@@ -1,0 +1,190 @@
+"""Modelos do core do Batuta (SQLAlchemy).
+
+Vocabulário do produto em português (CLAUDE.md §14). Toda tabela de negócio
+carrega, direta ou indiretamente, o vínculo com a organização, sustentando o
+isolamento entre organizações e times do PRODUTO.md.
+"""
+
+import uuid
+from datetime import datetime
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class IdData:
+    """Mixin: identificador único e datas de criação/atualização."""
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    atualizado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class Usuario(IdData, Base):
+    """Usuário do Batuta. Na Etapa 1 existe só o usuário fixo de testes;
+    na Etapa 2 isto é substituído pelo Supabase Auth."""
+
+    __tablename__ = "usuarios"
+    nome: Mapped[str] = mapped_column(String(200), nullable=False)
+    email: Mapped[str | None] = mapped_column(String(320), unique=True, nullable=True)
+
+
+class Organizacao(IdData, Base):
+    """A empresa. Espaço onde tudo daquela empresa vive."""
+
+    __tablename__ = "organizacoes"
+    nome: Mapped[str] = mapped_column(String(200), nullable=False)
+    dono_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("usuarios.id"), nullable=False
+    )
+
+
+class Time(IdData, Base):
+    """A unidade de trabalho. Pertence a uma organização."""
+
+    __tablename__ = "times"
+    organizacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    nome: Mapped[str] = mapped_column(String(200), nullable=False)
+    descricao: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class Agente(IdData, Base):
+    """Líder ou Agente. A distinção é o campo 'papel'. Cada time tem no
+    máximo um agente com papel 'lider' (garantido por índice parcial)."""
+
+    __tablename__ = "agentes"
+    time_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("times.id", ondelete="CASCADE"), nullable=False
+    )
+    nome: Mapped[str] = mapped_column(String(200), nullable=False)
+    papel: Mapped[str] = mapped_column(String(20), nullable=False)  # "lider" | "agente"
+    agent_md: Mapped[str | None] = mapped_column(Text, nullable=True)
+    skill_md: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tools_md: Mapped[str | None] = mapped_column(Text, nullable=True)
+    soul_md: Mapped[str | None] = mapped_column(Text, nullable=True)
+    modelo_ia: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    __table_args__ = (
+        Index(
+            "uq_um_lider_por_time",
+            "time_id",
+            unique=True,
+            postgresql_where=text("papel = 'lider'"),
+        ),
+    )
+
+
+class Instrumento(IdData, Base):
+    """Uma capacidade que um agente invoca. Pertence a um time. A configuração
+    é flexível (JSONB) porque cada tipo de instrumento pede campos diferentes."""
+
+    __tablename__ = "instrumentos"
+    time_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("times.id", ondelete="CASCADE"), nullable=False
+    )
+    nome: Mapped[str] = mapped_column(String(200), nullable=False)
+    tipo: Mapped[str] = mapped_column(String(50), nullable=False)
+    configuracao: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+class AgenteInstrumento(Base):
+    """Ligação N-para-N: instrumentos no cinto de um agente."""
+
+    __tablename__ = "agente_instrumentos"
+    agente_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agentes.id", ondelete="CASCADE"), primary_key=True
+    )
+    instrumento_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("instrumentos.id", ondelete="CASCADE"), primary_key=True
+    )
+
+
+class Automacao(IdData, Base):
+    """A definição de um fluxo: o gatilho e a cadeia ordenada de agentes."""
+
+    __tablename__ = "automacoes"
+    time_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("times.id", ondelete="CASCADE"), nullable=False
+    )
+    nome: Mapped[str] = mapped_column(String(200), nullable=False)
+    tipo_gatilho: Mapped[str] = mapped_column(String(50), nullable=False)
+    configuracao_gatilho: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    cadeia: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    ativa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+
+
+class Execucao(IdData, Base):
+    """O registro de cada vez que uma automação roda."""
+
+    __tablename__ = "execucoes"
+    automacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("automacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    estado: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default=text("'aguardando'")
+    )  # aguardando | em_andamento | aguardando_humano | concluida | falhou
+    entrada: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    resultado: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    iniciada_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finalizada_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class PassoExecucao(IdData, Base):
+    """Cada passo de uma execução: o agente que processou, o que recebeu e
+    produziu. É o que permite inspecionar a orquestração passo a passo.
+    O agente é nullable com SET NULL para preservar o histórico mesmo que o
+    agente seja removido depois (auditoria)."""
+
+    __tablename__ = "passos_execucao"
+    execucao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("execucoes.id", ondelete="CASCADE"), nullable=False
+    )
+    ordem: Mapped[int] = mapped_column(Integer, nullable=False)
+    agente_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("agentes.id", ondelete="SET NULL"), nullable=True
+    )
+    entrada: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    saida: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    estado: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default=text("'aguardando'")
+    )
+    iniciado_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finalizado_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
