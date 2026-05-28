@@ -4,6 +4,30 @@ Este é o roteiro de construção do Batuta.
 
 **Antes de usar este documento, leia o `PRODUTO.md` e o `CLAUDE.md` por completo.** Toda tarefa aqui é executada seguindo o **protocolo de execução de 6 passos** e a **lei do pare no primeiro erro** do `CLAUDE.md`. Este plano diz *o que* fazer; o `CLAUDE.md` diz *como*.
 
+## Ambiente fixado (Fase 0, 2026-05-28)
+
+Fatos verificados na máquina — não alterar sem re-verificar:
+
+| Ferramenta | Versão |
+|---|---|
+| Python (sistema) | 3.14.5 |
+| Python (projeto, via uv) | 3.13.13 |
+| Gerenciador Python | uv 0.11.16 |
+| Node.js | 24.15.0 |
+| npm | 11.14.1 |
+| git | 2.54.0 |
+| FastAPI | 0.136.3 |
+| uvicorn | 0.48.0 |
+| SQLAlchemy | 2.0.50 |
+| psycopg | 3.3.4 |
+| Alembic | 1.18.4 |
+| Next.js | 16.2.6 |
+| React | 19.2.4 |
+
+Repositório: `github.com/ti927/batuta`, branch `main`. Estrutura: `cerebro/` (Python) + `interface/` (Next.js). Banco: Supabase `lxprnyommztfgcvcjrzf`, conexão direta (IPv6 disponível).
+
+---
+
 ## Como este plano é organizado
 
 O plano tem **duas etapas**, e a ordem é inegociável:
@@ -97,17 +121,17 @@ Objetivo da etapa: ao final, o maestro consegue, por telas clicáveis, criar uma
 
 **Verificar:** o arquivo de segredos existe, preenchido, e **não** é rastreado pelo git (confirme com `git status`).
 
-### Definition of Done — Fase 0
+### Definition of Done — Fase 0 ✅ (concluída 2026-05-28, commit `97ca6fb`)
 
-- [ ] Versões de Python, Node.js e git verificadas e registradas
-- [ ] Repositório clonado, fora de pasta de nuvem
-- [ ] Estrutura de duas partes (cérebro / interface) criada
-- [ ] Cérebro FastAPI responde no endpoint de saúde (saída colada)
-- [ ] Interface Next.js abre no navegador
-- [ ] A interface exibe uma mensagem vinda do cérebro (as duas partes se falam)
-- [ ] `.claude/settings.json` criado e funcionando
-- [ ] Contas Supabase e Railway criadas; arquivo de segredos preenchido e fora do git
-- [ ] **Commit + push:** `chore: fundação do ambiente do Batuta`
+- [x] Versões de Python, Node.js e git verificadas e registradas
+- [x] Repositório clonado, fora de pasta de nuvem (`c:\dev\batuta`, branch `main`)
+- [x] Estrutura de duas partes (cérebro / interface) criada
+- [x] Cérebro FastAPI responde no endpoint de saúde — `HTTP 200 {"mensagem":"Batuta cérebro no ar"}`
+- [x] Interface Next.js abre no navegador — confirmado pelo maestro
+- [x] A interface exibe uma mensagem vinda do cérebro (as duas partes se falam) — confirmado pelo maestro
+- [x] `.claude/settings.json` criado e funcionando
+- [x] Contas Supabase e Railway criadas; arquivo de segredos preenchido e fora do git
+- [x] **Commit + push:** `chore: fundação do ambiente do Batuta`
 
 ---
 
@@ -213,13 +237,19 @@ Observações de arquitetura:
 
 **Verificar:** o cérebro consegue identificar o usuário fixo em uma operação de teste.
 
-### Definition of Done — Fase 1
+### Definition of Done — Fase 1 ✅ (concluída 2026-05-28, commit `c9b7c9f`)
 
-- [ ] Cérebro conecta ao banco do Supabase sem erro
-- [ ] Todas as tabelas do core criadas e visíveis no Supabase
-- [ ] Relações entre tabelas corretas
-- [ ] Usuário fixo de testes criado e reconhecido pelo cérebro
-- [ ] **Commit + push:** `feat: modelo de dados do core`
+- [x] Cérebro conecta ao banco do Supabase sem erro — `PostgreSQL 17.6` via conexão direta
+- [x] Todas as tabelas do core criadas e visíveis no Supabase — 9 tabelas + `alembic_version`
+- [x] Relações entre tabelas corretas — 10 FKs, cascade e SET NULL conforme especificação
+- [x] Usuário fixo de testes criado e reconhecido pelo cérebro — `00000000-0000-0000-0000-000000000001`
+- [x] **Commit + push:** `feat: modelo de dados do core`
+
+**Decisões técnicas desta fase:**
+- Gerenciador de migrations: **Alembic** (escolha do maestro) com autogenerate a partir dos modelos SQLAlchemy
+- Conexão: por componentes (não URL crua) para lidar com caracteres especiais na senha (`$ * ,`)
+- Índice parcial `uq_um_lider_por_time` garante no banco a regra de "no máximo um Líder por time"
+- `passos_execucao.agente_id` usa `SET NULL` (não CASCADE) para preservar histórico de auditoria
 
 ---
 
