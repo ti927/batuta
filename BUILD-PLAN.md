@@ -351,19 +351,20 @@ Cada tarefa abaixo envolve as duas partes (cérebro e interface) e deve mantê-l
 
 Esta é a fase mais difícil do projeto. Vá devagar, tarefa por tarefa, verificando cada uma.
 
-> **Progresso (sessão de 2026-05-29) — Fase 4 em andamento, NÃO concluída.**
-> Feito e verificado por chamadas reais (commits locais, **ainda sem push**):
+> **Progresso (sessão de 2026-05-29) — Fase 4 quase fechada; falta só a 4.7.**
+> Feito e **validado pelo maestro clicando**:
 > - **4.1** Chamar LLM — `orquestracao/llm.py` (langchain-anthropic; chave do `.env`). Commit `8fe99e3`.
 > - **4.2** Um agente sozinho — `orquestracao/agente.py` (markdowns→prompt; cinto→ferramentas; `create_react_agent`). Endpoint `POST /agentes/{id}/executar`. Commit `8fe99e3`.
 > - **4.3** Cadeia com **bifurcação** — `orquestracao/cadeia.py` (grafo; roteamento por LLM estruturado; loops com guarda). Commit `7d4f180`. Plano corrigido em `58456a4`.
 > - **4.4** Registrar cada passo — disparo grava `execucoes`/`passos_execucao`. Commit `1b8c794`.
 > - **4.5** Tela de inspeção — `/automacoes/[id]` mostra passos. Commit `1b8c794`.
 > - **Construtor de automação** (lacuna do plano, suprida) — `/times/[id]/automacoes` monta o grafo. Gatilho de teste `tipo_gatilho="manual"`. Commit `1b8c794`.
+> - **4.6** Espera-por-humano — agente marcado `pausa_humano` pausa (estado `aguardando_humano` salvo no banco, sobrevive a reinícios); `POST /execucoes/{id}/responder` retoma com a resposta. Interruptor no construtor + caixa de resposta na inspeção. Commits `4cf30f8` e o fix `agente sem saída sempre pausa`.
 >
 > **Falta para fechar a Fase 4:**
-> - **4.6 Espera-por-humano** — requer decisões de produto do maestro (como a pausa aparece, como responde, como retoma). Próximo passo ao retomar.
-> - **4.7 Gatilhos** — WhatsApp, CRON, webhook (hoje o disparo é manual).
-> - Validação do maestro clicando o fluxo completo.
+> - **4.7 Gatilhos** — WhatsApp, CRON, webhook (hoje o disparo é o `manual` de teste). É o único passo restante da fase.
+>
+> **Decisão de produto registrada:** a "pausa para humano" é por **interruptor por agente** (não um agente fixo), respondida na tela no core; o canal WhatsApp (via Líder, §10) fica para a Etapa 2. O comportamento do agente vem 100% dos markdowns (sem preâmbulo escondido).
 >
 > **Para retomar:** subir o cérebro (`uv run uvicorn main:app --port 8000` em `cerebro/`, com `uv` no PATH) e a interface (`npm run dev` em `interface/`). A `ANTHROPIC_API_KEY` já está no `cerebro/.env` (fora do git).
 
