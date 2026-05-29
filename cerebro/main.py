@@ -1,7 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from rotas import agentes, cinto, execucao, instrumentos, organizacoes, times
+from rotas import (
+    agentes,
+    automacoes,
+    cinto,
+    execucao,
+    instrumentos,
+    organizacoes,
+    times,
+)
 
 app = FastAPI(title="Batuta — Cérebro")
 
@@ -24,3 +32,4 @@ app.include_router(agentes.rotas)
 app.include_router(instrumentos.rotas)
 app.include_router(cinto.rotas)
 app.include_router(execucao.rotas)
+app.include_router(automacoes.rotas)

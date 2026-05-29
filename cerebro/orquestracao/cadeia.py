@@ -24,6 +24,8 @@ Loops são permitidos; um guarda de máximo de passos evita laço infinito.
 """
 
 import uuid
+from collections.abc import Callable
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -44,6 +46,37 @@ class _Escolha(BaseModel):
     """Saída estruturada do passo de roteamento."""
 
     rotulo: str = Field(description="O rótulo EXATO da saída escolhida.")
+
+
+def validar_cadeia(cadeia: dict, ids_agentes_validos: set[str]) -> None:
+    """Valida a estrutura do grafo e que todo nó/destino é um agente do time.
+    Levanta ValueError com mensagem clara. Cadeia vazia é permitida (rascunho)."""
+    if not isinstance(cadeia, dict):
+        raise ValueError("A cadeia precisa ser um objeto.")
+    nos = cadeia.get("nos")
+    inicio = cadeia.get("inicio")
+    if not nos and not inicio:
+        return  # rascunho ainda sem cadeia montada
+    if not isinstance(nos, dict) or not nos:
+        raise ValueError("A cadeia precisa ter ao menos um nó em 'nos'.")
+    if not inicio or inicio not in nos:
+        raise ValueError("A cadeia precisa de um 'inicio' que esteja em 'nos'.")
+    for no_id, no in nos.items():
+        if no_id not in ids_agentes_validos:
+            raise ValueError(f"O nó {no_id} não é um agente deste time.")
+        rotulos: set[str] = set()
+        for saida in (no or {}).get("saidas") or []:
+            rotulo = saida.get("rotulo")
+            if not rotulo:
+                raise ValueError(f"Há uma saída sem 'rotulo' no nó {no_id}.")
+            if rotulo in rotulos:
+                raise ValueError(f"Rótulo de saída repetido no nó {no_id}: {rotulo}")
+            rotulos.add(rotulo)
+            destino = saida.get("destino")
+            if destino not in _DESTINOS_FIM and destino not in ids_agentes_validos:
+                raise ValueError(
+                    f"Destino inválido no nó {no_id} (saída {rotulo}): {destino}"
+                )
 
 
 def _carregar_cinto(sessao: Session, agente_id: uuid.UUID) -> list[Instrumento]:
@@ -84,9 +117,13 @@ def executar_cadeia(
     cadeia: dict,
     entrada: str,
     max_passos: int = MAX_PASSOS,
+    registrar_passo: Callable[[dict, int], None] | None = None,
 ) -> dict:
     """Executa a cadeia a partir do nó inicial, seguindo as bifurcações, até
-    chegar a um fim. Devolve o resultado final e o rastro de cada passo."""
+    chegar a um fim. Devolve o resultado final e o rastro de cada passo.
+
+    Se `registrar_passo` for dado, é chamado após cada passo com (passo, ordem)
+    — é como a Tarefa 4.4 persiste cada passo em `passos_execucao`."""
     inicio = cadeia.get("inicio")
     nos = cadeia.get("nos") or {}
     if not inicio or inicio not in nos:
@@ -108,8 +145,10 @@ def executar_cadeia(
         if agente is None:
             raise ValueError(f"Agente da cadeia não encontrado: {no_atual}")
 
+        iniciado_em = datetime.now(timezone.utc)
         cinto = _carregar_cinto(sessao, agente.id)
         resultado = executar_agente(agente, cinto, entrada_atual)
+        finalizado_em = datetime.now(timezone.utc)
         saida_texto = resultado["saida"]
 
         saidas = nos.get(no_atual, {}).get("saidas") or []
@@ -120,16 +159,19 @@ def executar_cadeia(
         else:
             escolhida = _escolher_saida(saida_texto, saidas)
 
-        passos.append(
-            {
-                "agente_id": no_atual,
-                "agente_nome": agente.nome,
-                "entrada": entrada_atual,
-                "saida": saida_texto,
-                "instrumentos_acionados": resultado["instrumentos_acionados"],
-                "saida_escolhida": escolhida["rotulo"] if escolhida else None,
-            }
-        )
+        passo = {
+            "agente_id": no_atual,
+            "agente_nome": agente.nome,
+            "entrada": entrada_atual,
+            "saida": saida_texto,
+            "instrumentos_acionados": resultado["instrumentos_acionados"],
+            "saida_escolhida": escolhida["rotulo"] if escolhida else None,
+            "iniciado_em": iniciado_em,
+            "finalizado_em": finalizado_em,
+        }
+        passos.append(passo)
+        if registrar_passo is not None:
+            registrar_passo(passo, contagem)
 
         entrada_atual = saida_texto
         destino = escolhida.get("destino") if escolhida else None

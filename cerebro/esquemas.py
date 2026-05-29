@@ -179,3 +179,81 @@ class ExecutarAgente(BaseModel):
     """Entrada para acionar um agente isoladamente (Tarefa 4.2)."""
 
     entrada: str = Field(min_length=1)
+
+
+# ───────────────────────── Automações ────────────────────────────
+
+
+class AutomacaoCriar(BaseModel):
+    """Cria uma automação. A `cadeia` é o grafo de caminhos (ver
+    orquestracao/cadeia.py); validada contra os agentes do time na rota.
+    Na Etapa 1, o gatilho padrão é 'manual' (disparado pelo maestro)."""
+
+    nome: str = Field(min_length=1, max_length=200)
+    tipo_gatilho: str = Field(default="manual", max_length=50)
+    configuracao_gatilho: dict = Field(default_factory=dict)
+    cadeia: dict = Field(default_factory=dict)
+    ativa: bool = False
+
+
+class AutomacaoEditar(BaseModel):
+    nome: str = Field(min_length=1, max_length=200)
+    tipo_gatilho: str = Field(default="manual", max_length=50)
+    configuracao_gatilho: dict = Field(default_factory=dict)
+    cadeia: dict = Field(default_factory=dict)
+    ativa: bool = False
+
+
+class AutomacaoLer(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    time_id: uuid.UUID
+    nome: str
+    tipo_gatilho: str
+    configuracao_gatilho: dict | None
+    cadeia: dict | None
+    ativa: bool
+    criado_em: datetime
+    atualizado_em: datetime
+
+
+class DispararAutomacao(BaseModel):
+    """Entrada para disparar uma automação manualmente (teste/Fase 4)."""
+
+    entrada: str = Field(min_length=1)
+
+
+# ───────────────────────── Execuções ─────────────────────────────
+
+
+class PassoExecucaoLer(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    ordem: int
+    agente_id: uuid.UUID | None
+    entrada: dict | None
+    saida: dict | None
+    estado: str
+    iniciado_em: datetime | None
+    finalizado_em: datetime | None
+
+
+class ExecucaoLer(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    automacao_id: uuid.UUID
+    estado: str
+    entrada: dict | None
+    resultado: dict | None
+    iniciada_em: datetime | None
+    finalizada_em: datetime | None
+    criado_em: datetime
+
+
+class ExecucaoComPassos(ExecucaoLer):
+    """Uma execução com seu rastro de passos, para a tela de inspeção."""
+
+    passos: list[PassoExecucaoLer] = Field(default_factory=list)

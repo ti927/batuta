@@ -102,3 +102,58 @@ export type TipoInstrumento = {
   esquema_config: Record<string, unknown>;
   esquema_args: Record<string, unknown>;
 };
+
+// ─── Automações: a cadeia é um grafo de caminhos (bifurcação) ───
+
+export type SaidaCadeia = {
+  rotulo: string;
+  quando: string;
+  destino: string | null; // id de outro agente, ou null = fim (entrega ao usuário)
+};
+
+export type NoCadeia = { saidas: SaidaCadeia[] };
+
+export type Cadeia = {
+  inicio?: string;
+  nos?: Record<string, NoCadeia>;
+};
+
+export type Automacao = {
+  id: string;
+  time_id: string;
+  nome: string;
+  tipo_gatilho: string;
+  configuracao_gatilho: Record<string, unknown> | null;
+  cadeia: Cadeia | null;
+  ativa: boolean;
+  criado_em: string;
+  atualizado_em: string;
+};
+
+export type PassoExecucao = {
+  id: string;
+  ordem: number;
+  agente_id: string | null;
+  entrada: { texto?: string } | null;
+  saida: {
+    texto?: string;
+    instrumentos_acionados?: string[];
+    saida_escolhida?: string | null;
+  } | null;
+  estado: string;
+  iniciado_em: string | null;
+  finalizado_em: string | null;
+};
+
+export type Execucao = {
+  id: string;
+  automacao_id: string;
+  estado: string;
+  entrada: { texto?: string } | null;
+  resultado: { texto?: string; erro?: string } | null;
+  iniciada_em: string | null;
+  finalizada_em: string | null;
+  criado_em: string;
+};
+
+export type ExecucaoComPassos = Execucao & { passos: PassoExecucao[] };

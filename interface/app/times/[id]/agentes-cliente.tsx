@@ -139,6 +139,12 @@ export function AgentesCliente({
         >
           Instrumentos do time →
         </Link>
+        <Link
+          href={`/times/${time.id}/automacoes`}
+          className="text-sm text-blue-600 underline underline-offset-4"
+        >
+          Automações do time →
+        </Link>
       </div>
 
       {erro && (
