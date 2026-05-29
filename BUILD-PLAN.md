@@ -367,13 +367,21 @@ Esta é a fase mais difícil do projeto. Vá devagar, tarefa por tarefa, verific
 
 **Verificar:** o maestro dispara um agente isolado com uma entrada e vê a saída coerente; se o agente usou um instrumento, isso é visível.
 
-### Tarefa 4.3 — A cadeia: encadear agentes com o LangGraph
+### Tarefa 4.3 — A cadeia: encadear agentes com bifurcação (LangGraph)
 
-**Investigar:** leia a documentação do LangGraph sobre encadeamento e estado. Defina como a cadeia de uma automação vira um grafo do LangGraph, e como o resultado de um agente vira a entrada do próximo.
+> **Correção (2026-05-29, decisão do maestro):** a cadeia **não é linear** — é um
+> **grafo de caminhos com bifurcação**, como o `PRODUTO.md` §14 ("Bifurcação por
+> intenção") e o cenário 6 exigem. Cada agente, ao terminar, **escolhe uma de várias
+> saídas**, e cada saída leva a um destino: outro agente (inclusive um **anterior** —
+> loops permitidos) ou o fim (entregar ao usuário). "Encadeamento fixo" no produto
+> significa que **o humano desenha o caminho** (a IA não improvisa a topologia), não
+> "linha reta". O `automacoes.cadeia` (JSONB) guarda esse grafo — sem migration.
 
-**Implementar:** a orquestração encadeada — uma automação com vários agentes em sequência, cada um processando e passando adiante, sobre o LangGraph.
+**Investigar:** leia a documentação do LangGraph sobre estado e **arestas condicionais**. Defina o formato do grafo em `automacoes.cadeia` (nós = agentes; cada nó com suas saídas rotuladas → destino), como o resultado de um agente vira a entrada do próximo, e como se escolhe a saída quando há mais de uma.
 
-**Verificar:** o maestro dispara uma automação de três agentes encadeados e a resposta final reflete a passagem pelos três.
+**Implementar:** a orquestração com bifurcação — uma automação cujos agentes formam um grafo; cada agente processa, escolhe uma saída e passa adiante; loops permitidos, com guarda de máximo de passos contra laço infinito.
+
+**Verificar:** o maestro dispara uma automação com bifurcação (um agente classificador que manda a tarefa por um de dois caminhos) e a resposta final reflete o caminho correto; testar também os dois ramos.
 
 ### Tarefa 4.4 — Registrar cada passo
 
