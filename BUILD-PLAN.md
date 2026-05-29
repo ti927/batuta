@@ -327,14 +327,21 @@ Cada tarefa abaixo envolve as duas partes (cérebro e interface) e deve mantê-l
 
 **Verificar:** acionado isoladamente, o instrumento executa e devolve um resultado real.
 
-### Definition of Done — Fase 3
+### Definition of Done — Fase 3 ✅ (concluída 2026-05-29, commit `9a06c49`)
 
-- [ ] Verificações automáticas passam
-- [ ] Criar/listar/editar/remover Instrumentos funciona pela tela
-- [ ] O encaixe de instrumentos está definido e funciona
-- [ ] Vincular instrumento ao cinto de um agente funciona
-- [ ] Um tipo de instrumento real executa e devolve resultado
-- [ ] **Commit + push:** `feat: instrumentos e o cinto`
+- [x] Verificações automáticas passam — `tsc`/`eslint` verdes; CRUD, cinto e acionamento exercitados por chamadas reais
+- [x] Criar/listar/editar/remover Instrumentos funciona pela tela
+- [x] O encaixe de instrumentos está definido e funciona — registro de tipos com contrato uniforme (`instrumentos/base.py`)
+- [x] Vincular instrumento ao cinto de um agente funciona
+- [x] Um tipo de instrumento real executa e devolve resultado — Chamar API REST, status 200 + JSON real
+- [x] **Commit + push:** `feat: instrumentos e o cinto`
+
+**Decisões técnicas desta fase:**
+- O encaixe é um registro (`instrumentos/base.py`): cada tipo é subclasse de `TipoInstrumento` declarando `Config`, `Args`, `executar()` e `definicao_para_ia()` (formato de ferramenta para a LLM, que a Fase 4 consumirá)
+- Configuração validada contra o `Config` do tipo na criação/edição — é o que mantém o JSONB flexível sem virar caos
+- Primeiro tipo real: `chamar_api_rest` via `httpx` (dependência nova)
+- Endpoint `/instrumentos/{id}/acionar` aciona isolado pelo encaixe — base do que a Fase 4 fará na orquestração
+- Helpers de posse centralizados em `rotas/_comum.py`
 
 ---
 
