@@ -85,6 +85,10 @@ export function AutomacaoDetalheCliente({
   // Execução atualmente aberta (recém-disparada ou carregada da lista).
   const [aberta, setAberta] = useState<ExecucaoComPassos | null>(null);
 
+  // Resposta do humano a uma execução pausada.
+  const [resposta, setResposta] = useState("");
+  const [respondendo, setRespondendo] = useState(false);
+
   const nomeAgente = (id: string | null) =>
     id === null ? "(agente removido)" : agentes.find((a) => a.id === id)?.nome ?? id;
 
@@ -113,6 +117,25 @@ export function AutomacaoDetalheCliente({
       setAberta(await api.get<ExecucaoComPassos>(`/execucoes/${id}`));
     } catch (e) {
       setErro(e instanceof ErroDaApi ? e.message : "Falha ao abrir execução");
+    }
+  }
+
+  async function responder() {
+    if (!aberta || !resposta.trim()) return;
+    setRespondendo(true);
+    setErro(null);
+    try {
+      const r = await api.post<ExecucaoComPassos>(
+        `/execucoes/${aberta.id}/responder`,
+        { resposta: resposta.trim() },
+      );
+      setAberta(r);
+      setResposta("");
+      router.refresh();
+    } catch (e) {
+      setErro(e instanceof ErroDaApi ? e.message : "Falha ao responder");
+    } finally {
+      setRespondendo(false);
     }
   }
 
@@ -162,6 +185,30 @@ export function AutomacaoDetalheCliente({
             </span>
           </div>
           <Passos execucao={aberta} nomeAgente={nomeAgente} />
+
+          {aberta.estado === "aguardando_humano" && (
+            <div className="mt-3 flex flex-col gap-2 rounded border border-blue-300 bg-blue-50 p-3">
+              <span className="text-sm font-medium text-blue-900">
+                ⏸ Aguardando sua resposta
+              </span>
+              <p className="text-sm whitespace-pre-wrap text-blue-900">
+                {aberta.passos[aberta.passos.length - 1]?.saida?.texto}
+              </p>
+              <textarea
+                className="min-h-16 rounded border border-zinc-300 px-2 py-1 text-sm"
+                placeholder="Sua resposta"
+                value={resposta}
+                onChange={(e) => setResposta(e.target.value)}
+              />
+              <Button
+                className="self-start"
+                onClick={responder}
+                disabled={respondendo}
+              >
+                {respondendo ? "Retomando..." : "Responder e retomar"}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

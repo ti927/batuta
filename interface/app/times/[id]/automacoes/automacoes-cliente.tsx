@@ -16,19 +16,29 @@ import {
 import { Button } from "@/components/ui/button";
 
 type SaidasPorAgente = Record<string, SaidaCadeia[]>;
+type PausaPorAgente = Record<string, boolean>;
 
 function cadeiaParaForm(
   cadeia: Cadeia | null,
   agentes: Agente[],
-): { inicio: string; saidas: SaidasPorAgente } {
+): { inicio: string; saidas: SaidasPorAgente; pausa: PausaPorAgente } {
   const saidas: SaidasPorAgente = {};
-  for (const a of agentes) saidas[a.id] = cadeia?.nos?.[a.id]?.saidas ?? [];
-  return { inicio: cadeia?.inicio ?? agentes[0]?.id ?? "", saidas };
+  const pausa: PausaPorAgente = {};
+  for (const a of agentes) {
+    saidas[a.id] = cadeia?.nos?.[a.id]?.saidas ?? [];
+    pausa[a.id] = cadeia?.nos?.[a.id]?.pausa_humano ?? false;
+  }
+  return { inicio: cadeia?.inicio ?? agentes[0]?.id ?? "", saidas, pausa };
 }
 
-function formParaCadeia(inicio: string, saidas: SaidasPorAgente): Cadeia {
+function formParaCadeia(
+  inicio: string,
+  saidas: SaidasPorAgente,
+  pausa: PausaPorAgente,
+): Cadeia {
   const nos: Cadeia["nos"] = {};
-  for (const [id, lista] of Object.entries(saidas)) nos![id] = { saidas: lista };
+  for (const [id, lista] of Object.entries(saidas))
+    nos![id] = { saidas: lista, pausa_humano: pausa[id] ?? false };
   return { inicio, nos };
 }
 
@@ -48,6 +58,7 @@ export function AutomacoesCliente({
   const [nome, setNome] = useState("");
   const [inicio, setInicio] = useState(agentes[0]?.id ?? "");
   const [saidas, setSaidas] = useState<SaidasPorAgente>({});
+  const [pausa, setPausa] = useState<PausaPorAgente>({});
 
   const nomeAgente = (id: string | null) =>
     id === null ? "— fim (entrega ao usuário) —" : agentes.find((a) => a.id === id)?.nome ?? id;
@@ -61,6 +72,7 @@ export function AutomacoesCliente({
     setNome("");
     setInicio(f.inicio);
     setSaidas(f.saidas);
+    setPausa(f.pausa);
     setErro(null);
     setModo("novo");
   }
@@ -70,6 +82,7 @@ export function AutomacoesCliente({
     setNome(a.nome);
     setInicio(f.inicio);
     setSaidas(f.saidas);
+    setPausa(f.pausa);
     setErro(null);
     setModo(a.id);
   }
@@ -106,7 +119,7 @@ export function AutomacoesCliente({
       setErro("Escolha o agente inicial.");
       return;
     }
-    const corpo = { nome: nome.trim(), cadeia: formParaCadeia(inicio, saidas) };
+    const corpo = { nome: nome.trim(), cadeia: formParaCadeia(inicio, saidas, pausa) };
     try {
       if (modo === "novo") {
         await api.post<Automacao>(`/times/${time.id}/automacoes`, corpo);
@@ -212,6 +225,17 @@ export function AutomacoesCliente({
                     + saída
                   </Button>
                 </div>
+                <label className="mb-2 flex items-center gap-1.5 text-xs text-zinc-600">
+                  <input
+                    type="checkbox"
+                    checked={pausa[a.id] ?? false}
+                    onChange={(e) =>
+                      setPausa((p) => ({ ...p, [a.id]: e.target.checked }))
+                    }
+                  />
+                  Ao terminar, pausar e perguntar ao humano (o que ele escrever
+                  vira a pergunta; sua resposta segue ao próximo agente)
+                </label>
                 {(saidas[a.id] ?? []).length === 0 ? (
                   <p className="text-xs text-zinc-400">Sem saídas (encerra aqui).</p>
                 ) : (

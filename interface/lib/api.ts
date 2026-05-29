@@ -111,7 +111,10 @@ export type SaidaCadeia = {
   destino: string | null; // id de outro agente, ou null = fim (entrega ao usuário)
 };
 
-export type NoCadeia = { saidas: SaidaCadeia[] };
+export type NoCadeia = {
+  saidas: SaidaCadeia[];
+  pausa_humano?: boolean; // se true, pausa e pergunta ao humano após este agente
+};
 
 export type Cadeia = {
   inicio?: string;

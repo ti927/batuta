@@ -116,30 +116,41 @@ def executar_cadeia(
     sessao: Session,
     cadeia: dict,
     entrada: str,
+    *,
+    no_inicial: str | None = None,
+    ordem_inicial: int = 0,
     max_passos: int = MAX_PASSOS,
     registrar_passo: Callable[[dict, int], None] | None = None,
 ) -> dict:
-    """Executa a cadeia a partir do nó inicial, seguindo as bifurcações, até
-    chegar a um fim. Devolve o resultado final e o rastro de cada passo.
+    """Executa a cadeia seguindo as bifurcações, até um fim OU uma pausa para
+    humano. Pode começar de `no_inicial` (retomada) em vez do início.
+
+    Devolve um dicionário com `estado`:
+    - "concluida": chegou ao fim. `resultado` tem o texto final.
+    - "aguardando_humano": parou num agente marcado `pausa_humano`. `pergunta`
+      tem a saída desse agente (o que perguntar) e `proximo_no` para onde seguir
+      quando a resposta chegar.
+    `ordem` é o número do último passo; `passos`, o rastro deste trecho.
 
     Se `registrar_passo` for dado, é chamado após cada passo com (passo, ordem)
     — é como a Tarefa 4.4 persiste cada passo em `passos_execucao`."""
-    inicio = cadeia.get("inicio")
     nos = cadeia.get("nos") or {}
-    if not inicio or inicio not in nos:
-        raise ValueError("Cadeia inválida: 'inicio' ausente ou fora de 'nos'.")
+    no_atual: str | None = no_inicial or cadeia.get("inicio")
+    if not no_atual or no_atual not in nos:
+        raise ValueError("Cadeia inválida: nó inicial ausente ou fora de 'nos'.")
 
-    no_atual: str | None = inicio
     entrada_atual = entrada
     passos: list[dict] = []
-    contagem = 0
+    ordem = ordem_inicial
+    neste_trecho = 0
 
     while no_atual is not None:
-        contagem += 1
-        if contagem > max_passos:
+        neste_trecho += 1
+        if neste_trecho > max_passos:
             raise RuntimeError(
                 f"Máximo de passos ({max_passos}) excedido — possível laço infinito."
             )
+        ordem += 1
 
         agente = sessao.get(Agente, uuid.UUID(no_atual))
         if agente is None:
@@ -151,7 +162,8 @@ def executar_cadeia(
         finalizado_em = datetime.now(timezone.utc)
         saida_texto = resultado["saida"]
 
-        saidas = nos.get(no_atual, {}).get("saidas") or []
+        no = nos.get(no_atual, {})
+        saidas = no.get("saidas") or []
         if len(saidas) == 0:
             escolhida = None
         elif len(saidas) == 1:
@@ -171,10 +183,29 @@ def executar_cadeia(
         }
         passos.append(passo)
         if registrar_passo is not None:
-            registrar_passo(passo, contagem)
+            registrar_passo(passo, ordem)
+
+        destino = escolhida.get("destino") if escolhida else None
+        proximo = None if destino in _DESTINOS_FIM else destino
+
+        # Pausa para humano: o agente terminou (sua saída é a pergunta) e há um
+        # próximo nó. Para aqui; a retomada continuará em `proximo` com a resposta.
+        if no.get("pausa_humano") and proximo is not None:
+            return {
+                "estado": "aguardando_humano",
+                "pergunta": saida_texto,
+                "proximo_no": proximo,
+                "ordem": ordem,
+                "passos": passos,
+            }
+
+        if proximo is None:
+            return {
+                "estado": "concluida",
+                "resultado": saida_texto,
+                "ordem": ordem,
+                "passos": passos,
+            }
 
         entrada_atual = saida_texto
-        destino = escolhida.get("destino") if escolhida else None
-        no_atual = None if destino in _DESTINOS_FIM else destino
-
-    return {"resultado": entrada_atual, "passos": passos}
+        no_atual = proximo

@@ -21,6 +21,7 @@ from esquemas import (
     ExecucaoComPassos,
     ExecucaoLer,
     PassoExecucaoLer,
+    ResponderHumano,
 )
 from modelos import Agente, Automacao, Execucao, PassoExecucao
 from orquestracao.cadeia import executar_cadeia, validar_cadeia
@@ -128,6 +129,41 @@ def _montar_com_passos(sessao: Session, execucao: Execucao) -> ExecucaoComPassos
     )
 
 
+def _fazer_registrador(sessao: Session, execucao_id: uuid.UUID):
+    """Callback que grava cada passo da cadeia em `passos_execucao`."""
+
+    def registrar(passo: dict, ordem: int) -> None:
+        sessao.add(
+            PassoExecucao(
+                execucao_id=execucao_id,
+                ordem=ordem,
+                agente_id=uuid.UUID(passo["agente_id"]),
+                entrada={"texto": passo["entrada"]},
+                saida={
+                    "texto": passo["saida"],
+                    "instrumentos_acionados": passo["instrumentos_acionados"],
+                    "saida_escolhida": passo["saida_escolhida"],
+                },
+                estado="concluido",
+                iniciado_em=passo["iniciado_em"],
+                finalizado_em=passo["finalizado_em"],
+            )
+        )
+        sessao.commit()
+
+    return registrar
+
+
+def _aplicar_resultado(execucao: Execucao, r: dict) -> None:
+    """Aplica à execução o que a cadeia devolveu: pausa ou conclusão."""
+    if r["estado"] == "aguardando_humano":
+        execucao.estado = "aguardando_humano"  # sem finalizada_em: ainda viva
+    else:
+        execucao.estado = "concluida"
+        execucao.resultado = {"texto": r["resultado"]}
+        execucao.finalizada_em = datetime.now(timezone.utc)
+
+
 @rotas.post(
     "/automacoes/{automacao_id}/disparar", response_model=ExecucaoComPassos
 )
@@ -148,35 +184,85 @@ def disparar(
     sessao.commit()
     sessao.refresh(execucao)
 
-    def registrar(passo: dict, ordem: int) -> None:
-        sessao.add(
-            PassoExecucao(
-                execucao_id=execucao.id,
-                ordem=ordem,
-                agente_id=uuid.UUID(passo["agente_id"]),
-                entrada={"texto": passo["entrada"]},
-                saida={
-                    "texto": passo["saida"],
-                    "instrumentos_acionados": passo["instrumentos_acionados"],
-                    "saida_escolhida": passo["saida_escolhida"],
-                },
-                estado="concluido",
-                iniciado_em=passo["iniciado_em"],
-                finalizado_em=passo["finalizado_em"],
-            )
-        )
-        sessao.commit()
-
     try:
         r = executar_cadeia(
-            sessao, auto.cadeia or {}, dados.entrada, registrar_passo=registrar
+            sessao,
+            auto.cadeia or {},
+            dados.entrada,
+            registrar_passo=_fazer_registrador(sessao, execucao.id),
         )
-        execucao.estado = "concluida"
-        execucao.resultado = {"texto": r["resultado"]}
+        _aplicar_resultado(execucao, r)
     except Exception as e:  # falha de LLM/rede/cadeia inválida — registra e segue
         execucao.estado = "falhou"
         execucao.resultado = {"erro": str(e)}
-    execucao.finalizada_em = datetime.now(timezone.utc)
+        execucao.finalizada_em = datetime.now(timezone.utc)
+    sessao.commit()
+    sessao.refresh(execucao)
+    return _montar_com_passos(sessao, execucao)
+
+
+@rotas.post("/execucoes/{execucao_id}/responder", response_model=ExecucaoComPassos)
+def responder(
+    execucao_id: uuid.UUID,
+    dados: ResponderHumano,
+    sessao: Session = Depends(obter_sessao),
+):
+    """Retoma uma execução pausada (espera-por-humano): a resposta do humano
+    vira a entrada do próximo agente, e a cadeia continua de onde parou."""
+    execucao = sessao.get(Execucao, execucao_id)
+    if execucao is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Execução não encontrada")
+    auto = _automacao_do_dono(sessao, execucao.automacao_id)
+    if execucao.estado != "aguardando_humano":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Esta execução não está aguardando resposta."
+        )
+
+    # O ponto de retomada é derivado do último passo (onde pausou) + a cadeia.
+    ultimo = sessao.scalars(
+        select(PassoExecucao)
+        .where(PassoExecucao.execucao_id == execucao.id)
+        .order_by(PassoExecucao.ordem.desc())
+    ).first()
+    if ultimo is None or ultimo.agente_id is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Não foi possível retomar: passo de pausa ausente.",
+        )
+
+    cadeia = auto.cadeia or {}
+    no = (cadeia.get("nos") or {}).get(str(ultimo.agente_id)) or {}
+    rotulo = (ultimo.saida or {}).get("saida_escolhida")
+    proximo = next(
+        (s.get("destino") for s in no.get("saidas") or [] if s.get("rotulo") == rotulo),
+        None,
+    )
+
+    # Sem próximo agente (destino fim): a resposta encerra a execução.
+    if not proximo or proximo in ("fim", "FIM"):
+        execucao.estado = "concluida"
+        execucao.resultado = {"texto": dados.resposta}
+        execucao.finalizada_em = datetime.now(timezone.utc)
+        sessao.commit()
+        sessao.refresh(execucao)
+        return _montar_com_passos(sessao, execucao)
+
+    execucao.estado = "em_andamento"
+    sessao.commit()
+    try:
+        r = executar_cadeia(
+            sessao,
+            cadeia,
+            dados.resposta,
+            no_inicial=proximo,
+            ordem_inicial=ultimo.ordem,
+            registrar_passo=_fazer_registrador(sessao, execucao.id),
+        )
+        _aplicar_resultado(execucao, r)
+    except Exception as e:
+        execucao.estado = "falhou"
+        execucao.resultado = {"erro": str(e)}
+        execucao.finalizada_em = datetime.now(timezone.utc)
     sessao.commit()
     sessao.refresh(execucao)
     return _montar_com_passos(sessao, execucao)

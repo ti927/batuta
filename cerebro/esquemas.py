@@ -224,6 +224,12 @@ class DispararAutomacao(BaseModel):
     entrada: str = Field(min_length=1)
 
 
+class ResponderHumano(BaseModel):
+    """Resposta do humano a uma execução pausada (espera-por-humano, 4.6)."""
+
+    resposta: str = Field(min_length=1)
+
+
 # ───────────────────────── Execuções ─────────────────────────────
 
 
