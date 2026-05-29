@@ -281,15 +281,21 @@ Cada tarefa abaixo envolve as duas partes (cérebro e interface) e deve mantê-l
 
 **Verificar:** o maestro cria um Líder e dois Agentes num time, preenche os markdowns de cada um, e tudo é salvo e relido corretamente.
 
-### Definition of Done — Fase 2
+### Definition of Done — Fase 2 ✅ (concluída 2026-05-29, commit `f1aa462`)
 
-- [ ] Verificações automáticas das duas partes passam
-- [ ] Criar/listar/editar/remover Organizações funciona pela tela
-- [ ] Criar/listar/editar/remover Times funciona pela tela
-- [ ] Criar/listar/editar/remover Agentes funciona, com os quatro markdowns
-- [ ] Regra de um Líder por time respeitada
-- [ ] Maestro confirmou o fluxo completo clicando nas telas
-- [ ] **Commit + push:** `feat: gestão de organizações, times e agentes`
+- [x] Verificações automáticas das duas partes passam — `tsc` e `eslint` da interface verdes; CRUD do cérebro exercitado por chamadas reais
+- [x] Criar/listar/editar/remover Organizações funciona pela tela
+- [x] Criar/listar/editar/remover Times funciona pela tela
+- [x] Criar/listar/editar/remover Agentes funciona, com os quatro markdowns
+- [x] Regra de um Líder por time respeitada — checagem prévia devolve 409 com mensagem clara; índice parcial do banco como backstop
+- [x] Maestro confirmou o fluxo completo clicando nas telas
+- [x] **Commit + push:** `feat: gestão de organizações, times e agentes`
+
+**Decisões técnicas desta fase:**
+- Estrutura do cérebro: `sessao.py` (sessão por requisição), `esquemas.py` (Pydantic v2) e pacote `rotas/` por recurso
+- Isolamento por dono em toda consulta, via `usuario_fixo` — ponto único a trocar na Etapa 2
+- Interface: padrão Server Component (busca) + ilha cliente (mutação) + `router.refresh()`, porque o Next 16 barra `useEffect`+`fetch` no lint
+- Cliente único `lib/api.ts` centraliza o acesso ao cérebro e traduz o `detail` do FastAPI em mensagem
 
 ---
 
