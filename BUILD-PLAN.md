@@ -351,6 +351,22 @@ Cada tarefa abaixo envolve as duas partes (cérebro e interface) e deve mantê-l
 
 Esta é a fase mais difícil do projeto. Vá devagar, tarefa por tarefa, verificando cada uma.
 
+> **Progresso (sessão de 2026-05-29) — Fase 4 em andamento, NÃO concluída.**
+> Feito e verificado por chamadas reais (commits locais, **ainda sem push**):
+> - **4.1** Chamar LLM — `orquestracao/llm.py` (langchain-anthropic; chave do `.env`). Commit `8fe99e3`.
+> - **4.2** Um agente sozinho — `orquestracao/agente.py` (markdowns→prompt; cinto→ferramentas; `create_react_agent`). Endpoint `POST /agentes/{id}/executar`. Commit `8fe99e3`.
+> - **4.3** Cadeia com **bifurcação** — `orquestracao/cadeia.py` (grafo; roteamento por LLM estruturado; loops com guarda). Commit `7d4f180`. Plano corrigido em `58456a4`.
+> - **4.4** Registrar cada passo — disparo grava `execucoes`/`passos_execucao`. Commit `1b8c794`.
+> - **4.5** Tela de inspeção — `/automacoes/[id]` mostra passos. Commit `1b8c794`.
+> - **Construtor de automação** (lacuna do plano, suprida) — `/times/[id]/automacoes` monta o grafo. Gatilho de teste `tipo_gatilho="manual"`. Commit `1b8c794`.
+>
+> **Falta para fechar a Fase 4:**
+> - **4.6 Espera-por-humano** — requer decisões de produto do maestro (como a pausa aparece, como responde, como retoma). Próximo passo ao retomar.
+> - **4.7 Gatilhos** — WhatsApp, CRON, webhook (hoje o disparo é manual).
+> - Validação do maestro clicando o fluxo completo.
+>
+> **Para retomar:** subir o cérebro (`uv run uvicorn main:app --port 8000` em `cerebro/`, com `uv` no PATH) e a interface (`npm run dev` em `interface/`). A `ANTHROPIC_API_KEY` já está no `cerebro/.env` (fora do git).
+
 ### Tarefa 4.1 — Chamar uma LLM
 
 **Investigar:** leia a documentação do LangGraph e do provedor de IA sobre fazer uma chamada simples a um modelo, usando a chave do arquivo de segredos.
