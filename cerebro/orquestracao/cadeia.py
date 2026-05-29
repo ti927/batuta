@@ -188,9 +188,10 @@ def executar_cadeia(
         destino = escolhida.get("destino") if escolhida else None
         proximo = None if destino in _DESTINOS_FIM else destino
 
-        # Pausa para humano: o agente terminou (sua saída é a pergunta) e há um
-        # próximo nó. Para aqui; a retomada continuará em `proximo` com a resposta.
-        if no.get("pausa_humano") and proximo is not None:
+        # Pausa para humano: o agente terminou (sua saída é a pergunta). Para
+        # aqui SEMPRE que marcado. Ao responder, a retomada segue para `proximo`
+        # (a saída escolhida); se não houver próximo, a resposta encerra o fluxo.
+        if no.get("pausa_humano"):
             return {
                 "estado": "aguardando_humano",
                 "pergunta": saida_texto,

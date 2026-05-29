@@ -236,6 +236,14 @@ export function AutomacoesCliente({
                   Ao terminar, pausar e perguntar ao humano (o que ele escrever
                   vira a pergunta; sua resposta segue ao próximo agente)
                 </label>
+                {pausa[a.id] && (saidas[a.id] ?? []).length === 0 && (
+                  <p className="mb-2 text-xs text-amber-700">
+                    ⚠ Este agente espera resposta mas não tem saída: ao responder,
+                    o fluxo encerra. Para ele reagir à sua resposta, adicione uma
+                    saída (pode apontar para este mesmo agente, criando uma
+                    conversa de ida e volta).
+                  </p>
+                )}
                 {(saidas[a.id] ?? []).length === 0 ? (
                   <p className="text-xs text-zinc-400">Sem saídas (encerra aqui).</p>
                 ) : (
