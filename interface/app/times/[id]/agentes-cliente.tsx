@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { api, ErroDaApi, type Agente, type Papel, type Time } from "@/lib/api";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 // Modelos de IA conhecidos (Etapa 1). Lista crua; refina-se depois.
 const MODELOS = ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"];
@@ -131,7 +131,15 @@ export function AgentesCliente({
         ← Voltar à organização
       </Link>
       <h1 className="mt-2 mb-1 text-2xl font-bold">{time.nome}</h1>
-      <p className="mb-6 text-sm text-zinc-500">Agentes do time</p>
+      <div className="mb-6 flex items-center gap-3">
+        <p className="text-sm text-zinc-500">Agentes do time</p>
+        <Link
+          href={`/times/${time.id}/instrumentos`}
+          className="text-sm text-blue-600 underline underline-offset-4"
+        >
+          Instrumentos do time →
+        </Link>
+      </div>
 
       {erro && (
         <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
@@ -240,6 +248,12 @@ export function AgentesCliente({
                   <span className="ml-2 text-xs text-zinc-400">{a.modelo_ia}</span>
                 )}
               </span>
+              <Link
+                href={`/agentes/${a.id}`}
+                className={buttonVariants({ size: "sm", variant: "outline" })}
+              >
+                Cinto
+              </Link>
               <Button size="sm" variant="outline" onClick={() => abrirEdicao(a)}>
                 Editar
               </Button>

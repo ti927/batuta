@@ -112,3 +112,61 @@ class AgenteLer(BaseModel):
     modelo_ia: str | None
     criado_em: datetime
     atualizado_em: datetime
+
+
+# ────────────────────────── Instrumentos ─────────────────────────
+
+
+class InstrumentoCriar(BaseModel):
+    """Dados para criar um instrumento. A configuração é validada contra o
+    esquema do tipo (o encaixe), não aqui."""
+
+    nome: str = Field(min_length=1, max_length=200)
+    tipo: str = Field(min_length=1, max_length=50)
+    configuracao: dict = Field(default_factory=dict)
+
+
+class InstrumentoEditar(BaseModel):
+    """Edita um instrumento. O tipo é fixo após a criação; muda-se nome e
+    configuração."""
+
+    nome: str = Field(min_length=1, max_length=200)
+    configuracao: dict = Field(default_factory=dict)
+
+
+class InstrumentoLer(BaseModel):
+    """Instrumento como a API o devolve."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    time_id: uuid.UUID
+    nome: str
+    tipo: str
+    configuracao: dict | None
+    criado_em: datetime
+    atualizado_em: datetime
+
+
+class TipoInstrumentoLer(BaseModel):
+    """Um tipo de instrumento disponível no encaixe, para a interface montar
+    o formulário de configuração e de acionamento."""
+
+    tipo: str
+    nome_exibicao: str
+    descricao: str
+    esquema_config: dict
+    esquema_args: dict
+
+
+class AcionarInstrumento(BaseModel):
+    """Argumentos para acionar um instrumento isoladamente (teste/Fase 4).
+    Validados contra o esquema de Args do tipo."""
+
+    argumentos: dict = Field(default_factory=dict)
+
+
+class VincularInstrumento(BaseModel):
+    """Pendura um instrumento no cinto de um agente."""
+
+    instrumento_id: uuid.UUID

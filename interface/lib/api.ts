@@ -84,3 +84,21 @@ export type Agente = {
   criado_em: string;
   atualizado_em: string;
 };
+
+export type Instrumento = {
+  id: string;
+  time_id: string;
+  nome: string;
+  tipo: string;
+  configuracao: Record<string, unknown> | null;
+  criado_em: string;
+  atualizado_em: string;
+};
+
+export type TipoInstrumento = {
+  tipo: string;
+  nome_exibicao: string;
+  descricao: string;
+  esquema_config: Record<string, unknown>;
+  esquema_args: Record<string, unknown>;
+};
