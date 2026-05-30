@@ -545,10 +545,10 @@ Cada um entra no encaixe `instrumentos/base.py` (subclasse `TipoInstrumento` com
 `Config`/`Args`/`executar`), com verificação real e acionamento isolado, e a tela
 de configuração já existente.
 
-- [ ] **Webhook de saída** — POST a uma URL para avisar/acionar outro sistema. Sem conta externa.
-- [ ] **Busca na web** — informação atualizada da internet. Precisa de chave de um provedor (o maestro cria a conta; a chave vai no `cerebro/.env`).
-- [ ] **Gerar PDF/documento** — produzir um arquivo e devolver um link. Pode exigir Supabase Storage (bucket + chave de serviço).
-- [ ] **Conectar MCP** — padrão universal de integração; expõe as ferramentas de um servidor MCP ao agente.
+- [x] **Webhook de saída** — POST a uma URL para avisar/acionar outro sistema. `instrumentos/webhook_saida.py`. Commit `6953c77`.
+- [~] **Busca na web** — via Tavily; chave em `cerebro/.env` (`TAVILY_API_KEY`). `instrumentos/busca_web.py`, commit `ebb13ff`. **Código pronto; falta verificar a busca real com a chave do maestro.**
+- [x] **Gerar PDF/documento** — `instrumentos/gerar_pdf.py` (fpdf2); arquivo servido localmente pelo cérebro em `/arquivos` (`arquivos.py` + StaticFiles), migra para Supabase Storage na Etapa 2. Commit `ebb13ff`.
+- [→] **Conectar MCP** — **adiado para a Etapa 2 (Fase 8)** por decisão do maestro (2026-05-30): é o único que mexe no núcleo da orquestração (instrumento multi-ferramenta + assíncrono); não vale arriscar o motor às vésperas do portão.
 - [ ] **Commit + push:** `feat: mais instrumentos do core`
 
 ---
@@ -589,7 +589,7 @@ Login e cadastro reais (Supabase Auth), substituindo o usuário fixo de testes. 
 Aplicar o `DESIGN-SYSTEM.md` — cores, tipografia, logo, tom de voz — sobre as telas cruas do core. As telas deixam de ser cruas e passam a ser o Batuta.
 
 ## FASE 8 — Cofre de segredos e mais instrumentos
-O cofre de chaves dos clientes (`PRODUTO.md`, seção 26). Os demais tipos de instrumento do `PRODUTO.md`, seção 13, entrando no encaixe já provado na Fase 3.
+O cofre de chaves dos clientes (`PRODUTO.md`, seção 26). Os demais tipos de instrumento do `PRODUTO.md`, seção 13, entrando no encaixe já provado na Fase 3 — incluindo o **Conectar MCP** (adiado da frente 5.6 por exigir instrumento multi-ferramenta + assíncrono no núcleo), além de SQL direto, planilhas, multimídia "de entendimento" e contas Google/Microsoft/Apple (OAuth + cofre).
 
 ## FASE 9 — Canais e gatilhos completos
 O canal de WhatsApp e o webhook de entrada completos, ligados ao Líder, conforme o `PRODUTO.md`.
