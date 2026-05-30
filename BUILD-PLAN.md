@@ -528,7 +528,28 @@ banco e na tela.
 - [x] Várias execuções simultâneas são processadas sem perda
 - [x] O uso (tokens, custo aproximado) é registrado e exibido
 - [x] Gestão de execuções: listar/filtrar (inclusive as paradas), cancelar, deletar e retomar pela tela
-- [ ] **Commit + push:** `feat: robustez do core` (push pende confirmação do maestro)
+- [x] **Commit + push:** `feat: robustez do core` (push `05f2032..6124ba9` em 2026-05-30)
+
+---
+
+## FASE 5.6 — Mais instrumentos do core (pré-portão)
+
+> **Origem (2026-05-30):** o maestro observou, com razão, que validar o core
+> "exaustivamente" com **um só** instrumento (REST) não exercita o **cinto**, que
+> é conceito central (PRODUTO §13). O encaixe (Fase 3) já está provado, então cada
+> instrumento novo é "mais um plugue". O maestro escolheu adicionar quatro antes
+> do portão. Os demais do §13 (SQL, planilhas, multimídia "de entendimento",
+> contas Google/MS via OAuth+cofre) seguem para a Etapa 2 (Fase 8).
+
+Cada um entra no encaixe `instrumentos/base.py` (subclasse `TipoInstrumento` com
+`Config`/`Args`/`executar`), com verificação real e acionamento isolado, e a tela
+de configuração já existente.
+
+- [ ] **Webhook de saída** — POST a uma URL para avisar/acionar outro sistema. Sem conta externa.
+- [ ] **Busca na web** — informação atualizada da internet. Precisa de chave de um provedor (o maestro cria a conta; a chave vai no `cerebro/.env`).
+- [ ] **Gerar PDF/documento** — produzir um arquivo e devolver um link. Pode exigir Supabase Storage (bucket + chave de serviço).
+- [ ] **Conectar MCP** — padrão universal de integração; expõe as ferramentas de um servidor MCP ao agente.
+- [ ] **Commit + push:** `feat: mais instrumentos do core`
 
 ---
 
