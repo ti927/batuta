@@ -497,6 +497,29 @@ Esta é a fase mais difícil do projeto. Vá devagar, tarefa por tarefa, verific
 
 **Verificar:** após algumas execuções, o maestro vê o uso registrado por execução, com custo estimado.
 
+### Tarefa 5.5 — Gestão de execuções
+
+> **Origem (2026-05-30):** lacuna levantada pelo maestro ao testar o agendamento
+> (Tarefa 4.7). Hoje as execuções só aparecem listadas por automação e o único
+> controle é responder uma pausa (4.6) e disparar manualmente (4.7). Falta a
+> visão e o controle operacional de todas elas.
+
+**Investigar:** revise os estados de `execucoes` (`aguardando`, `em_andamento`,
+`aguardando_humano`, `concluida`, `falhou`) e como uma execução em andamento ou
+pausada pode ser interrompida com segurança (especialmente a integração com a
+espera-por-humano e a futura fila da 5.3). Defina o que "cancelar" significa para
+cada estado.
+
+**Implementar:** uma visão consolidada de execuções (não só por automação) com
+filtro por estado — ver de relance quais estão **paradas/aguardando humano**, em
+andamento, concluídas ou falhas; e o controle sobre cada uma: **cancelar** uma em
+andamento ou pausada (estado final claro), **deletar** o registro de uma execução,
+**disparar/retomar** pela tela. Crua na aparência, completa no conteúdo.
+
+**Verificar:** o maestro abre a visão de execuções, filtra as paradas, cancela
+uma, deleta outra, e retoma uma terceira — cada ação reflete corretamente no
+banco e na tela.
+
 ### Definition of Done — Fase 5
 
 - [ ] Verificações automáticas passam
@@ -504,6 +527,7 @@ Esta é a fase mais difícil do projeto. Vá devagar, tarefa por tarefa, verific
 - [ ] O progresso de uma execução é visível em tempo real
 - [ ] Várias execuções simultâneas são processadas sem perda
 - [ ] O uso (tokens, custo aproximado) é registrado e exibido
+- [ ] Gestão de execuções: listar/filtrar (inclusive as paradas), cancelar, deletar e retomar pela tela
 - [ ] **Commit + push:** `feat: robustez do core`
 
 ---
@@ -525,6 +549,7 @@ Antes de qualquer tarefa da Etapa 2, o maestro testa o core exaustivamente. Rote
 - [ ] Forçar uma falha de instrumento e ver o tratamento
 - [ ] Disparar várias execuções ao mesmo tempo
 - [ ] Conferir a medição de uso
+- [ ] Listar as execuções, filtrar as paradas, e cancelar/deletar/retomar uma pela tela
 
 **O maestro, e somente o maestro, declara o core validado.** Enquanto não declarar, o trabalho continua na Etapa 1, corrigindo e refinando. Nenhuma tarefa da Etapa 2 começa antes dessa declaração.
 
