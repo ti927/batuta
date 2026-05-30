@@ -16,8 +16,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import select
 
+import fila
 from modelos import Automacao
-from orquestracao.disparo import executar_automacao
+from orquestracao.disparo import criar_execucao
 from sessao import CriadorDeSessao
 
 FUSO = "America/Sao_Paulo"
@@ -60,8 +61,9 @@ def _rodar(automacao_id_str: str) -> None:
         if auto is None or not auto.ativa or auto.tipo_gatilho != TIPO_AGENDAMENTO:
             return  # desativada/removida/trocou de gatilho — não dispara
         entrada = (auto.configuracao_gatilho or {}).get("entrada") or ""
-        executar_automacao(sessao, auto, entrada)
-        logger.info("Automação agendada %s disparada.", automacao_id_str)
+        criar_execucao(sessao, auto, entrada)  # enfileira; a fila roda
+        fila.enfileirar()
+        logger.info("Automação agendada %s enfileirada.", automacao_id_str)
     except Exception:
         logger.exception("Falha ao rodar automação agendada %s", automacao_id_str)
     finally:

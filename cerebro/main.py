@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import agendador
+import fila
 from rotas import (
     agentes,
     automacoes,
@@ -18,10 +19,13 @@ from rotas import (
 
 @asynccontextmanager
 async def ciclo_de_vida(app: FastAPI):
-    """Sobe o relógio dos gatilhos por agendamento ao iniciar; desliga ao parar."""
+    """Sobe a fila de execuções (pool de trabalhadores) e o relógio dos gatilhos
+    por agendamento ao iniciar; desliga ambos ao parar."""
+    fila.iniciar()
     agendador.iniciar()
     yield
     agendador.desligar()
+    fila.desligar()
 
 
 app = FastAPI(title="Batuta — Cérebro", lifespan=ciclo_de_vida)

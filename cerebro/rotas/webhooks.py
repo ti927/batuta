@@ -12,10 +12,10 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
-from starlette.concurrency import run_in_threadpool
 
+import fila
 from modelos import Automacao
-from orquestracao.disparo import executar_automacao
+from orquestracao.disparo import criar_execucao
 from sessao import obter_sessao
 
 rotas = APIRouter(tags=["webhooks"])
@@ -54,7 +54,7 @@ async def receber(
         raise HTTPException(status.HTTP_409_CONFLICT, "Esta automação está desativada.")
 
     entrada = _extrair_entrada(await request.body())
-    # A execução faz chamadas bloqueantes (LLM); roda numa thread para não
-    # travar o event loop.
-    execucao = await run_in_threadpool(executar_automacao, sessao, auto, entrada)
+    # Enfileira e responde na hora (ack ao sistema externo); a fila roda a cadeia.
+    execucao = criar_execucao(sessao, auto, entrada)
+    fila.enfileirar()
     return {"execucao_id": str(execucao.id), "estado": execucao.estado}

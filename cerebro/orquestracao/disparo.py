@@ -1,12 +1,12 @@
-"""Disparo de uma automação — o ponto único onde uma execução nasce.
+"""Disparo de uma automação — onde uma execução nasce e como ela roda.
 
-Todos os gatilhos (botão manual, agendamento/CRON, webhook de entrada) chegam
-aqui: criam uma `Execucao`, rodam a cadeia sobre o LangGraph e gravam o
-resultado. Cada chamador entra com sua própria sessão de banco — o botão usa a
-sessão da requisição; o agendador e o webhook abrem uma sessão própria.
+Todos os gatilhos (botão manual, agendamento/CRON, webhook) **enfileiram**: criam
+a execução no estado `aguardando` (`criar_execucao`) e devolvem na hora. Quem de
+fato roda a cadeia é o pool de trabalhadores da fila (`fila.py`), que chama
+`rodar_execucao`. Assim muitas execuções simultâneas são organizadas sem travar
+(PRODUTO §18, Tarefa 5.3).
 """
 
-import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -14,9 +14,6 @@ from sqlalchemy.orm import Session
 
 from modelos import Automacao, Execucao, PassoExecucao
 from orquestracao.cadeia import executar_cadeia
-from sessao import CriadorDeSessao
-
-logger = logging.getLogger("batuta.disparo")
 
 
 def _fazer_registrador(sessao: Session, execucao_id: uuid.UUID):
@@ -57,16 +54,14 @@ def _aplicar_resultado(execucao: Execucao, r: dict) -> None:
 def criar_execucao(
     sessao: Session, automacao: Automacao, entrada: str
 ) -> Execucao:
-    """Cria o registro da execução (estado `em_andamento`) e devolve já com id.
-
-    Separado de `rodar_execucao` para o disparo poder responder na hora (com o
-    id) enquanto a cadeia roda em segundo plano — é o que permite a tela mostrar
-    o progresso ao vivo (Tarefa 5.2)."""
+    """Enfileira uma execução: cria o registro no estado `aguardando` e devolve
+    já com id. Quem roda é o pool de trabalhadores (`fila.py`); por isso o
+    disparo responde na hora e a tela mostra o progresso (Tarefas 5.2 e 5.3).
+    `iniciada_em` fica nulo até um trabalhador pegar a execução."""
     execucao = Execucao(
         automacao_id=automacao.id,
-        estado="em_andamento",
+        estado="aguardando",
         entrada={"texto": entrada},
-        iniciada_em=datetime.now(timezone.utc),
     )
     sessao.add(execucao)
     sessao.commit()
@@ -75,8 +70,9 @@ def criar_execucao(
 
 
 def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
-    """Roda a cadeia de uma execução já criada, gravando cada passo e o estado
-    final (concluida, aguardando_humano ou falhou). Devolve a execução."""
+    """Roda a cadeia de uma execução já reivindicada pelo trabalhador, gravando
+    cada passo e o estado final (concluida, aguardando_humano ou falhou).
+    Devolve a execução."""
     automacao = sessao.get(Automacao, execucao.automacao_id)
     entrada = (execucao.entrada or {}).get("texto", "")
     try:
@@ -94,30 +90,3 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
     sessao.commit()
     sessao.refresh(execucao)
     return execucao
-
-
-def executar_automacao(
-    sessao: Session, automacao: Automacao, entrada: str
-) -> Execucao:
-    """Cria e roda uma execução de ponta a ponta (síncrono). Usado por quem
-    espera o resultado pronto: o gatilho de agendamento e o webhook.
-
-    Não decide *quem* pode disparar nem checa o gatilho — apenas executa.
-    """
-    execucao = criar_execucao(sessao, automacao, entrada)
-    return rodar_execucao(sessao, execucao)
-
-
-def rodar_execucao_em_segundo_plano(execucao_id: uuid.UUID) -> None:
-    """Roda uma execução já criada, numa sessão própria. É o que o disparo
-    manual agenda como tarefa de fundo para responder na hora à tela."""
-    sessao = CriadorDeSessao()
-    try:
-        execucao = sessao.get(Execucao, execucao_id)
-        if execucao is None:
-            return
-        rodar_execucao(sessao, execucao)
-    except Exception:  # rede/LLM já viram 'falhou' em rodar_execucao; isto é defesa
-        logger.exception("Falha ao rodar execução em segundo plano %s", execucao_id)
-    finally:
-        sessao.close()

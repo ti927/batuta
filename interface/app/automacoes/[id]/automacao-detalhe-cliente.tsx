@@ -230,6 +230,12 @@ export function AutomacaoDetalheCliente({
               {aberta.estado}
             </span>
           </div>
+          {aberta.estado === "aguardando" && (
+            <p className="mt-2 flex items-center gap-2 text-sm text-zinc-500">
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-zinc-400" />
+              Na fila, aguardando um trabalhador…
+            </p>
+          )}
           {aberta.estado === "em_andamento" && (
             <p className="mt-2 flex items-center gap-2 text-sm text-amber-700">
               <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-amber-500" />
