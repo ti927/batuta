@@ -2,9 +2,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 import agendador
 import fila
+from arquivos import DIRETORIO_ARQUIVOS
 from rotas import (
     agentes,
     automacoes,
@@ -51,3 +53,6 @@ app.include_router(cinto.rotas)
 app.include_router(execucao.rotas)
 app.include_router(automacoes.rotas)
 app.include_router(webhooks.rotas)
+
+# Arquivos gerados (ex.: PDFs do instrumento gerar_pdf), servidos localmente.
+app.mount("/arquivos", StaticFiles(directory=DIRETORIO_ARQUIVOS), name="arquivos")

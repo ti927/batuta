@@ -16,6 +16,8 @@ from instrumentos.base import (
 )
 
 # Registra os tipos concretos ao importar o pacote.
+from instrumentos import busca_web  # noqa: E402, F401  (efeito colateral: registro)
+from instrumentos import gerar_pdf  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import rest  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import webhook_saida  # noqa: E402, F401  (efeito colateral: registro)
 
