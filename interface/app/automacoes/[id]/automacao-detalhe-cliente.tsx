@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 // Estados em que a execução parou de avançar (não há mais o que acompanhar).
-const ESTADOS_TERMINAIS = ["concluida", "falhou", "aguardando_humano"];
+const ESTADOS_TERMINAIS = ["concluida", "falhou", "aguardando_humano", "cancelada"];
 
 const COR_ESTADO: Record<string, string> = {
   concluida: "bg-green-100 text-green-800",
@@ -23,6 +23,7 @@ const COR_ESTADO: Record<string, string> = {
   em_andamento: "bg-amber-100 text-amber-800",
   aguardando: "bg-zinc-100 text-zinc-600",
   aguardando_humano: "bg-blue-100 text-blue-800",
+  cancelada: "bg-zinc-200 text-zinc-700",
 };
 
 function Passos({

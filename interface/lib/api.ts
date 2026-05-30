@@ -183,3 +183,6 @@ export type ExecucaoComPassos = Execucao & {
   passos: PassoExecucao[];
   uso?: ResumoUso | null;
 };
+
+// Execução na visão consolidada (gestão de execuções), com o nome da automação.
+export type ExecucaoNaLista = Execucao & { automacao_nome: string };

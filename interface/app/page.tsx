@@ -8,12 +8,20 @@ export default function Home() {
       <h1 className="text-5xl font-bold tracking-tight">Batuta</h1>
       <p className="text-sm text-zinc-500">Você guia. A IA executa.</p>
       <StatusCerebro />
-      <Link
-        href="/organizacoes"
-        className="mt-4 text-sm text-blue-600 underline underline-offset-4"
-      >
-        Organizações →
-      </Link>
+      <div className="mt-4 flex gap-4 text-sm">
+        <Link
+          href="/organizacoes"
+          className="text-blue-600 underline underline-offset-4"
+        >
+          Organizações →
+        </Link>
+        <Link
+          href="/execucoes"
+          className="text-blue-600 underline underline-offset-4"
+        >
+          Execuções →
+        </Link>
+      </div>
     </main>
   );
 }

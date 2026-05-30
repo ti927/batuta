@@ -10,6 +10,7 @@ fato roda a cadeia é o pool de trabalhadores da fila (`fila.py`), que chama
 import uuid
 from datetime import datetime, timezone
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from modelos import Automacao, Execucao, PassoExecucao
@@ -43,13 +44,29 @@ def _fazer_registrador(sessao: Session, execucao_id: uuid.UUID):
 
 
 def _aplicar_resultado(execucao: Execucao, r: dict) -> None:
-    """Aplica à execução o que a cadeia devolveu: pausa ou conclusão."""
+    """Aplica à execução o que a cadeia devolveu: pausa, cancelamento ou
+    conclusão."""
     if r["estado"] == "aguardando_humano":
         execucao.estado = "aguardando_humano"  # sem finalizada_em: ainda viva
+    elif r["estado"] == "cancelada":
+        execucao.estado = "cancelada"
+        if not execucao.resultado:
+            execucao.resultado = {"texto": "Cancelada pelo operador."}
+        execucao.finalizada_em = datetime.now(timezone.utc)
     else:
         execucao.estado = "concluida"
         execucao.resultado = {"texto": r["resultado"]}
         execucao.finalizada_em = datetime.now(timezone.utc)
+
+
+def _esta_cancelada(sessao: Session, execucao_id: uuid.UUID) -> bool:
+    """Relê o estado da execução no banco (vê o que outra sessão já gravou)."""
+    return (
+        sessao.execute(
+            select(Execucao.estado).where(Execucao.id == execucao_id)
+        ).scalar()
+        == "cancelada"
+    )
 
 
 def criar_execucao(
@@ -82,6 +99,7 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
             (automacao.cadeia if automacao else None) or {},
             entrada,
             registrar_passo=_fazer_registrador(sessao, execucao.id),
+            cancelado=lambda: _esta_cancelada(sessao, execucao.id),
         )
         _aplicar_resultado(execucao, r)
     except Exception as e:  # falha de LLM/rede/cadeia inválida — registra e segue

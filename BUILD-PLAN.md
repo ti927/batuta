@@ -522,13 +522,13 @@ banco e na tela.
 
 ### Definition of Done — Fase 5
 
-- [ ] Verificações automáticas passam
-- [ ] Falha de instrumento é tratada e fica visível, nunca silenciosa
-- [ ] O progresso de uma execução é visível em tempo real
-- [ ] Várias execuções simultâneas são processadas sem perda
-- [ ] O uso (tokens, custo aproximado) é registrado e exibido
-- [ ] Gestão de execuções: listar/filtrar (inclusive as paradas), cancelar, deletar e retomar pela tela
-- [ ] **Commit + push:** `feat: robustez do core`
+- [x] Verificações automáticas passam
+- [x] Falha de instrumento é tratada e fica visível, nunca silenciosa
+- [x] O progresso de uma execução é visível em tempo real
+- [x] Várias execuções simultâneas são processadas sem perda
+- [x] O uso (tokens, custo aproximado) é registrado e exibido
+- [x] Gestão de execuções: listar/filtrar (inclusive as paradas), cancelar, deletar e retomar pela tela
+- [ ] **Commit + push:** `feat: robustez do core` (push pende confirmação do maestro)
 
 ---
 

@@ -131,6 +131,7 @@ def executar_cadeia(
     ordem_inicial: int = 0,
     max_passos: int = MAX_PASSOS,
     registrar_passo: Callable[[dict, int], None] | None = None,
+    cancelado: Callable[[], bool] | None = None,
 ) -> dict:
     """Executa a cadeia seguindo as bifurcações, até um fim OU uma pausa para
     humano. Pode começar de `no_inicial` (retomada) em vez do início.
@@ -155,6 +156,10 @@ def executar_cadeia(
     neste_trecho = 0
 
     while no_atual is not None:
+        # Cancelamento cooperativo (Tarefa 5.5): entre passos, se o operador
+        # cancelou, paramos aqui — os passos já feitos ficam registrados.
+        if cancelado is not None and cancelado():
+            return {"estado": "cancelada", "ordem": ordem, "passos": passos}
         neste_trecho += 1
         if neste_trecho > max_passos:
             raise RuntimeError(

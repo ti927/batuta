@@ -20,13 +20,14 @@ from esquemas import (
     DispararAutomacao,
     ExecucaoComPassos,
     ExecucaoLer,
+    ExecucaoNaLista,
     PassoExecucaoLer,
     ResponderHumano,
 )
 import agendador
 import fila
 import precos
-from modelos import Agente, Automacao, Execucao, PassoExecucao
+from modelos import Agente, Automacao, Execucao, Organizacao, PassoExecucao, Time
 from orquestracao.cadeia import executar_cadeia, validar_cadeia
 from orquestracao.disparo import (
     _aplicar_resultado,
@@ -35,6 +36,10 @@ from orquestracao.disparo import (
 )
 from rotas._comum import time_do_dono
 from sessao import obter_sessao
+from usuario_fixo import usuario_atual_id
+
+# Estados em que a execução já encerrou (não há mais o que cancelar).
+ESTADOS_ENCERRADOS = {"concluida", "falhou", "cancelada"}
 
 rotas = APIRouter(tags=["automacoes"])
 
@@ -45,6 +50,14 @@ def _automacao_do_dono(sessao: Session, automacao_id: uuid.UUID) -> Automacao:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Automação não encontrada")
     time_do_dono(sessao, auto.time_id)
     return auto
+
+
+def _execucao_do_dono(sessao: Session, execucao_id: uuid.UUID) -> Execucao:
+    execucao = sessao.get(Execucao, execucao_id)
+    if execucao is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Execução não encontrada")
+    _automacao_do_dono(sessao, execucao.automacao_id)
+    return execucao
 
 
 def _ids_dos_agentes(sessao: Session, time_id: uuid.UUID) -> set[str]:
@@ -243,10 +256,66 @@ def listar_execucoes(
     ).all()
 
 
+@rotas.get("/execucoes", response_model=list[ExecucaoNaLista])
+def listar_todas_execucoes(
+    estado: str | None = None, sessao: Session = Depends(obter_sessao)
+):
+    """Visão consolidada de execuções de todas as automações do dono, com filtro
+    opcional por estado (gestão de execuções, Tarefa 5.5)."""
+    consulta = (
+        select(Execucao, Automacao.nome)
+        .join(Automacao, Automacao.id == Execucao.automacao_id)
+        .join(Time, Time.id == Automacao.time_id)
+        .join(Organizacao, Organizacao.id == Time.organizacao_id)
+        .where(Organizacao.dono_id == usuario_atual_id())
+        .order_by(Execucao.criado_em.desc())
+    )
+    if estado:
+        consulta = consulta.where(Execucao.estado == estado)
+    return [
+        ExecucaoNaLista(
+            **ExecucaoLer.model_validate(e).model_dump(), automacao_nome=nome
+        )
+        for e, nome in sessao.execute(consulta).all()
+    ]
+
+
 @rotas.get("/execucoes/{execucao_id}", response_model=ExecucaoComPassos)
 def obter_execucao(execucao_id: uuid.UUID, sessao: Session = Depends(obter_sessao)):
-    execucao = sessao.get(Execucao, execucao_id)
-    if execucao is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Execução não encontrada")
-    _automacao_do_dono(sessao, execucao.automacao_id)
+    execucao = _execucao_do_dono(sessao, execucao_id)
     return _montar_com_passos(sessao, execucao)
+
+
+@rotas.post("/execucoes/{execucao_id}/cancelar", response_model=ExecucaoComPassos)
+def cancelar_execucao(
+    execucao_id: uuid.UUID, sessao: Session = Depends(obter_sessao)
+):
+    """Cancela uma execução enfileirada, em andamento ou pausada. Se estiver
+    rodando, o trabalhador para no próximo passo (cancelamento cooperativo)."""
+    execucao = _execucao_do_dono(sessao, execucao_id)
+    if execucao.estado in ESTADOS_ENCERRADOS:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Esta execução já encerrou."
+        )
+    execucao.estado = "cancelada"
+    if not execucao.resultado:
+        execucao.resultado = {"texto": "Cancelada pelo operador."}
+    execucao.finalizada_em = datetime.now(timezone.utc)
+    sessao.commit()
+    sessao.refresh(execucao)
+    return _montar_com_passos(sessao, execucao)
+
+
+@rotas.delete("/execucoes/{execucao_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remover_execucao(
+    execucao_id: uuid.UUID, sessao: Session = Depends(obter_sessao)
+):
+    """Apaga o registro de uma execução já encerrada (e seus passos, em cascata).
+    Uma execução ainda viva precisa ser cancelada antes."""
+    execucao = _execucao_do_dono(sessao, execucao_id)
+    if execucao.estado not in ESTADOS_ENCERRADOS:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Cancele a execução antes de apagá-la."
+        )
+    sessao.delete(execucao)
+    sessao.commit()

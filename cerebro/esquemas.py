@@ -259,6 +259,13 @@ class ExecucaoLer(BaseModel):
     criado_em: datetime
 
 
+class ExecucaoNaLista(ExecucaoLer):
+    """Uma execução na visão consolidada (gestão de execuções, Tarefa 5.5),
+    com o nome da automação para dar contexto sem abrir cada uma."""
+
+    automacao_nome: str
+
+
 class ExecucaoComPassos(ExecucaoLer):
     """Uma execução com seu rastro de passos, para a tela de inspeção."""
 
