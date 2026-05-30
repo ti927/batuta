@@ -6,6 +6,7 @@ resultado. Cada chamador entra com sua própria sessão de banco — o botão us
 sessão da requisição; o agendador e o webhook abrem uma sessão própria.
 """
 
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -13,6 +14,9 @@ from sqlalchemy.orm import Session
 
 from modelos import Automacao, Execucao, PassoExecucao
 from orquestracao.cadeia import executar_cadeia
+from sessao import CriadorDeSessao
+
+logger = logging.getLogger("batuta.disparo")
 
 
 def _fazer_registrador(sessao: Session, execucao_id: uuid.UUID):
@@ -50,15 +54,14 @@ def _aplicar_resultado(execucao: Execucao, r: dict) -> None:
         execucao.finalizada_em = datetime.now(timezone.utc)
 
 
-def executar_automacao(
+def criar_execucao(
     sessao: Session, automacao: Automacao, entrada: str
 ) -> Execucao:
-    """Cria e roda uma execução da automação a partir de uma entrada.
+    """Cria o registro da execução (estado `em_andamento`) e devolve já com id.
 
-    Não decide *quem* pode disparar (isso é do chamador) nem checa o gatilho —
-    apenas executa. Devolve a `Execucao` já persistida, em seu estado final
-    (concluida, aguardando_humano ou falhou).
-    """
+    Separado de `rodar_execucao` para o disparo poder responder na hora (com o
+    id) enquanto a cadeia roda em segundo plano — é o que permite a tela mostrar
+    o progresso ao vivo (Tarefa 5.2)."""
     execucao = Execucao(
         automacao_id=automacao.id,
         estado="em_andamento",
@@ -68,11 +71,18 @@ def executar_automacao(
     sessao.add(execucao)
     sessao.commit()
     sessao.refresh(execucao)
+    return execucao
 
+
+def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
+    """Roda a cadeia de uma execução já criada, gravando cada passo e o estado
+    final (concluida, aguardando_humano ou falhou). Devolve a execução."""
+    automacao = sessao.get(Automacao, execucao.automacao_id)
+    entrada = (execucao.entrada or {}).get("texto", "")
     try:
         r = executar_cadeia(
             sessao,
-            automacao.cadeia or {},
+            (automacao.cadeia if automacao else None) or {},
             entrada,
             registrar_passo=_fazer_registrador(sessao, execucao.id),
         )
@@ -84,3 +94,30 @@ def executar_automacao(
     sessao.commit()
     sessao.refresh(execucao)
     return execucao
+
+
+def executar_automacao(
+    sessao: Session, automacao: Automacao, entrada: str
+) -> Execucao:
+    """Cria e roda uma execução de ponta a ponta (síncrono). Usado por quem
+    espera o resultado pronto: o gatilho de agendamento e o webhook.
+
+    Não decide *quem* pode disparar nem checa o gatilho — apenas executa.
+    """
+    execucao = criar_execucao(sessao, automacao, entrada)
+    return rodar_execucao(sessao, execucao)
+
+
+def rodar_execucao_em_segundo_plano(execucao_id: uuid.UUID) -> None:
+    """Roda uma execução já criada, numa sessão própria. É o que o disparo
+    manual agenda como tarefa de fundo para responder na hora à tela."""
+    sessao = CriadorDeSessao()
+    try:
+        execucao = sessao.get(Execucao, execucao_id)
+        if execucao is None:
+            return
+        rodar_execucao(sessao, execucao)
+    except Exception:  # rede/LLM já viram 'falhou' em rodar_execucao; isto é defesa
+        logger.exception("Falha ao rodar execução em segundo plano %s", execucao_id)
+    finally:
+        sessao.close()

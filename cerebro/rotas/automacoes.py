@@ -9,7 +9,7 @@ de inspeção (Tarefas 4.3, 4.4 e 4.5).
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -29,7 +29,8 @@ from orquestracao.cadeia import executar_cadeia, validar_cadeia
 from orquestracao.disparo import (
     _aplicar_resultado,
     _fazer_registrador,
-    executar_automacao,
+    criar_execucao,
+    rodar_execucao_em_segundo_plano,
 )
 from rotas._comum import time_do_dono
 from sessao import obter_sessao
@@ -144,12 +145,18 @@ def _montar_com_passos(sessao: Session, execucao: Execucao) -> ExecucaoComPassos
 def disparar(
     automacao_id: uuid.UUID,
     dados: DispararAutomacao,
+    tarefas: BackgroundTasks,
     sessao: Session = Depends(obter_sessao),
 ):
     """Disparo manual (botão de teste): roda independente do gatilho da
-    automação — é a forma de o maestro testar qualquer fluxo na Etapa 1."""
+    automação — é a forma de o maestro testar qualquer fluxo na Etapa 1.
+
+    Não bloqueia: cria a execução, devolve o id na hora (estado `em_andamento`)
+    e roda a cadeia em segundo plano. A tela acompanha o progresso consultando
+    a execução (Tarefa 5.2)."""
     auto = _automacao_do_dono(sessao, automacao_id)
-    execucao = executar_automacao(sessao, auto, dados.entrada)
+    execucao = criar_execucao(sessao, auto, dados.entrada)
+    tarefas.add_task(rodar_execucao_em_segundo_plano, execucao.id)
     return _montar_com_passos(sessao, execucao)
 
 

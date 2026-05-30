@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   api,
@@ -13,6 +13,9 @@ import {
   type ExecucaoComPassos,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+
+// Estados em que a execução parou de avançar (não há mais o que acompanhar).
+const ESTADOS_TERMINAIS = ["concluida", "falhou", "aguardando_humano"];
 
 const COR_ESTADO: Record<string, string> = {
   concluida: "bg-green-100 text-green-800",
@@ -89,11 +92,44 @@ export function AutomacaoDetalheCliente({
   const [resposta, setResposta] = useState("");
   const [respondendo, setRespondendo] = useState(false);
 
+  // Acompanhamento ao vivo: enquanto a execução está em andamento, consultamos
+  // a cada 1,5s e redesenhamos os passos conforme terminam (Tarefa 5.2).
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function pararPoll() {
+    if (pollRef.current) {
+      clearTimeout(pollRef.current);
+      pollRef.current = null;
+    }
+  }
+
+  // Limpa o acompanhamento ao sair da tela.
+  useEffect(() => pararPoll, []);
+
+  function acompanhar(id: string) {
+    pollRef.current = setTimeout(async () => {
+      try {
+        const r = await api.get<ExecucaoComPassos>(`/execucoes/${id}`);
+        setAberta(r);
+        if (ESTADOS_TERMINAIS.includes(r.estado)) {
+          pararPoll();
+          setRodando(false);
+          router.refresh();
+          return;
+        }
+      } catch {
+        // erro transitório ao consultar — tenta de novo no próximo ciclo
+      }
+      acompanhar(id);
+    }, 1500);
+  }
+
   const nomeAgente = (id: string | null) =>
     id === null ? "(agente removido)" : agentes.find((a) => a.id === id)?.nome ?? id;
 
   async function disparar() {
     if (!entrada.trim()) return;
+    pararPoll();
     setRodando(true);
     setErro(null);
     try {
@@ -103,18 +139,28 @@ export function AutomacaoDetalheCliente({
       );
       setAberta(r);
       setEntrada("");
-      router.refresh();
+      if (ESTADOS_TERMINAIS.includes(r.estado)) {
+        setRodando(false);
+        router.refresh();
+      } else {
+        acompanhar(r.id); // em andamento: acompanha até terminar
+      }
     } catch (e) {
       setErro(e instanceof ErroDaApi ? e.message : "Falha ao disparar");
-    } finally {
       setRodando(false);
     }
   }
 
   async function abrir(id: string) {
     setErro(null);
+    pararPoll();
     try {
-      setAberta(await api.get<ExecucaoComPassos>(`/execucoes/${id}`));
+      const r = await api.get<ExecucaoComPassos>(`/execucoes/${id}`);
+      setAberta(r);
+      if (!ESTADOS_TERMINAIS.includes(r.estado)) {
+        setRodando(true);
+        acompanhar(id); // aberta uma execução ainda em andamento: acompanha
+      }
     } catch (e) {
       setErro(e instanceof ErroDaApi ? e.message : "Falha ao abrir execução");
     }
@@ -184,6 +230,13 @@ export function AutomacaoDetalheCliente({
               {aberta.estado}
             </span>
           </div>
+          {aberta.estado === "em_andamento" && (
+            <p className="mt-2 flex items-center gap-2 text-sm text-amber-700">
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+              Em andamento — {aberta.passos.length} passo(s) concluído(s), rodando o
+              próximo…
+            </p>
+          )}
           <Passos execucao={aberta} nomeAgente={nomeAgente} />
 
           {aberta.estado === "aguardando_humano" && (
