@@ -11,7 +11,7 @@ from typing import Any, Literal
 import httpx
 from pydantic import BaseModel, Field
 
-from instrumentos.base import TipoInstrumento, registrar
+from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 
 # Limites de segurança para uma resposta — evita estourar memória/contexto.
 TIMEOUT_S = 15.0
@@ -60,7 +60,25 @@ class ChamarApiRest(TipoInstrumento):
                     json=args.corpo,
                 )
         except httpx.HTTPError as e:
-            return {"ok": False, "erro": f"Falha na requisição: {e}"}
+            # Transporte: conexão recusada, DNS, timeout — transitório, vale retentar.
+            raise FalhaInstrumento(
+                f"não foi possível chamar {config.url}: {e}", retentavel=True
+            )
+
+        # Falhas de operação do sistema externo (PRODUTO §16) viram falha do
+        # instrumento; respostas legítimas (2xx e demais 4xx, ex.: 404) voltam
+        # ao agente como dado.
+        status = resposta.status_code
+        if status in (401, 403):
+            raise FalhaInstrumento(
+                f"acesso negado por {config.url} (HTTP {status}) — "
+                "verifique a autenticação/chave.",
+                retentavel=False,
+            )
+        if status == 429 or 500 <= status < 600:
+            raise FalhaInstrumento(
+                f"o sistema em {config.url} respondeu HTTP {status}.", retentavel=True
+            )
 
         # Tenta interpretar como JSON; se não der, devolve o texto truncado.
         try:
@@ -70,7 +88,7 @@ class ChamarApiRest(TipoInstrumento):
 
         return {
             "ok": resposta.is_success,
-            "status": resposta.status_code,
+            "status": status,
             "corpo": corpo,
         }
 

@@ -14,6 +14,7 @@ from langchain_core.tools import StructuredTool
 from langgraph.prebuilt import create_react_agent
 
 import instrumentos as encaixe
+from instrumentos.base import FalhaInstrumento, acionar_com_retentativa
 from modelos import Agente, Instrumento
 from orquestracao.llm import construir_modelo, texto_da_resposta
 
@@ -43,9 +44,16 @@ def _nome_de_ferramenta(inst: Instrumento, tipo_fallback: str) -> str:
     return f"{base or tipo_fallback}_{inst.id.hex[:8]}"
 
 
-def _ferramenta_de_instrumento(inst: Instrumento) -> StructuredTool | None:
+def _ferramenta_de_instrumento(
+    inst: Instrumento, falhas: list[str]
+) -> StructuredTool | None:
     """Transforma um instrumento do cinto numa ferramenta da IA pelo encaixe.
-    Devolve None se o tipo for desconhecido (instrumento ignorado)."""
+    Devolve None se o tipo for desconhecido (instrumento ignorado).
+
+    Em falha definitiva do instrumento (esgotadas as retentativas, ou falha não
+    retentável), registra em `falhas` e informa o erro à IA. A orquestração, ao
+    fim do laço, transforma isso numa falha visível — sem depender da narração
+    do agente (PRODUTO §16: "nunca morre em silêncio")."""
     tipo = encaixe.obter_tipo(inst.tipo)
     if tipo is None:
         return None
@@ -53,7 +61,12 @@ def _ferramenta_de_instrumento(inst: Instrumento) -> StructuredTool | None:
 
     def executar(**kwargs) -> str:
         args = tipo.Args.model_validate(kwargs)
-        resultado = tipo.executar(config, args)
+        try:
+            resultado = acionar_com_retentativa(tipo, config, args)
+        except FalhaInstrumento as e:
+            msg = f"O instrumento '{inst.nome}' falhou: {e}"
+            falhas.append(msg)
+            return json.dumps({"ok": False, "erro": msg}, ensure_ascii=False)
         return json.dumps(resultado, ensure_ascii=False, default=str)
 
     return StructuredTool.from_function(
@@ -68,13 +81,22 @@ def executar_agente(
     agente: Agente, cinto: list[Instrumento], entrada: str
 ) -> dict:
     """Roda um agente sozinho sobre uma entrada. Devolve a saída em texto e a
-    lista de instrumentos que ele acionou (para inspeção)."""
+    lista de instrumentos que ele acionou (para inspeção).
+
+    Se um instrumento falhar de vez, levanta `FalhaInstrumento` ao fim do laço —
+    a execução então fica num estado de falha claro e visível (Tarefa 5.1)."""
     modelo = construir_modelo(agente.modelo_ia)
+    falhas: list[str] = []
     ferramentas = [
-        f for f in (_ferramenta_de_instrumento(i) for i in cinto) if f is not None
+        f for f in (_ferramenta_de_instrumento(i, falhas) for i in cinto) if f is not None
     ]
     app = create_react_agent(modelo, ferramentas, prompt=montar_instrucoes(agente))
     resultado = app.invoke({"messages": [{"role": "user", "content": entrada}]})
+
+    # Não confiamos na narração do agente: se um instrumento falhou de vez,
+    # a execução falha de forma determinística e visível.
+    if falhas:
+        raise FalhaInstrumento(falhas[0])
 
     mensagens = resultado["messages"]
     acionados = [
