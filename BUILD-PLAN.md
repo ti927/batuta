@@ -546,10 +546,10 @@ Cada um entra no encaixe `instrumentos/base.py` (subclasse `TipoInstrumento` com
 de configuração já existente.
 
 - [x] **Webhook de saída** — POST a uma URL para avisar/acionar outro sistema. `instrumentos/webhook_saida.py`. Commit `6953c77`.
-- [~] **Busca na web** — via Tavily; chave em `cerebro/.env` (`TAVILY_API_KEY`). `instrumentos/busca_web.py`, commit `ebb13ff`. **Código pronto; falta verificar a busca real com a chave do maestro.**
+- [x] **Busca na web** — via Tavily; chave em `cerebro/.env` (`TAVILY_API_KEY`). `instrumentos/busca_web.py`, commit `ebb13ff`. Verificado: busca real devolveu resultados (título/link/trecho).
 - [x] **Gerar PDF/documento** — `instrumentos/gerar_pdf.py` (fpdf2); arquivo servido localmente pelo cérebro em `/arquivos` (`arquivos.py` + StaticFiles), migra para Supabase Storage na Etapa 2. Commit `ebb13ff`.
 - [→] **Conectar MCP** — **adiado para a Etapa 2 (Fase 8)** por decisão do maestro (2026-05-30): é o único que mexe no núcleo da orquestração (instrumento multi-ferramenta + assíncrono); não vale arriscar o motor às vésperas do portão.
-- [ ] **Commit + push:** `feat: mais instrumentos do core`
+- [x] **Commit + push:** instrumentos em `6953c77` e `ebb13ff`; frente fechada (3 feitos, MCP adiado).
 
 ---
 
