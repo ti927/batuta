@@ -23,8 +23,14 @@ from esquemas import (
     PassoExecucaoLer,
     ResponderHumano,
 )
+import agendador
 from modelos import Agente, Automacao, Execucao, PassoExecucao
 from orquestracao.cadeia import executar_cadeia, validar_cadeia
+from orquestracao.disparo import (
+    _aplicar_resultado,
+    _fazer_registrador,
+    executar_automacao,
+)
 from rotas._comum import time_do_dono
 from sessao import obter_sessao
 
@@ -84,6 +90,7 @@ def criar(
     sessao.add(auto)
     sessao.commit()
     sessao.refresh(auto)
+    agendador.sincronizar(auto)
     return auto
 
 
@@ -104,6 +111,7 @@ def editar(
         setattr(auto, campo, valor)
     sessao.commit()
     sessao.refresh(auto)
+    agendador.sincronizar(auto)
     return auto
 
 
@@ -112,6 +120,7 @@ def remover(automacao_id: uuid.UUID, sessao: Session = Depends(obter_sessao)):
     auto = _automacao_do_dono(sessao, automacao_id)
     sessao.delete(auto)
     sessao.commit()
+    agendador.remover(automacao_id)
 
 
 # ─────────────────────── Disparo e inspeção ──────────────────────
@@ -129,41 +138,6 @@ def _montar_com_passos(sessao: Session, execucao: Execucao) -> ExecucaoComPassos
     )
 
 
-def _fazer_registrador(sessao: Session, execucao_id: uuid.UUID):
-    """Callback que grava cada passo da cadeia em `passos_execucao`."""
-
-    def registrar(passo: dict, ordem: int) -> None:
-        sessao.add(
-            PassoExecucao(
-                execucao_id=execucao_id,
-                ordem=ordem,
-                agente_id=uuid.UUID(passo["agente_id"]),
-                entrada={"texto": passo["entrada"]},
-                saida={
-                    "texto": passo["saida"],
-                    "instrumentos_acionados": passo["instrumentos_acionados"],
-                    "saida_escolhida": passo["saida_escolhida"],
-                },
-                estado="concluido",
-                iniciado_em=passo["iniciado_em"],
-                finalizado_em=passo["finalizado_em"],
-            )
-        )
-        sessao.commit()
-
-    return registrar
-
-
-def _aplicar_resultado(execucao: Execucao, r: dict) -> None:
-    """Aplica à execução o que a cadeia devolveu: pausa ou conclusão."""
-    if r["estado"] == "aguardando_humano":
-        execucao.estado = "aguardando_humano"  # sem finalizada_em: ainda viva
-    else:
-        execucao.estado = "concluida"
-        execucao.resultado = {"texto": r["resultado"]}
-        execucao.finalizada_em = datetime.now(timezone.utc)
-
-
 @rotas.post(
     "/automacoes/{automacao_id}/disparar", response_model=ExecucaoComPassos
 )
@@ -172,32 +146,10 @@ def disparar(
     dados: DispararAutomacao,
     sessao: Session = Depends(obter_sessao),
 ):
+    """Disparo manual (botão de teste): roda independente do gatilho da
+    automação — é a forma de o maestro testar qualquer fluxo na Etapa 1."""
     auto = _automacao_do_dono(sessao, automacao_id)
-
-    execucao = Execucao(
-        automacao_id=auto.id,
-        estado="em_andamento",
-        entrada={"texto": dados.entrada},
-        iniciada_em=datetime.now(timezone.utc),
-    )
-    sessao.add(execucao)
-    sessao.commit()
-    sessao.refresh(execucao)
-
-    try:
-        r = executar_cadeia(
-            sessao,
-            auto.cadeia or {},
-            dados.entrada,
-            registrar_passo=_fazer_registrador(sessao, execucao.id),
-        )
-        _aplicar_resultado(execucao, r)
-    except Exception as e:  # falha de LLM/rede/cadeia inválida — registra e segue
-        execucao.estado = "falhou"
-        execucao.resultado = {"erro": str(e)}
-        execucao.finalizada_em = datetime.now(timezone.utc)
-    sessao.commit()
-    sessao.refresh(execucao)
+    execucao = executar_automacao(sessao, auto, dados.entrada)
     return _montar_com_passos(sessao, execucao)
 
 

@@ -1,6 +1,9 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+import agendador
 from rotas import (
     agentes,
     automacoes,
@@ -9,9 +12,19 @@ from rotas import (
     instrumentos,
     organizacoes,
     times,
+    webhooks,
 )
 
-app = FastAPI(title="Batuta — Cérebro")
+
+@asynccontextmanager
+async def ciclo_de_vida(app: FastAPI):
+    """Sobe o relógio dos gatilhos por agendamento ao iniciar; desliga ao parar."""
+    agendador.iniciar()
+    yield
+    agendador.desligar()
+
+
+app = FastAPI(title="Batuta — Cérebro", lifespan=ciclo_de_vida)
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,3 +46,4 @@ app.include_router(instrumentos.rotas)
 app.include_router(cinto.rotas)
 app.include_router(execucao.rotas)
 app.include_router(automacoes.rotas)
+app.include_router(webhooks.rotas)

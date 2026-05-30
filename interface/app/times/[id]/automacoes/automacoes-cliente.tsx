@@ -7,6 +7,7 @@ import { useState } from "react";
 import {
   api,
   ErroDaApi,
+  URL_CEREBRO,
   type Agente,
   type Automacao,
   type Cadeia,
@@ -17,6 +18,30 @@ import { Button } from "@/components/ui/button";
 
 type SaidasPorAgente = Record<string, SaidaCadeia[]>;
 type PausaPorAgente = Record<string, boolean>;
+
+type TipoGatilho = "manual" | "agendamento" | "webhook";
+type Frequencia = "diaria" | "semanal" | "mensal";
+
+// índice 0 = segunda, alinhado ao agendador do cérebro (agendador.py)
+const DIAS_SEMANA = [
+  "Segunda",
+  "Terça",
+  "Quarta",
+  "Quinta",
+  "Sexta",
+  "Sábado",
+  "Domingo",
+];
+
+const ROTULO_GATILHO: Record<string, string> = {
+  manual: "Manual (botão)",
+  agendamento: "Agendamento",
+  webhook: "Webhook",
+};
+
+function horaParaTexto(h: number, m: number): string {
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
 
 function cadeiaParaForm(
   cadeia: Cadeia | null,
@@ -60,11 +85,32 @@ export function AutomacoesCliente({
   const [saidas, setSaidas] = useState<SaidasPorAgente>({});
   const [pausa, setPausa] = useState<PausaPorAgente>({});
 
+  // Gatilho: o que inicia o fluxo (PRODUTO §12).
+  const [tipoGatilho, setTipoGatilho] = useState<TipoGatilho>("manual");
+  const [frequencia, setFrequencia] = useState<Frequencia>("diaria");
+  const [diaSemana, setDiaSemana] = useState(0);
+  const [diaMes, setDiaMes] = useState(1);
+  const [horario, setHorario] = useState("08:00");
+  const [entradaAgendada, setEntradaAgendada] = useState("");
+  const [ativa, setAtiva] = useState(true);
+
   const nomeAgente = (id: string | null) =>
     id === null ? "— fim (entrega ao usuário) —" : agentes.find((a) => a.id === id)?.nome ?? id;
 
   function tratar(e: unknown, padrao: string) {
     setErro(e instanceof ErroDaApi ? e.message : padrao);
+  }
+
+  function carregarGatilho(a: Automacao | null) {
+    const tipo = (a?.tipo_gatilho ?? "manual") as TipoGatilho;
+    const cfg = (a?.configuracao_gatilho ?? {}) as Record<string, unknown>;
+    setTipoGatilho(["agendamento", "webhook"].includes(tipo) ? tipo : "manual");
+    setFrequencia((cfg.frequencia as Frequencia) ?? "diaria");
+    setDiaSemana(Number(cfg.dia_semana ?? 0));
+    setDiaMes(Number(cfg.dia_mes ?? 1));
+    setHorario(horaParaTexto(Number(cfg.hora ?? 8), Number(cfg.minuto ?? 0)));
+    setEntradaAgendada((cfg.entrada as string) ?? "");
+    setAtiva(a ? a.ativa : true);
   }
 
   function abrirNovo() {
@@ -73,6 +119,7 @@ export function AutomacoesCliente({
     setInicio(f.inicio);
     setSaidas(f.saidas);
     setPausa(f.pausa);
+    carregarGatilho(null);
     setErro(null);
     setModo("novo");
   }
@@ -83,6 +130,7 @@ export function AutomacoesCliente({
     setInicio(f.inicio);
     setSaidas(f.saidas);
     setPausa(f.pausa);
+    carregarGatilho(a);
     setErro(null);
     setModo(a.id);
   }
@@ -110,6 +158,20 @@ export function AutomacoesCliente({
     });
   }
 
+  function montarConfigGatilho(): Record<string, unknown> {
+    if (tipoGatilho !== "agendamento") return {};
+    const [h, m] = horario.split(":").map(Number);
+    const cfg: Record<string, unknown> = {
+      frequencia,
+      hora: h,
+      minuto: m,
+      entrada: entradaAgendada,
+    };
+    if (frequencia === "semanal") cfg.dia_semana = diaSemana;
+    if (frequencia === "mensal") cfg.dia_mes = diaMes;
+    return cfg;
+  }
+
   async function salvar() {
     if (!nome.trim()) {
       setErro("O nome é obrigatório.");
@@ -119,7 +181,18 @@ export function AutomacoesCliente({
       setErro("Escolha o agente inicial.");
       return;
     }
-    const corpo = { nome: nome.trim(), cadeia: formParaCadeia(inicio, saidas, pausa) };
+    if (tipoGatilho === "agendamento" && !entradaAgendada.trim()) {
+      setErro("No agendamento, escreva a mensagem que o gatilho envia ao fluxo.");
+      return;
+    }
+    const corpo = {
+      nome: nome.trim(),
+      tipo_gatilho: tipoGatilho,
+      configuracao_gatilho: montarConfigGatilho(),
+      cadeia: formParaCadeia(inicio, saidas, pausa),
+      // O interruptor liga/desliga só vale para gatilhos automáticos.
+      ativa: tipoGatilho === "manual" ? false : ativa,
+    };
     try {
       if (modo === "novo") {
         await api.post<Automacao>(`/times/${time.id}/automacoes`, corpo);
@@ -202,6 +275,129 @@ export function AutomacoesCliente({
               ))}
             </select>
           </label>
+
+          <div className="flex flex-col gap-2 rounded border border-zinc-200 bg-white p-3">
+            <span className="text-xs font-semibold text-zinc-700">
+              Gatilho — o que inicia este fluxo
+            </span>
+            <div className="flex flex-wrap gap-3 text-sm">
+              {(["manual", "agendamento", "webhook"] as TipoGatilho[]).map((t) => (
+                <label key={t} className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="gatilho"
+                    checked={tipoGatilho === t}
+                    onChange={() => setTipoGatilho(t)}
+                  />
+                  {ROTULO_GATILHO[t]}
+                </label>
+              ))}
+            </div>
+
+            {tipoGatilho === "manual" && (
+              <p className="text-xs text-zinc-500">
+                Dispara apenas pelo botão de teste, na tela da automação.
+              </p>
+            )}
+
+            {tipoGatilho === "agendamento" && (
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="flex flex-col gap-1 text-xs text-zinc-600">
+                    Frequência
+                    <select
+                      className="rounded border border-zinc-300 px-2 py-1 text-sm"
+                      value={frequencia}
+                      onChange={(e) => setFrequencia(e.target.value as Frequencia)}
+                    >
+                      <option value="diaria">Todo dia</option>
+                      <option value="semanal">Toda semana</option>
+                      <option value="mensal">Todo mês</option>
+                    </select>
+                  </label>
+                  {frequencia === "semanal" && (
+                    <label className="flex flex-col gap-1 text-xs text-zinc-600">
+                      Dia da semana
+                      <select
+                        className="rounded border border-zinc-300 px-2 py-1 text-sm"
+                        value={diaSemana}
+                        onChange={(e) => setDiaSemana(Number(e.target.value))}
+                      >
+                        {DIAS_SEMANA.map((d, i) => (
+                          <option key={i} value={i}>
+                            {d}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {frequencia === "mensal" && (
+                    <label className="flex flex-col gap-1 text-xs text-zinc-600">
+                      Dia do mês
+                      <input
+                        type="number"
+                        min={1}
+                        max={31}
+                        className="w-20 rounded border border-zinc-300 px-2 py-1 text-sm"
+                        value={diaMes}
+                        onChange={(e) => setDiaMes(Number(e.target.value))}
+                      />
+                    </label>
+                  )}
+                  <label className="flex flex-col gap-1 text-xs text-zinc-600">
+                    Horário
+                    <input
+                      type="time"
+                      className="rounded border border-zinc-300 px-2 py-1 text-sm"
+                      value={horario}
+                      onChange={(e) => setHorario(e.target.value)}
+                    />
+                  </label>
+                </div>
+                <label className="flex flex-col gap-1 text-xs text-zinc-600">
+                  Mensagem que o gatilho envia ao fluxo (a entrada do agente inicial)
+                  <textarea
+                    className="min-h-16 rounded border border-zinc-300 px-2 py-1 text-sm"
+                    placeholder="Ex.: Gere o lembrete mensal de fechamento."
+                    value={entradaAgendada}
+                    onChange={(e) => setEntradaAgendada(e.target.value)}
+                  />
+                </label>
+                <p className="text-xs text-zinc-400">Horário no fuso de Brasília.</p>
+              </div>
+            )}
+
+            {tipoGatilho === "webhook" && (
+              <div className="flex flex-col gap-1 text-xs text-zinc-600">
+                <p>
+                  Um sistema externo dispara este fluxo por uma URL (POST). O corpo
+                  enviado vira a entrada — o campo <code>entrada</code> do JSON, se
+                  houver; senão, o corpo inteiro.
+                </p>
+                {modo !== "novo" ? (
+                  <code className="break-all rounded bg-zinc-100 px-2 py-1 text-zinc-800">
+                    {URL_CEREBRO}/webhooks/automacoes/{modo}
+                  </code>
+                ) : (
+                  <p className="text-amber-700">
+                    Salve a automação para gerar a URL do webhook.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {tipoGatilho !== "manual" && (
+              <label className="flex items-center gap-1.5 text-xs text-zinc-600">
+                <input
+                  type="checkbox"
+                  checked={ativa}
+                  onChange={(e) => setAtiva(e.target.checked)}
+                />
+                Gatilho ativo (dispara automaticamente). Desmarque para pausar sem
+                apagar a automação.
+              </label>
+            )}
+          </div>
 
           <p className="text-xs text-zinc-500">
             Para cada agente, defina suas saídas: o rótulo, quando segui-la, e o
@@ -312,7 +508,10 @@ export function AutomacoesCliente({
               >
                 {a.nome}
                 <span className="ml-2 text-xs text-zinc-400">
-                  início: {nomeAgente(a.cadeia?.inicio ?? null)}
+                  {ROTULO_GATILHO[a.tipo_gatilho] ?? a.tipo_gatilho}
+                  {a.tipo_gatilho !== "manual" && !a.ativa && " (pausado)"}
+                  {" · início: "}
+                  {nomeAgente(a.cadeia?.inicio ?? null)}
                 </span>
               </Link>
               <Button size="sm" variant="outline" onClick={() => abrirEdicao(a)}>

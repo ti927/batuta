@@ -5,6 +5,9 @@ const BASE =
   process.env.NEXT_PUBLIC_CEREBRO_URL?.replace(/\/$/, "") ??
   "http://localhost:8000";
 
+// Endereço do cérebro, exposto para montar URLs públicas (ex.: webhook de entrada).
+export const URL_CEREBRO = BASE;
+
 export class ErroDaApi extends Error {
   constructor(
     public status: number,

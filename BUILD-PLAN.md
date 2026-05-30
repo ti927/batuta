@@ -351,7 +351,12 @@ Cada tarefa abaixo envolve as duas partes (cérebro e interface) e deve mantê-l
 
 Esta é a fase mais difícil do projeto. Vá devagar, tarefa por tarefa, verificando cada uma.
 
-> **Progresso (sessão de 2026-05-29) — Fase 4 quase fechada; falta só a 4.7.**
+> **Progresso (sessão de 2026-05-30) — Fase 4 COMPLETA (4.1–4.7 feitas).**
+> A 4.7 (gatilhos) foi implementada e verificada de ponta a ponta pelo Claude
+> (manual, agendamento/CRON disparando sozinho às 09:58 BR, e webhook de
+> entrada com guarda 409). Falta só o **click-test do maestro na tela** do novo
+> construtor de gatilho e o **push** para fechar a fase.
+>
 > Feito e **validado pelo maestro clicando**:
 > - **4.1** Chamar LLM — `orquestracao/llm.py` (langchain-anthropic; chave do `.env`). Commit `8fe99e3`.
 > - **4.2** Um agente sozinho — `orquestracao/agente.py` (markdowns→prompt; cinto→ferramentas; `create_react_agent`). Endpoint `POST /agentes/{id}/executar`. Commit `8fe99e3`.
@@ -361,8 +366,18 @@ Esta é a fase mais difícil do projeto. Vá devagar, tarefa por tarefa, verific
 > - **Construtor de automação** (lacuna do plano, suprida) — `/times/[id]/automacoes` monta o grafo. Gatilho de teste `tipo_gatilho="manual"`. Commit `1b8c794`.
 > - **4.6** Espera-por-humano — agente marcado `pausa_humano` pausa (estado `aguardando_humano` salvo no banco, sobrevive a reinícios); `POST /execucoes/{id}/responder` retoma com a resposta. Interruptor no construtor + caixa de resposta na inspeção. Commits `4cf30f8` e o fix `agente sem saída sempre pausa`.
 >
-> **Falta para fechar a Fase 4:**
-> - **4.7 Gatilhos** — WhatsApp, CRON, webhook (hoje o disparo é o `manual` de teste). É o único passo restante da fase.
+> **4.7 Gatilhos (sessão 2026-05-30):** três tipos no produto, todos no core.
+> - **Manual** (botão de teste) — já existia; o disparo foi refatorado para
+>   `orquestracao/disparo.py` (`executar_automacao`), reusado por todos os gatilhos.
+> - **Agendamento (CRON)** — `agendador.py` (APScheduler 3.x, `BackgroundScheduler`,
+>   fuso America/Sao_Paulo). Relógio em memória reconstruído do banco no startup
+>   (lifespan do FastAPI) e re-sincronizado no CRUD de automações. Formulário guiado
+>   na tela (frequência diária/semanal/mensal + horário), sem jargão cron. Só dispara
+>   se `ativa=true`.
+> - **Webhook de entrada** — `rotas/webhooks.py`: `POST /webhooks/automacoes/{id}`,
+>   público, dispara se gatilho é `webhook` e `ativa`; corpo vira a entrada.
+> - O interruptor `ativa` liga/desliga gatilhos automáticos; o botão manual roda
+>   sempre (é a forma de testar qualquer fluxo na Etapa 1).
 >
 > **Decisão de produto registrada:** a "pausa para humano" é por **interruptor por agente** (não um agente fixo), respondida na tela no core; o canal WhatsApp (via Líder, §10) fica para a Etapa 2. O comportamento do agente vem 100% dos markdowns (sem preâmbulo escondido).
 >
@@ -434,15 +449,15 @@ Esta é a fase mais difícil do projeto. Vá devagar, tarefa por tarefa, verific
 
 ### Definition of Done — Fase 4
 
-- [ ] Verificações automáticas passam
-- [ ] O cérebro chama uma LLM e recebe resposta
-- [ ] Um agente isolado executa, usando instrumentos do cinto
-- [ ] Uma cadeia de vários agentes executa encadeada, sobre o LangGraph
-- [ ] Cada execução e cada passo são registrados
-- [ ] A tela de inspeção mostra a orquestração passo a passo
-- [ ] A espera-por-humano funciona nas três formas, inclusive com pausa longa
-- [ ] Disparo manual e por agendamento funcionam
-- [ ] **Commit + push:** `feat: orquestração de agentes`
+- [x] Verificações automáticas passam
+- [x] O cérebro chama uma LLM e recebe resposta
+- [x] Um agente isolado executa, usando instrumentos do cinto
+- [x] Uma cadeia de vários agentes executa encadeada, sobre o LangGraph
+- [x] Cada execução e cada passo são registrados
+- [x] A tela de inspeção mostra a orquestração passo a passo
+- [x] A espera-por-humano funciona nas três formas, inclusive com pausa longa
+- [x] Disparo manual e por agendamento funcionam (e webhook de entrada)
+- [ ] **Commit + push:** `feat: orquestração de agentes` (push pende confirmação do maestro)
 
 ---
 
