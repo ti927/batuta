@@ -136,6 +136,22 @@ export type Automacao = {
   atualizado_em: string;
 };
 
+export type UsoChamada = {
+  modelo: string;
+  tokens_entrada: number;
+  tokens_saida: number;
+};
+
+export type ResumoUso = {
+  tokens_entrada: number;
+  tokens_saida: number;
+  custo_usd: number;
+  por_modelo: Record<
+    string,
+    { tokens_entrada: number; tokens_saida: number; custo_usd: number }
+  >;
+};
+
 export type PassoExecucao = {
   id: string;
   ordem: number;
@@ -145,6 +161,7 @@ export type PassoExecucao = {
     texto?: string;
     instrumentos_acionados?: string[];
     saida_escolhida?: string | null;
+    uso?: UsoChamada[];
   } | null;
   estado: string;
   iniciado_em: string | null;
@@ -162,4 +179,7 @@ export type Execucao = {
   criado_em: string;
 };
 
-export type ExecucaoComPassos = Execucao & { passos: PassoExecucao[] };
+export type ExecucaoComPassos = Execucao & {
+  passos: PassoExecucao[];
+  uso?: ResumoUso | null;
+};

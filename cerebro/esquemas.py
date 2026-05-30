@@ -263,3 +263,5 @@ class ExecucaoComPassos(ExecucaoLer):
     """Uma execução com seu rastro de passos, para a tela de inspeção."""
 
     passos: list[PassoExecucaoLer] = Field(default_factory=list)
+    # Resumo de uso (tokens e custo aproximado) somado dos passos — Tarefa 5.4.
+    uso: dict | None = None

@@ -10,13 +10,14 @@ import json
 import re
 import unicodedata
 
+from langchain_core.messages import AIMessage
 from langchain_core.tools import StructuredTool
 from langgraph.prebuilt import create_react_agent
 
 import instrumentos as encaixe
 from instrumentos.base import FalhaInstrumento, acionar_com_retentativa
 from modelos import Agente, Instrumento
-from orquestracao.llm import construir_modelo, texto_da_resposta
+from orquestracao.llm import MODELO_PADRAO, construir_modelo, texto_da_resposta
 
 
 def montar_instrucoes(agente: Agente) -> str:
@@ -104,7 +105,26 @@ def executar_agente(
         for m in mensagens
         for chamada in (getattr(m, "tool_calls", None) or [])
     ]
+
+    # Uso (Tarefa 5.4): soma os tokens de cada turno do modelo. Num laço de
+    # tool-calling há vários AIMessage; cada turno reenvia o contexto, então a
+    # soma reflete o que foi de fato consumido.
+    tokens_entrada = tokens_saida = 0
+    for m in mensagens:
+        if isinstance(m, AIMessage):
+            u = m.usage_metadata or {}
+            tokens_entrada += u.get("input_tokens", 0)
+            tokens_saida += u.get("output_tokens", 0)
+    modelo_usado = agente.modelo_ia or MODELO_PADRAO
+
     return {
         "saida": texto_da_resposta(mensagens[-1]),
         "instrumentos_acionados": acionados,
+        "uso": [
+            {
+                "modelo": modelo_usado,
+                "tokens_entrada": tokens_entrada,
+                "tokens_saida": tokens_saida,
+            }
+        ],
     }

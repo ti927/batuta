@@ -33,7 +33,7 @@ from sqlalchemy.orm import Session
 
 from modelos import Agente, AgenteInstrumento, Instrumento
 from orquestracao.agente import executar_agente
-from orquestracao.llm import construir_modelo
+from orquestracao.llm import MODELO_PADRAO, construir_modelo
 
 # Guarda contra laço infinito: nº máximo de passos (agentes executados).
 MAX_PASSOS = 25
@@ -92,10 +92,13 @@ def _carregar_cinto(sessao: Session, agente_id: uuid.UUID) -> list[Instrumento]:
     )
 
 
-def _escolher_saida(saida_texto: str, saidas: list[dict]) -> dict:
+def _escolher_saida(saida_texto: str, saidas: list[dict]) -> tuple[dict, dict]:
     """Escolhe uma saída entre várias, conforme o 'quando' de cada uma e a
     saída produzida pelo agente. Usa a LLM com saída estruturada; em caso de
-    rótulo inesperado, cai na primeira saída (determinístico)."""
+    rótulo inesperado, cai na primeira saída (determinístico).
+
+    Devolve (saída escolhida, uso) — o uso (modelo/tokens) do passo de
+    roteamento é contabilizado na medição (Tarefa 5.4)."""
     opcoes = "\n".join(
         f'- "{s["rotulo"]}": {s.get("quando") or "(sem descrição)"}' for s in saidas
     )
@@ -106,10 +109,17 @@ def _escolher_saida(saida_texto: str, saidas: list[dict]) -> dict:
         f"OPÇÕES:\n{opcoes}\n\n"
         "Responda apenas com o rótulo exato de uma das opções."
     )
-    modelo = construir_modelo(None).with_structured_output(_Escolha)
-    escolha = modelo.invoke(prompt)
+    modelo = construir_modelo(None).with_structured_output(_Escolha, include_raw=True)
+    resposta = modelo.invoke(prompt)
+    escolha = resposta["parsed"]
+    u = getattr(resposta["raw"], "usage_metadata", None) or {}
+    uso = {
+        "modelo": MODELO_PADRAO,  # o roteamento usa sempre o modelo padrão
+        "tokens_entrada": u.get("input_tokens", 0),
+        "tokens_saida": u.get("output_tokens", 0),
+    }
     por_rotulo = {s["rotulo"]: s for s in saidas}
-    return por_rotulo.get(escolha.rotulo, saidas[0])
+    return por_rotulo.get(escolha.rotulo, saidas[0]), uso
 
 
 def executar_cadeia(
@@ -162,6 +172,7 @@ def executar_cadeia(
         finalizado_em = datetime.now(timezone.utc)
         saida_texto = resultado["saida"]
 
+        uso_passo = list(resultado.get("uso") or [])
         no = nos.get(no_atual, {})
         saidas = no.get("saidas") or []
         if len(saidas) == 0:
@@ -169,7 +180,8 @@ def executar_cadeia(
         elif len(saidas) == 1:
             escolhida = saidas[0]
         else:
-            escolhida = _escolher_saida(saida_texto, saidas)
+            escolhida, uso_roteamento = _escolher_saida(saida_texto, saidas)
+            uso_passo.append(uso_roteamento)
 
         passo = {
             "agente_id": no_atual,
@@ -178,6 +190,7 @@ def executar_cadeia(
             "saida": saida_texto,
             "instrumentos_acionados": resultado["instrumentos_acionados"],
             "saida_escolhida": escolhida["rotulo"] if escolhida else None,
+            "uso": uso_passo,
             "iniciado_em": iniciado_em,
             "finalizado_em": finalizado_em,
         }

@@ -30,6 +30,7 @@ def _fazer_registrador(sessao: Session, execucao_id: uuid.UUID):
                     "texto": passo["saida"],
                     "instrumentos_acionados": passo["instrumentos_acionados"],
                     "saida_escolhida": passo["saida_escolhida"],
+                    "uso": passo.get("uso") or [],
                 },
                 estado="concluido",
                 iniciado_em=passo["iniciado_em"],

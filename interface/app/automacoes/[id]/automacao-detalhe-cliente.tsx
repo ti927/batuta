@@ -59,6 +59,19 @@ function Passos({
             <div className="whitespace-pre-wrap text-zinc-800">
               saída: {p.saida?.texto}
             </div>
+            {(p.saida?.uso ?? []).length > 0 && (
+              <div className="mt-1 text-zinc-400">
+                🪙{" "}
+                {(p.saida?.uso ?? [])
+                  .reduce((s, u) => s + u.tokens_entrada, 0)
+                  .toLocaleString("pt-BR")}{" "}
+                entrada +{" "}
+                {(p.saida?.uso ?? [])
+                  .reduce((s, u) => s + u.tokens_saida, 0)
+                  .toLocaleString("pt-BR")}{" "}
+                saída tokens
+              </div>
+            )}
           </li>
         ))}
       </ol>
@@ -244,6 +257,26 @@ export function AutomacaoDetalheCliente({
             </p>
           )}
           <Passos execucao={aberta} nomeAgente={nomeAgente} />
+
+          {aberta.uso &&
+            aberta.uso.tokens_entrada + aberta.uso.tokens_saida > 0 && (
+              <div className="mt-3 rounded border border-zinc-200 bg-zinc-50 p-2 text-xs text-zinc-600">
+                <span className="font-medium">Uso (estimado):</span>{" "}
+                {aberta.uso.tokens_entrada.toLocaleString("pt-BR")} entrada +{" "}
+                {aberta.uso.tokens_saida.toLocaleString("pt-BR")} saída tokens · ~US${" "}
+                {aberta.uso.custo_usd.toFixed(4)}
+                {Object.entries(aberta.uso.por_modelo).map(([modelo, u]) => (
+                  <div key={modelo} className="text-zinc-400">
+                    {modelo}: {u.tokens_entrada.toLocaleString("pt-BR")}+
+                    {u.tokens_saida.toLocaleString("pt-BR")} tok · ~US$
+                    {u.custo_usd.toFixed(4)}
+                  </div>
+                ))}
+                <div className="mt-1 text-zinc-400">
+                  Custo aproximado, apenas informativo — não é cobrança.
+                </div>
+              </div>
+            )}
 
           {aberta.estado === "aguardando_humano" && (
             <div className="mt-3 flex flex-col gap-2 rounded border border-blue-300 bg-blue-50 p-3">

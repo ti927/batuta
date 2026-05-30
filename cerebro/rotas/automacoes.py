@@ -25,6 +25,7 @@ from esquemas import (
 )
 import agendador
 import fila
+import precos
 from modelos import Agente, Automacao, Execucao, PassoExecucao
 from orquestracao.cadeia import executar_cadeia, validar_cadeia
 from orquestracao.disparo import (
@@ -135,7 +136,9 @@ def _montar_com_passos(sessao: Session, execucao: Execucao) -> ExecucaoComPassos
     ).all()
     base = ExecucaoLer.model_validate(execucao).model_dump()
     return ExecucaoComPassos(
-        **base, passos=[PassoExecucaoLer.model_validate(p) for p in passos]
+        **base,
+        passos=[PassoExecucaoLer.model_validate(p) for p in passos],
+        uso=precos.resumir_uso(passos),
     )
 
 
