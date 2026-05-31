@@ -20,6 +20,7 @@ from instrumentos import busca_web  # noqa: E402, F401  (efeito colateral: regis
 from instrumentos import gerar_pdf  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import rest  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import webhook_saida  # noqa: E402, F401  (efeito colateral: registro)
+from instrumentos import wordpress  # noqa: E402, F401  (efeito colateral: registro)
 
 __all__ = [
     "TipoInstrumento",
