@@ -19,6 +19,9 @@ from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 
 TIMEOUT_S = 20.0
 URL_TAVILY = "https://api.tavily.com/search"
+# A Tavily recusa (HTTP 400) consultas acima de 400 caracteres. Truncamos para
+# não estourar — uma consulta de busca não precisa ser maior que isso.
+MAX_CONSULTA = 400
 
 
 class ConfigBuscaWeb(BaseModel):
@@ -57,7 +60,7 @@ class BuscaWeb(TipoInstrumento):
 
         corpo = {
             "api_key": chave,
-            "query": args.consulta,
+            "query": args.consulta.strip()[:MAX_CONSULTA],
             "max_results": config.max_resultados,
             "search_depth": "basic",
         }
