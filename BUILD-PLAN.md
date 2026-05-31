@@ -576,6 +576,34 @@ de configuração já existente.
 >   automática deve FAZER e entregar só o produto (não validar o colega nem pedir
 >   confirmação); conhecimento citado ("biblioteca Lure") precisa ser materializado
 >   no markdown ou via instrumento.
+>
+> **Sessão 2026-05-31 (cont.) — instrumento "Publicar no WordPress" + decisão de
+> modelo. Commits LOCAIS, push pendente do OK do maestro:**
+> - **`feat 0e3d3a2` + `feat ae7f50e` — instrumento `publicar_wordpress`**
+>   (`cerebro/instrumentos/wordpress.py`, molde do `busca_web`): publica via
+>   `/wp-json/wp/v2/posts` (Basic Auth). Credenciais no `cerebro/.env`
+>   (`WORDPRESS_URL`, `WORDPRESS_USUARIO=lure_admin`, `WORDPRESS_APP_PASSWORD`) —
+>   nunca no banco/interface (CLAUDE §8). Aceita título+conteúdo (IA), status e
+>   **categorias** (config; nome→ID, não cria), **tags** (IA; nome→ID, cria se
+>   faltar) e **resumo** (IA→excerpt). Validado lendo o post de volta (rascunho
+>   com categoria, tags e excerpt gravados). Pendurado no cinto do `Lure.publisher`.
+> - **Lição de diagnóstico:** WordPress recusava auth com erro idêntico para senha
+>   certa/errada e usuário inexistente. Não era o servidor descartando o header
+>   (hipótese inicial, errada) — era **usuário errado** (`lure_admin`, não `admin`).
+>   Confirmar o `user_login` exato antes de culpar a infra.
+> - **`fix 2a8c072`** — `busca_web` trunca a consulta em 400 caracteres (limite da
+>   Tavily; HTTP 400 acima disso). Só apareceu quando um agente Sonnet de fato
+>   aciona a busca (o Haiku narrava em vez de buscar).
+> - **Decisão de modelo (do maestro):** `lure-writer` e `curator-lure-fit` passam a
+>   rodar em **`claude-sonnet-4-6`** — em Haiku o escritor travava pedindo "o
+>   pacote" mesmo com o pacote na frente, e os agentes narravam apesar do markdown
+>   proibir. `news-to-insight` e `Lure.publisher` seguem Haiku. Os 4 markdowns foram
+>   reescritos (claros/diretos, contratos de repasse encaixando, `soul.md`
+>   preenchido) — essa mudança vive no banco, não no git.
+> - **Dúvidas do maestro p/ Etapa 2:** segredos por-empresário → **cofre de segredos
+>   por Organização** (Fase 8; só a senha de app é segredo, URL/usuário ficam na
+>   config); mais campos do WordPress (SEO/palavra-chave) dependem de plugin
+>   (Yoast/RankMath) via post meta — capítulo à parte, adiado.
 
 Antes de qualquer tarefa da Etapa 2, o maestro testa o core exaustivamente. Roteiro mínimo de validação, todo feito pelas telas:
 
