@@ -139,8 +139,9 @@ def executar_cadeia(
     Devolve um dicionário com `estado`:
     - "concluida": chegou ao fim. `resultado` tem o texto final.
     - "aguardando_humano": parou num agente marcado `pausa_humano`. `pergunta`
-      tem a saída desse agente (o que perguntar) e `proximo_no` para onde seguir
-      quando a resposta chegar.
+      tem a saída desse agente (a proposta/pergunta). O caminho a seguir NÃO é
+      decidido aqui — é a resposta do humano que escolhe a saída, no resume
+      (portão de aprovação, PRODUTO §14).
     `ordem` é o número do último passo; `passos`, o rastro deste trecho.
 
     Se `registrar_passo` for dado, é chamado após cada passo com (passo, ordem)
@@ -180,13 +181,19 @@ def executar_cadeia(
         uso_passo = list(resultado.get("uso") or [])
         no = nos.get(no_atual, {})
         saidas = no.get("saidas") or []
-        if len(saidas) == 0:
-            escolhida = None
-        elif len(saidas) == 1:
-            escolhida = saidas[0]
-        else:
-            escolhida, uso_roteamento = _escolher_saida(saida_texto, saidas)
-            uso_passo.append(uso_roteamento)
+        pausa = bool(no.get("pausa_humano"))
+
+        # Roteamento automático só quando NÃO há pausa. Com pausa (portão de
+        # aprovação, PRODUTO §14), quem escolhe a saída é a RESPOSTA DO HUMANO,
+        # decidida no resume — por isso aqui o agente não roteia (e não gasta a
+        # chamada de roteamento à toa).
+        escolhida = None
+        if not pausa:
+            if len(saidas) == 1:
+                escolhida = saidas[0]
+            elif len(saidas) >= 2:
+                escolhida, uso_roteamento = _escolher_saida(saida_texto, saidas)
+                uso_passo.append(uso_roteamento)
 
         passo = {
             "agente_id": no_atual,
@@ -203,21 +210,18 @@ def executar_cadeia(
         if registrar_passo is not None:
             registrar_passo(passo, ordem)
 
-        destino = escolhida.get("destino") if escolhida else None
-        proximo = None if destino in _DESTINOS_FIM else destino
-
-        # Pausa para humano: o agente terminou (sua saída é a pergunta). Para
-        # aqui SEMPRE que marcado. Ao responder, a retomada segue para `proximo`
-        # (a saída escolhida); se não houver próximo, a resposta encerra o fluxo.
-        if no.get("pausa_humano"):
+        # Pausa para humano: o agente terminou (sua saída é a pergunta/proposta).
+        # Para aqui; o caminho a seguir é decidido pela resposta do humano.
+        if pausa:
             return {
                 "estado": "aguardando_humano",
                 "pergunta": saida_texto,
-                "proximo_no": proximo,
                 "ordem": ordem,
                 "passos": passos,
             }
 
+        destino = escolhida.get("destino") if escolhida else None
+        proximo = None if destino in _DESTINOS_FIM else destino
         if proximo is None:
             return {
                 "estado": "concluida",

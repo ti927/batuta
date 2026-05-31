@@ -429,8 +429,10 @@ export function AutomacoesCliente({
                       setPausa((p) => ({ ...p, [a.id]: e.target.checked }))
                     }
                   />
-                  Ao terminar, pausar e perguntar ao humano (o que ele escrever
-                  vira a pergunta; sua resposta segue ao próximo agente)
+                  Ao terminar, pausar e esperar sua decisão (portão de
+                  aprovação): sua resposta escolhe por qual saída seguir (ex.:
+                  &quot;aprovado&quot; / &quot;reprovado, mude X&quot;) e vai junto
+                  com o trabalho do agente ao próximo
                 </label>
                 {pausa[a.id] && (saidas[a.id] ?? []).length === 0 && (
                   <p className="mb-2 text-xs text-amber-700">

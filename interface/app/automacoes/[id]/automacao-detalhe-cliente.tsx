@@ -180,14 +180,18 @@ export function AutomacaoDetalheCliente({
     }
   }
 
-  async function responder() {
-    if (!aberta || !resposta.trim()) return;
+  // `decisao` é o rótulo de uma saída (portão de aprovação). Se houver feedback
+  // digitado, ele acompanha a decisão (ex.: "reprovado: mude o título").
+  async function responder(decisao?: string) {
+    const fb = resposta.trim();
+    const texto = decisao ? (fb ? `${decisao}: ${fb}` : decisao) : fb;
+    if (!aberta || !texto) return;
     setRespondendo(true);
     setErro(null);
     try {
       const r = await api.post<ExecucaoComPassos>(
         `/execucoes/${aberta.id}/responder`,
-        { resposta: resposta.trim() },
+        { resposta: texto },
       );
       setAberta(r);
       setResposta("");
@@ -279,29 +283,58 @@ export function AutomacaoDetalheCliente({
               </div>
             )}
 
-          {aberta.estado === "aguardando_humano" && (
-            <div className="mt-3 flex flex-col gap-2 rounded border border-blue-300 bg-blue-50 p-3">
-              <span className="text-sm font-medium text-blue-900">
-                ⏸ Aguardando sua resposta
-              </span>
-              <p className="text-sm whitespace-pre-wrap text-blue-900">
-                {aberta.passos[aberta.passos.length - 1]?.saida?.texto}
-              </p>
-              <textarea
-                className="min-h-16 rounded border border-zinc-300 px-2 py-1 text-sm"
-                placeholder="Sua resposta"
-                value={resposta}
-                onChange={(e) => setResposta(e.target.value)}
-              />
-              <Button
-                className="self-start"
-                onClick={responder}
-                disabled={respondendo}
-              >
-                {respondendo ? "Retomando..." : "Responder e retomar"}
-              </Button>
-            </div>
-          )}
+          {aberta.estado === "aguardando_humano" &&
+            (() => {
+              const ultimo = aberta.passos[aberta.passos.length - 1];
+              const saidasPausa = ultimo?.agente_id
+                ? automacao.cadeia?.nos?.[ultimo.agente_id]?.saidas ?? []
+                : [];
+              return (
+                <div className="mt-3 flex flex-col gap-2 rounded border border-blue-300 bg-blue-50 p-3">
+                  <span className="text-sm font-medium text-blue-900">
+                    ⏸ Aguardando sua decisão
+                  </span>
+                  <p className="text-sm whitespace-pre-wrap text-blue-900">
+                    {ultimo?.saida?.texto}
+                  </p>
+                  <textarea
+                    className="min-h-16 rounded border border-zinc-300 px-2 py-1 text-sm"
+                    placeholder={
+                      saidasPausa.length > 0
+                        ? "Feedback (opcional) — acompanha a decisão que você escolher abaixo"
+                        : "Sua resposta"
+                    }
+                    value={resposta}
+                    onChange={(e) => setResposta(e.target.value)}
+                  />
+                  {saidasPausa.length > 0 ? (
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-xs text-blue-900">Sua decisão:</span>
+                      {saidasPausa.map((s) => (
+                        <div key={s.rotulo} className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            disabled={respondendo}
+                            onClick={() => responder(s.rotulo)}
+                          >
+                            {s.rotulo}
+                          </Button>
+                          <span className="text-xs text-zinc-500">{s.quando}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <Button
+                      className="self-start"
+                      onClick={() => responder()}
+                      disabled={respondendo}
+                    >
+                      {respondendo ? "Retomando..." : "Responder e retomar"}
+                    </Button>
+                  )}
+                </div>
+              );
+            })()}
         </div>
       )}
 

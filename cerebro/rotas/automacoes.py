@@ -28,7 +28,12 @@ import agendador
 import fila
 import precos
 from modelos import Agente, Automacao, Execucao, Organizacao, PassoExecucao, Time
-from orquestracao.cadeia import executar_cadeia, validar_cadeia
+from orquestracao.cadeia import (
+    _DESTINOS_FIM,
+    _escolher_saida,
+    executar_cadeia,
+    validar_cadeia,
+)
 from orquestracao.disparo import (
     _aplicar_resultado,
     _fazer_registrador,
@@ -50,6 +55,12 @@ def _automacao_do_dono(sessao: Session, automacao_id: uuid.UUID) -> Automacao:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Automação não encontrada")
     time_do_dono(sessao, auto.time_id)
     return auto
+
+
+def _entrada_retomada(saida_pausada: str, resposta: str) -> str:
+    """A entrada do próximo nó ao retomar uma pausa: o trabalho que o agente
+    produziu + a decisão/feedback do humano, separados e rotulados."""
+    return f"{saida_pausada}\n\n---\n[Resposta do humano]\n{resposta}"
 
 
 def _execucao_do_dono(sessao: Session, execucao_id: uuid.UUID) -> Execucao:
@@ -206,16 +217,29 @@ def responder(
 
     cadeia = auto.cadeia or {}
     no = (cadeia.get("nos") or {}).get(str(ultimo.agente_id)) or {}
-    rotulo = (ultimo.saida or {}).get("saida_escolhida")
-    proximo = next(
-        (s.get("destino") for s in no.get("saidas") or [] if s.get("rotulo") == rotulo),
-        None,
-    )
+    saidas = no.get("saidas") or []
 
-    # Sem próximo agente (destino fim): a resposta encerra a execução.
-    if not proximo or proximo in ("fim", "FIM"):
+    # Portão de aprovação (PRODUTO §14): a RESPOSTA DO HUMANO escolhe o caminho.
+    # Com várias saídas, um roteador casa a resposta ("aprovado" / "reprovado,
+    # mude X") com a saída certa; com uma, segue ela; sem saídas, encerra.
+    if len(saidas) == 0:
+        escolhida = None
+    elif len(saidas) == 1:
+        escolhida = saidas[0]
+    else:
+        escolhida, _ = _escolher_saida(dados.resposta, saidas)
+    destino = escolhida.get("destino") if escolhida else None
+    proximo = None if destino in _DESTINOS_FIM else destino
+
+    # O próximo nó recebe o trabalho pausado (o que o agente produziu) MAIS a
+    # decisão/feedback do humano — assim o publisher recebe o artigo + "aprovado"
+    # e o escritor (no ramo reprovado) recebe o artigo + o que mudar.
+    entrada_proxima = _entrada_retomada((ultimo.saida or {}).get("texto", ""), dados.resposta)
+
+    # Sem próximo agente (destino fim): encerra com o trabalho + a decisão.
+    if proximo is None:
         execucao.estado = "concluida"
-        execucao.resultado = {"texto": dados.resposta}
+        execucao.resultado = {"texto": entrada_proxima}
         execucao.finalizada_em = datetime.now(timezone.utc)
         sessao.commit()
         sessao.refresh(execucao)
@@ -227,7 +251,7 @@ def responder(
         r = executar_cadeia(
             sessao,
             cadeia,
-            dados.resposta,
+            entrada_proxima,
             no_inicial=proximo,
             ordem_inicial=ultimo.ordem,
             registrar_passo=_fazer_registrador(sessao, execucao.id),
