@@ -12,7 +12,9 @@ from langchain_core.messages import AIMessage
 
 # Modelo padrão quando o agente não escolheu um. Haiku: barato para o trivial.
 MODELO_PADRAO = "claude-haiku-4-5"
-MAX_TOKENS = 2048
+# Teto de tokens de SAÍDA por resposta. Folga para saídas estruturadas e longas
+# (tabelas, vários candidatos, artigos) — 2048 cortava saídas ricas no meio.
+MAX_TOKENS = 8192
 
 
 def construir_modelo(
