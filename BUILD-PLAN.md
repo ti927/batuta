@@ -364,7 +364,7 @@ Esta é a fase mais difícil do projeto. Vá devagar, tarefa por tarefa, verific
 > - **4.4** Registrar cada passo — disparo grava `execucoes`/`passos_execucao`. Commit `1b8c794`.
 > - **4.5** Tela de inspeção — `/automacoes/[id]` mostra passos. Commit `1b8c794`.
 > - **Construtor de automação** (lacuna do plano, suprida) — `/times/[id]/automacoes` monta o grafo. Gatilho de teste `tipo_gatilho="manual"`. Commit `1b8c794`.
-> - **4.6** Espera-por-humano — agente marcado `pausa_humano` pausa (estado `aguardando_humano` salvo no banco, sobrevive a reinícios); `POST /execucoes/{id}/responder` retoma com a resposta. Interruptor no construtor + caixa de resposta na inspeção. Commits `4cf30f8` e o fix `agente sem saída sempre pausa`.
+> - **4.6** Espera-por-humano — agente marcado `pausa_humano` pausa (estado `aguardando_humano` salvo no banco, sobrevive a reinícios); `POST /execucoes/{id}/responder` retoma com a resposta. Interruptor no construtor + caixa de resposta na inspeção. Commits `4cf30f8` e o fix `agente sem saída sempre pausa`. **Evoluído na validação (`941ee8e`) para o portão de aprovação do §14: a resposta do humano escolhe a saída (ver o bloco "Validação EM ANDAMENTO" no Portão).**
 >
 > **4.7 Gatilhos (sessão 2026-05-30):** três tipos no produto, todos no core.
 > - **Manual** (botão de teste) — já existia; o disparo foi refatorado para
@@ -556,6 +556,26 @@ de configuração já existente.
 ## PORTÃO DE VALIDAÇÃO DO CORE
 
 **Este é o portão entre a Etapa 1 e a Etapa 2. A Etapa 2 está bloqueada até que o maestro o abra.**
+
+> **Validação EM ANDAMENTO (iniciada 2026-05-31).** O maestro está testando com um
+> time real (news-to-insight → curator-lure-fit → lure-writer → Lure.publisher) e o
+> teste já expôs correções de núcleo, todas implementadas, verificadas e enviadas:
+> - **`fix d615376`** — teto de tokens de SAÍDA subiu de 2048 → **8192**
+>   (`orquestracao/llm.py`): 2048 cortava saídas longas no meio (a tabela do curador
+>   truncava; o escritor recebia o pacote pela metade).
+> - **`feat 941ee8e` — Portão de aprovação (PRODUTO §14):** a forma "portão de
+>   aprovação" da espera-por-humano não existia de fato. Antes, num nó com pausa, a
+>   IA escolhia o ramo a partir da saída do próprio agente e a resposta do humano
+>   só virava a entrada do ramo já escolhido. Agora o nó com pausa **não roteia**; a
+>   **resposta do humano** escolhe a saída (no `responder`, um roteador casa
+>   "aprovado"/"reprovado, mude X" com o `quando` de cada saída) e o próximo nó
+>   recebe trabalho-pausado + decisão. Na tela, um botão por saída na pausa.
+> - **Aprendizado de autoria (não é bug):** o comportamento do agente vem 100% do
+>   markdown — o motor só monta o prompt dos 4 markdowns e passa a entrada como
+>   mensagem do usuário (não há "insumo inicial" no código). Agente em cadeia
+>   automática deve FAZER e entregar só o produto (não validar o colega nem pedir
+>   confirmação); conhecimento citado ("biblioteca Lure") precisa ser materializado
+>   no markdown ou via instrumento.
 
 Antes de qualquer tarefa da Etapa 2, o maestro testa o core exaustivamente. Roteiro mínimo de validação, todo feito pelas telas:
 
