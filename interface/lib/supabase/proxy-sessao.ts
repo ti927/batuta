@@ -7,9 +7,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Rotas que não exigem sessão (a própria tela de login e o aceite de convite,
-// que é como um convidado entra antes de ter cadastro).
-const ROTAS_PUBLICAS = ["/login", "/convite"];
+// Rotas que não exigem sessão: a tela de login; o aceite de convite e a rota
+// que recebe o link do e-mail de convite (é como um convidado entra antes de
+// ter cadastro).
+const ROTAS_PUBLICAS = ["/login", "/convite", "/auth"];
 
 export async function renovarSessao(request: NextRequest) {
   let resposta = NextResponse.next({ request });
