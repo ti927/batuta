@@ -51,6 +51,16 @@ class Usuario(IdData, Base):
     __tablename__ = "usuarios"
     nome: Mapped[str] = mapped_column(String(200), nullable=False)
     email: Mapped[str | None] = mapped_column(String(320), unique=True, nullable=True)
+    # Vínculo ao Supabase Auth (o `sub` do JWT). Nulo até o usuário aceitar o
+    # convite e logar a primeira vez; é o que liga a identidade real ao registro.
+    auth_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), unique=True, nullable=True
+    )
+    # Desativação (MIGRACAO §3.7): um usuário inativo não acessa nada, mas o
+    # registro e seu histórico permanecem.
+    ativo: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
 
 
 class Organizacao(IdData, Base):
@@ -188,3 +198,69 @@ class PassoExecucao(IdData, Base):
     finalizado_em: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+
+# ───────────────────── Identidade e acesso (Etapa 2, Fase 6) ─────────────────
+
+
+class Membro(IdData, Base):
+    """Vínculo de um usuário a uma organização, com seu papel de acesso
+    (admin | operador | observador). É a fonte de permissão da Etapa 2 — substitui,
+    na prática, o antigo 'dono' único da organização. Um usuário pode ser membro de
+    várias organizações, com papel distinto em cada (índice único do par)."""
+
+    __tablename__ = "membros"
+    usuario_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
+    )
+    organizacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    papel: Mapped[str] = mapped_column(String(20), nullable=False)  # admin|operador|observador
+
+    __table_args__ = (
+        Index("uq_membro_usuario_org", "usuario_id", "organizacao_id", unique=True),
+    )
+
+
+class Convite(IdData, Base):
+    """Convite para um email entrar numa organização com um papel. Ninguém se
+    autoinscreve (MIGRACAO §3.7): um admin emite o convite; o convidado aceita e
+    vira Membro."""
+
+    __tablename__ = "convites"
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    organizacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    papel: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'pendente'")
+    )  # pendente|aceito|expirado|revogado
+    convidado_por_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
+    )
+    expira_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (Index("ix_convite_email_org", "email", "organizacao_id"),)
+
+
+class Auditoria(IdData, Base):
+    """Registro nominal de uma ação sensível (quem, o quê, quando, em qual recurso).
+    `usuario_id` é SET NULL para preservar o registro mesmo que o usuário seja
+    removido (igual a PassoExecucao.agente_id). `recurso_id`/`organizacao_id` são
+    UUID soltos (não FK) de propósito: a auditoria sobrevive à exclusão do recurso."""
+
+    __tablename__ = "auditoria"
+    usuario_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
+    )
+    acao: Mapped[str] = mapped_column(String(60), nullable=False)
+    recurso_tipo: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    recurso_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    organizacao_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    detalhe: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
