@@ -630,7 +630,7 @@ Antes de qualquer tarefa da Etapa 2, o maestro testa o core exaustivamente. Rote
 
 O Batuta deixou de ser SaaS público e passou a ser **ferramenta interna da consultoria Lure**. A Etapa 2 foi **reorganizada pelo `MIGRACAO.md`** (jun/2026): caem planos/billing/inadimplência/onboarding público; entram a camada conversacional (IA criadora) e a IA companheira. O **núcleo de orquestração da Etapa 1 é intocável** — só se estende. Cada fase é detalhada no formato investigar/implementar/verificar à medida que é executada (MIGRACAO §4.3/§6.3). Trabalho na branch **`migracao-etapa-2`**.
 
-## FASE 6 — Identidade e papéis  ✅ CONCLUÍDA (2026-06-04; e-mail de convite pendente de SMTP)
+## FASE 6 — Identidade e papéis  ✅ CONCLUÍDA (2026-06-04)
 
 Trocar o usuário fixo por **login real (Supabase Auth)** e **três papéis** (admin/operador/observador), com convites, desativação de usuários e auditoria nominal. Referência completa: `MIGRACAO.md` §4.1/§5/§6.
 
@@ -652,13 +652,13 @@ Trocar o usuário fixo por **login real (Supabase Auth)** e **três papéis** (a
 - **I6.5** Telas de gestão (`/organizacoes/[id]/acesso`): membros (papel, remover, (des)ativar) e convites (convidar, revogar); gating por `GET /eu`. — `962b2ff`.
 - **I6.6** UI ciente de papel em todas as telas (`lib/permissoes.ts`); cérebro ganhou `organizacao_id` aditivo na lista global de execuções. — `7b11d9c`.
 
-**Pendência conhecida (infra, não-código):** o **envio do e-mail de convite** pelo Supabase falha (Gmail bloqueia SMTP a partir dos servidores do Supabase). Mecanismo do convite provado pelo gerador de link de teste (`scripts/gerar_convite_teste.py`). Resolver com **Resend** (ou destravar o Gmail) — ver Fase 7/infra.
+**Envio de e-mail (resolvido 2026-06-04):** o e-mail de convite sai pelo **Resend** (SMTP `smtp.resend.com:587`, usuário `resend`, senha = API key; domínio verificado no Resend). O Gmail foi descartado (bloqueia SMTP a partir dos servidores do Supabase). O template "Invite user" do Supabase aponta o link para `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/convite` — sem isso, o link cai no `verify` padrão e não chega à tela de senha.
 
-### Definition of Done — Fase 6
+### Definition of Done — Fase 6 ✅
 - [x] Cérebro: login real + três papéis em todas as rotas + convites/desativação + auditoria — **19 testes verdes**.
 - [x] Interface: login funcionando, token encaminhado, telas de gestão, UI por papel — **tsc/eslint verdes**.
-- [x] Verificação pelas telas: maestro logou; CRUD via token; aceite de convite ponta a ponta (membro operador criado); UI por papel (admin vê tudo, operador sem deletar/criar-time/gerir-acesso).
-- [~] Envio de e-mail de convite: **pendente de SMTP** (Resend) — único item do fluxo que não roda completo; é infra.
+- [x] Verificação pelas telas: maestro logou; CRUD via token; aceite de convite **ponta a ponta com e-mail real** (Resend); UI por papel (admin vê tudo, operador sem deletar/criar-time/gerir-acesso).
+- [x] Envio de e-mail de convite funcionando (Resend).
 - [x] `PRODUTO.md`/`BUILD-PLAN.md` atualizados; commit da branch. Push/merge em `main` com confirmação do maestro.
 
 ## FASE 7 — Cofre de chaves por projeto
