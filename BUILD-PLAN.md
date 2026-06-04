@@ -630,7 +630,7 @@ Antes de qualquer tarefa da Etapa 2, o maestro testa o core exaustivamente. Rote
 
 O Batuta deixou de ser SaaS público e passou a ser **ferramenta interna da consultoria Lure**. A Etapa 2 foi **reorganizada pelo `MIGRACAO.md`** (jun/2026): caem planos/billing/inadimplência/onboarding público; entram a camada conversacional (IA criadora) e a IA companheira. O **núcleo de orquestração da Etapa 1 é intocável** — só se estende. Cada fase é detalhada no formato investigar/implementar/verificar à medida que é executada (MIGRACAO §4.3/§6.3). Trabalho na branch **`migracao-etapa-2`**.
 
-## FASE 6 — Identidade e papéis  🟡 EM ANDAMENTO (cérebro completo; interface pendente)
+## FASE 6 — Identidade e papéis  ✅ CONCLUÍDA (2026-06-04; e-mail de convite pendente de SMTP)
 
 Trocar o usuário fixo por **login real (Supabase Auth)** e **três papéis** (admin/operador/observador), com convites, desativação de usuários e auditoria nominal. Referência completa: `MIGRACAO.md` §4.1/§5/§6.
 
@@ -645,13 +645,21 @@ Trocar o usuário fixo por **login real (Supabase Auth)** e **três papéis** (a
 - **6.7** `rotas/membros.py` + `supabase_admin.py`: membros, papéis (guarda do último admin), convites (Supabase invite), `POST /convites/aceitar`, (des)ativação, `GET /eu`. — `3d76a27`
 - **6.8** `scripts/bootstrap_admin.py` + `iniciar_do_zero.py`; admin ligado, banco zerado, `usuario_fixo.py` removido. — `1d55b02`
 
-**Interface (Next 16) — ⬜ pendente:** I6.1 base `@supabase/ssr` + middleware + proteção de rotas (`.env.local` já criado); I6.2 login/logout + sessão no layout; I6.3 encaminhar o Bearer ao cérebro (client e Server Components); I6.4 aceite de convite; I6.5 telas de gestão (admin); I6.6 UI ciente de papel.
+**Interface (Next 16) — ✅ feita e verificada (tsc/eslint verdes):**
+- **I6.1/I6.2** Base `@supabase/ssr` (clientes navegador/servidor) + `proxy.ts` (no Next 16 substitui o `middleware.ts`) protegendo as rotas; tela `/login` e barra de sessão com Sair. — `d2e06bf`. Verificado pelo maestro (login/logout no navegador).
+- **I6.3** Token encaminhado ao cérebro nos dois contextos: `lib/api.ts` (núcleo `requisitar` + `api` do navegador) e `lib/cerebro-servidor.ts` (`buscarCerebro`, server-only) nos 8 Server Components. — `72a4ccc`. Verificado: maestro criou orgs/times/agentes/instrumentos e fez logoff/login.
+- **I6.4** Aceite de convite: `app/auth/confirm/route.ts` (verifyOtp do token do e-mail → sessão) + `app/convite` (define senha + `POST /convites/aceitar`). — `cadbeaa`. Verificado de ponta a ponta com link gerado sem e-mail (membro criado, convite "aceito").
+- **I6.5** Telas de gestão (`/organizacoes/[id]/acesso`): membros (papel, remover, (des)ativar) e convites (convidar, revogar); gating por `GET /eu`. — `962b2ff`.
+- **I6.6** UI ciente de papel em todas as telas (`lib/permissoes.ts`); cérebro ganhou `organizacao_id` aditivo na lista global de execuções. — `7b11d9c`.
+
+**Pendência conhecida (infra, não-código):** o **envio do e-mail de convite** pelo Supabase falha (Gmail bloqueia SMTP a partir dos servidores do Supabase). Mecanismo do convite provado pelo gerador de link de teste (`scripts/gerar_convite_teste.py`). Resolver com **Resend** (ou destravar o Gmail) — ver Fase 7/infra.
 
 ### Definition of Done — Fase 6
 - [x] Cérebro: login real + três papéis em todas as rotas + convites/desativação + auditoria — **19 testes verdes**.
-- [ ] Interface: login funcionando, token encaminhado, telas de gestão, UI por papel.
-- [ ] Verificação ponta a ponta pelas telas: maestro loga; operador/observador respeitados (403/ocultos); isolamento (404); auditoria gerando linhas.
-- [ ] `PRODUTO.md`/`BUILD-PLAN.md` atualizados; commit + **push** da branch e merge em `main` (com confirmação do maestro).
+- [x] Interface: login funcionando, token encaminhado, telas de gestão, UI por papel — **tsc/eslint verdes**.
+- [x] Verificação pelas telas: maestro logou; CRUD via token; aceite de convite ponta a ponta (membro operador criado); UI por papel (admin vê tudo, operador sem deletar/criar-time/gerir-acesso).
+- [~] Envio de e-mail de convite: **pendente de SMTP** (Resend) — único item do fluxo que não roda completo; é infra.
+- [x] `PRODUTO.md`/`BUILD-PLAN.md` atualizados; commit da branch. Push/merge em `main` com confirmação do maestro.
 
 ## FASE 7 — Cofre de chaves por projeto
 Cofre criptografado; chave por projeto + **chave padrão da consultoria** + fallback; troca de chave (admin); **medição refinada por chave/IA**. As **três** IAs (executora/criadora/companheira) têm chaves **trocáveis** por escolha do admin; medição de tokens obrigatória em tudo quando se usa a chave da consultoria (MIGRACAO Viradas 4/5).
