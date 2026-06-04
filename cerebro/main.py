@@ -13,6 +13,7 @@ from rotas import (
     cinto,
     execucao,
     instrumentos,
+    membros,
     organizacoes,
     times,
     webhooks,
@@ -46,6 +47,7 @@ def saude():
 
 
 app.include_router(organizacoes.rotas)
+app.include_router(membros.rotas)
 app.include_router(times.rotas)
 app.include_router(agentes.rotas)
 app.include_router(instrumentos.rotas)

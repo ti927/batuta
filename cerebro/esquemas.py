@@ -272,3 +272,69 @@ class ExecucaoComPassos(ExecucaoLer):
     passos: list[PassoExecucaoLer] = Field(default_factory=list)
     # Resumo de uso (tokens e custo aproximado) somado dos passos — Tarefa 5.4.
     uso: dict | None = None
+
+
+# ───────────────── Identidade e acesso (Etapa 2, Fase 6) ─────────────────
+
+# Papel de ACESSO (admin/operador/observador) — distinto do `Papel` do agente
+# (lider/agente); são conceitos diferentes, não reusar.
+PapelAcesso = Literal["admin", "operador", "observador"]
+
+
+class UsuarioLer(BaseModel):
+    """Um usuário do Batuta, como a API o devolve."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    nome: str
+    email: str | None
+    ativo: bool
+
+
+class MembroLer(BaseModel):
+    """Um membro de uma organização, com os dados do usuário para exibição."""
+
+    usuario_id: uuid.UUID
+    papel: PapelAcesso
+    nome: str
+    email: str | None
+    ativo: bool
+
+
+class AlterarPapel(BaseModel):
+    """Muda o papel de um membro na organização."""
+
+    papel: PapelAcesso
+
+
+class ConviteCriar(BaseModel):
+    """Convida um email para a organização com um papel."""
+
+    email: str = Field(min_length=3, max_length=320)
+    papel: PapelAcesso
+
+
+class ConviteLer(BaseModel):
+    """Um convite, como a API o devolve."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    email: str
+    organizacao_id: uuid.UUID
+    papel: str
+    status: str
+    expira_em: datetime | None
+    criado_em: datetime
+
+
+class MeuAcesso(BaseModel):
+    """O usuário atual + seus papéis por organização — para a interface decidir
+    o que mostrar (UI ciente de papel) sem recalcular a cada tela."""
+
+    id: uuid.UUID
+    nome: str
+    email: str | None
+    ativo: bool
+    papeis: dict[uuid.UUID, PapelAcesso] = Field(default_factory=dict)
