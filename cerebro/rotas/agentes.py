@@ -1,11 +1,8 @@
 """Endpoints CRUD de Agentes (Líder e Agentes).
 
-Agentes pertencem a um time; o time a uma organização; a organização ao
-usuário atual. Toda operação confere essa cadeia de posse.
-
-Regra do produto (PRODUTO.md §10): cada time tem no máximo um Líder. O banco
-garante isso por índice parcial; aqui checamos antes para devolver uma mensagem
-clara (409) em vez de um erro cru de banco.
+Acesso por papel (Fase 6): membro vê (observador); operador cria/edita; só admin
+apaga. Regra do produto (PRODUTO.md §10): cada time tem no máximo um Líder —
+garantido por índice parcial no banco e checado aqui para uma mensagem clara (409).
 """
 
 import uuid
@@ -14,30 +11,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from auth import usuario_atual
 from esquemas import AgenteCriar, AgenteEditar, AgenteLer
-from modelos import Agente, Organizacao, Time
+from modelos import Agente, Usuario
+from rotas._comum import agente_acessivel, time_acessivel
 from sessao import obter_sessao
-from usuario_fixo import usuario_atual_id
 
 rotas = APIRouter(tags=["agentes"])
-
-
-def _time_do_dono(sessao: Session, time_id: uuid.UUID) -> Time:
-    time = sessao.get(Time, time_id)
-    if time is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Time não encontrado")
-    org = sessao.get(Organizacao, time.organizacao_id)
-    if org is None or org.dono_id != usuario_atual_id():
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Time não encontrado")
-    return time
-
-
-def _agente_do_dono(sessao: Session, agente_id: uuid.UUID) -> Agente:
-    agente = sessao.get(Agente, agente_id)
-    if agente is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Agente não encontrado")
-    _time_do_dono(sessao, agente.time_id)
-    return agente
 
 
 def _ja_existe_lider(
@@ -55,8 +35,12 @@ CONFLITO_LIDER = "Este time já tem um Líder. Cada time pode ter apenas um."
 
 
 @rotas.get("/times/{time_id}/agentes", response_model=list[AgenteLer])
-def listar(time_id: uuid.UUID, sessao: Session = Depends(obter_sessao)):
-    _time_do_dono(sessao, time_id)
+def listar(
+    time_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    time_acessivel(sessao, usuario, time_id)
     consulta = (
         select(Agente).where(Agente.time_id == time_id).order_by(Agente.criado_em)
     )
@@ -69,9 +53,12 @@ def listar(time_id: uuid.UUID, sessao: Session = Depends(obter_sessao)):
     status_code=status.HTTP_201_CREATED,
 )
 def criar(
-    time_id: uuid.UUID, dados: AgenteCriar, sessao: Session = Depends(obter_sessao)
+    time_id: uuid.UUID,
+    dados: AgenteCriar,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
 ):
-    _time_do_dono(sessao, time_id)
+    time_acessivel(sessao, usuario, time_id, minimo="operador")
     if dados.papel == "lider" and _ja_existe_lider(sessao, time_id):
         raise HTTPException(status.HTTP_409_CONFLICT, CONFLITO_LIDER)
     agente = Agente(time_id=time_id, **dados.model_dump())
@@ -82,15 +69,22 @@ def criar(
 
 
 @rotas.get("/agentes/{agente_id}", response_model=AgenteLer)
-def obter(agente_id: uuid.UUID, sessao: Session = Depends(obter_sessao)):
-    return _agente_do_dono(sessao, agente_id)
+def obter(
+    agente_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    return agente_acessivel(sessao, usuario, agente_id)
 
 
 @rotas.put("/agentes/{agente_id}", response_model=AgenteLer)
 def editar(
-    agente_id: uuid.UUID, dados: AgenteEditar, sessao: Session = Depends(obter_sessao)
+    agente_id: uuid.UUID,
+    dados: AgenteEditar,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
 ):
-    agente = _agente_do_dono(sessao, agente_id)
+    agente = agente_acessivel(sessao, usuario, agente_id, minimo="operador")
     if dados.papel == "lider" and _ja_existe_lider(
         sessao, agente.time_id, ignorar_id=agente.id
     ):
@@ -103,7 +97,11 @@ def editar(
 
 
 @rotas.delete("/agentes/{agente_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remover(agente_id: uuid.UUID, sessao: Session = Depends(obter_sessao)):
-    agente = _agente_do_dono(sessao, agente_id)
+def remover(
+    agente_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    agente = agente_acessivel(sessao, usuario, agente_id, minimo="admin")
     sessao.delete(agente)
     sessao.commit()

@@ -1,55 +1,65 @@
 """Endpoints CRUD de Organizações.
 
-Na Etapa 1 toda organização pertence ao usuário fixo de testes. As consultas
-são sempre filtradas por esse dono — é o que sustenta o isolamento entre
-organizações do PRODUTO.md (CLAUDE.md §8) e o ponto a trocar na Etapa 2.
+A posse é por papel (Etapa 2, Fase 6): quem é membro vê; só admin edita/apaga.
+Criar uma organização é permitido a qualquer usuário autenticado e ativo — o
+criador entra como `admin` da nova organização na mesma transação (não há, nesta
+fase, um "admin da consultoria" acima das organizações; isso chega na Fase 7).
 """
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from auth import usuario_atual
 from esquemas import OrganizacaoCriar, OrganizacaoEditar, OrganizacaoLer
-from modelos import Organizacao
+from modelos import Membro, Organizacao, Usuario
+from rotas._comum import organizacao_acessivel
 from sessao import obter_sessao
-from usuario_fixo import usuario_atual_id
 
 rotas = APIRouter(prefix="/organizacoes", tags=["organizacoes"])
 
 
-def _buscar_do_dono(sessao: Session, organizacao_id: uuid.UUID) -> Organizacao:
-    """Busca uma organização garantindo que pertence ao usuário atual.
-    Levanta 404 se não existe ou é de outro dono."""
-    org = sessao.get(Organizacao, organizacao_id)
-    if org is None or org.dono_id != usuario_atual_id():
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Organização não encontrada")
-    return org
-
-
 @rotas.get("", response_model=list[OrganizacaoLer])
-def listar(sessao: Session = Depends(obter_sessao)):
+def listar(
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """As organizações em que o usuário é membro (qualquer papel)."""
     consulta = (
         select(Organizacao)
-        .where(Organizacao.dono_id == usuario_atual_id())
+        .join(Membro, Membro.organizacao_id == Organizacao.id)
+        .where(Membro.usuario_id == usuario.id)
         .order_by(Organizacao.criado_em)
     )
     return sessao.scalars(consulta).all()
 
 
 @rotas.post("", response_model=OrganizacaoLer, status_code=status.HTTP_201_CREATED)
-def criar(dados: OrganizacaoCriar, sessao: Session = Depends(obter_sessao)):
-    org = Organizacao(nome=dados.nome, dono_id=usuario_atual_id())
+def criar(
+    dados: OrganizacaoCriar,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    org = Organizacao(nome=dados.nome, dono_id=usuario.id)
     sessao.add(org)
+    sessao.flush()  # garante org.id antes de criar o vínculo de membro
+    sessao.add(
+        Membro(usuario_id=usuario.id, organizacao_id=org.id, papel="admin")
+    )
     sessao.commit()
     sessao.refresh(org)
     return org
 
 
 @rotas.get("/{organizacao_id}", response_model=OrganizacaoLer)
-def obter(organizacao_id: uuid.UUID, sessao: Session = Depends(obter_sessao)):
-    return _buscar_do_dono(sessao, organizacao_id)
+def obter(
+    organizacao_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    return organizacao_acessivel(sessao, usuario, organizacao_id)
 
 
 @rotas.put("/{organizacao_id}", response_model=OrganizacaoLer)
@@ -57,8 +67,9 @@ def editar(
     organizacao_id: uuid.UUID,
     dados: OrganizacaoEditar,
     sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
 ):
-    org = _buscar_do_dono(sessao, organizacao_id)
+    org = organizacao_acessivel(sessao, usuario, organizacao_id, minimo="admin")
     org.nome = dados.nome
     sessao.commit()
     sessao.refresh(org)
@@ -66,7 +77,11 @@ def editar(
 
 
 @rotas.delete("/{organizacao_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remover(organizacao_id: uuid.UUID, sessao: Session = Depends(obter_sessao)):
-    org = _buscar_do_dono(sessao, organizacao_id)
+def remover(
+    organizacao_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    org = organizacao_acessivel(sessao, usuario, organizacao_id, minimo="admin")
     sessao.delete(org)
     sessao.commit()

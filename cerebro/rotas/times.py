@@ -1,42 +1,31 @@
 """Endpoints CRUD de Times.
 
-Times pertencem a uma organização; a organização pertence ao usuário atual.
-Toda operação confere essa cadeia de posse — é o isolamento do PRODUTO.md.
+Acesso por papel (Fase 6): membro vê (observador); operador cria/edita; só admin
+apaga ou cria um time novo na organização (MIGRACAO §3.7: criar projetos/times = admin).
 """
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from auth import usuario_atual
 from esquemas import TimeCriar, TimeEditar, TimeLer
-from modelos import Organizacao, Time
+from modelos import Time, Usuario
+from rotas._comum import organizacao_acessivel, time_acessivel
 from sessao import obter_sessao
-from usuario_fixo import usuario_atual_id
 
 rotas = APIRouter(tags=["times"])
 
 
-def _organizacao_do_dono(sessao: Session, organizacao_id: uuid.UUID) -> Organizacao:
-    org = sessao.get(Organizacao, organizacao_id)
-    if org is None or org.dono_id != usuario_atual_id():
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Organização não encontrada")
-    return org
-
-
-def _time_do_dono(sessao: Session, time_id: uuid.UUID) -> Time:
-    time = sessao.get(Time, time_id)
-    if time is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Time não encontrado")
-    # Confere que a organização do time pertence ao usuário atual.
-    _organizacao_do_dono(sessao, time.organizacao_id)
-    return time
-
-
 @rotas.get("/organizacoes/{organizacao_id}/times", response_model=list[TimeLer])
-def listar(organizacao_id: uuid.UUID, sessao: Session = Depends(obter_sessao)):
-    _organizacao_do_dono(sessao, organizacao_id)
+def listar(
+    organizacao_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    organizacao_acessivel(sessao, usuario, organizacao_id)
     consulta = (
         select(Time)
         .where(Time.organizacao_id == organizacao_id)
@@ -54,8 +43,9 @@ def criar(
     organizacao_id: uuid.UUID,
     dados: TimeCriar,
     sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
 ):
-    _organizacao_do_dono(sessao, organizacao_id)
+    organizacao_acessivel(sessao, usuario, organizacao_id, minimo="admin")
     time = Time(
         organizacao_id=organizacao_id, nome=dados.nome, descricao=dados.descricao
     )
@@ -66,15 +56,22 @@ def criar(
 
 
 @rotas.get("/times/{time_id}", response_model=TimeLer)
-def obter(time_id: uuid.UUID, sessao: Session = Depends(obter_sessao)):
-    return _time_do_dono(sessao, time_id)
+def obter(
+    time_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    return time_acessivel(sessao, usuario, time_id)
 
 
 @rotas.put("/times/{time_id}", response_model=TimeLer)
 def editar(
-    time_id: uuid.UUID, dados: TimeEditar, sessao: Session = Depends(obter_sessao)
+    time_id: uuid.UUID,
+    dados: TimeEditar,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
 ):
-    time = _time_do_dono(sessao, time_id)
+    time = time_acessivel(sessao, usuario, time_id, minimo="operador")
     time.nome = dados.nome
     time.descricao = dados.descricao
     sessao.commit()
@@ -83,7 +80,11 @@ def editar(
 
 
 @rotas.delete("/times/{time_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remover(time_id: uuid.UUID, sessao: Session = Depends(obter_sessao)):
-    time = _time_do_dono(sessao, time_id)
+def remover(
+    time_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    time = time_acessivel(sessao, usuario, time_id, minimo="admin")
     sessao.delete(time)
     sessao.commit()

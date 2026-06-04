@@ -4,6 +4,10 @@ Uma automação é a definição de um fluxo: o gatilho e a cadeia (o grafo de
 agentes com bifurcação). Aqui se monta a automação (CRUD), dispara-se
 manualmente (Etapa 1), e cada passo é gravado em `passos_execucao` para a tela
 de inspeção (Tarefas 4.3, 4.4 e 4.5).
+
+Acesso por papel (Fase 6): membro vê (observador); operador cria/edita/dispara/
+cancela; só admin apaga automação ou execução (apagar histórico). Responder uma
+espera-por-humano (portão de aprovação) é ação de observador (MIGRACAO §3.7).
 """
 
 import uuid
@@ -27,7 +31,17 @@ from esquemas import (
 import agendador
 import fila
 import precos
-from modelos import Agente, Automacao, Execucao, Organizacao, PassoExecucao, Time
+from auth import usuario_atual
+from modelos import (
+    Agente,
+    Automacao,
+    Execucao,
+    Membro,
+    Organizacao,
+    PassoExecucao,
+    Time,
+    Usuario,
+)
 from orquestracao.cadeia import (
     _DESTINOS_FIM,
     _escolher_saida,
@@ -39,9 +53,8 @@ from orquestracao.disparo import (
     _fazer_registrador,
     criar_execucao,
 )
-from rotas._comum import time_do_dono
+from rotas._comum import automacao_acessivel, execucao_acessivel, time_acessivel
 from sessao import obter_sessao
-from usuario_fixo import usuario_atual_id
 
 # Estados em que a execução já encerrou (não há mais o que cancelar).
 ESTADOS_ENCERRADOS = {"concluida", "falhou", "cancelada"}
@@ -49,26 +62,10 @@ ESTADOS_ENCERRADOS = {"concluida", "falhou", "cancelada"}
 rotas = APIRouter(tags=["automacoes"])
 
 
-def _automacao_do_dono(sessao: Session, automacao_id: uuid.UUID) -> Automacao:
-    auto = sessao.get(Automacao, automacao_id)
-    if auto is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Automação não encontrada")
-    time_do_dono(sessao, auto.time_id)
-    return auto
-
-
 def _entrada_retomada(saida_pausada: str, resposta: str) -> str:
     """A entrada do próximo nó ao retomar uma pausa: o trabalho que o agente
     produziu + a decisão/feedback do humano, separados e rotulados."""
     return f"{saida_pausada}\n\n---\n[Resposta do humano]\n{resposta}"
-
-
-def _execucao_do_dono(sessao: Session, execucao_id: uuid.UUID) -> Execucao:
-    execucao = sessao.get(Execucao, execucao_id)
-    if execucao is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Execução não encontrada")
-    _automacao_do_dono(sessao, execucao.automacao_id)
-    return execucao
 
 
 def _ids_dos_agentes(sessao: Session, time_id: uuid.UUID) -> set[str]:
@@ -91,8 +88,12 @@ def _validar_cadeia_ou_422(sessao: Session, time_id: uuid.UUID, cadeia: dict) ->
 
 
 @rotas.get("/times/{time_id}/automacoes", response_model=list[AutomacaoLer])
-def listar(time_id: uuid.UUID, sessao: Session = Depends(obter_sessao)):
-    time_do_dono(sessao, time_id)
+def listar(
+    time_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    time_acessivel(sessao, usuario, time_id)
     return sessao.scalars(
         select(Automacao)
         .where(Automacao.time_id == time_id)
@@ -109,8 +110,9 @@ def criar(
     time_id: uuid.UUID,
     dados: AutomacaoCriar,
     sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
 ):
-    time_do_dono(sessao, time_id)
+    time_acessivel(sessao, usuario, time_id, minimo="operador")
     _validar_cadeia_ou_422(sessao, time_id, dados.cadeia)
     auto = Automacao(time_id=time_id, **dados.model_dump())
     sessao.add(auto)
@@ -121,8 +123,12 @@ def criar(
 
 
 @rotas.get("/automacoes/{automacao_id}", response_model=AutomacaoLer)
-def obter(automacao_id: uuid.UUID, sessao: Session = Depends(obter_sessao)):
-    return _automacao_do_dono(sessao, automacao_id)
+def obter(
+    automacao_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    return automacao_acessivel(sessao, usuario, automacao_id)
 
 
 @rotas.put("/automacoes/{automacao_id}", response_model=AutomacaoLer)
@@ -130,8 +136,9 @@ def editar(
     automacao_id: uuid.UUID,
     dados: AutomacaoEditar,
     sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
 ):
-    auto = _automacao_do_dono(sessao, automacao_id)
+    auto = automacao_acessivel(sessao, usuario, automacao_id, minimo="operador")
     _validar_cadeia_ou_422(sessao, auto.time_id, dados.cadeia)
     for campo, valor in dados.model_dump().items():
         setattr(auto, campo, valor)
@@ -142,8 +149,12 @@ def editar(
 
 
 @rotas.delete("/automacoes/{automacao_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remover(automacao_id: uuid.UUID, sessao: Session = Depends(obter_sessao)):
-    auto = _automacao_do_dono(sessao, automacao_id)
+def remover(
+    automacao_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    auto = automacao_acessivel(sessao, usuario, automacao_id, minimo="admin")
     sessao.delete(auto)
     sessao.commit()
     agendador.remover(automacao_id)
@@ -173,14 +184,11 @@ def disparar(
     automacao_id: uuid.UUID,
     dados: DispararAutomacao,
     sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
 ):
     """Disparo manual (botão de teste): roda independente do gatilho da
-    automação — é a forma de o maestro testar qualquer fluxo na Etapa 1.
-
-    Não bloqueia: enfileira a execução (estado `aguardando`) e devolve o id na
-    hora. Um trabalhador da fila a roda; a tela acompanha o progresso
-    consultando a execução (Tarefas 5.2 e 5.3)."""
-    auto = _automacao_do_dono(sessao, automacao_id)
+    automação. Não bloqueia: enfileira a execução e devolve o id na hora."""
+    auto = automacao_acessivel(sessao, usuario, automacao_id, minimo="operador")
     execucao = criar_execucao(sessao, auto, dados.entrada)
     fila.enfileirar()
     return _montar_com_passos(sessao, execucao)
@@ -191,13 +199,13 @@ def responder(
     execucao_id: uuid.UUID,
     dados: ResponderHumano,
     sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
 ):
     """Retoma uma execução pausada (espera-por-humano): a resposta do humano
-    vira a entrada do próximo agente, e a cadeia continua de onde parou."""
-    execucao = sessao.get(Execucao, execucao_id)
-    if execucao is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Execução não encontrada")
-    auto = _automacao_do_dono(sessao, execucao.automacao_id)
+    vira a entrada do próximo agente, e a cadeia continua de onde parou.
+    Responder o portão de aprovação é ação permitida ao observador (§3.7)."""
+    execucao = execucao_acessivel(sessao, usuario, execucao_id)
+    auto = sessao.get(Automacao, execucao.automacao_id)
     if execucao.estado != "aguardando_humano":
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Esta execução não está aguardando resposta."
@@ -220,8 +228,6 @@ def responder(
     saidas = no.get("saidas") or []
 
     # Portão de aprovação (PRODUTO §14): a RESPOSTA DO HUMANO escolhe o caminho.
-    # Com várias saídas, um roteador casa a resposta ("aprovado" / "reprovado,
-    # mude X") com a saída certa; com uma, segue ela; sem saídas, encerra.
     if len(saidas) == 0:
         escolhida = None
     elif len(saidas) == 1:
@@ -231,10 +237,9 @@ def responder(
     destino = escolhida.get("destino") if escolhida else None
     proximo = None if destino in _DESTINOS_FIM else destino
 
-    # O próximo nó recebe o trabalho pausado (o que o agente produziu) MAIS a
-    # decisão/feedback do humano — assim o publisher recebe o artigo + "aprovado"
-    # e o escritor (no ramo reprovado) recebe o artigo + o que mudar.
-    entrada_proxima = _entrada_retomada((ultimo.saida or {}).get("texto", ""), dados.resposta)
+    entrada_proxima = _entrada_retomada(
+        (ultimo.saida or {}).get("texto", ""), dados.resposta
+    )
 
     # Sem próximo agente (destino fim): encerra com o trabalho + a decisão.
     if proximo is None:
@@ -270,9 +275,11 @@ def responder(
     "/automacoes/{automacao_id}/execucoes", response_model=list[ExecucaoLer]
 )
 def listar_execucoes(
-    automacao_id: uuid.UUID, sessao: Session = Depends(obter_sessao)
+    automacao_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
 ):
-    _automacao_do_dono(sessao, automacao_id)
+    automacao_acessivel(sessao, usuario, automacao_id)
     return sessao.scalars(
         select(Execucao)
         .where(Execucao.automacao_id == automacao_id)
@@ -282,16 +289,19 @@ def listar_execucoes(
 
 @rotas.get("/execucoes", response_model=list[ExecucaoNaLista])
 def listar_todas_execucoes(
-    estado: str | None = None, sessao: Session = Depends(obter_sessao)
+    estado: str | None = None,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
 ):
-    """Visão consolidada de execuções de todas as automações do dono, com filtro
-    opcional por estado (gestão de execuções, Tarefa 5.5)."""
+    """Visão consolidada de execuções das organizações em que o usuário é membro,
+    com filtro opcional por estado (gestão de execuções, Tarefa 5.5)."""
     consulta = (
         select(Execucao, Automacao.nome)
         .join(Automacao, Automacao.id == Execucao.automacao_id)
         .join(Time, Time.id == Automacao.time_id)
         .join(Organizacao, Organizacao.id == Time.organizacao_id)
-        .where(Organizacao.dono_id == usuario_atual_id())
+        .join(Membro, Membro.organizacao_id == Organizacao.id)
+        .where(Membro.usuario_id == usuario.id)
         .order_by(Execucao.criado_em.desc())
     )
     if estado:
@@ -305,18 +315,24 @@ def listar_todas_execucoes(
 
 
 @rotas.get("/execucoes/{execucao_id}", response_model=ExecucaoComPassos)
-def obter_execucao(execucao_id: uuid.UUID, sessao: Session = Depends(obter_sessao)):
-    execucao = _execucao_do_dono(sessao, execucao_id)
+def obter_execucao(
+    execucao_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    execucao = execucao_acessivel(sessao, usuario, execucao_id)
     return _montar_com_passos(sessao, execucao)
 
 
 @rotas.post("/execucoes/{execucao_id}/cancelar", response_model=ExecucaoComPassos)
 def cancelar_execucao(
-    execucao_id: uuid.UUID, sessao: Session = Depends(obter_sessao)
+    execucao_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
 ):
     """Cancela uma execução enfileirada, em andamento ou pausada. Se estiver
     rodando, o trabalhador para no próximo passo (cancelamento cooperativo)."""
-    execucao = _execucao_do_dono(sessao, execucao_id)
+    execucao = execucao_acessivel(sessao, usuario, execucao_id, minimo="operador")
     if execucao.estado in ESTADOS_ENCERRADOS:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Esta execução já encerrou."
@@ -332,11 +348,13 @@ def cancelar_execucao(
 
 @rotas.delete("/execucoes/{execucao_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remover_execucao(
-    execucao_id: uuid.UUID, sessao: Session = Depends(obter_sessao)
+    execucao_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
 ):
     """Apaga o registro de uma execução já encerrada (e seus passos, em cascata).
-    Uma execução ainda viva precisa ser cancelada antes."""
-    execucao = _execucao_do_dono(sessao, execucao_id)
+    Apagar histórico é ação de admin (§3.7)."""
+    execucao = execucao_acessivel(sessao, usuario, execucao_id, minimo="admin")
     if execucao.estado not in ESTADOS_ENCERRADOS:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Cancele a execução antes de apagá-la."

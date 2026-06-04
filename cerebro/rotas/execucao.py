@@ -1,8 +1,7 @@
 """Endpoints de execução da orquestração.
 
-Por enquanto, acionar um agente sozinho (Tarefa 4.2) — recebe uma entrada,
-carrega o cinto do agente e executa. A execução de uma cadeia inteira
-(automação) entra nas tarefas seguintes da Fase 4.
+Acionar um agente sozinho (Tarefa 4.2): recebe uma entrada, carrega o cinto do
+agente e executa. Acesso por papel (Fase 6): executar é ação de operador.
 """
 
 import uuid
@@ -11,10 +10,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from auth import usuario_atual
 from esquemas import ExecutarAgente
-from modelos import AgenteInstrumento, Instrumento
+from modelos import AgenteInstrumento, Instrumento, Usuario
 from orquestracao.agente import executar_agente
-from rotas._comum import agente_do_dono
+from rotas._comum import agente_acessivel
 from sessao import obter_sessao
 
 rotas = APIRouter(tags=["execucao"])
@@ -25,8 +25,9 @@ def executar(
     agente_id: uuid.UUID,
     dados: ExecutarAgente,
     sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
 ):
-    agente = agente_do_dono(sessao, agente_id)
+    agente = agente_acessivel(sessao, usuario, agente_id, minimo="operador")
     cinto = sessao.scalars(
         select(Instrumento)
         .join(AgenteInstrumento, AgenteInstrumento.instrumento_id == Instrumento.id)
