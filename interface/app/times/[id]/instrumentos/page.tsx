@@ -1,12 +1,9 @@
 import { notFound } from "next/navigation";
 
 import { type Instrumento, type TipoInstrumento, type Time } from "@/lib/api";
+import { buscarCerebro } from "@/lib/cerebro-servidor";
 
 import { InstrumentosCliente } from "./instrumentos-cliente";
-
-const BASE =
-  process.env.NEXT_PUBLIC_CEREBRO_URL?.replace(/\/$/, "") ??
-  "http://localhost:8000";
 
 async function carregar(timeId: string): Promise<{
   time: Time;
@@ -14,9 +11,9 @@ async function carregar(timeId: string): Promise<{
   tipos: TipoInstrumento[];
 } | null> {
   const [respTime, respInst, respTipos] = await Promise.all([
-    fetch(`${BASE}/times/${timeId}`, { cache: "no-store" }),
-    fetch(`${BASE}/times/${timeId}/instrumentos`, { cache: "no-store" }),
-    fetch(`${BASE}/instrumentos/tipos`, { cache: "no-store" }),
+    buscarCerebro(`/times/${timeId}`),
+    buscarCerebro(`/times/${timeId}/instrumentos`),
+    buscarCerebro(`/instrumentos/tipos`),
   ]);
   if (respTime.status === 404) return null;
   if (!respTime.ok || !respInst.ok || !respTipos.ok)

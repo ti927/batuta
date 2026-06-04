@@ -1,28 +1,23 @@
 import { notFound } from "next/navigation";
 
 import { type Agente, type Automacao, type Execucao } from "@/lib/api";
+import { buscarCerebro } from "@/lib/cerebro-servidor";
 
 import { AutomacaoDetalheCliente } from "./automacao-detalhe-cliente";
-
-const BASE =
-  process.env.NEXT_PUBLIC_CEREBRO_URL?.replace(/\/$/, "") ??
-  "http://localhost:8000";
 
 async function carregar(automacaoId: string): Promise<{
   automacao: Automacao;
   execucoes: Execucao[];
   agentes: Agente[];
 } | null> {
-  const respAuto = await fetch(`${BASE}/automacoes/${automacaoId}`, {
-    cache: "no-store",
-  });
+  const respAuto = await buscarCerebro(`/automacoes/${automacaoId}`);
   if (respAuto.status === 404) return null;
   if (!respAuto.ok) throw new Error("Falha ao carregar a automação");
   const automacao: Automacao = await respAuto.json();
 
   const [respExec, respAg] = await Promise.all([
-    fetch(`${BASE}/automacoes/${automacaoId}/execucoes`, { cache: "no-store" }),
-    fetch(`${BASE}/times/${automacao.time_id}/agentes`, { cache: "no-store" }),
+    buscarCerebro(`/automacoes/${automacaoId}/execucoes`),
+    buscarCerebro(`/times/${automacao.time_id}/agentes`),
   ]);
   if (!respExec.ok || !respAg.ok) throw new Error("Falha ao carregar execuções");
 

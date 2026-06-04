@@ -1,5 +1,13 @@
 // Cliente único de acesso ao cérebro (a API em Python/FastAPI).
 // A interface nunca fala com o banco direto — sempre passa por aqui (CLAUDE.md §8).
+//
+// Desde a Fase 6, o cérebro exige autenticação: toda chamada leva o token do
+// Supabase em `Authorization: Bearer <token>`. O token vem de contextos
+// diferentes — no NAVEGADOR (ilhas-cliente) usa-se `api` daqui; no SERVIDOR
+// (Server Components) usa-se `apiServidor` de `lib/api-servidor.ts`. Os dois
+// compartilham o núcleo `requisitar()` abaixo.
+
+import { criarClienteNavegador } from "@/lib/supabase/cliente-navegador";
 
 const BASE =
   process.env.NEXT_PUBLIC_CEREBRO_URL?.replace(/\/$/, "") ??
@@ -17,11 +25,18 @@ export class ErroDaApi extends Error {
   }
 }
 
-async function pedir<T>(caminho: string, opcoes: RequestInit = {}): Promise<T> {
-  const resposta = await fetch(`${BASE}${caminho}`, {
-    headers: { "Content-Type": "application/json" },
-    ...opcoes,
-  });
+// Núcleo compartilhado: faz a requisição e anexa o token quando houver.
+export async function requisitar<T>(
+  caminho: string,
+  opcoes: RequestInit = {},
+  token?: string | null,
+): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const resposta = await fetch(`${BASE}${caminho}`, { ...opcoes, headers });
 
   if (!resposta.ok) {
     // O FastAPI devolve o motivo em { detail: ... }; traduzimos para mensagem.
@@ -44,13 +59,30 @@ async function pedir<T>(caminho: string, opcoes: RequestInit = {}): Promise<T> {
   return resposta.json() as Promise<T>;
 }
 
+// Token da sessão no NAVEGADOR (cookies/local storage do Supabase).
+async function tokenNavegador(): Promise<string | null> {
+  const { data } = await criarClienteNavegador().auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
+// Cliente para ILHAS-CLIENTE ("use client"): pega o token do navegador.
 export const api = {
-  get: <T>(caminho: string) => pedir<T>(caminho),
-  post: <T>(caminho: string, corpo: unknown) =>
-    pedir<T>(caminho, { method: "POST", body: JSON.stringify(corpo) }),
-  put: <T>(caminho: string, corpo: unknown) =>
-    pedir<T>(caminho, { method: "PUT", body: JSON.stringify(corpo) }),
-  delete: (caminho: string) => pedir<void>(caminho, { method: "DELETE" }),
+  get: async <T>(caminho: string) =>
+    requisitar<T>(caminho, {}, await tokenNavegador()),
+  post: async <T>(caminho: string, corpo: unknown) =>
+    requisitar<T>(
+      caminho,
+      { method: "POST", body: JSON.stringify(corpo) },
+      await tokenNavegador(),
+    ),
+  put: async <T>(caminho: string, corpo: unknown) =>
+    requisitar<T>(
+      caminho,
+      { method: "PUT", body: JSON.stringify(corpo) },
+      await tokenNavegador(),
+    ),
+  delete: async (caminho: string) =>
+    requisitar<void>(caminho, { method: "DELETE" }, await tokenNavegador()),
 };
 
 // ───────────────────────── Tipos do core ─────────────────────────

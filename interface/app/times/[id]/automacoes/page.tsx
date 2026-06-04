@@ -1,12 +1,9 @@
 import { notFound } from "next/navigation";
 
 import { type Agente, type Automacao, type Time } from "@/lib/api";
+import { buscarCerebro } from "@/lib/cerebro-servidor";
 
 import { AutomacoesCliente } from "./automacoes-cliente";
-
-const BASE =
-  process.env.NEXT_PUBLIC_CEREBRO_URL?.replace(/\/$/, "") ??
-  "http://localhost:8000";
 
 async function carregar(timeId: string): Promise<{
   time: Time;
@@ -14,9 +11,9 @@ async function carregar(timeId: string): Promise<{
   agentes: Agente[];
 } | null> {
   const [respTime, respAuto, respAg] = await Promise.all([
-    fetch(`${BASE}/times/${timeId}`, { cache: "no-store" }),
-    fetch(`${BASE}/times/${timeId}/automacoes`, { cache: "no-store" }),
-    fetch(`${BASE}/times/${timeId}/agentes`, { cache: "no-store" }),
+    buscarCerebro(`/times/${timeId}`),
+    buscarCerebro(`/times/${timeId}/automacoes`),
+    buscarCerebro(`/times/${timeId}/agentes`),
   ]);
   if (respTime.status === 404) return null;
   if (!respTime.ok || !respAuto.ok || !respAg.ok)
