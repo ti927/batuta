@@ -8,9 +8,11 @@ import {
   api,
   ErroDaApi,
   type Instrumento,
+  type PapelAcesso,
   type TipoInstrumento,
   type Time,
 } from "@/lib/api";
+import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { Button } from "@/components/ui/button";
 
 // Tenta interpretar um texto como objeto JSON. Devolve [valor, null] ou
@@ -41,13 +43,17 @@ export function InstrumentosCliente({
   time,
   inicial,
   tipos,
+  meuPapel,
 }: {
   time: Time;
   inicial: Instrumento[];
   tipos: TipoInstrumento[];
+  meuPapel: PapelAcesso | null;
 }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
+  const souOperador = podeOperar(meuPapel);
+  const souAdmin = podeAdmin(meuPapel);
 
   const [modo, setModo] = useState<null | "novo" | string>(null);
   const [nome, setNome] = useState("");
@@ -164,7 +170,7 @@ export function InstrumentosCliente({
         </p>
       )}
 
-      {modo === null && (
+      {modo === null && souOperador && (
         <Button className="mb-6" onClick={abrirNovo} disabled={tipos.length === 0}>
           + Novo instrumento
         </Button>
@@ -244,15 +250,33 @@ export function InstrumentosCliente({
                     {inst.tipo}
                   </span>
                 </span>
-                <Button size="sm" variant="outline" onClick={() => abrirTeste(inst)}>
-                  Testar
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => abrirEdicao(inst)}>
-                  Editar
-                </Button>
-                <Button size="sm" variant="destructive" onClick={() => remover(inst)}>
-                  Remover
-                </Button>
+                {souOperador && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => abrirTeste(inst)}
+                  >
+                    Testar
+                  </Button>
+                )}
+                {souOperador && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => abrirEdicao(inst)}
+                  >
+                    Editar
+                  </Button>
+                )}
+                {souAdmin && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => remover(inst)}
+                  >
+                    Remover
+                  </Button>
+                )}
               </div>
 
               {testandoId === inst.id && (

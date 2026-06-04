@@ -1,5 +1,5 @@
 import { type ExecucaoNaLista } from "@/lib/api";
-import { buscarCerebro } from "@/lib/cerebro-servidor";
+import { buscarCerebro, buscarMeuAcesso } from "@/lib/cerebro-servidor";
 
 import { ExecucoesCliente } from "./execucoes-cliente";
 
@@ -10,6 +10,6 @@ async function carregar(): Promise<ExecucaoNaLista[]> {
 }
 
 export default async function ExecucoesPage() {
-  const execucoes = await carregar();
-  return <ExecucoesCliente inicial={execucoes} />;
+  const [execucoes, eu] = await Promise.all([carregar(), buscarMeuAcesso()]);
+  return <ExecucoesCliente inicial={execucoes} papeis={eu?.papeis ?? {}} />;
 }

@@ -4,7 +4,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { api, ErroDaApi, type Agente, type Papel, type Time } from "@/lib/api";
+import {
+  api,
+  ErroDaApi,
+  type Agente,
+  type Papel,
+  type PapelAcesso,
+  type Time,
+} from "@/lib/api";
+import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { Button, buttonVariants } from "@/components/ui/button";
 
 // Modelos de IA conhecidos (Etapa 1). Lista crua; refina-se depois.
@@ -45,12 +53,16 @@ function deAgente(a: Agente): Formulario {
 export function AgentesCliente({
   time,
   inicial,
+  meuPapel,
 }: {
   time: Time;
   inicial: Agente[];
+  meuPapel: PapelAcesso | null;
 }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
+  const souOperador = podeOperar(meuPapel);
+  const souAdmin = podeAdmin(meuPapel);
 
   // modo: null = nenhum form aberto; "novo" = criando; id = editando aquele agente
   const [modo, setModo] = useState<null | "novo" | string>(null);
@@ -153,7 +165,7 @@ export function AgentesCliente({
         </p>
       )}
 
-      {modo === null && (
+      {modo === null && souOperador && (
         <Button className="mb-6" onClick={abrirNovo}>
           + Novo agente
         </Button>
@@ -260,16 +272,24 @@ export function AgentesCliente({
               >
                 Cinto
               </Link>
-              <Button size="sm" variant="outline" onClick={() => abrirEdicao(a)}>
-                Editar
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => remover(a)}
-              >
-                Remover
-              </Button>
+              {souOperador && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => abrirEdicao(a)}
+                >
+                  Editar
+                </Button>
+              )}
+              {souAdmin && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => remover(a)}
+                >
+                  Remover
+                </Button>
+              )}
             </li>
           ))}
         </ul>

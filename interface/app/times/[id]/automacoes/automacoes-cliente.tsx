@@ -11,9 +11,11 @@ import {
   type Agente,
   type Automacao,
   type Cadeia,
+  type PapelAcesso,
   type SaidaCadeia,
   type Time,
 } from "@/lib/api";
+import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { Button } from "@/components/ui/button";
 
 type SaidasPorAgente = Record<string, SaidaCadeia[]>;
@@ -71,13 +73,17 @@ export function AutomacoesCliente({
   time,
   inicial,
   agentes,
+  meuPapel,
 }: {
   time: Time;
   inicial: Automacao[];
   agentes: Agente[];
+  meuPapel: PapelAcesso | null;
 }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
+  const souOperador = podeOperar(meuPapel);
+  const souAdmin = podeAdmin(meuPapel);
 
   const [modo, setModo] = useState<null | "novo" | string>(null);
   const [nome, setNome] = useState("");
@@ -240,7 +246,8 @@ export function AutomacoesCliente({
           Crie agentes no time antes de montar uma automação.
         </p>
       ) : (
-        modo === null && (
+        modo === null &&
+        souOperador && (
           <Button className="mb-6" onClick={abrirNovo}>
             + Nova automação
           </Button>
@@ -516,12 +523,16 @@ export function AutomacoesCliente({
                   {nomeAgente(a.cadeia?.inicio ?? null)}
                 </span>
               </Link>
-              <Button size="sm" variant="outline" onClick={() => abrirEdicao(a)}>
-                Editar
-              </Button>
-              <Button size="sm" variant="destructive" onClick={() => remover(a)}>
-                Remover
-              </Button>
+              {souOperador && (
+                <Button size="sm" variant="outline" onClick={() => abrirEdicao(a)}>
+                  Editar
+                </Button>
+              )}
+              {souAdmin && (
+                <Button size="sm" variant="destructive" onClick={() => remover(a)}>
+                  Remover
+                </Button>
+              )}
             </li>
           ))}
         </ul>

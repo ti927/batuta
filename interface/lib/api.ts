@@ -216,8 +216,12 @@ export type ExecucaoComPassos = Execucao & {
   uso?: ResumoUso | null;
 };
 
-// Execução na visão consolidada (gestão de execuções), com o nome da automação.
-export type ExecucaoNaLista = Execucao & { automacao_nome: string };
+// Execução na visão consolidada (gestão de execuções), com o nome da automação
+// e a organização (para a UI decidir o que cada papel pode fazer por linha).
+export type ExecucaoNaLista = Execucao & {
+  automacao_nome: string;
+  organizacao_id: string;
+};
 
 // ─────────────────── Acesso: papéis, membros, convites ───────────────────
 

@@ -4,20 +4,30 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { api, ErroDaApi, type Agente, type Instrumento } from "@/lib/api";
+import {
+  api,
+  ErroDaApi,
+  type Agente,
+  type Instrumento,
+  type PapelAcesso,
+} from "@/lib/api";
+import { podeOperar } from "@/lib/permissoes";
 import { Button } from "@/components/ui/button";
 
 export function CintoCliente({
   agente,
   cinto,
   instrumentosDoTime,
+  meuPapel,
 }: {
   agente: Agente;
   cinto: Instrumento[];
   instrumentosDoTime: Instrumento[];
+  meuPapel: PapelAcesso | null;
 }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
+  const souOperador = podeOperar(meuPapel);
 
   // Instrumentos do time que ainda não estão no cinto.
   const noCinto = new Set(cinto.map((i) => i.id));
@@ -80,38 +90,42 @@ export function CintoCliente({
         </p>
       )}
 
-      <div className="mb-6 flex gap-2">
-        <select
-          className="flex-1 rounded border border-zinc-300 px-2 py-1.5 text-sm"
-          value={selecionado}
-          onChange={(e) => setSelecionado(e.target.value)}
-        >
-          <option value="">
-            {disponiveis.length === 0
-              ? "Nenhum instrumento disponível neste time"
-              : "Escolha um instrumento do time…"}
-          </option>
-          {disponiveis.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.nome} ({i.tipo})
-            </option>
-          ))}
-        </select>
-        <Button onClick={pendurar} disabled={!selecionado}>
-          Pendurar no cinto
-        </Button>
-      </div>
+      {souOperador && (
+        <>
+          <div className="mb-6 flex gap-2">
+            <select
+              className="flex-1 rounded border border-zinc-300 px-2 py-1.5 text-sm"
+              value={selecionado}
+              onChange={(e) => setSelecionado(e.target.value)}
+            >
+              <option value="">
+                {disponiveis.length === 0
+                  ? "Nenhum instrumento disponível neste time"
+                  : "Escolha um instrumento do time…"}
+              </option>
+              {disponiveis.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.nome} ({i.tipo})
+                </option>
+              ))}
+            </select>
+            <Button onClick={pendurar} disabled={!selecionado}>
+              Pendurar no cinto
+            </Button>
+          </div>
 
-      <p className="mb-2 text-xs text-zinc-500">
-        Para criar instrumentos, vá em{" "}
-        <Link
-          href={`/times/${agente.time_id}/instrumentos`}
-          className="text-blue-600 underline underline-offset-4"
-        >
-          Instrumentos do time
-        </Link>
-        .
-      </p>
+          <p className="mb-2 text-xs text-zinc-500">
+            Para criar instrumentos, vá em{" "}
+            <Link
+              href={`/times/${agente.time_id}/instrumentos`}
+              className="text-blue-600 underline underline-offset-4"
+            >
+              Instrumentos do time
+            </Link>
+            .
+          </p>
+        </>
+      )}
 
       {cinto.length === 0 ? (
         <p className="text-sm text-zinc-500">O cinto está vazio.</p>
@@ -125,9 +139,15 @@ export function CintoCliente({
                   {inst.tipo}
                 </span>
               </span>
-              <Button size="sm" variant="destructive" onClick={() => tirar(inst)}>
-                Tirar
-              </Button>
+              {souOperador && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => tirar(inst)}
+                >
+                  Tirar
+                </Button>
+              )}
             </li>
           ))}
         </ul>

@@ -305,7 +305,7 @@ def listar_todas_execucoes(
     """Visão consolidada de execuções das organizações em que o usuário é membro,
     com filtro opcional por estado (gestão de execuções, Tarefa 5.5)."""
     consulta = (
-        select(Execucao, Automacao.nome)
+        select(Execucao, Automacao.nome, Organizacao.id)
         .join(Automacao, Automacao.id == Execucao.automacao_id)
         .join(Time, Time.id == Automacao.time_id)
         .join(Organizacao, Organizacao.id == Time.organizacao_id)
@@ -317,9 +317,11 @@ def listar_todas_execucoes(
         consulta = consulta.where(Execucao.estado == estado)
     return [
         ExecucaoNaLista(
-            **ExecucaoLer.model_validate(e).model_dump(), automacao_nome=nome
+            **ExecucaoLer.model_validate(e).model_dump(),
+            automacao_nome=nome,
+            organizacao_id=org_id,
         )
-        for e, nome in sessao.execute(consulta).all()
+        for e, nome, org_id in sessao.execute(consulta).all()
     ]
 
 

@@ -6,6 +6,7 @@
 
 import "server-only";
 
+import { type MeuAcesso } from "@/lib/api";
 import { criarClienteServidor } from "@/lib/supabase/cliente-servidor";
 
 const BASE =
@@ -23,4 +24,11 @@ export async function buscarCerebro(caminho: string): Promise<Response> {
     cache: "no-store",
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
+}
+
+// Quem sou eu e meus papéis por organização (para a UI ciente de papel, I6.6).
+export async function buscarMeuAcesso(): Promise<MeuAcesso | null> {
+  const resp = await buscarCerebro("/eu");
+  if (!resp.ok) return null;
+  return resp.json();
 }

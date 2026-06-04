@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { api, ErroDaApi, type ExecucaoNaLista } from "@/lib/api";
+import {
+  api,
+  ErroDaApi,
+  type ExecucaoNaLista,
+  type PapelAcesso,
+} from "@/lib/api";
+import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { Button } from "@/components/ui/button";
 
 const COR_ESTADO: Record<string, string> = {
@@ -29,7 +35,13 @@ const FILTROS: { valor: string; rotulo: string }[] = [
   { valor: "cancelada", rotulo: "Canceladas" },
 ];
 
-export function ExecucoesCliente({ inicial }: { inicial: ExecucaoNaLista[] }) {
+export function ExecucoesCliente({
+  inicial,
+  papeis,
+}: {
+  inicial: ExecucaoNaLista[];
+  papeis: Record<string, PapelAcesso>;
+}) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
   const [filtro, setFiltro] = useState("todos");
@@ -117,6 +129,7 @@ export function ExecucoesCliente({ inicial }: { inicial: ExecucaoNaLista[] }) {
         <ul className="divide-y divide-zinc-200 rounded border border-zinc-200">
           {lista.map((e) => {
             const encerrada = ENCERRADOS.includes(e.estado);
+            const papel = papeis[e.organizacao_id];
             return (
               <li key={e.id} className="flex items-center gap-3 p-3 text-sm">
                 <span
@@ -137,7 +150,7 @@ export function ExecucoesCliente({ inicial }: { inicial: ExecucaoNaLista[] }) {
                     {e.entrada?.texto ?? "—"}
                   </div>
                 </div>
-                {!encerrada && (
+                {!encerrada && podeOperar(papel) && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -147,7 +160,7 @@ export function ExecucoesCliente({ inicial }: { inicial: ExecucaoNaLista[] }) {
                     Cancelar
                   </Button>
                 )}
-                {encerrada && (
+                {encerrada && podeAdmin(papel) && (
                   <Button
                     size="sm"
                     variant="destructive"

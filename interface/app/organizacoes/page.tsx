@@ -1,5 +1,5 @@
 import { type Organizacao } from "@/lib/api";
-import { buscarCerebro } from "@/lib/cerebro-servidor";
+import { buscarCerebro, buscarMeuAcesso } from "@/lib/cerebro-servidor";
 
 import { OrganizacoesCliente } from "./organizacoes-cliente";
 
@@ -12,6 +12,8 @@ async function listar(): Promise<Organizacao[]> {
 }
 
 export default async function OrganizacoesPage() {
-  const organizacoes = await listar();
-  return <OrganizacoesCliente inicial={organizacoes} />;
+  const [organizacoes, eu] = await Promise.all([listar(), buscarMeuAcesso()]);
+  return (
+    <OrganizacoesCliente inicial={organizacoes} papeis={eu?.papeis ?? {}} />
+  );
 }

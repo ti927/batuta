@@ -11,7 +11,9 @@ import {
   type Automacao,
   type Execucao,
   type ExecucaoComPassos,
+  type PapelAcesso,
 } from "@/lib/api";
+import { podeOperar } from "@/lib/permissoes";
 import { Button } from "@/components/ui/button";
 
 // Estados em que a execução parou de avançar (não há mais o que acompanhar).
@@ -89,12 +91,15 @@ export function AutomacaoDetalheCliente({
   automacao,
   execucoes,
   agentes,
+  meuPapel,
 }: {
   automacao: Automacao;
   execucoes: Execucao[];
   agentes: Agente[];
+  meuPapel: PapelAcesso | null;
 }) {
   const router = useRouter();
+  const souOperador = podeOperar(meuPapel);
   const [erro, setErro] = useState<string | null>(null);
   const [entrada, setEntrada] = useState("");
   const [rodando, setRodando] = useState(false);
@@ -223,18 +228,20 @@ export function AutomacaoDetalheCliente({
         </p>
       )}
 
-      <div className="mb-6 flex flex-col gap-2 rounded border border-zinc-300 bg-zinc-50 p-4">
-        <label className="text-sm font-medium">Disparar (teste manual)</label>
-        <textarea
-          className="min-h-20 rounded border border-zinc-300 px-2 py-1 text-sm"
-          placeholder="Mensagem/tarefa de entrada"
-          value={entrada}
-          onChange={(e) => setEntrada(e.target.value)}
-        />
-        <Button className="self-start" onClick={disparar} disabled={rodando}>
-          {rodando ? "Executando..." : "Disparar"}
-        </Button>
-      </div>
+      {souOperador && (
+        <div className="mb-6 flex flex-col gap-2 rounded border border-zinc-300 bg-zinc-50 p-4">
+          <label className="text-sm font-medium">Disparar (teste manual)</label>
+          <textarea
+            className="min-h-20 rounded border border-zinc-300 px-2 py-1 text-sm"
+            placeholder="Mensagem/tarefa de entrada"
+            value={entrada}
+            onChange={(e) => setEntrada(e.target.value)}
+          />
+          <Button className="self-start" onClick={disparar} disabled={rodando}>
+            {rodando ? "Executando..." : "Disparar"}
+          </Button>
+        </div>
+      )}
 
       {aberta && (
         <div className="mb-6 rounded border border-zinc-300 p-4">

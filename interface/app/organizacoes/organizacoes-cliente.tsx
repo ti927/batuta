@@ -4,10 +4,22 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { api, ErroDaApi, type Organizacao } from "@/lib/api";
+import {
+  api,
+  ErroDaApi,
+  type Organizacao,
+  type PapelAcesso,
+} from "@/lib/api";
+import { podeAdmin } from "@/lib/permissoes";
 import { Button } from "@/components/ui/button";
 
-export function OrganizacoesCliente({ inicial }: { inicial: Organizacao[] }) {
+export function OrganizacoesCliente({
+  inicial,
+  papeis,
+}: {
+  inicial: Organizacao[];
+  papeis: Record<string, PapelAcesso>;
+}) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
 
@@ -109,23 +121,27 @@ export function OrganizacoesCliente({ inicial }: { inicial: Organizacao[] }) {
                   >
                     {org.nome}
                   </Link>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setEditandoId(org.id);
-                      setNomeEdicao(org.nome);
-                    }}
-                  >
-                    Editar
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => remover(org.id, org.nome)}
-                  >
-                    Remover
-                  </Button>
+                  {podeAdmin(papeis[org.id]) && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditandoId(org.id);
+                          setNomeEdicao(org.nome);
+                        }}
+                      >
+                        Editar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => remover(org.id, org.nome)}
+                      >
+                        Remover
+                      </Button>
+                    </>
+                  )}
                 </>
               )}
             </li>

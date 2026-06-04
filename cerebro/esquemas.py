@@ -261,9 +261,11 @@ class ExecucaoLer(BaseModel):
 
 class ExecucaoNaLista(ExecucaoLer):
     """Uma execução na visão consolidada (gestão de execuções, Tarefa 5.5),
-    com o nome da automação para dar contexto sem abrir cada uma."""
+    com o nome da automação para dar contexto sem abrir cada uma, e a
+    organização para a interface decidir o que cada papel pode fazer (I6.6)."""
 
     automacao_nome: str
+    organizacao_id: uuid.UUID
 
 
 class ExecucaoComPassos(ExecucaoLer):

@@ -4,18 +4,29 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { api, ErroDaApi, type Organizacao, type Time } from "@/lib/api";
+import {
+  api,
+  ErroDaApi,
+  type Organizacao,
+  type PapelAcesso,
+  type Time,
+} from "@/lib/api";
+import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { Button } from "@/components/ui/button";
 
 export function TimesCliente({
   organizacao,
   inicial,
+  meuPapel,
 }: {
   organizacao: Organizacao;
   inicial: Time[];
+  meuPapel: PapelAcesso | null;
 }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
+  const souAdmin = podeAdmin(meuPapel);
+  const souOperador = podeOperar(meuPapel);
 
   const [nomeNovo, setNomeNovo] = useState("");
   const [descNova, setDescNova] = useState("");
@@ -80,12 +91,14 @@ export function TimesCliente({
       <h1 className="mt-2 mb-1 text-2xl font-bold">{organizacao.nome}</h1>
       <div className="mb-6 flex items-center gap-3">
         <p className="text-sm text-zinc-500">Times da organização</p>
-        <Link
-          href={`/organizacoes/${organizacao.id}/acesso`}
-          className="text-sm text-blue-600 underline underline-offset-4"
-        >
-          Gerir acesso →
-        </Link>
+        {souAdmin && (
+          <Link
+            href={`/organizacoes/${organizacao.id}/acesso`}
+            className="text-sm text-blue-600 underline underline-offset-4"
+          >
+            Gerir acesso →
+          </Link>
+        )}
       </div>
 
       {erro && (
@@ -94,24 +107,26 @@ export function TimesCliente({
         </p>
       )}
 
-      <div className="mb-6 flex flex-col gap-2 rounded border border-zinc-200 p-3">
-        <input
-          className="rounded border border-zinc-300 px-3 py-1.5 text-sm"
-          placeholder="Nome do novo time"
-          value={nomeNovo}
-          onChange={(e) => setNomeNovo(e.target.value)}
-        />
-        <input
-          className="rounded border border-zinc-300 px-3 py-1.5 text-sm"
-          placeholder="Descrição (opcional)"
-          value={descNova}
-          onChange={(e) => setDescNova(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && criar()}
-        />
-        <Button className="self-start" onClick={criar}>
-          Criar time
-        </Button>
-      </div>
+      {souAdmin && (
+        <div className="mb-6 flex flex-col gap-2 rounded border border-zinc-200 p-3">
+          <input
+            className="rounded border border-zinc-300 px-3 py-1.5 text-sm"
+            placeholder="Nome do novo time"
+            value={nomeNovo}
+            onChange={(e) => setNomeNovo(e.target.value)}
+          />
+          <input
+            className="rounded border border-zinc-300 px-3 py-1.5 text-sm"
+            placeholder="Descrição (opcional)"
+            value={descNova}
+            onChange={(e) => setDescNova(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && criar()}
+          />
+          <Button className="self-start" onClick={criar}>
+            Criar time
+          </Button>
+        </div>
+      )}
 
       {inicial.length === 0 ? (
         <p className="text-sm text-zinc-500">Nenhum time ainda.</p>
@@ -160,24 +175,28 @@ export function TimesCliente({
                       </span>
                     )}
                   </Link>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setEditandoId(time.id);
-                      setNomeEdicao(time.nome);
-                      setDescEdicao(time.descricao ?? "");
-                    }}
-                  >
-                    Editar
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => remover(time.id, time.nome)}
-                  >
-                    Remover
-                  </Button>
+                  {souOperador && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditandoId(time.id);
+                        setNomeEdicao(time.nome);
+                        setDescEdicao(time.descricao ?? "");
+                      }}
+                    >
+                      Editar
+                    </Button>
+                  )}
+                  {souAdmin && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => remover(time.id, time.nome)}
+                    >
+                      Remover
+                    </Button>
+                  )}
                 </div>
               )}
             </li>
