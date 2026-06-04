@@ -33,9 +33,11 @@ Toda vez que uma decisão de produto ameaçar esse princípio — exigir que o u
 
 ## 4. Quem usa
 
-O Batuta atende empresas de qualquer porte e ramo — de microempresa a indústria, hospital, escola. O modelo funciona para todas porque o que muda entre elas não é o produto, é a **composição**: mais agentes, encadeados diferente.
+> **Atualização (MIGRACAO.md, Virada 1):** o Batuta passou a ser **ferramenta interna da consultoria Lure**, não um SaaS público. Os consultores da Lure o usam para padronizar e automatizar processos nos clientes que atendem.
 
-Quem opera o Batuta no dia a dia é uma pessoa **não-técnica**: um gestor, um coordenador, um dono de negócio, um analista administrativo. Não sabe programar, não conhece "API" nem "webhook" como termos. Pensa em tarefas e problemas, não em código. Toda a experiência do Batuta é desenhada para essa pessoa, em português, sem jargão.
+O Batuta continua servindo empresas de qualquer porte e ramo — de microempresa a indústria, hospital, escola —, mas **via a consultoria**. O que muda entre elas não é o produto, é a **composição**: mais agentes, encadeados diferente.
+
+O operador principal é o **consultor da Lure** (perfil técnico-de-domínio, não um leigo total). Do lado do cliente, as pessoas entram em **papéis restritos** — admin, operador, observador (ver §28). Ainda assim, toda a experiência é em português e sem jargão gratuito.
 
 ---
 
@@ -227,7 +229,14 @@ Dados de pacientes, de menores de idade, financeiros — tudo isso trafega pelo 
 
 # PARTE IV — O LADO ADMINISTRATIVO E DO NEGÓCIO
 
-O Batuta não é só um instrumento — é um negócio. Esta parte descreve como ele se sustenta e o que precisa ser administrado. Tudo aqui é parte do produto.
+> **Atualização (MIGRACAO.md §3.4, jun/2026):** com a virada para ferramenta interna da consultoria (não SaaS público), boa parte desta Parte IV foi **reorientada**.
+> - **Já em vigor (Fase 6):** §28 (papéis admin/operador/observador) e §31 (auditoria), ambos implementados.
+> - **Removidos do escopo** (a cobrança é feita pela consultoria, fora do produto): §24 (BYOK + mensalidade), §27 (planos), §29 (billing), §30 (inadimplência).
+> - **Permanecem, adaptados:** §25 (medição agora separada por chave/IA), §26 (cofre de chaves por projeto + chave padrão da consultoria) e §32 (painel vira gestão interna da consultoria) — chegam na Fase 7. §33/§34 viram suporte/onboarding internos + LGPD via contrato.
+>
+> O texto histórico abaixo é mantido por referência; a fonte da verdade da reorientação é o `MIGRACAO.md`.
+
+O Batuta não é só um instrumento — é um negócio. Esta parte descreve como ele se sustenta e o que precisa ser administrado.
 
 ## 24. Modelo de cobrança: BYOK + mensalidade fixa
 
@@ -263,10 +272,14 @@ A mensalidade fixa tem níveis, definidos por **capacidade do Batuta** (não por
 
 ## 28. Membros e papéis
 
-Dentro de uma organização e de um time, é preciso administrar pessoas:
-- Convidar e remover membros.
-- Definir papéis: dono, administrador, editor, leitor.
-- Controlar quem pode editar o Líder, quem pode ver dados sensíveis que passaram por um fluxo (valores financeiros, dados pessoais).
+> **Implementado na Fase 6** (substitui a versão antiga; ver `MIGRACAO.md` §3.7).
+
+**Três papéis, e somente três:**
+- **Admin** — poderes plenos: troca chaves de API, convida e desativa usuários, cria e apaga organizações e times, apaga histórico, vê todo o uso e custos.
+- **Operador** — o dia a dia: cria e edita Agentes, Instrumentos e Automações; dispara e cancela execuções; arquiva. **Não** troca chaves, **não** convida/desativa, **não** apaga projetos/times nem histórico.
+- **Observador** — só vê os projetos a que pertence; **responde portões de aprovação** e perguntas do agente quando o fluxo pausa; não altera nada.
+
+**Princípios:** acesso só por convite (ninguém se autoinscreve); isolamento absoluto entre clientes; permissões por papel, não por usuário; admin pode ser de qualquer origem (garante a autonomia do cliente se o contrato encerrar). **Regra de polegar** para ações novas: destrutiva/sistêmica = admin; operacional = operador; observar = todos. Toda ação sensível é auditada (§31).
 
 ## 29. Billing da plataforma
 
@@ -311,9 +324,11 @@ Pontos conscientemente em aberto, a resolver antes ou durante o detalhamento té
 Para manter o foco, é útil dizer o que o Batuta não é:
 
 - Não é um instrumento de programador. Se exige programar, o design falhou.
-- Não é um revendedor de IA. O cliente traz as próprias chaves.
 - Não gera áudio (decisão explícita; pode ser reconsiderado no futuro).
 - Não é um produto só para microempresa, nem só para grande empresa. Serve a ambas pela composição de peças.
+- **Não é um SaaS público** vendido a empresas em geral — é ferramenta interna da consultoria Lure (MIGRACAO §1).
+- **Não é um sistema de billing** nem de cobrança recorrente automatizada (a cobrança é da consultoria, fora do produto).
+- **Não usa, sob nenhuma circunstância, credenciais de planos Free/Pro/Max** (Claude ou equivalentes) — somente API keys oficiais pagas por uso (MIGRACAO Virada 5).
 
 ---
 

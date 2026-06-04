@@ -555,7 +555,9 @@ de configuração já existente.
 
 ## PORTÃO DE VALIDAÇÃO DO CORE
 
-**Este é o portão entre a Etapa 1 e a Etapa 2. A Etapa 2 está bloqueada até que o maestro o abra.**
+> **✅ PORTÃO ABERTO em 2026-06-04.** O maestro exercitou o roteiro de validação por inteiro (incluindo webhook de entrada+saída, falha de instrumento forçada, volume/fila com várias execuções simultâneas e espera-por-humano respondida com atraso) e **autorizou a Etapa 2**, agora guiada pelo `MIGRACAO.md`. A Etapa 1 (o core) está **encerrada e validada**.
+
+**Este foi o portão entre a Etapa 1 e a Etapa 2.**
 
 > **Validação EM ANDAMENTO (iniciada 2026-05-31).** O maestro está testando com um
 > time real (news-to-insight → curator-lure-fit → lure-writer → Lure.publisher) e o
@@ -624,35 +626,53 @@ Antes de qualquer tarefa da Etapa 2, o maestro testa o core exaustivamente. Rote
 
 ---
 
-# ETAPA 2 — O ENTORNO
+# ETAPA 2 — O ENTORNO (reorganizada pelo `MIGRACAO.md`)
 
-**Esta etapa só começa após o maestro declarar o core validado no Portão acima.**
+O Batuta deixou de ser SaaS público e passou a ser **ferramenta interna da consultoria Lure**. A Etapa 2 foi **reorganizada pelo `MIGRACAO.md`** (jun/2026): caem planos/billing/inadimplência/onboarding público; entram a camada conversacional (IA criadora) e a IA companheira. O **núcleo de orquestração da Etapa 1 é intocável** — só se estende. Cada fase é detalhada no formato investigar/implementar/verificar à medida que é executada (MIGRACAO §4.3/§6.3). Trabalho na branch **`migracao-etapa-2`**.
 
-A Etapa 2 transforma o core provado num produto completo. As fases abaixo são o esqueleto — cada uma será detalhada no nível das fases da Etapa 1 **quando a Etapa 2 for autorizada**, e não antes. Detalhá-las agora seria planejar sobre um core ainda não validado.
+## FASE 6 — Identidade e papéis  🟡 EM ANDAMENTO (cérebro completo; interface pendente)
 
-## FASE 6 — Identidade e acesso
-Login e cadastro reais (Supabase Auth), substituindo o usuário fixo de testes. Papéis e permissões dentro de organizações e times (`PRODUTO.md`, seção 28). O ponto isolado criado na Tarefa 1.3 é trocado aqui.
+Trocar o usuário fixo por **login real (Supabase Auth)** e **três papéis** (admin/operador/observador), com convites, desativação de usuários e auditoria nominal. Referência completa: `MIGRACAO.md` §4.1/§5/§6.
 
-## FASE 7 — Identidade visual
-Aplicar o `DESIGN-SYSTEM.md` — cores, tipografia, logo, tom de voz — sobre as telas cruas do core. As telas deixam de ser cruas e passam a ser o Batuta.
+**Decisões fixadas:** começar do zero (apaga dados, mantém estrutura; sem migração de histórico); 1º admin `luregpt@lureconsultoria.com.br`; "apagar = só admin". Supabase usa **JWKS/ES256** (validação local, sem segredo novo).
 
-## FASE 8 — Cofre de segredos e mais instrumentos
-O cofre de chaves dos clientes (`PRODUTO.md`, seção 26). Os demais tipos de instrumento do `PRODUTO.md`, seção 13, entrando no encaixe já provado na Fase 3 — incluindo o **Conectar MCP** (adiado da frente 5.6 por exigir instrumento multi-ferramenta + assíncrono no núcleo), além de SQL direto, planilhas, multimídia "de entendimento" e contas Google/Microsoft/Apple (OAuth + cofre).
+**Cérebro — ✅ feito e verificado (19 testes pytest verdes em `cerebro/testes/`):**
+- **6.1/6.2** `auth_supabase.py` valida o token do Supabase via JWKS (pyjwt[crypto]). — `8f3dfc5`
+- **6.3** Modelos + migration aditiva `cf6de832ad21`: `usuarios.auth_id`+`ativo`; tabelas `membros`/`convites`/`auditoria` (reversível; core intocado). — `85dd448`
+- **6.4** `auth.py` (`usuario_atual`→401/403, `papel_na_org`, `exigir_papel`) + helpers `*_acessivel` em `_comum.py`. — `c8fae83`
+- **6.5** Matriz de papéis em todas as rotas (menos webhooks); `usuario_fixo` aposentado; pytest introduzido. — `ae3989d`
+- **6.6** `auditoria.py` + instrumentação (criar/remover org/time/agente/instrumento, markdown_alterado, portao.aprovado). — `9379345`
+- **6.7** `rotas/membros.py` + `supabase_admin.py`: membros, papéis (guarda do último admin), convites (Supabase invite), `POST /convites/aceitar`, (des)ativação, `GET /eu`. — `3d76a27`
+- **6.8** `scripts/bootstrap_admin.py` + `iniciar_do_zero.py`; admin ligado, banco zerado, `usuario_fixo.py` removido. — `1d55b02`
 
-## FASE 9 — Canais e gatilhos completos
-O canal de WhatsApp e o webhook de entrada completos, ligados ao Líder, conforme o `PRODUTO.md`.
+**Interface (Next 16) — ⬜ pendente:** I6.1 base `@supabase/ssr` + middleware + proteção de rotas (`.env.local` já criado); I6.2 login/logout + sessão no layout; I6.3 encaminhar o Bearer ao cérebro (client e Server Components); I6.4 aceite de convite; I6.5 telas de gestão (admin); I6.6 UI ciente de papel.
 
-## FASE 10 — Cobrança e administração
-Planos da plataforma, mensalidade via cobrança recorrente, billing, inadimplência (`PRODUTO.md`, seções 24, 27, 29, 30).
+### Definition of Done — Fase 6
+- [x] Cérebro: login real + três papéis em todas as rotas + convites/desativação + auditoria — **19 testes verdes**.
+- [ ] Interface: login funcionando, token encaminhado, telas de gestão, UI por papel.
+- [ ] Verificação ponta a ponta pelas telas: maestro loga; operador/observador respeitados (403/ocultos); isolamento (404); auditoria gerando linhas.
+- [ ] `PRODUTO.md`/`BUILD-PLAN.md` atualizados; commit + **push** da branch e merge em `main` (com confirmação do maestro).
 
-## FASE 11 — Painel do operador e fechamento
-O painel do operador (`PRODUTO.md`, seção 32), auditoria, onboarding e suporte, termos legais e a camada de LGPD (`PRODUTO.md`, seções 23, 31, 33, 34).
+## FASE 7 — Cofre de chaves por projeto
+Cofre criptografado; chave por projeto + **chave padrão da consultoria** + fallback; troca de chave (admin); **medição refinada por chave/IA**. As **três** IAs (executora/criadora/companheira) têm chaves **trocáveis** por escolha do admin; medição de tokens obrigatória em tudo quando se usa a chave da consultoria (MIGRACAO Viradas 4/5).
 
-## FASE 12 — Implantação em produção
-Publicação no Railway, domínio, e o teste de ponta a ponta do produto completo.
+## FASE 8 — Identidade visual
+Aplicar o `DESIGN-SYSTEM.md` sobre as telas cruas do core.
+
+## FASE 9 — Camada conversacional de criação (IA criadora)
+Chat que estrutura projeto/time por conversa; tool use para a IA executar as operações do Batuta; **modo rascunho** (nada vira definitivo sem aprovação humana); desfazer cirúrgico.
+
+## FASE 10 — IA companheira de projeto
+Histórico de conversa por projeto; tool use para consultar o estado do projeto; **memória vetorial** com isolamento estrito entre projetos.
+
+## FASE adicional — MCP e instrumentos restantes
+Conectar MCP (adiado da frente 5.6) + demais instrumentos do `PRODUTO.md` §13, no encaixe já provado. Sugestão: entre as Fases 7 e 8.
+
+## FASE final — Implantação em produção
+Railway, domínio definitivo, teste de ponta a ponta.
 
 ---
 
 # Encerramento
 
-Quando a Etapa 2 for autorizada, este documento será estendido — cada fase de 6 a 12 ganhará suas tarefas detalhadas no formato investigar/implementar/verificar, com seu Definition of Done. Até lá, o foco é um só: **o core, provado e validado.**
+As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
