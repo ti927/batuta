@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import auditoria
 import instrumentos as encaixe
 from auth import usuario_atual
 from esquemas import (
@@ -70,7 +71,7 @@ def criar(
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
-    time_acessivel(sessao, usuario, time_id, minimo="operador")
+    time = time_acessivel(sessao, usuario, time_id, minimo="operador")
     try:
         config_limpa = encaixe.validar_configuracao(dados.tipo, dados.configuracao)
     except ValueError as e:
@@ -82,6 +83,12 @@ def criar(
         configuracao=config_limpa,
     )
     sessao.add(inst)
+    sessao.flush()
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="instrumento.criado",
+        recurso_tipo="instrumento", recurso_id=inst.id,
+        organizacao_id=time.organizacao_id,
+    )
     sessao.commit()
     sessao.refresh(inst)
     return inst
@@ -124,6 +131,11 @@ def remover(
     usuario: Usuario = Depends(usuario_atual),
 ):
     inst = instrumento_acessivel(sessao, usuario, instrumento_id, minimo="admin")
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="instrumento.removido",
+        recurso_tipo="instrumento", recurso_id=inst.id,
+        organizacao_id=auditoria.org_do_time(sessao, inst.time_id),
+    )
     sessao.delete(inst)
     sessao.commit()
 

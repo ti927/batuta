@@ -29,6 +29,7 @@ from esquemas import (
     ResponderHumano,
 )
 import agendador
+import auditoria
 import fila
 import precos
 from auth import usuario_atual
@@ -210,6 +211,14 @@ def responder(
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Esta execução não está aguardando resposta."
         )
+
+    # Auditoria (§3.7): a aprovação humana de um portão é ação sensível.
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="portao.aprovado", recurso_tipo="execucao",
+        recurso_id=execucao.id,
+        organizacao_id=auditoria.org_do_time(sessao, auto.time_id),
+        detalhe={"resposta": dados.resposta[:200]},
+    )
 
     # O ponto de retomada é derivado do último passo (onde pausou) + a cadeia.
     ultimo = sessao.scalars(

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import auditoria
 from auth import usuario_atual
 from esquemas import TimeCriar, TimeEditar, TimeLer
 from modelos import Time, Usuario
@@ -50,6 +51,11 @@ def criar(
         organizacao_id=organizacao_id, nome=dados.nome, descricao=dados.descricao
     )
     sessao.add(time)
+    sessao.flush()
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="time.criado", recurso_tipo="time",
+        recurso_id=time.id, organizacao_id=organizacao_id,
+    )
     sessao.commit()
     sessao.refresh(time)
     return time
@@ -86,5 +92,9 @@ def remover(
     usuario: Usuario = Depends(usuario_atual),
 ):
     time = time_acessivel(sessao, usuario, time_id, minimo="admin")
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="time.removido", recurso_tipo="time",
+        recurso_id=time.id, organizacao_id=time.organizacao_id,
+    )
     sessao.delete(time)
     sessao.commit()

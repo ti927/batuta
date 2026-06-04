@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import auditoria
 from auth import usuario_atual
 from esquemas import OrganizacaoCriar, OrganizacaoEditar, OrganizacaoLer
 from modelos import Membro, Organizacao, Usuario
@@ -48,6 +49,10 @@ def criar(
     sessao.add(
         Membro(usuario_id=usuario.id, organizacao_id=org.id, papel="admin")
     )
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="organizacao.criada",
+        recurso_tipo="organizacao", recurso_id=org.id, organizacao_id=org.id,
+    )
     sessao.commit()
     sessao.refresh(org)
     return org
@@ -83,5 +88,9 @@ def remover(
     usuario: Usuario = Depends(usuario_atual),
 ):
     org = organizacao_acessivel(sessao, usuario, organizacao_id, minimo="admin")
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="organizacao.removida",
+        recurso_tipo="organizacao", recurso_id=org.id, organizacao_id=org.id,
+    )
     sessao.delete(org)
     sessao.commit()

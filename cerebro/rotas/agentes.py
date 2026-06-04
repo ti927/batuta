@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import auditoria
 from auth import usuario_atual
 from esquemas import AgenteCriar, AgenteEditar, AgenteLer
 from modelos import Agente, Usuario
@@ -58,11 +59,16 @@ def criar(
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
-    time_acessivel(sessao, usuario, time_id, minimo="operador")
+    time = time_acessivel(sessao, usuario, time_id, minimo="operador")
     if dados.papel == "lider" and _ja_existe_lider(sessao, time_id):
         raise HTTPException(status.HTTP_409_CONFLICT, CONFLITO_LIDER)
     agente = Agente(time_id=time_id, **dados.model_dump())
     sessao.add(agente)
+    sessao.flush()
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="agente.criado", recurso_tipo="agente",
+        recurso_id=agente.id, organizacao_id=time.organizacao_id,
+    )
     sessao.commit()
     sessao.refresh(agente)
     return agente
@@ -89,8 +95,18 @@ def editar(
         sessao, agente.time_id, ignorar_id=agente.id
     ):
         raise HTTPException(status.HTTP_409_CONFLICT, CONFLITO_LIDER)
+    # Detecta alteração de markdown EM PRODUÇÃO antes de aplicar (§3.7: auditável).
+    campos_md = ("agent_md", "skill_md", "tools_md", "soul_md")
+    md_alterados = [c for c in campos_md if getattr(agente, c) != getattr(dados, c)]
     for campo, valor in dados.model_dump().items():
         setattr(agente, campo, valor)
+    if md_alterados:
+        auditoria.registrar(
+            sessao, usuario=usuario, acao="agente.markdown_alterado",
+            recurso_tipo="agente", recurso_id=agente.id,
+            organizacao_id=auditoria.org_do_time(sessao, agente.time_id),
+            detalhe={"campos": md_alterados},
+        )
     sessao.commit()
     sessao.refresh(agente)
     return agente
@@ -103,5 +119,10 @@ def remover(
     usuario: Usuario = Depends(usuario_atual),
 ):
     agente = agente_acessivel(sessao, usuario, agente_id, minimo="admin")
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="agente.removido", recurso_tipo="agente",
+        recurso_id=agente.id,
+        organizacao_id=auditoria.org_do_time(sessao, agente.time_id),
+    )
     sessao.delete(agente)
     sessao.commit()
