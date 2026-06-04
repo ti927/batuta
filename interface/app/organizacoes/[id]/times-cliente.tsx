@@ -78,7 +78,15 @@ export function TimesCliente({
         ← Organizações
       </Link>
       <h1 className="mt-2 mb-1 text-2xl font-bold">{organizacao.nome}</h1>
-      <p className="mb-6 text-sm text-zinc-500">Times da organização</p>
+      <div className="mb-6 flex items-center gap-3">
+        <p className="text-sm text-zinc-500">Times da organização</p>
+        <Link
+          href={`/organizacoes/${organizacao.id}/acesso`}
+          className="text-sm text-blue-600 underline underline-offset-4"
+        >
+          Gerir acesso →
+        </Link>
+      </div>
 
       {erro && (
         <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">

@@ -218,3 +218,41 @@ export type ExecucaoComPassos = Execucao & {
 
 // Execução na visão consolidada (gestão de execuções), com o nome da automação.
 export type ExecucaoNaLista = Execucao & { automacao_nome: string };
+
+// ─────────────────── Acesso: papéis, membros, convites ───────────────────
+
+export type PapelAcesso = "admin" | "operador" | "observador";
+
+export type MembroLer = {
+  usuario_id: string;
+  papel: PapelAcesso;
+  nome: string;
+  email: string | null;
+  ativo: boolean;
+};
+
+export type ConviteLer = {
+  id: string;
+  email: string;
+  organizacao_id: string;
+  papel: string;
+  status: string;
+  expira_em: string | null;
+  criado_em: string;
+};
+
+export type UsuarioLer = {
+  id: string;
+  nome: string;
+  email: string | null;
+  ativo: boolean;
+};
+
+// Quem sou eu + meus papéis por organização (chave = id da organização).
+export type MeuAcesso = {
+  id: string;
+  nome: string;
+  email: string | null;
+  ativo: boolean;
+  papeis: Record<string, PapelAcesso>;
+};
