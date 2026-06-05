@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+import { type ConvitePendente } from "@/lib/api";
+import { buscarCerebro } from "@/lib/cerebro-servidor";
 import { criarClienteServidor } from "@/lib/supabase/cliente-servidor";
+import { BannerConvites } from "./banner-convites";
 import { BarraSessao } from "./barra-sessao";
 
 const geistSans = Geist({
@@ -32,6 +35,14 @@ export default async function RootLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Convites pendentes para o usuário logado — o aviso aparece em TODA tela
+  // autenticada (não só na home), pois é onde quer que ele caia que precisa ver.
+  let pendentes: ConvitePendente[] = [];
+  if (user?.email) {
+    const resp = await buscarCerebro("/convites/pendentes");
+    if (resp.ok) pendentes = await resp.json();
+  }
+
   return (
     <html
       lang="pt-BR"
@@ -39,6 +50,11 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {user?.email && <BarraSessao email={user.email} />}
+        {pendentes.length > 0 && (
+          <div className="flex justify-center px-4 pt-4">
+            <BannerConvites convites={pendentes} />
+          </div>
+        )}
         {children}
       </body>
     </html>
