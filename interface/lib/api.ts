@@ -245,6 +245,21 @@ export type ConviteLer = {
   criado_em: string;
 };
 
+// O que `criar_convite` devolve: o convite + se o e-mail saiu de fato.
+// email_enviado=false → a pessoa já tinha conta; verá o aviso dentro do Batuta.
+export type ConviteCriado = ConviteLer & {
+  email_enviado: boolean;
+};
+
+// Convite pendente para o usuário logado (com o nome da org) — banner na home.
+export type ConvitePendente = {
+  id: string;
+  organizacao_id: string;
+  organizacao_nome: string;
+  papel: string;
+  expira_em: string | null;
+};
+
 export type UsuarioLer = {
   id: string;
   nome: string;

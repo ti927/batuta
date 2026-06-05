@@ -7,6 +7,7 @@ import { useState } from "react";
 import {
   api,
   ErroDaApi,
+  type ConviteCriado,
   type ConviteLer,
   type MembroLer,
   type Organizacao,
@@ -40,6 +41,7 @@ export function AcessoCliente({
 
   const [emailNovo, setEmailNovo] = useState("");
   const [papelNovo, setPapelNovo] = useState<PapelAcesso>("operador");
+  const [aviso, setAviso] = useState<string | null>(null);
 
   function tratar(e: unknown, padrao: string) {
     setErro(e instanceof ErroDaApi ? e.message : padrao);
@@ -85,14 +87,22 @@ export function AcessoCliente({
   async function convidar() {
     if (!emailNovo.trim()) return;
     try {
-      await api.post<ConviteLer>(`/organizacoes/${organizacao.id}/convites`, {
-        email: emailNovo.trim(),
-        papel: papelNovo,
-      });
+      const r = await api.post<ConviteCriado>(
+        `/organizacoes/${organizacao.id}/convites`,
+        { email: emailNovo.trim(), papel: papelNovo },
+      );
       setEmailNovo("");
       setErro(null);
+      // Quem já tem conta não recebe e-mail (o Supabase não reenvia); verá o
+      // aviso dentro do Batuta ao entrar. Avisa o admin para não achar que falhou.
+      setAviso(
+        r.email_enviado
+          ? "Convite enviado por e-mail."
+          : "Convite criado. Esta pessoa já tem conta — verá o aviso ao entrar no Batuta (nenhum e-mail foi enviado).",
+      );
       router.refresh();
     } catch (e) {
+      setAviso(null);
       tratar(e, "Falha ao convidar");
     }
   }
@@ -230,6 +240,12 @@ export function AcessoCliente({
             </select>
             <Button onClick={convidar}>Convidar</Button>
           </div>
+
+          {aviso && (
+            <p className="mb-4 rounded border border-blue-300 bg-blue-50 p-2 text-sm text-blue-800">
+              {aviso}
+            </p>
+          )}
 
           {convites.length === 0 ? (
             <p className="text-sm text-zinc-500">Nenhum convite.</p>

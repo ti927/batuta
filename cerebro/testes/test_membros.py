@@ -3,6 +3,7 @@ A criação de convite (que chama o Supabase) é exercitada manualmente; aqui
 cobrimos a lógica de papéis, o aceite e as guardas."""
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
@@ -88,3 +89,58 @@ def test_eu_retorna_papeis(cliente, entrar, dados):
     r = cliente.get("/eu")
     assert r.status_code == 200
     assert r.json()["papeis"][str(dados["orgA"].id)] == "operador"
+
+
+# ── Convites pendentes (banner de aviso na home) ──
+
+
+def test_convites_pendentes_lista_com_nome_org(cliente, dados, sessao, monkeypatch):
+    email = f"pend-{uuid.uuid4().hex[:6]}@x.com"
+    sessao.add(
+        Convite(
+            email=email, organizacao_id=dados["orgA"].id, papel="operador",
+            status="pendente",
+        )
+    )
+    sessao.flush()
+    monkeypatch.setattr(
+        membros_mod, "validar_token",
+        lambda t: {"sub": str(uuid.uuid4()), "email": email},
+    )
+    r = cliente.get("/convites/pendentes", headers={"Authorization": "Bearer x"})
+    assert r.status_code == 200
+    corpo = r.json()
+    assert len(corpo) == 1
+    assert corpo[0]["organizacao_nome"] == "Org A"
+    assert corpo[0]["papel"] == "operador"
+    assert corpo[0]["organizacao_id"] == str(dados["orgA"].id)
+
+
+def test_convites_pendentes_isolado_por_email(cliente, dados, monkeypatch):
+    # E-mail sem nenhum convite → lista vazia (não vaza convites de outros).
+    monkeypatch.setattr(
+        membros_mod, "validar_token",
+        lambda t: {"sub": str(uuid.uuid4()), "email": "ninguem@x.com"},
+    )
+    r = cliente.get("/convites/pendentes", headers={"Authorization": "Bearer x"})
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_convites_pendentes_ignora_expirado(cliente, dados, sessao, monkeypatch):
+    email = f"exp-{uuid.uuid4().hex[:6]}@x.com"
+    sessao.add(
+        Convite(
+            email=email, organizacao_id=dados["orgA"].id, papel="operador",
+            status="pendente",
+            expira_em=datetime.now(timezone.utc) - timedelta(days=1),
+        )
+    )
+    sessao.flush()
+    monkeypatch.setattr(
+        membros_mod, "validar_token",
+        lambda t: {"sub": str(uuid.uuid4()), "email": email},
+    )
+    r = cliente.get("/convites/pendentes", headers={"Authorization": "Bearer x"})
+    assert r.status_code == 200
+    assert r.json() == []  # convite expirado não aparece no banner

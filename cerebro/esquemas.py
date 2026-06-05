@@ -331,6 +331,26 @@ class ConviteLer(BaseModel):
     criado_em: datetime
 
 
+class ConviteCriado(ConviteLer):
+    """O que `criar_convite` devolve: o convite + se o e-mail saiu de fato.
+    `email_enviado=False` quando a pessoa já tinha conta (o Supabase não reenvia);
+    nesse caso ela verá o aviso dentro do Batuta ao entrar."""
+
+    email_enviado: bool
+
+
+class ConvitePendente(BaseModel):
+    """Um convite pendente endereçado ao usuário logado, com o NOME da
+    organização — para o banner de aviso na home. Montado por join, não vem
+    direto de um ORM model, então é construído por keyword."""
+
+    id: uuid.UUID
+    organizacao_id: uuid.UUID
+    organizacao_nome: str
+    papel: str
+    expira_em: datetime | None
+
+
 class MeuAcesso(BaseModel):
     """O usuário atual + seus papéis por organização — para a interface decidir
     o que mostrar (UI ciente de papel) sem recalcular a cada tela."""

@@ -21,8 +21,10 @@ from auth import usuario_atual
 from auth_supabase import TokenInvalido, validar_token
 from esquemas import (
     AlterarPapel,
+    ConviteCriado,
     ConviteCriar,
     ConviteLer,
+    ConvitePendente,
     MembroLer,
     MeuAcesso,
     UsuarioLer,
@@ -181,7 +183,7 @@ def listar_convites(
 
 @rotas.post(
     "/organizacoes/{organizacao_id}/convites",
-    response_model=ConviteLer,
+    response_model=ConviteCriado,
     status_code=status.HTTP_201_CREATED,
 )
 def criar_convite(
@@ -192,8 +194,10 @@ def criar_convite(
 ):
     organizacao_acessivel(sessao, usuario, organizacao_id, minimo="admin")
     # Dispara o convite no Supabase (cria a conta e envia o email). Se o email já
-    # tem conta, o Supabase responde erro — tratamos como convite mesmo assim, pois
-    # o aceite (abaixo) cria o vínculo quando a pessoa logar.
+    # tem conta, o Supabase responde 422 e NÃO reenvia — nesse caso o convite vale
+    # mesmo assim, mas a pessoa só fica sabendo pelo aviso dentro do Batuta (banner
+    # na home), pois nenhum e-mail saiu. `email_enviado` informa isso ao admin.
+    email_enviado = True
     try:
         supabase_admin.convidar(dados.email)
     except httpx.HTTPStatusError as e:
@@ -204,6 +208,7 @@ def criar_convite(
                 status.HTTP_502_BAD_GATEWAY,
                 f"Falha ao enviar o convite pelo Supabase: {e.response.text[:200]}",
             )
+        email_enviado = False
     except httpx.HTTPError as e:
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY, f"Falha ao contatar o Supabase: {e}"
@@ -222,11 +227,20 @@ def criar_convite(
     auditoria.registrar(
         sessao, usuario=usuario, acao="convite.criado", recurso_tipo="convite",
         recurso_id=convite.id, organizacao_id=organizacao_id,
-        detalhe={"email": dados.email, "papel": dados.papel},
+        detalhe={"email": dados.email, "papel": dados.papel, "email_enviado": email_enviado},
     )
     sessao.commit()
     sessao.refresh(convite)
-    return convite
+    return ConviteCriado(
+        id=convite.id,
+        email=convite.email,
+        organizacao_id=convite.organizacao_id,
+        papel=convite.papel,
+        status=convite.status,
+        expira_em=convite.expira_em,
+        criado_em=convite.criado_em,
+        email_enviado=email_enviado,
+    )
 
 
 @rotas.delete("/convites/{convite_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -312,6 +326,46 @@ def aceitar_convites(
     for c in validos:
         sessao.refresh(c)
     return validos
+
+
+@rotas.get("/convites/pendentes", response_model=list[ConvitePendente])
+def convites_pendentes(
+    request: Request,
+    sessao: Session = Depends(obter_sessao),
+):
+    """Convites pendentes endereçados ao usuário logado — alimenta o banner de
+    aviso na home. Autentica pelo token DIRETO (não `usuario_atual`): o convidado
+    pode já ter conta no Supabase mas ainda não ter `Usuario`/`auth_id` ligado, e
+    nesse caso `usuario_atual` daria 403 e o banner nunca apareceria."""
+    token = auth._token_do_cabecalho(request)
+    try:
+        claims = validar_token(token)
+    except TokenInvalido as e:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"Token inválido: {e}")
+    email = (claims.get("email") or "").strip()
+    if not email:
+        return []  # token sem email → nada a mostrar (não é erro)
+
+    agora = datetime.now(timezone.utc)
+    linhas = sessao.execute(
+        select(
+            Convite.id,
+            Convite.organizacao_id,
+            Organizacao.nome,
+            Convite.papel,
+            Convite.expira_em,
+        )
+        .join(Organizacao, Organizacao.id == Convite.organizacao_id)
+        .where(Convite.email == email, Convite.status == "pendente")
+        .order_by(Convite.criado_em.desc())
+    ).all()
+    return [
+        ConvitePendente(
+            id=cid, organizacao_id=oid, organizacao_nome=nome, papel=papel, expira_em=exp
+        )
+        for cid, oid, nome, papel, exp in linhas
+        if exp is None or exp > agora
+    ]
 
 
 # ──────────────────────── (Des)ativação de usuário ───────────────
