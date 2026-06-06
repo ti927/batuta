@@ -102,6 +102,8 @@ Cada Agente tem um **cinto de instrumentos** próprio e customizável (ver seç�
 
 Cada Agente pode usar uma **LLM diferente**, escolhida conforme a tarefa — o Agente que só classifica texto pode usar um modelo barato; o que redige um artigo, um modelo mais capaz; o que gera imagem, um modelo de imagem.
 
+> **Nota de implementação (jun/2026):** a seleção de **modelo e provedor** por agente (Claude, OpenAI, Google) é entregue na **Fase 7-A** do `BUILD-PLAN.md`. Até ela, o motor opera só com Anthropic.
+
 ## 12. Gatilhos (o que inicia um fluxo)
 
 Todo fluxo começa por um gatilho. O Batuta tem três tipos:
@@ -265,6 +267,8 @@ O coração do modelo BYOK. As chaves de IA do cliente, e as credenciais dos ins
 - Nunca reexibi-las depois de salvas.
 - Nunca deixá-las aparecer em logs, telas de erro, ou qualquer lugar.
 Como tudo no Batuta depende dessas chaves, esta é uma peça central de segurança.
+
+> **Nota de implementação (jun/2026):** as **chaves de IA** entraram no cofre na **Fase 7**. As **credenciais de instrumentos** (senha de app do WordPress, chave Tavily, auth de REST/webhook) entram no mesmo cofre criptografado, por organização, na **Fase 7-B** do `BUILD-PLAN.md` — até lá, vivem no `.env` (paliativo) ou, no caso de REST/webhook, na config do instrumento (a corrigir).
 
 ## 27. Planos da plataforma
 

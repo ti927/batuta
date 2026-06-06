@@ -684,6 +684,38 @@ Cofre criptografado; chave por **organização** + **chave-mãe da consultoria**
 
 **DoD:** testes pytest verdes; chave cifrada nunca reexibida; agente executa com a chave certa e o fallback; só admin troca; medição separa por chave; auditoria registra; tsc/eslint verdes; commit + push.
 
+## FASE 7-A — Múltiplos provedores de IA  ⏳ (a executar após a Fase 7)
+
+> **Origem (2026-06-06, decisão do maestro):** o motor hoje só constrói `ChatAnthropic` — um agente com `modelo_ia` de outro provedor falharia. O `PRODUTO.md §11` ("cada Agente pode usar uma LLM diferente") e o `MIGRACAO Virada 5` (OpenAI, Google, etc.) exigem multi-provedor. A `chaves_api` já tem o campo `provedor`, mas a resolução e o endpoint estão fixos em `anthropic`. Esta fase é dedicada, **logo após a Fase 7** (antes da identidade visual). Lembrete: `executora/criadora/companheira` são *papéis* de IA, não modelos — o modelo é o `modelo_ia` do agente.
+
+**Objetivo:** um agente roda em modelo não-Anthropic (OpenAI, Google) com a chave do provedor certo, do cofre, mantendo o fallback consultoria → `.env` da 7.3.
+
+**Abordagem (estende o núcleo, não refatora):**
+- **Registro de modelos** — novo `cerebro/orquestracao/modelos_ia.py`: mapa único `modelo → provedor` (fonte da verdade), espelhado em TS na interface. Modelo desconhecido → erro claro.
+- **Resolução por provedor** — a fronteira resolve, de uma vez, a chave de cada provedor da org (`dict {provedor: chave}`) no contexto; o `contextvar` da 7.3 (`usar_chave`) vira `usar_chaves(mapa)`. Necessário porque agentes da mesma cadeia podem usar provedores diferentes; `cadeia.py`/`agente.py` ficam intocados.
+- **Despacho no motor** — `orquestracao/llm.py` `construir_modelo` deriva o provedor pelo registro e constrói `ChatAnthropic`/`ChatOpenAI`/`ChatGoogleGenerativeAI`, pegando `mapa[provedor]` (fallback `.env` p/ anthropic).
+- **Dependências** — `langchain-openai`, `langchain-google-genai` no `pyproject.toml`.
+- **Endpoint** — `rotas/chaves_api.py`: expandir `PROVEDORES_SUPORTADOS` para `{anthropic, openai, google}` (upsert já é por `provedor`).
+- **Interface** — dropdown de modelo (`interface/app/times/[id]/agentes-cliente.tsx`) agrupado por provedor; `components/gestao-chaves.tsx` ganha seleção de provedor.
+
+**DoD:** agente em OpenAI/Google executa de fato com a chave certa; resolução por provedor com fallback; endpoint aceita os novos provedores; tela escolhe provedor+modelo; pytest + tsc/eslint verdes; commit + push.
+
+## FASE 7-B — Cofre de segredos de instrumentos  ⏳ (a executar antes da identidade visual)
+
+> **Origem (2026-06-06, decisão do maestro):** o `PRODUTO.md §26` prevê as credenciais de instrumentos no mesmo cofre criptografado. Hoje WordPress/Tavily leem do `.env` (paliativo por-cérebro) e **REST/webhook guardam o token em texto plano** na config JSONB do banco — viola o §26. Fase dedicada, **antes da identidade visual**. (Recupera o slot que a renumeração do MIGRACAO sobrescreveu.)
+
+**Objetivo:** credenciais de instrumento guardadas cifradas por organização, nunca em texto plano, injetadas só na execução; reusa a cripto do `cofre.py`.
+
+**Abordagem:**
+- **Campos secretos no encaixe** — cada `TipoInstrumento` (`instrumentos/base.py`) declara quais campos da `Config` são secretos; ao salvar, esses são cifrados e guardados fora da config em claro (URL/usuário/categorias seguem na config).
+- **Armazenamento** — nova tabela `segredos_instrumento` (`instrumento_id`, `campo`, `valor_cifrado`, `ultimos4`) + migration aditiva; per-org por herança (instrumento → time → org); reusa `cofre.cifrar/decifrar/ultimos4`.
+- **Injeção** — decifrar os segredos ao carregar o cinto (`orquestracao/cadeia.py` `_carregar_cinto`, que já tem a sessão), mesclando na `Config` antes do `executar`; laço react intocado.
+- **Migrar paliativos** — `instrumentos/wordpress.py` e `busca_web.py` leem o segredo do cofre (com `.env` como fallback legado); `rest.py`/`webhook_saida.py` movem o token de `cabecalhos` para campo secreto.
+- **Interface** — formulário de config de instrumento marca campos secretos como `password`, mostra `••••ultimos4`, nunca reexibe.
+- **Auditoria** — registra troca/remoção de segredo de instrumento.
+
+**DoD:** segredo salvo cifrado e nunca reexibido; instrumento executa com o segredo decifrado; nenhum segredo novo em texto plano no banco; `.env` como fallback legado; auditoria registra; pytest + tsc/eslint verdes; commit + push. Atende a parte de "credenciais de instrumentos" do `PRODUTO §26`.
+
 ## FASE 8 — Identidade visual
 Aplicar o `DESIGN-SYSTEM.md` sobre as telas cruas do core.
 
@@ -694,7 +726,7 @@ Chat que estrutura projeto/time por conversa; tool use para a IA executar as ope
 Histórico de conversa por projeto; tool use para consultar o estado do projeto; **memória vetorial** com isolamento estrito entre projetos.
 
 ## FASE adicional — MCP e instrumentos restantes
-Conectar MCP (adiado da frente 5.6) + demais instrumentos do `PRODUTO.md` §13, no encaixe já provado. Sugestão: entre as Fases 7 e 8.
+Conectar MCP (adiado da frente 5.6) + demais instrumentos do `PRODUTO.md` §13, no encaixe já provado. Ordem sugerida da janela entre a Fase 7 e a Fase 8: **7-A (multi-provedor) → 7-B (segredos de instrumentos) → esta (MCP/instrumentos) → Fase 8 (visual)**. Os instrumentos novos já nascem usando o cofre de segredos da 7-B.
 
 ## FASE final — Implantação em produção
 Railway, domínio definitivo, teste de ponta a ponta.
