@@ -731,14 +731,14 @@ Chat que estrutura projeto/time por conversa; tool use para a IA executar as ope
 ## FASE 10 — IA companheira de projeto
 Histórico de conversa por projeto; tool use para consultar o estado do projeto; **memória vetorial** com isolamento estrito entre projetos.
 
-## FASE adicional — MCP e instrumentos restantes  🚧 EM ANDAMENTO
+## FASE adicional — MCP e instrumentos restantes  ✅ ESCOPO DESTA FASE CONCLUÍDO (2026-06-06)
 Conectar MCP (adiado da frente 5.6) + demais instrumentos do `PRODUTO.md` §13, no encaixe já provado. Ordem da janela entre a Fase 7 e a Fase 8: **7-A → 7-B → esta → Fase 8 (visual)**. Os instrumentos novos já nascem usando o cofre de segredos da 7-B.
 
-**Escopo desta fase (decisão do maestro 2026-06-06): MCP + Banco de dados direto (SQL) + Gerar imagem.** Contas Google/MS (OAuth) e multimídia "de entendimento" (ler imagem/PDF, transcrever áudio) ficam para **fases próprias** depois (OAuth é grande; multimídia é entrada multimodal, outro mecanismo). Ritmo: MCP primeiro, sozinho.
+**Escopo desta fase (decisão do maestro 2026-06-06): MCP + Banco de dados direto (SQL) + Gerar imagem — TODOS FEITOS.** Contas Google/MS (OAuth) e multimídia "de entendimento" (ler imagem/PDF, transcrever áudio) ficam para **fases próprias** depois (OAuth é grande; multimídia é entrada multimodal, outro mecanismo). Ritmo seguido: MCP primeiro, sozinho; depois SQL; depois imagem.
 
 - **MCP ✅** (commit na branch): novo `instrumentos/mcp.py` (`conectar_mcp`). O encaixe ganhou `expandir_ferramentas(config)` opcional (`base.py`): um instrumento MCP expõe VÁRIAS ferramentas; o motor (`agente.py` `_ferramentas_de_instrumento`) usa todas no cinto, mantendo o caminho de ferramenta única para os demais. As chamadas assíncronas do MCP são embrulhadas SÍNCRONAS (`asyncio.run`, conexão por chamada) — motor síncrono intocado. Transporte `streamable_http` (padrão) ou `sse`; token de auth é campo secreto (cofre 7-B → `Authorization: Bearer`). "Acionar" testa a conexão e lista as ferramentas. Deps `langchain-mcp-adapters`+`mcp`. UI sem mudança (catálogo dinâmico). 68 testes pytest verdes (6 novos; conexão mockada — teste LIVE precisa de servidor MCP real).
 - **Banco de dados direto (SQL) ✅** (commit na branch): `instrumentos/sql.py` (`banco_sql`). Config = componentes de conexão (host/porta/banco/usuário públicos + **senha secreta** no cofre 7-B + modo `ssl`); a IA passa SQL + parâmetros nomeados (`:nome`, evitam injeção). SELECT → linhas (teto 100); escrita → linhas afetadas (commit). Conexão por chamada (NullPool, `connect_timeout`). Falha de conexão → falha do instrumento (retentável); erro de SQL → volta à IA como dado. PostgreSQL via `psycopg` (campo `tipo_banco` pronto para outros). 74 testes pytest verdes (6 novos, contra o Postgres real). UI sem mudança.
-- **Gerar imagem** ⏳ a seguir (último do escopo desta fase).
+- **Gerar imagem ✅** (commit na branch): `instrumentos/gerar_imagem.py` (`gerar_imagem`). Gera imagem via API da OpenAI (chave = campo secreto do cofre 7-B); salva o arquivo localmente e devolve o link, como o `gerar_pdf` (migra p/ Supabase Storage na fase de produção). Aceita `b64_json` ou download da `url`. Falha de transporte/5xx/429 retentável; 401/403 e sem-chave não. `provedor` pronto para outros. 77 testes pytest verdes (3 novos; chamada mockada — geração LIVE precisa de chave OpenAI paga). UI sem mudança.
 
 ## FASE final — Implantação em produção
 Railway, domínio definitivo, teste de ponta a ponta.
