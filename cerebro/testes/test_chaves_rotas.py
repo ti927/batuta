@@ -82,11 +82,21 @@ def test_remover_chave_da_org(cliente, entrar, dados, sessao):
     )
 
 
-def test_provedor_nao_suportado_recusado(cliente, entrar, dados):
+def test_provedor_openai_agora_aceito(cliente, entrar, dados):
+    """Fase 7-A: OpenAI passou a ser provedor suportado."""
     entrar(dados["admin"])
     r = cliente.put(
         f"/organizacoes/{dados['orgA'].id}/chaves",
         json=_payload(provedor="openai"),
+    )
+    assert r.status_code == 200 and r.json()["provedor"] == "openai"
+
+
+def test_provedor_desconhecido_recusado(cliente, entrar, dados):
+    entrar(dados["admin"])
+    r = cliente.put(
+        f"/organizacoes/{dados['orgA'].id}/chaves",
+        json=_payload(provedor="cohere"),
     )
     assert r.status_code == 422
 

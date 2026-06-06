@@ -27,12 +27,14 @@ from auth import usuario_atual
 from consultoria import exigir_admin_consultoria
 from esquemas import ChaveApiCriar, ChaveApiLer
 from modelos import ChaveApi, Usuario
+from orquestracao.modelos_ia import PROVEDORES
 from rotas._comum import organizacao_acessivel
 from sessao import obter_sessao
 
 rotas = APIRouter(tags=["chaves"])
 
-PROVEDORES_SUPORTADOS = {"anthropic"}
+# Provedores que o motor sabe consumir (Fase 7-A): Anthropic, OpenAI, Google.
+PROVEDORES_SUPORTADOS = set(PROVEDORES)
 
 
 def _validar_provedor(provedor: str) -> None:

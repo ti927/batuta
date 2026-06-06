@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from cofre import decifrar
 from modelos import ChaveApi, Time
+from orquestracao.modelos_ia import PROVEDOR_ANTHROPIC, PROVEDORES
 
 
 def _buscar(
@@ -116,3 +117,30 @@ def resolver_chave_e_origem_por_time(
     organizacao_id = _org_do_time(sessao, time_id)
     chave, origem = _resolver(sessao, organizacao_id, tipo_ia, provedor)
     return chave, (origem or ORIGEM_LEGADO)
+
+
+def resolver_chaves_por_time(
+    sessao: Session,
+    time_id: uuid.UUID | None,
+    *,
+    tipo_ia: str = "executora",
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Resolve a chave de CADA provedor suportado para a organização do time
+    (Fase 7-A: o motor é multi-provedor). Devolve dois mapas por provedor:
+    `chaves` {provedor: chave} (só os provedores com chave no cofre) e `origens`
+    {provedor: origem} (para a medição da 7.6).
+
+    A Anthropic ganha origem ORIGEM_LEGADO mesmo sem chave no cofre, pois o motor
+    cai na ANTHROPIC_API_KEY do .env; OpenAI/Google sem chave ficam de fora (o
+    motor exige a chave do cofre e falha de forma clara se um modelo deles rodar)."""
+    organizacao_id = _org_do_time(sessao, time_id)
+    chaves: dict[str, str] = {}
+    origens: dict[str, str] = {}
+    for provedor in PROVEDORES:
+        chave, origem = _resolver(sessao, organizacao_id, tipo_ia, provedor)
+        if chave:
+            chaves[provedor] = chave
+            origens[provedor] = origem
+        elif provedor == PROVEDOR_ANTHROPIC:
+            origens[provedor] = ORIGEM_LEGADO
+    return chaves, origens
