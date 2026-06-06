@@ -304,3 +304,91 @@ export type ChaveApiLer = {
   criado_em: string;
   atualizado_em: string;
 };
+
+// ───────────────────── IA criadora (Fase 9) ─────────────────────
+// O rascunho do time que a IA monta por conversa. Espelha cerebro/criacao/
+// rascunho.py. Os `ref` são ids locais (sobrevivem a edições); viram uuids reais
+// só ao aprovar (materializar). Segredos nunca trafegam no rascunho.
+
+export type InstrumentoRascunho = {
+  ref: string;
+  nome: string;
+  tipo: string;
+  configuracao: Record<string, unknown>;
+  segredos_pendentes: string[];
+};
+
+export type AgenteRascunho = {
+  ref: string;
+  nome: string;
+  papel: Papel;
+  agent_md: string | null;
+  skill_md: string | null;
+  tools_md: string | null;
+  soul_md: string | null;
+  modelo_ia: string | null;
+  cinto: string[];
+};
+
+export type GatilhoRascunho = {
+  tipo_gatilho: string;
+  configuracao_gatilho: Record<string, unknown>;
+};
+
+export type AutomacaoRascunho = {
+  nome: string | null;
+  cadeia: Cadeia;
+  gatilho: GatilhoRascunho;
+};
+
+export type CustoEstimado = {
+  por_execucao_usd: number | null;
+  por_mes_usd: number | null;
+  detalhe: Record<string, unknown>;
+};
+
+// O rascunho pode vir como {} (conversa recém-aberta). Por isso os campos são
+// opcionais aqui; a UI normaliza com `agentes ?? []`, etc.
+export type Rascunho = {
+  time_nome?: string | null;
+  time_descricao?: string | null;
+  agentes?: AgenteRascunho[];
+  instrumentos?: InstrumentoRascunho[];
+  automacao?: AutomacaoRascunho | null;
+  custo_estimado?: CustoEstimado | null;
+};
+
+export type MensagemConversa = {
+  papel: "usuario" | "ia";
+  conteudo: string;
+  chips?: string[];
+  uso?: UsoChamada & { origem?: string };
+};
+
+export type EstadoConversa = "rascunho" | "materializada" | "descartada";
+
+export type ConversaCriacao = {
+  id: string;
+  organizacao_id: string;
+  titulo: string | null;
+  estado: EstadoConversa;
+  time_id: string | null;
+  criado_em: string;
+  atualizado_em: string;
+  mensagens: MensagemConversa[];
+  rascunho: Rascunho;
+};
+
+export type RespostaTurno = {
+  resposta: string;
+  chips: string[];
+  rascunho: Rascunho;
+  uso: Record<string, unknown>;
+};
+
+export type MaterializacaoResultado = {
+  time_id: string;
+  agentes: number;
+  instrumentos: number;
+  automacao: boolean;
+};
