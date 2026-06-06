@@ -2,12 +2,14 @@
 
 Este é o manual de operação do projeto Batuta. Ele não descreve só **o que** construir — descreve **como você (Claude Code) deve trabalhar**. Trate este documento como vinculante.
 
-Quatro documentos governam este projeto. Leia os quatro antes de qualquer ação:
+Estes documentos governam este projeto. Leia-os antes de qualquer ação:
 
 1. **`PRODUTO.md`** — o que o Batuta é, pela ótica do usuário e do negócio. É a fonte da verdade do produto.
 2. **`CLAUDE.md`** (este arquivo) — como você deve trabalhar.
 3. **`BUILD-PLAN.md`** — o plano de implementação, fase por fase.
-4. **`DESIGN-SYSTEM.md`** — a identidade visual do Batuta (consultar só nas fases de acabamento visual; ver seção 17).
+4. **`DESIGN-SYSTEM.md`** — a marca do Batuta: paleta, tipografia, tokens, voz (fonte da verdade de **marca/tokens/voz**; ver seção 17).
+5. **`MIGRACAO.md`** — a reorientação da Etapa 2 (Batuta como ferramenta interna da consultoria; IA criadora/companheira; núcleo congelado). Vigente desde o fim do portão de validação.
+6. **`docs/design/`** (handoff de design hi-fi, com `README.md`) — a fonte da verdade de **design, layout, telas e UX/UI**: as telas desenhadas (criação AI-first, dashboard, inspeção de execução, IA companheira) e o shell de navegação (sidebar). **Sempre que for desenhar ou implementar qualquer tela/layout/UX, leia o `docs/design/README.md` junto com o `DESIGN-SYSTEM.md`** — um traz as telas hi-fi, o outro os tokens/marca. Os `.jsx`/`.html` ali são referência de design, não código de produção.
 
 Se `PRODUTO.md` e qualquer documento técnico divergirem, **o `PRODUTO.md` vence** — ou você levanta a contradição com o maestro antes de prosseguir.
 
@@ -151,10 +153,11 @@ Uma tarefa só está concluída quando todas são verdade:
 
 ## 13. No início de toda sessão de trabalho
 
-1. Leia o `PRODUTO.md` (ou releia as partes relevantes), o `CLAUDE.md` e o ponto atual do `BUILD-PLAN.md`.
+1. Leia o `PRODUTO.md` (ou releia as partes relevantes), o `CLAUDE.md`, o `MIGRACAO.md` (Etapa 2) e o ponto atual do `BUILD-PLAN.md`.
 2. Rode `git status` e `git log --oneline -5` para entender o estado do repositório.
 3. Identifique a fase e a tarefa atuais.
-4. Se algo estiver inconsistente (repositório sujo, fase ambígua, contradição entre documentos), **pare e alinhe com o maestro** antes de prosseguir.
+4. **Antes de qualquer trabalho de design, layout, tela ou UX/UI**, leia o `DESIGN-SYSTEM.md` (marca/tokens/voz) **e** o `docs/design/README.md` (telas hi-fi + shell sidebar) — eles são a fonte da verdade visual; não improvise telas de memória.
+5. Se algo estiver inconsistente (repositório sujo, fase ambígua, contradição entre documentos), **pare e alinhe com o maestro** antes de prosseguir.
 
 ---
 
@@ -192,11 +195,15 @@ O `BUILD-PLAN.md` é dividido em duas etapas, e a ordem é inegociável:
 
 **Você não inicia nenhuma tarefa da Etapa 2 antes de o maestro declarar o core validado.** Esse portão é absoluto.
 
-## 17. Identidade visual — quando aplicar
+## 17. Identidade visual — fonte da verdade
 
-Durante a Etapa 1, as telas são **cruas**: funcionais, clicáveis, sem preocupação estética. O objetivo do core é provar o motor, não decorar.
+Durante a Etapa 1, as telas foram **cruas** de propósito (provar o motor, não decorar). **Isso acabou:** a Etapa 2 está em curso e a **Fase 8 já aplicou a marca** sobre as telas do core.
 
-O `DESIGN-SYSTEM.md` (cores, tipografia, logo, tom de voz da Batuta) só entra na Etapa 2. Não gaste esforço com identidade visual durante o core — seria energia investida em algo que ainda vai mudar.
+Daqui em diante, o visual tem duas fontes que se complementam, e você consulta **as duas** antes de mexer em qualquer tela:
+- **`DESIGN-SYSTEM.md`** — marca, paleta, tipografia, tokens, componentes, voz.
+- **`docs/design/`** (handoff hi-fi, ler o `README.md`) — as **telas desenhadas** (criação AI-first, dashboard do time, inspeção de execução, IA companheira) e o **shell de navegação em sidebar escura**, que é a casca definitiva — o header simples da Fase 8 evolui para essa sidebar. Os `.jsx`/`.html` são referência de design; recrie as telas no ambiente real (Next + Tailwind + shadcn/ui), não copie o protótipo.
+
+Esse handoff é a especificação visual/UX das **Fases 9 e 10** e dos refinos de tela (shell, dashboard, inspeção). Não desenhe telas "de cabeça": parta sempre do que está em `docs/design/`.
 
 ## 18. Lembrete final
 

@@ -9,11 +9,19 @@ Documento vivo da identidade visual da Batuta. Atualizar sempre que uma decisão
 > telas do core. **No ar:** paleta Batuta nos tokens (tema claro; escuro pronto, sem botão
 > de troca), Inter (interface) + Bricolage Grotesque (logotipo), primitivos (Button, Input,
 > Textarea, Select, Label, Card, Badge, Aviso, EstadoVazio), header com logotipo, sentence
-> case, pesos 400/500, ícones lucide, estados vazios e erros com ícone. **Pendente de arte:**
-> mascote, ilustrações de empty state e favicon final (§13) — por ora há um símbolo
-> tipográfico provisório. **Decisão do maestro:** nas telas (de operador) vale o vocabulário
-> de produto — "Agente/Instrumento/Automação" —, NÃO a tradução "Assistente/Habilidade" do
-> tom de voz (§2), que fica reservada à futura camada do cliente final.
+> case, pesos 400/500, ícones lucide, estados vazios e erros com ícone. **Decisão do maestro:**
+> nas telas (de operador) vale o vocabulário de produto — "Agente/Instrumento/Automação" —, NÃO
+> a tradução "Assistente/Habilidade" do tom de voz (§2), que fica reservada à futura camada do
+> cliente final.
+
+> **🎨 Fonte da verdade de TELAS/LAYOUT/UX: `docs/design/` (handoff hi-fi).** Este documento
+> (`DESIGN-SYSTEM.md`) é a fonte de **marca, tokens, tipografia e voz**; o **handoff em
+> `docs/design/`** (ler o `README.md`) traz as **telas desenhadas** (criação AI-first, dashboard
+> do time, inspeção de execução, IA companheira) e o **shell de navegação em sidebar escura** (a
+> casca definitiva — o header da Fase 8 evolui para ela). Antes de desenhar/implementar qualquer
+> tela, consulte os dois. Os `.jsx`/`.html` do handoff são referência de design, não código de
+> produção (recriar com Next + Tailwind + shadcn/ui). Os **assets de marca** (mascote, símbolo,
+> logo-lockup) já chegaram: PNG em `docs/design/assets/` e copiados para `interface/public/`.
 
 ---
 
@@ -602,8 +610,13 @@ Frases que devem ser usadas como referência consistente em todo o produto, mark
 
 Coisas que ainda precisamos definir e fechar:
 
-- [ ] Kit de logo completo (SVG do mascot, SVG do logotipo, ícone em todos os tamanhos)
-- [ ] Versões finais do mascot pra ilustrações de empty state (3-5 cenas)
+- [x] **Mascote, símbolo e logo-lockup — ENTREGUES (2026-06-06)** em PNG: `docs/design/assets/`
+  (`mascote.png`, `mascote-completo.png`, `simbolo.png`, `logo-lockup.png`), copiados para
+  `interface/public/`. Falta ainda: **vetorizar para SVG** (nitidez em retina/telas grandes) e
+  **gerar o kit de favicon** (16/32/192/512, ICO) a partir do `simbolo.png`.
+- [x] **Telas hi-fi desenhadas — ENTREGUES** no handoff `docs/design/` (criação, dashboard,
+  inspeção de execução, IA companheira, shell sidebar). São a fonte da verdade de layout/UX.
+- [ ] Versões finais do mascote pra ilustrações de empty state (3-5 cenas)
 - [ ] Voz e tom no canal WhatsApp (a Batuta tem um "tom oficial" quando assistentes respondem? Ou herda do template?)
 - [ ] Sistema de animações (entrada de elementos, micro-interações) — provavelmente Framer Motion
 - [ ] Domínio definitivo: batuta.com.br? batuta.ai? batuta.io?
