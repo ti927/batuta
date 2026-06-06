@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { criarClienteNavegador } from "@/lib/supabase/cliente-navegador";
+import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export function LoginCliente() {
   const router = useRouter();
@@ -38,24 +40,18 @@ export function LoginCliente() {
 
   return (
     <div className="w-full max-w-sm">
-      {erro && (
-        <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <Aviso className="mb-4">{erro}</Aviso>}
       <div className="flex flex-col gap-3">
-        <input
+        <Input
           type="email"
-          className="rounded border border-zinc-300 px-3 py-2 text-sm"
           placeholder="E-mail"
           value={email}
           autoComplete="email"
           onChange={(e) => setEmail(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && entrar()}
         />
-        <input
+        <Input
           type="password"
-          className="rounded border border-zinc-300 px-3 py-2 text-sm"
           placeholder="Senha"
           value={senha}
           autoComplete="current-password"

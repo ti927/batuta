@@ -29,7 +29,7 @@ export function BannerConvites({ convites }: { convites: ConvitePendente[] }) {
   }
 
   return (
-    <section className="mb-6 w-full max-w-md rounded border border-blue-300 bg-blue-50 p-4 text-sm">
+    <section className="mb-6 w-full max-w-md rounded-lg border border-accent-foreground/20 bg-accent p-4 text-sm text-accent-foreground">
       <p className="mb-2 font-medium">
         Você {convites.length > 1 ? "tem convites pendentes" : "tem um convite pendente"}:
       </p>
@@ -40,7 +40,7 @@ export function BannerConvites({ convites }: { convites: ConvitePendente[] }) {
           </li>
         ))}
       </ul>
-      {erro && <p className="mb-2 text-red-700">{erro}</p>}
+      {erro && <p className="mb-2 text-destructive">{erro}</p>}
       <Button onClick={aceitar} disabled={enviando}>
         {enviando ? "Aceitando…" : "Aceitar"}
       </Button>
