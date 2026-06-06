@@ -15,7 +15,11 @@ import {
   ROTULO_PROVEDOR,
   type Provedor,
 } from "@/lib/modelos";
+import { Aviso } from "@/components/ui/aviso";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 
 const TIPOS: TipoIA[] = ["executora", "criadora", "companheira"];
 
@@ -72,30 +76,26 @@ export function GestaoChaves({
 
   return (
     <div>
-      {erro && (
-        <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <Aviso className="mb-4">{erro}</Aviso>}
 
       {/* Lista das chaves cadastradas (mascaradas) */}
       {chavesIniciais.length === 0 ? (
-        <p className="mb-6 text-sm text-zinc-500">Nenhuma chave cadastrada.</p>
+        <p className="mb-6 text-sm text-muted-foreground">
+          Nenhuma chave cadastrada.
+        </p>
       ) : (
-        <ul className="mb-6 divide-y divide-zinc-200 rounded border border-zinc-200">
+        <ul className="mb-6 divide-y divide-border rounded-lg border border-border bg-card">
           {chavesIniciais.map((c) => (
             <li key={c.id} className="flex flex-wrap items-center gap-2 p-3">
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">
+                <p className="flex items-center gap-2 text-sm font-medium text-foreground">
                   {c.tipo_ia}
-                  <span className="ml-2 text-xs text-zinc-500">{c.provedor}</span>
-                  {!c.ativa && (
-                    <span className="ml-2 rounded bg-zinc-200 px-1.5 py-0.5 text-xs text-zinc-600">
-                      inativa
-                    </span>
-                  )}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {c.provedor}
+                  </span>
+                  {!c.ativa && <Badge>inativa</Badge>}
                 </p>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-muted-foreground">
                   termina em ••••{c.ultimos4}
                   {c.apelido ? ` · ${c.apelido}` : ""}
                 </p>
@@ -109,11 +109,13 @@ export function GestaoChaves({
       )}
 
       {/* Formulário de cadastro/troca */}
-      <div className="flex flex-col gap-2 rounded border border-zinc-200 p-3">
-        <h3 className="text-sm font-semibold">Cadastrar ou trocar uma chave</h3>
+      <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
+        <h3 className="text-sm font-medium text-foreground">
+          Cadastrar ou trocar uma chave
+        </h3>
         <div className="flex flex-wrap gap-2">
-          <select
-            className="rounded border border-zinc-300 px-2 py-1.5 text-sm"
+          <Select
+            className="w-auto"
             value={tipo}
             onChange={(e) => setTipo(e.target.value as TipoIA)}
           >
@@ -122,9 +124,9 @@ export function GestaoChaves({
                 {t}
               </option>
             ))}
-          </select>
-          <select
-            className="rounded border border-zinc-300 px-2 py-1.5 text-sm"
+          </Select>
+          <Select
+            className="w-auto"
             value={provedor}
             onChange={(e) => setProvedor(e.target.value as Provedor)}
           >
@@ -133,32 +135,30 @@ export function GestaoChaves({
                 {ROTULO_PROVEDOR[p]}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
-        <input
+        <Input
           type="password"
           autoComplete="off"
-          className="rounded border border-zinc-300 px-3 py-1.5 text-sm"
           placeholder="Cole o valor da chave (não será reexibido)"
           value={valor}
           onChange={(e) => setValor(e.target.value)}
         />
-        <input
-          className="rounded border border-zinc-300 px-3 py-1.5 text-sm"
+        <Input
           placeholder="Apelido (opcional)"
           value={apelido}
           onChange={(e) => setApelido(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && salvar()}
         />
         {jaTem && (
-          <p className="text-xs text-amber-700">
+          <p className="text-xs text-warning">
             Já existe uma chave “{tipo}” em {ROTULO_PROVEDOR[provedor]}. Salvar vai
             substituí-la.
           </p>
         )}
-        <p className="text-xs text-zinc-500">
-          Nesta fase só a IA <strong>executora</strong> é usada pelo motor; as
-          demais ficam reservadas para fases futuras.
+        <p className="text-xs text-muted-foreground">
+          Nesta fase só a IA <span className="font-medium">executora</span> é
+          usada pelo motor; as demais ficam reservadas para fases futuras.
         </p>
         <Button className="self-start" onClick={salvar}>
           Salvar chave

@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 
 import { type ChaveApiLer } from "@/lib/api";
 import { buscarCerebro, buscarMeuAcesso } from "@/lib/cerebro-servidor";
+import { Aviso } from "@/components/ui/aviso";
 
 import { ConsultoriaCliente } from "./consultoria-cliente";
 
@@ -22,17 +24,18 @@ async function carregar(): Promise<{
 export default async function ChavesConsultoriaPage() {
   const { adminConsultoria, chaves } = await carregar();
   return (
-    <main className="mx-auto w-full max-w-3xl p-8">
-      <div className="mb-1 text-sm">
-        <Link
-          href="/organizacoes"
-          className="text-blue-600 underline underline-offset-4"
-        >
-          ← Organizações
-        </Link>
-      </div>
-      <h1 className="mb-2 text-2xl font-bold">Chave-mãe da consultoria</h1>
-      <p className="mb-6 text-sm text-zinc-500">
+    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+      <Link
+        href="/organizacoes"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ChevronLeft className="size-4" />
+        Organizações
+      </Link>
+      <h1 className="mb-2 mt-2 text-2xl font-medium text-foreground">
+        Chave-mãe da consultoria
+      </h1>
+      <p className="mb-6 text-sm text-muted-foreground">
         A chave padrão usada quando uma organização não tem chave própria. Vale
         para todas as organizações como fallback.
       </p>
@@ -40,9 +43,9 @@ export default async function ChavesConsultoriaPage() {
       {adminConsultoria ? (
         <ConsultoriaCliente chaves={chaves} />
       ) : (
-        <p className="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-800">
+        <Aviso variant="atencao">
           Esta área é restrita aos administradores da consultoria.
-        </p>
+        </Aviso>
       )}
     </main>
   );

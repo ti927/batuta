@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ChevronLeft } from "lucide-react";
 
 import {
   api,
@@ -13,7 +14,11 @@ import {
   type Organizacao,
   type PapelAcesso,
 } from "@/lib/api";
+import { Aviso } from "@/components/ui/aviso";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 
 const PAPEIS: PapelAcesso[] = ["admin", "operador", "observador"];
 
@@ -119,61 +124,58 @@ export function AcessoCliente({
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl p-8">
-      <div className="mb-1 text-sm">
-        <Link
-          href={`/organizacoes/${organizacao.id}`}
-          className="text-blue-600 underline underline-offset-4"
-        >
-          ← {organizacao.nome}
-        </Link>
-      </div>
-      <h1 className="mb-6 text-2xl font-bold">Gerir acesso</h1>
+    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+      <Link
+        href={`/organizacoes/${organizacao.id}`}
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ChevronLeft className="size-4" />
+        {organizacao.nome}
+      </Link>
+      <h1 className="mb-6 mt-2 text-2xl font-medium text-foreground">
+        Gerir acesso
+      </h1>
 
       {!souAdmin && (
-        <p className="mb-4 rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-800">
+        <Aviso variant="atencao" className="mb-4">
           Somente administradores desta organização podem gerir o acesso. Você
           está vendo a lista em modo leitura.
-        </p>
+        </Aviso>
       )}
 
-      {erro && (
-        <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <Aviso className="mb-4">{erro}</Aviso>}
 
       {/* ───────────────── Membros ───────────────── */}
       <section className="mb-10">
-        <h2 className="mb-3 text-lg font-semibold">Membros</h2>
+        <h2 className="mb-3 text-lg font-medium text-foreground">Membros</h2>
         {membros.length === 0 ? (
-          <p className="text-sm text-zinc-500">Nenhum membro ainda.</p>
+          <p className="text-sm text-muted-foreground">Nenhum membro ainda.</p>
         ) : (
-          <ul className="divide-y divide-zinc-200 rounded border border-zinc-200">
+          <ul className="divide-y divide-border rounded-lg border border-border bg-card">
             {membros.map((m) => (
               <li
                 key={m.usuario_id}
                 className="flex flex-wrap items-center gap-2 p-3"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
+                  <p className="flex items-center gap-2 truncate text-sm font-medium text-foreground">
                     {m.nome}
                     {m.usuario_id === meuId && (
-                      <span className="ml-1 text-xs text-zinc-400">(você)</span>
-                    )}
-                    {!m.ativo && (
-                      <span className="ml-2 rounded bg-zinc-200 px-1.5 py-0.5 text-xs text-zinc-600">
-                        desativado
+                      <span className="text-xs font-normal text-muted-foreground">
+                        (você)
                       </span>
                     )}
+                    {!m.ativo && <Badge>desativado</Badge>}
                   </p>
-                  <p className="truncate text-xs text-zinc-500">{m.email}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {m.email}
+                  </p>
                 </div>
 
                 {souAdmin ? (
                   <>
-                    <select
-                      className="rounded border border-zinc-300 px-2 py-1 text-sm"
+                    <Select
+                      className="h-8 w-auto"
                       value={m.papel}
                       onChange={(e) =>
                         alterarPapel(m.usuario_id, e.target.value as PapelAcesso)
@@ -184,7 +186,7 @@ export function AcessoCliente({
                           {p}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                     {m.usuario_id !== meuId && (
                       <Button
                         size="sm"
@@ -203,9 +205,7 @@ export function AcessoCliente({
                     </Button>
                   </>
                 ) : (
-                  <span className="rounded bg-zinc-100 px-2 py-1 text-sm text-zinc-600">
-                    {m.papel}
-                  </span>
+                  <Badge variant="info">{m.papel}</Badge>
                 )}
               </li>
             ))}
@@ -216,19 +216,19 @@ export function AcessoCliente({
       {/* ───────────────── Convites (só admin) ───────────────── */}
       {souAdmin && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold">Convites</h2>
+          <h2 className="mb-3 text-lg font-medium text-foreground">Convites</h2>
 
           <div className="mb-4 flex flex-wrap gap-2">
-            <input
+            <Input
               type="email"
-              className="min-w-[16rem] flex-1 rounded border border-zinc-300 px-3 py-1.5 text-sm"
+              className="min-w-[16rem] flex-1"
               placeholder="email@convidado.com"
               value={emailNovo}
               onChange={(e) => setEmailNovo(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && convidar()}
             />
-            <select
-              className="rounded border border-zinc-300 px-2 py-1.5 text-sm"
+            <Select
+              className="w-auto"
               value={papelNovo}
               onChange={(e) => setPapelNovo(e.target.value as PapelAcesso)}
             >
@@ -237,25 +237,27 @@ export function AcessoCliente({
                   {p}
                 </option>
               ))}
-            </select>
+            </Select>
             <Button onClick={convidar}>Convidar</Button>
           </div>
 
           {aviso && (
-            <p className="mb-4 rounded border border-blue-300 bg-blue-50 p-2 text-sm text-blue-800">
+            <Aviso variant="info" className="mb-4">
               {aviso}
-            </p>
+            </Aviso>
           )}
 
           {convites.length === 0 ? (
-            <p className="text-sm text-zinc-500">Nenhum convite.</p>
+            <p className="text-sm text-muted-foreground">Nenhum convite.</p>
           ) : (
-            <ul className="divide-y divide-zinc-200 rounded border border-zinc-200">
+            <ul className="divide-y divide-border rounded-lg border border-border bg-card">
               {convites.map((c) => (
                 <li key={c.id} className="flex items-center gap-2 p-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{c.email}</p>
-                    <p className="text-xs text-zinc-500">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {c.email}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
                       {c.papel} · {c.status} · expira {dataCurta(c.expira_em)}
                     </p>
                   </div>
