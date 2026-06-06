@@ -164,3 +164,26 @@ def test_resolver_chaves_por_time_mapa_por_provedor(sessao, dados):
     assert chaves["openai"] == "sk-org-openai"
     assert origens["anthropic"] == ORIGEM_ORGANIZACAO
     assert "google" not in chaves  # sem chave Google cadastrada
+
+
+# ─────────────────── Chave da IA criadora (Fase 9) ────────────────────
+
+
+def test_resolver_chaves_por_organizacao_criadora(sessao, dados):
+    """A IA criadora resolve por ORGANIZAÇÃO, com tipo_ia='criadora', seguindo o
+    mesmo fallback org → consultoria. Uma chave 'criadora' não é vista como
+    'executora' (tipos isolados)."""
+    from chaves import resolver_chaves_por_organizacao
+
+    _add_chave(sessao, dados["orgA"].id, "sk-criadora-A", tipo_ia="criadora")
+    chaves, origens = resolver_chaves_por_organizacao(
+        sessao, dados["orgA"].id, tipo_ia="criadora"
+    )
+    assert chaves["anthropic"] == "sk-criadora-A"
+    assert origens["anthropic"] == ORIGEM_ORGANIZACAO
+    # sem chave 'criadora', cai no legado (.env) para a Anthropic
+    vazio, origens_b = resolver_chaves_por_organizacao(
+        sessao, dados["orgB"].id, tipo_ia="criadora"
+    )
+    assert "anthropic" not in vazio
+    assert origens_b["anthropic"] == ORIGEM_LEGADO

@@ -337,3 +337,49 @@ class SegredoInstrumento(IdData, Base):
             unique=True,
         ),
     )
+
+
+# ───────────────────── IA criadora (Etapa 2, Fase 9) ─────────────────────────
+
+
+class ConversaCriacao(IdData, Base):
+    """Sessão conversacional da IA criadora (Fase 9, MIGRACAO §6.4).
+
+    A IA propõe; o consultor confirma. Nada entra em produção sem aprovação
+    humana explícita: as ferramentas da IA mutam APENAS o `rascunho` (JSONB) —
+    nenhuma tabela de negócio é tocada até `materializar`. É o ponto de maior
+    risco da migração (MIGRACAO §6.4), e a separação 'a IA propõe / o consultor
+    confirma' é aqui uma garantia estrutural, não disciplina.
+
+    Vínculo à ORGANIZAÇÃO (não a um time): durante a criação o time ainda não
+    existe — é o que está sendo proposto. `mensagens` é o histórico append-only
+    da conversa; `rascunho` é o documento estruturado do time proposto. Ao
+    aprovar, `materializar` grava tudo de uma vez e preenche `time_id`.
+
+    Distinta da futura `conversas_projeto` (Fase 10, IA companheira), que será
+    vinculada a um time já existente."""
+
+    __tablename__ = "conversas_criacao"
+    organizacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    criada_por_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
+    )
+    titulo: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    estado: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'rascunho'")
+    )  # rascunho | materializada | descartada
+    mensagens: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    rascunho: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    # Preenchido ao materializar: o time real criado (rastreio/auditoria). SET
+    # NULL para o registro da conversa sobreviver à exclusão do time.
+    time_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("times.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (Index("ix_conversa_criacao_org", "organizacao_id"),)

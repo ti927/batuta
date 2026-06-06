@@ -16,7 +16,16 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from auth import exigir_papel
-from modelos import Agente, Automacao, Execucao, Instrumento, Organizacao, Time, Usuario
+from modelos import (
+    Agente,
+    Automacao,
+    ConversaCriacao,
+    Execucao,
+    Instrumento,
+    Organizacao,
+    Time,
+    Usuario,
+)
 
 
 def organizacao_acessivel(
@@ -82,3 +91,15 @@ def execucao_acessivel(
     time = sessao.get(Time, auto.time_id)
     exigir_papel(sessao, usuario, time.organizacao_id, minimo)
     return execucao
+
+
+def conversa_criacao_acessivel(
+    sessao: Session, usuario: Usuario, conversa_id: uuid.UUID, minimo: str = "observador"
+) -> ConversaCriacao:
+    conversa = sessao.get(ConversaCriacao, conversa_id)
+    if conversa is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "Conversa de criação não encontrada"
+        )
+    exigir_papel(sessao, usuario, conversa.organizacao_id, minimo)
+    return conversa
