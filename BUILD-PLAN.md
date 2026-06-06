@@ -722,8 +722,33 @@ Cofre criptografado; chave por **organização** + **chave-mãe da consultoria**
 
 **DoD:** segredo salvo cifrado e nunca reexibido; instrumento executa com o segredo decifrado; nenhum segredo novo em texto plano no banco; `.env` como fallback legado; auditoria registra; pytest + tsc/eslint verdes; commit + push. Atende a parte de "credenciais de instrumentos" do `PRODUTO §26`.
 
-## FASE 8 — Identidade visual
+## FASE 8 — Identidade visual  🚧 EM ANDAMENTO (iniciada 2026-06-06)
 Aplicar o `DESIGN-SYSTEM.md` sobre as telas cruas do core.
+
+> **Decisões do maestro (2026-06-06):** (1) **vocabulário de produto** mantido nas telas
+> ("Agente/Instrumento/Automação"), NÃO a tradução "Assistente/Habilidade" do tom de voz do
+> DS — estas são telas de operador, não do cliente final; (2) **só tema claro** agora (tokens
+> do escuro ficam prontos no `globals.css`, sem botão de troca). Mascote, ilustrações de
+> empty state e favicon final dependem de arte ainda não produzida (DS §13 TODO) — entrega-se
+> só o logotipo tipográfico ("Batuta" em Bricolage) e um símbolo simples.
+
+**Marca a aplicar:** Roxo Batuta `#6D4AFF` + off-white `#FAFAF7`; **Inter** (interface) +
+**Bricolage Grotesque** (logotipo); sentence case; só pesos 400/500; ícones lucide; flat design.
+
+**Sub-tarefas (cada uma: verificação `tsc`+`eslint` verde + commit):**
+- **8.1 — Fundação de marca.** Paleta Batuta mapeada nos tokens do `globals.css` (claro + escuro
+  pronto) + fontes Inter/Bricolage via `next/font` no `layout.tsx`. Vira a cara de quase tudo de
+  uma vez (telas que já usam tokens semânticos `bg-background`/`bg-primary`/`border-border`).
+- **8.2 — Primitivos.** `Button` no padrão DS (altura `h-10`, roxo, destrutivo cheio) + criar
+  `Input`, `Card`, `Badge`, `Label`, `Select`, `Textarea`, `Dialog`/`AlertDialog`, Toast (`sonner`).
+- **8.3 — Casca do app.** Header com logotipo "Batuta", fundo off-white, container centrado, respiro.
+- **8.4–8.8 — Varredura das 19 telas.** Trocar as ~211 cores cruas (`zinc/blue/red/...`) por tokens
+  + componentes, sentence case, ícones, estados vazios. Grupos: (a) login/convite, (b)
+  organizações/acesso, (c) times/agentes, (d) instrumentos, (e) automações/execuções/chaves.
+- **8.9 — Voz e microcópia.** Mensagens de erro empáticas e estados vazios conforme DS §12.
+
+**DoD:** telas com a marca Batuta aplicada; nenhuma cor crua solta nas telas varridas; `tsc`+`eslint`
+verdes; servidor de dev sobe; QA visual do maestro aprovado; commit + push.
 
 ## FASE 9 — Camada conversacional de criação (IA criadora)
 Chat que estrutura projeto/time por conversa; tool use para a IA executar as operações do Batuta; **modo rascunho** (nada vira definitivo sem aprovação humana); desfazer cirúrgico.

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Bricolage_Grotesque, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 
 import { type ConvitePendente } from "@/lib/api";
@@ -8,11 +8,23 @@ import { criarClienteServidor } from "@/lib/supabase/cliente-servidor";
 import { BannerConvites } from "./banner-convites";
 import { BarraSessao } from "./barra-sessao";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Inter é a fonte de interface (corpo, títulos internos, formulários). Só os
+// pesos 400/500, como manda o DESIGN-SYSTEM (§5).
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
+// Bricolage Grotesque é a fonte de marca — usada só no logotipo "Batuta"
+// (exposta como `font-heading`).
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
+  subsets: ["latin"],
+  weight: ["500", "600"],
+});
+
+// Monoespaçada reservada a trechos de dado cru (ex.: JSON de execuções).
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
@@ -46,7 +58,7 @@ export default async function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${bricolage.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         {user?.email && <BarraSessao email={user.email} />}
