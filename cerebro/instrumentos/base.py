@@ -95,6 +95,16 @@ class TipoInstrumento(ABC):
             "parametros": self.Args.model_json_schema(),
         }
 
+    def expandir_ferramentas(self, config: BaseModel) -> list | None:
+        """Instrumentos MULTI-FERRAMENTA (Fase adicional/MCP): um único
+        instrumento que expõe VÁRIAS ferramentas à IA (ex.: todas as ferramentas
+        de um servidor MCP). Quando devolve uma lista, a orquestração usa essas
+        ferramentas no lugar da ferramenta única derivada de `executar`.
+
+        O padrão é `None`: o instrumento é de ferramenta única (o caso comum),
+        e a orquestração segue pelo `executar`."""
+        return None
+
 
 _REGISTRO: dict[str, TipoInstrumento] = {}
 
