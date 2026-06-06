@@ -126,6 +126,8 @@ export type Instrumento = {
   nome: string;
   tipo: string;
   configuracao: Record<string, unknown> | null;
+  // Segredos já guardados (cifrados): campo → 4 últimos dígitos (Fase 7-B).
+  segredos: Record<string, string>;
   criado_em: string;
   atualizado_em: string;
 };
@@ -136,6 +138,8 @@ export type TipoInstrumento = {
   descricao: string;
   esquema_config: Record<string, unknown>;
   esquema_args: Record<string, unknown>;
+  // Campos da config que são segredos (cifrados, nunca reexibidos) — Fase 7-B.
+  campos_secretos: string[];
 };
 
 // ─── Automações: a cadeia é um grafo de caminhos (bifurcação) ───

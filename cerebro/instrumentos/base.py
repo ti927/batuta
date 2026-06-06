@@ -70,6 +70,10 @@ class TipoInstrumento(ABC):
     descricao: str
     Config: type[BaseModel]
     Args: type[BaseModel]
+    # Campos da Config que são SEGREDOS (Fase 7-B): em vez de irem para a
+    # `instrumentos.configuracao` (JSONB em claro), são cifrados no cofre de
+    # segredos do instrumento e injetados só na execução. Top-level, string.
+    campos_secretos: tuple[str, ...] = ()
 
     @abstractmethod
     def executar(self, config: BaseModel, args: BaseModel) -> dict:
@@ -117,3 +121,38 @@ def validar_configuracao(tipo: str, configuracao: dict | None) -> dict:
     if t is None:
         raise ValueError(f"Tipo de instrumento desconhecido: {tipo!r}")
     return t.Config.model_validate(configuracao or {}).model_dump()
+
+
+def campos_secretos(tipo: str) -> tuple[str, ...]:
+    """Os campos secretos de um tipo (vazio se o tipo não tem segredos)."""
+    t = obter_tipo(tipo)
+    return tuple(getattr(t, "campos_secretos", ()) or ()) if t else ()
+
+
+def preparar_config(tipo: str, configuracao: dict | None) -> tuple[dict, dict]:
+    """Valida a config e SEPARA os segredos (Fase 7-B). Devolve
+    `(config_publica, segredos)`:
+    - `config_publica`: a configuração validada SEM os campos secretos — é o que
+      vai para `instrumentos.configuracao` (JSONB em claro).
+    - `segredos`: {campo: valor} só com os campos secretos REALMENTE informados
+      (presentes e não-vazios) na entrada — é o que será cifrado no cofre. Campo
+      secreto omitido ou vazio não entra (na edição, preserva o valor atual).
+
+    Levanta `ValueError` se o tipo é desconhecido ou a configuração é inválida.
+    """
+    t = obter_tipo(tipo)
+    if t is None:
+        raise ValueError(f"Tipo de instrumento desconhecido: {tipo!r}")
+    secretos = set(t.campos_secretos)
+    bruta = dict(configuracao or {})
+    segredos = {
+        campo: str(bruta[campo])
+        for campo in secretos
+        if campo in bruta and str(bruta[campo]).strip()
+    }
+    # Valida a config inteira (segredos são campos opcionais do Config) para
+    # pegar erros de tipo, mas guarda só a parte pública.
+    config_publica = t.Config.model_validate(bruta).model_dump()
+    for campo in secretos:
+        config_publica.pop(campo, None)
+    return config_publica, segredos

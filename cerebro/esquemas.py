@@ -135,7 +135,8 @@ class InstrumentoEditar(BaseModel):
 
 
 class InstrumentoLer(BaseModel):
-    """Instrumento como a API o devolve."""
+    """Instrumento como a API o devolve. `segredos` (Fase 7-B) traz, por campo
+    secreto já guardado, só os 4 últimos dígitos — o valor nunca é reexibido."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -144,19 +145,22 @@ class InstrumentoLer(BaseModel):
     nome: str
     tipo: str
     configuracao: dict | None
+    segredos: dict[str, str] = Field(default_factory=dict)
     criado_em: datetime
     atualizado_em: datetime
 
 
 class TipoInstrumentoLer(BaseModel):
     """Um tipo de instrumento disponível no encaixe, para a interface montar
-    o formulário de configuração e de acionamento."""
+    o formulário de configuração e de acionamento. `campos_secretos` (Fase 7-B)
+    lista os campos da config que são segredos (cifrados, nunca reexibidos)."""
 
     tipo: str
     nome_exibicao: str
     descricao: str
     esquema_config: dict
     esquema_args: dict
+    campos_secretos: list[str] = Field(default_factory=list)
 
 
 class AcionarInstrumento(BaseModel):

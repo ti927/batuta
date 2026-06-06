@@ -704,9 +704,11 @@ Cofre criptografado; chave por **organização** + **chave-mãe da consultoria**
 
 **DoD:** agente em OpenAI/Google executa de fato com a chave certa; resolução por provedor com fallback; endpoint aceita os novos provedores; tela escolhe provedor+modelo; pytest + tsc/eslint verdes; commit + push.
 
-## FASE 7-B — Cofre de segredos de instrumentos  ⏳ (a executar antes da identidade visual)
+## FASE 7-B — Cofre de segredos de instrumentos  ✅ CONCLUÍDA (2026-06-06)
 
 > **Origem (2026-06-06, decisão do maestro):** o `PRODUTO.md §26` prevê as credenciais de instrumentos no mesmo cofre criptografado. Hoje WordPress/Tavily leem do `.env` (paliativo por-cérebro) e **REST/webhook guardam o token em texto plano** na config JSONB do banco — viola o §26. Fase dedicada, **antes da identidade visual**. (Recupera o slot que a renumeração do MIGRACAO sobrescreveu.)
+
+> **FEITO (2026-06-06):** mecanismo geral `campos_secretos` no encaixe (`instrumentos/base.py`) + `preparar_config` (separa config pública × segredos). Nova tabela `segredos_instrumento` (migration aditiva `b26cc22ca49a`, aplicada) + módulo `cerebro/segredos_instrumento.py` (reusa `cofre.py`: cifrar/decifrar/ultimos4; upsert que preserva ao omitir; `anexar_aos_instrumentos` injeta os segredos decifrados num atributo transitório). Instrumentos migrados: WordPress (`site_url`/`usuario` na config + `senha_app` secreto), busca web (`chave_api` secreto), REST e webhook (`token_bearer` secreto → `Authorization: Bearer`) — todos com **`.env` como fallback legado** (não quebra os já configurados). Injeção na execução: `cadeia._carregar_cinto` + `agente._ferramenta_de_instrumento` mesclam os segredos só em memória; rota `acionar` idem; rota CRUD separa/cifra os segredos e audita (`instrumento.segredo_alterado`); leitura devolve só `ultimos4`, nunca o valor. UI: aviso dos campos secretos + o que já está guardado (mascarado). **62 testes pytest + tsc/eslint verdes** (8 novos). Atende a parte de credenciais de instrumentos do `PRODUTO §26`.
 
 **Objetivo:** credenciais de instrumento guardadas cifradas por organização, nunca em texto plano, injetadas só na execução; reusa a cripto do `cofre.py`.
 

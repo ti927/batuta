@@ -19,12 +19,20 @@ MAX_CORPO = 10_000
 
 
 class ConfigRest(BaseModel):
-    """Configuração fixa do instrumento, preenchida por quem monta o agente."""
+    """Configuração fixa do instrumento, preenchida por quem monta o agente.
+    `token_bearer` é SEGREDO (cofre, Fase 7-B): se preenchido, vira o cabeçalho
+    `Authorization: Bearer <token>` — a forma segura de autenticar, em vez de
+    deixar o segredo em claro em `cabecalhos`."""
 
     url: str = Field(min_length=1, description="Endereço do endpoint.")
     metodo: Literal["GET", "POST", "PUT", "PATCH", "DELETE"] = "GET"
     cabecalhos: dict[str, str] = Field(
-        default_factory=dict, description="Cabeçalhos fixos (ex.: autenticação)."
+        default_factory=dict,
+        description="Cabeçalhos fixos não-secretos (não coloque segredos aqui).",
+    )
+    token_bearer: str = Field(
+        default="",
+        description="Token de autenticação (segredo) → cabeçalho Authorization Bearer.",
     )
 
 
@@ -48,14 +56,18 @@ class ChamarApiRest(TipoInstrumento):
     )
     Config = ConfigRest
     Args = ArgsRest
+    campos_secretos = ("token_bearer",)
 
     def executar(self, config: ConfigRest, args: ArgsRest) -> dict:
+        cabecalhos = dict(config.cabecalhos or {})
+        if config.token_bearer:
+            cabecalhos["Authorization"] = f"Bearer {config.token_bearer}"
         try:
             with httpx.Client(timeout=TIMEOUT_S) as cliente:
                 resposta = cliente.request(
                     config.metodo,
                     config.url,
-                    headers=config.cabecalhos or None,
+                    headers=cabecalhos or None,
                     params=args.parametros_query or None,
                     json=args.corpo,
                 )

@@ -14,6 +14,7 @@ from auth import usuario_atual
 from chaves import resolver_chaves_por_time
 from esquemas import ExecutarAgente
 from modelos import AgenteInstrumento, Instrumento, Usuario
+import segredos_instrumento
 from orquestracao.agente import executar_agente
 from orquestracao.llm import usar_chaves
 from rotas._comum import agente_acessivel
@@ -30,11 +31,15 @@ def executar(
     usuario: Usuario = Depends(usuario_atual),
 ):
     agente = agente_acessivel(sessao, usuario, agente_id, minimo="operador")
-    cinto = sessao.scalars(
-        select(Instrumento)
-        .join(AgenteInstrumento, AgenteInstrumento.instrumento_id == Instrumento.id)
-        .where(AgenteInstrumento.agente_id == agente_id)
-    ).all()
+    cinto = list(
+        sessao.scalars(
+            select(Instrumento)
+            .join(AgenteInstrumento, AgenteInstrumento.instrumento_id == Instrumento.id)
+            .where(AgenteInstrumento.agente_id == agente_id)
+        )
+    )
+    # Fase 7-B: anexa os segredos decifrados dos instrumentos do cinto.
+    segredos_instrumento.anexar_aos_instrumentos(sessao, cinto)
     # Fases 7.3/7-A: as chaves (por provedor) seguem a organização do time do
     # agente (fallback consultoria → .env legado p/ Anthropic).
     chaves, _ = resolver_chaves_por_time(sessao, agente.time_id)

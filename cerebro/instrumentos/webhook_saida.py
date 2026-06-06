@@ -20,11 +20,18 @@ MAX_CORPO = 2_000
 
 
 class ConfigWebhook(BaseModel):
-    """Configuração fixa, preenchida por quem monta o agente."""
+    """Configuração fixa, preenchida por quem monta o agente. `token_bearer` é
+    SEGREDO (cofre, Fase 7-B): se preenchido, vira o cabeçalho
+    `Authorization: Bearer <token>`."""
 
     url: str = Field(min_length=1, description="Endereço que receberá o POST.")
     cabecalhos: dict[str, str] = Field(
-        default_factory=dict, description="Cabeçalhos fixos (ex.: autenticação)."
+        default_factory=dict,
+        description="Cabeçalhos fixos não-secretos (não coloque segredos aqui).",
+    )
+    token_bearer: str = Field(
+        default="",
+        description="Token de autenticação (segredo) → cabeçalho Authorization Bearer.",
     )
 
 
@@ -46,13 +53,17 @@ class DispararWebhook(TipoInstrumento):
     )
     Config = ConfigWebhook
     Args = ArgsWebhook
+    campos_secretos = ("token_bearer",)
 
     def executar(self, config: ConfigWebhook, args: ArgsWebhook) -> dict:
+        cabecalhos = dict(config.cabecalhos or {})
+        if config.token_bearer:
+            cabecalhos["Authorization"] = f"Bearer {config.token_bearer}"
         try:
             with httpx.Client(timeout=TIMEOUT_S) as cliente:
                 resposta = cliente.post(
                     config.url,
-                    headers=config.cabecalhos or None,
+                    headers=cabecalhos or None,
                     json=args.payload,
                 )
         except httpx.HTTPError as e:

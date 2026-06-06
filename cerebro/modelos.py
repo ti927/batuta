@@ -308,3 +308,32 @@ class ChaveApi(IdData, Base):
             postgresql_nulls_not_distinct=True,
         ),
     )
+
+
+class SegredoInstrumento(IdData, Base):
+    """Cofre criptografado das credenciais de um instrumento (Fase 7-B, PRODUTO §26).
+
+    Cada linha é UM campo secreto de UM instrumento (ex.: a senha de app do
+    WordPress, a chave da busca web, o token de um webhook). O valor fica sempre
+    cifrado em `valor_cifrado` e NUNCA é reexibido — a interface mostra só
+    `ultimos4`. Vive separado da `instrumentos.configuracao` (JSONB em claro), que
+    guarda apenas os campos não-secretos. É per-organização por herança
+    (instrumento → time → organização). Há no máximo um segredo por
+    (instrumento, campo)."""
+
+    __tablename__ = "segredos_instrumento"
+    instrumento_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("instrumentos.id", ondelete="CASCADE"), nullable=False
+    )
+    campo: Mapped[str] = mapped_column(String(80), nullable=False)
+    valor_cifrado: Mapped[str] = mapped_column(Text, nullable=False)
+    ultimos4: Mapped[str | None] = mapped_column(String(8), nullable=True)
+
+    __table_args__ = (
+        Index(
+            "uq_segredo_instrumento_campo",
+            "instrumento_id",
+            "campo",
+            unique=True,
+        ),
+    )
