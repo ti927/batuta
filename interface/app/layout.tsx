@@ -6,7 +6,7 @@ import { type ConvitePendente } from "@/lib/api";
 import { buscarCerebro } from "@/lib/cerebro-servidor";
 import { criarClienteServidor } from "@/lib/supabase/cliente-servidor";
 import { BannerConvites } from "./banner-convites";
-import { BarraSessao } from "./barra-sessao";
+import { Cabecalho } from "./cabecalho";
 
 // Inter é a fonte de interface (corpo, títulos internos, formulários). Só os
 // pesos 400/500, como manda o DESIGN-SYSTEM (§5).
@@ -60,10 +60,10 @@ export default async function RootLayout({
       lang="pt-BR"
       className={`${inter.variable} ${bricolage.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
-        {user?.email && <BarraSessao email={user.email} />}
+      <body className="min-h-full flex flex-col bg-background">
+        {user?.email && <Cabecalho email={user.email} />}
         {pendentes.length > 0 && (
-          <div className="flex justify-center px-4 pt-4">
+          <div className="mx-auto flex w-full max-w-6xl justify-center px-4 pt-4 sm:px-6">
             <BannerConvites convites={pendentes} />
           </div>
         )}
