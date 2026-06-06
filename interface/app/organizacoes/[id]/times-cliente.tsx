@@ -92,12 +92,20 @@ export function TimesCliente({
       <div className="mb-6 flex items-center gap-3">
         <p className="text-sm text-zinc-500">Times da organização</p>
         {souAdmin && (
-          <Link
-            href={`/organizacoes/${organizacao.id}/acesso`}
-            className="text-sm text-blue-600 underline underline-offset-4"
-          >
-            Gerir acesso →
-          </Link>
+          <>
+            <Link
+              href={`/organizacoes/${organizacao.id}/acesso`}
+              className="text-sm text-blue-600 underline underline-offset-4"
+            >
+              Gerir acesso →
+            </Link>
+            <Link
+              href={`/organizacoes/${organizacao.id}/chaves`}
+              className="text-sm text-blue-600 underline underline-offset-4"
+            >
+              Chaves de IA →
+            </Link>
+          </>
         )}
       </div>
 

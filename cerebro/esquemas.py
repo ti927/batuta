@@ -360,6 +360,9 @@ class MeuAcesso(BaseModel):
     email: str | None
     ativo: bool
     papeis: dict[uuid.UUID, PapelAcesso] = Field(default_factory=dict)
+    # Admin da consultoria (lista no .env) — habilita a gestão da chave-mãe na UI
+    # (Fase 7.5). É distinto do papel 'admin' de uma organização.
+    admin_consultoria: bool = False
 
 
 # ───────────────────── Cofre de chaves (Etapa 2, Fase 7) ─────────────────────

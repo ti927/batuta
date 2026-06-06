@@ -126,3 +126,12 @@ def test_usuario_comum_nao_e_admin_consultoria(cliente, entrar, dados, monkeypat
     monkeypatch.setenv("CONSULTORIA_ADMINS", dados["admin"].email)
     entrar(dados["operador"])
     assert cliente.put("/chaves-consultoria", json=_payload()).status_code == 403
+
+
+def test_eu_expoe_admin_consultoria(cliente, entrar, dados, monkeypatch):
+    """A UI (7.5) usa /eu.admin_consultoria para mostrar o link da chave-mãe."""
+    monkeypatch.setenv("CONSULTORIA_ADMINS", dados["admin"].email)
+    entrar(dados["admin"])
+    assert cliente.get("/eu").json()["admin_consultoria"] is True
+    entrar(dados["operador"])
+    assert cliente.get("/eu").json()["admin_consultoria"] is False

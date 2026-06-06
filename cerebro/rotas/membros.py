@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 import auditoria
 import auth
+import consultoria
 import supabase_admin
 from auth import usuario_atual
 from auth_supabase import TokenInvalido, validar_token
@@ -83,6 +84,7 @@ def eu(
         email=usuario.email,
         ativo=usuario.ativo,
         papeis=papeis,
+        admin_consultoria=consultoria.eh_admin_consultoria(usuario.email),
     )
 
 
