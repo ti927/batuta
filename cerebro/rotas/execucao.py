@@ -11,9 +11,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from auth import usuario_atual
+from chaves import resolver_chave_por_time
 from esquemas import ExecutarAgente
 from modelos import AgenteInstrumento, Instrumento, Usuario
 from orquestracao.agente import executar_agente
+from orquestracao.llm import usar_chave
 from rotas._comum import agente_acessivel
 from sessao import obter_sessao
 
@@ -33,8 +35,12 @@ def executar(
         .join(AgenteInstrumento, AgenteInstrumento.instrumento_id == Instrumento.id)
         .where(AgenteInstrumento.agente_id == agente_id)
     ).all()
+    # Fase 7.3: a chave segue a organização do time do agente (fallback
+    # consultoria → .env legado).
+    chave = resolver_chave_por_time(sessao, agente.time_id)
     try:
-        return executar_agente(agente, list(cinto), dados.entrada)
+        with usar_chave(chave):
+            return executar_agente(agente, list(cinto), dados.entrada)
     except Exception as e:  # falha de LLM/rede/instrumento — traduz para o cliente
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY, f"Falha na execução do agente: {e}"

@@ -16,9 +16,11 @@ import { Button } from "@/components/ui/button";
 export function OrganizacoesCliente({
   inicial,
   papeis,
+  adminConsultoria,
 }: {
   inicial: Organizacao[];
   papeis: Record<string, PapelAcesso>;
+  adminConsultoria: boolean;
 }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
@@ -68,7 +70,17 @@ export function OrganizacoesCliente({
 
   return (
     <main className="mx-auto w-full max-w-2xl p-8">
-      <h1 className="mb-6 text-2xl font-bold">Organizações</h1>
+      <div className="mb-6 flex items-center gap-3">
+        <h1 className="text-2xl font-bold">Organizações</h1>
+        {adminConsultoria && (
+          <Link
+            href="/chaves-consultoria"
+            className="text-sm text-blue-600 underline underline-offset-4"
+          >
+            Chave-mãe da consultoria →
+          </Link>
+        )}
+      </div>
 
       {erro && (
         <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">

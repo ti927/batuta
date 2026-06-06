@@ -14,6 +14,10 @@ async function listar(): Promise<Organizacao[]> {
 export default async function OrganizacoesPage() {
   const [organizacoes, eu] = await Promise.all([listar(), buscarMeuAcesso()]);
   return (
-    <OrganizacoesCliente inicial={organizacoes} papeis={eu?.papeis ?? {}} />
+    <OrganizacoesCliente
+      inicial={organizacoes}
+      papeis={eu?.papeis ?? {}}
+      adminConsultoria={eu?.admin_consultoria ?? false}
+    />
   );
 }

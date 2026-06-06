@@ -31,30 +31,40 @@ def custo_usd(modelo: str, tokens_entrada: int, tokens_saida: int) -> float:
 
 def resumir_uso(passos) -> dict:
     """Soma o uso de uma lista de passos (objetos com `.saida['uso']`, uma lista
-    de {modelo, tokens_entrada, tokens_saida}) e estima o custo total.
+    de {modelo, tokens_entrada, tokens_saida, origem?}) e estima o custo total.
 
-    Devolve {tokens_entrada, tokens_saida, custo_usd, por_modelo}, pronto para
-    a tela de transparência (uso por execução)."""
+    Devolve {tokens_entrada, tokens_saida, custo_usd, por_modelo, por_origem}.
+    `por_origem` (Fase 7.6) separa o consumo por origem da chave (cliente ×
+    consultoria × legado), para a tela de transparência. Passos antigos sem
+    origem registrada caem em 'desconhecida'."""
     total_e = total_s = 0
     custo = 0.0
     por_modelo: dict[str, dict] = {}
+    por_origem: dict[str, dict] = {}
+
+    def _acumular(agrupador: dict, chave: str, te: int, ts: int, c: float) -> None:
+        d = agrupador.setdefault(
+            chave, {"tokens_entrada": 0, "tokens_saida": 0, "custo_usd": 0.0}
+        )
+        d["tokens_entrada"] += te
+        d["tokens_saida"] += ts
+        d["custo_usd"] = round(d["custo_usd"] + c, 6)
+
     for p in passos:
         for e in (getattr(p, "saida", None) or {}).get("uso") or []:
             modelo = e.get("modelo", "?")
             te = e.get("tokens_entrada", 0) or 0
             ts = e.get("tokens_saida", 0) or 0
+            c = custo_usd(modelo, te, ts)
             total_e += te
             total_s += ts
-            custo += custo_usd(modelo, te, ts)
-            d = por_modelo.setdefault(
-                modelo, {"tokens_entrada": 0, "tokens_saida": 0, "custo_usd": 0.0}
-            )
-            d["tokens_entrada"] += te
-            d["tokens_saida"] += ts
-            d["custo_usd"] = round(d["custo_usd"] + custo_usd(modelo, te, ts), 6)
+            custo += c
+            _acumular(por_modelo, modelo, te, ts, c)
+            _acumular(por_origem, e.get("origem") or "desconhecida", te, ts, c)
     return {
         "tokens_entrada": total_e,
         "tokens_saida": total_s,
         "custo_usd": round(custo, 6),
         "por_modelo": por_modelo,
+        "por_origem": por_origem,
     }

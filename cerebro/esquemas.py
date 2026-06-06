@@ -360,3 +360,40 @@ class MeuAcesso(BaseModel):
     email: str | None
     ativo: bool
     papeis: dict[uuid.UUID, PapelAcesso] = Field(default_factory=dict)
+    # Admin da consultoria (lista no .env) — habilita a gestão da chave-mãe na UI
+    # (Fase 7.5). É distinto do papel 'admin' de uma organização.
+    admin_consultoria: bool = False
+
+
+# ───────────────────── Cofre de chaves (Etapa 2, Fase 7) ─────────────────────
+
+# Os três tipos de IA (MIGRACAO Virada 4). Nesta fase só a 'executora' é
+# consumida pelo motor; as outras já são modeladas para as Fases 9/10.
+TipoIA = Literal["executora", "criadora", "companheira"]
+
+
+class ChaveApiCriar(BaseModel):
+    """Cadastra ou troca uma chave de IA. O `valor` é o segredo: entra cifrado
+    no cofre e NUNCA volta numa leitura (PRODUTO §26)."""
+
+    tipo_ia: TipoIA = "executora"
+    provedor: str = Field(default="anthropic", min_length=1, max_length=40)
+    valor: str = Field(min_length=1)
+    apelido: str | None = Field(default=None, max_length=200)
+
+
+class ChaveApiLer(BaseModel):
+    """Uma chave do cofre como a API a devolve: só metadados e os últimos 4
+    dígitos. O valor cifrado nunca é reexibido (PRODUTO §26)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organizacao_id: uuid.UUID | None
+    tipo_ia: str
+    provedor: str
+    ultimos4: str | None
+    apelido: str | None
+    ativa: bool
+    criado_em: datetime
+    atualizado_em: datetime

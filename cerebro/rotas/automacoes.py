@@ -43,12 +43,14 @@ from modelos import (
     Time,
     Usuario,
 )
+from chaves import resolver_chave_e_origem_por_time
 from orquestracao.cadeia import (
     _DESTINOS_FIM,
     _escolher_saida,
     executar_cadeia,
     validar_cadeia,
 )
+from orquestracao.llm import usar_chave
 from orquestracao.disparo import (
     _aplicar_resultado,
     _fazer_registrador,
@@ -212,6 +214,11 @@ def responder(
             status.HTTP_409_CONFLICT, "Esta execução não está aguardando resposta."
         )
 
+    # Fase 7.3/7.6: mesma chave da organização vale para o roteamento da retomada
+    # e para o restante da cadeia (fallback consultoria → .env legado), com a
+    # origem para carimbar a medição dos passos da retomada.
+    chave, origem = resolver_chave_e_origem_por_time(sessao, auto.time_id)
+
     # Auditoria (§3.7): a aprovação humana de um portão é ação sensível.
     auditoria.registrar(
         sessao, usuario=usuario, acao="portao.aprovado", recurso_tipo="execucao",
@@ -242,7 +249,8 @@ def responder(
     elif len(saidas) == 1:
         escolhida = saidas[0]
     else:
-        escolhida, _ = _escolher_saida(dados.resposta, saidas)
+        with usar_chave(chave):
+            escolhida, _ = _escolher_saida(dados.resposta, saidas)
     destino = escolhida.get("destino") if escolhida else None
     proximo = None if destino in _DESTINOS_FIM else destino
 
@@ -262,14 +270,15 @@ def responder(
     execucao.estado = "em_andamento"
     sessao.commit()
     try:
-        r = executar_cadeia(
-            sessao,
-            cadeia,
-            entrada_proxima,
-            no_inicial=proximo,
-            ordem_inicial=ultimo.ordem,
-            registrar_passo=_fazer_registrador(sessao, execucao.id),
-        )
+        with usar_chave(chave):
+            r = executar_cadeia(
+                sessao,
+                cadeia,
+                entrada_proxima,
+                no_inicial=proximo,
+                ordem_inicial=ultimo.ordem,
+                registrar_passo=_fazer_registrador(sessao, execucao.id, origem),
+            )
         _aplicar_resultado(execucao, r)
     except Exception as e:
         execucao.estado = "falhou"
@@ -323,6 +332,30 @@ def listar_todas_execucoes(
         )
         for e, nome, org_id in sessao.execute(consulta).all()
     ]
+
+
+@rotas.get("/uso/resumo")
+def resumo_uso(
+    organizacao_id: uuid.UUID | None = None,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Medição consolidada (Fase 7.6): soma o uso de TODOS os passos das execuções
+    das organizações em que o usuário é membro, com `por_origem` separando o
+    consumo por chave (cliente × consultoria × legado). Filtro opcional por
+    organização. O isolamento vem do join por `membros` (cada um só vê o seu)."""
+    consulta = (
+        select(PassoExecucao)
+        .join(Execucao, Execucao.id == PassoExecucao.execucao_id)
+        .join(Automacao, Automacao.id == Execucao.automacao_id)
+        .join(Time, Time.id == Automacao.time_id)
+        .join(Membro, Membro.organizacao_id == Time.organizacao_id)
+        .where(Membro.usuario_id == usuario.id)
+    )
+    if organizacao_id is not None:
+        consulta = consulta.where(Time.organizacao_id == organizacao_id)
+    passos = sessao.scalars(consulta).all()
+    return precos.resumir_uso(passos)
 
 
 @rotas.get("/execucoes/{execucao_id}", response_model=ExecucaoComPassos)

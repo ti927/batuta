@@ -174,14 +174,19 @@ export type UsoChamada = {
   tokens_saida: number;
 };
 
+export type UsoAgrupado = {
+  tokens_entrada: number;
+  tokens_saida: number;
+  custo_usd: number;
+};
+
 export type ResumoUso = {
   tokens_entrada: number;
   tokens_saida: number;
   custo_usd: number;
-  por_modelo: Record<
-    string,
-    { tokens_entrada: number; tokens_saida: number; custo_usd: number }
-  >;
+  por_modelo: Record<string, UsoAgrupado>;
+  // Consumo separado por origem da chave (cliente × consultoria × legado) — 7.6.
+  por_origem: Record<string, UsoAgrupado>;
 };
 
 export type PassoExecucao = {
@@ -274,4 +279,24 @@ export type MeuAcesso = {
   email: string | null;
   ativo: boolean;
   papeis: Record<string, PapelAcesso>;
+  // Admin da consultoria (lista no .env do cérebro) — habilita a chave-mãe.
+  admin_consultoria: boolean;
+};
+
+// ───────────────────── Cofre de chaves (Fase 7) ─────────────────────
+
+export type TipoIA = "executora" | "criadora" | "companheira";
+
+// Uma chave do cofre como a API a devolve: NUNCA o valor, só os 4 últimos
+// dígitos + metadados (PRODUTO §26). organizacao_id null = chave-mãe da consultoria.
+export type ChaveApiLer = {
+  id: string;
+  organizacao_id: string | null;
+  tipo_ia: TipoIA;
+  provedor: string;
+  ultimos4: string | null;
+  apelido: string | null;
+  ativa: boolean;
+  criado_em: string;
+  atualizado_em: string;
 };
