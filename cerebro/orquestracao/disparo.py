@@ -13,8 +13,10 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from chaves import resolver_chave_por_time
 from modelos import Automacao, Execucao, PassoExecucao
 from orquestracao.cadeia import executar_cadeia
+from orquestracao.llm import usar_chave
 
 
 def _fazer_registrador(sessao: Session, execucao_id: uuid.UUID):
@@ -93,14 +95,19 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
     Devolve a execução."""
     automacao = sessao.get(Automacao, execucao.automacao_id)
     entrada = (execucao.entrada or {}).get("texto", "")
+    # Fase 7.3: resolve a chave da organização desta automação (com fallback para
+    # a chave-mãe da consultoria e, por fim, o .env legado) e a fixa no contexto
+    # durante toda a cadeia, sem tocar no motor de grafo.
+    chave = resolver_chave_por_time(sessao, automacao.time_id if automacao else None)
     try:
-        r = executar_cadeia(
-            sessao,
-            (automacao.cadeia if automacao else None) or {},
-            entrada,
-            registrar_passo=_fazer_registrador(sessao, execucao.id),
-            cancelado=lambda: _esta_cancelada(sessao, execucao.id),
-        )
+        with usar_chave(chave):
+            r = executar_cadeia(
+                sessao,
+                (automacao.cadeia if automacao else None) or {},
+                entrada,
+                registrar_passo=_fazer_registrador(sessao, execucao.id),
+                cancelado=lambda: _esta_cancelada(sessao, execucao.id),
+            )
         _aplicar_resultado(execucao, r)
     except Exception as e:  # falha de LLM/rede/cadeia inválida — registra e segue
         execucao.estado = "falhou"
