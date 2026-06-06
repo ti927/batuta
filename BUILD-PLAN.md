@@ -773,11 +773,31 @@ Aplicar o `DESIGN-SYSTEM.md` sobre as telas cruas do core.
 **DoD:** telas com a marca Batuta aplicada; nenhuma cor crua solta nas telas varridas; `tsc`+`eslint`
 verdes; servidor de dev sobe; QA visual do maestro aprovado; commit + push.
 
+## DESIGN — fonte da verdade das telas (handoff hi-fi)
+A partir da Fase 8, o visual tem **duas fontes complementares**: `DESIGN-SYSTEM.md` (marca/tokens/voz)
+e **`docs/design/`** (handoff hi-fi — ler o `README.md`), que traz as **telas desenhadas** e o
+**shell de navegação em sidebar escura** (a casca definitiva; o header simples da Fase 8 evolui para
+ela). **Antes de qualquer tela/layout/UX, ler os dois.** Os `.jsx`/`.html` do handoff são referência
+de design, não código de produção — recriar com Next + Tailwind + shadcn/ui. Mapa tela→arquivo→fase:
+
+| Tela | Arquivo no handoff | Onde entra |
+|---|---|---|
+| Shell sidebar (navegação) | `app-shell.jsx` (variação "Sidebar"; README §5) | Refino de casca (substitui o header da Fase 8); base das Fases 9/10 |
+| Dashboard do time | `app-dashboard.jsx` (README §6.3) | Refino de tela |
+| Inspeção de execução + espera-por-humano | `app-execution.jsx` (README §6.4) | Refino da tela crua da Etapa 1 |
+| Card/Drawer de agente + RobotFace | `app-creation.jsx` (README §6.1, §6.5) | Refino + Fase 9 |
+| Criação AI-first (IA criadora) | `app-creation.jsx` (README §6.2; roteiros §8; dados §9) | **Fase 9** |
+| IA companheira + painel de memória | `app-companion.jsx` (README §6.6) | **Fase 10** |
+
+Ordem de implementação sugerida no `docs/design/README.md` §13.
+
 ## FASE 9 — Camada conversacional de criação (IA criadora)
 Chat que estrutura projeto/time por conversa; tool use para a IA executar as operações do Batuta; **modo rascunho** (nada vira definitivo sem aprovação humana); desfazer cirúrgico.
+- **Spec visual/UX:** `docs/design/` — `app-creation.jsx` (tela dividida chat + canvas de rascunho), README §6.2/§6.5; roteiros de conversa §8; mapa de dados→cérebro §9; regra de modo rascunho (`MIGRACAO.md` §6.4).
 
 ## FASE 10 — IA companheira de projeto
 Histórico de conversa por projeto; tool use para consultar o estado do projeto; **memória vetorial** com isolamento estrito entre projetos.
+- **Spec visual/UX:** `docs/design/` — `app-companion.jsx` (chat + painel de memória "O que eu sei deste projeto"), README §6.6.
 
 ## FASE adicional — MCP e instrumentos restantes  ✅ ESCOPO DESTA FASE CONCLUÍDO (2026-06-06)
 Conectar MCP (adiado da frente 5.6) + demais instrumentos do `PRODUTO.md` §13, no encaixe já provado. Ordem da janela entre a Fase 7 e a Fase 8: **7-A → 7-B → esta → Fase 8 (visual)**. Os instrumentos novos já nascem usando o cofre de segredos da 7-B.

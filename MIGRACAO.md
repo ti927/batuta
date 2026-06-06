@@ -296,6 +296,7 @@ Este `MIGRACAO.md` é o documento de transição. As mudanças que ele descreve 
 - Conforme cada fase desta migração for concluída e validada, atualize o `PRODUTO.md` para refletir o que mudou (usando esta migração como referência das mudanças). Não reescreva o `PRODUTO.md` de uma vez antes do trabalho começar — atualize-o à medida que cada parte fica pronta.
 - Atualize o `BUILD-PLAN.md` removendo o esqueleto antigo das fases 6 a 12 e substituindo pelas fases novas detalhadas conforme você executá-las.
 - O `CLAUDE.md` e o `DESIGN-SYSTEM.md` permanecem como estão. O método não muda; a identidade visual não muda.
+  - **Atualização (2026-06-06):** por decisão do maestro, ambos **foram atualizados** para incorporar o **handoff de design hi-fi** recebido, agora versionado em **`docs/design/`** (com `README.md`). Esse handoff é a **fonte da verdade de telas/layout/UX** das Fases 8–10 (criação AI-first, dashboard, inspeção de execução, IA companheira) e define o **shell em sidebar escura** (a casca definitiva — o header da Fase 8 evolui para ela). Toda doc que a IA lê (`CLAUDE.md` §13/§17, `DESIGN-SYSTEM.md`, `BUILD-PLAN.md`, `interface/AGENTS.md`) aponta para `docs/design/`.
 
 Quando todas as fases desta migração estiverem concluídas e os documentos vigentes refletirem o estado final, este `MIGRACAO.md` pode ser arquivado em um diretório `docs/historico/` — não apagado, pois é registro da decisão.
 
