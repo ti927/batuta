@@ -264,3 +264,47 @@ class Auditoria(IdData, Base):
         UUID(as_uuid=True), nullable=True
     )
     detalhe: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+# ───────────────────── Cofre de chaves (Etapa 2, Fase 7) ─────────────────────
+
+
+class ChaveApi(IdData, Base):
+    """Cofre criptografado de chaves de API de IA (PRODUTO §26, MIGRACAO Viradas 4/5).
+
+    Cada chave pertence a uma organização (o cliente). Quando `organizacao_id` é
+    nulo, é a CHAVE-MÃE DA CONSULTORIA — o fallback usado quando o cliente não tem
+    chave própria. O valor fica sempre cifrado em `valor_cifrado` e NUNCA é
+    reexibido (PRODUTO §26): a interface mostra apenas `ultimos4`.
+
+    Os três tipos de IA (executora | criadora | companheira) são modelados desde
+    já (MIGRACAO Virada 4); na Fase 7 só a 'executora' é consumida pelo motor.
+
+    Há no máximo uma chave por (organização, tipo de IA, provedor) — inclusive
+    para a chave-mãe (índice com NULLS NOT DISTINCT, pois `organizacao_id` é nulo
+    nela). Trocar a chave atualiza a linha existente; `ativa` permite desligá-la
+    sem apagar o registro."""
+
+    __tablename__ = "chaves_api"
+    organizacao_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organizacoes.id", ondelete="CASCADE"), nullable=True
+    )
+    tipo_ia: Mapped[str] = mapped_column(String(20), nullable=False)  # executora|criadora|companheira
+    provedor: Mapped[str] = mapped_column(String(40), nullable=False)  # anthropic|openai|google|...
+    valor_cifrado: Mapped[str] = mapped_column(Text, nullable=False)
+    ultimos4: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    apelido: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    ativa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+
+    __table_args__ = (
+        Index(
+            "uq_chave_org_tipo_provedor",
+            "organizacao_id",
+            "tipo_ia",
+            "provedor",
+            unique=True,
+            postgresql_nulls_not_distinct=True,
+        ),
+    )

@@ -654,6 +654,8 @@ Trocar o usuário fixo por **login real (Supabase Auth)** e **três papéis** (a
 
 **Envio de e-mail (resolvido 2026-06-04):** o e-mail de convite sai pelo **Resend** (SMTP `smtp.resend.com:587`, usuário `resend`, senha = API key; domínio verificado no Resend). O Gmail foi descartado (bloqueia SMTP a partir dos servidores do Supabase). O template "Invite user" do Supabase aponta o link para `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/convite` — sem isso, o link cai no `verify` padrão e não chega à tela de senha.
 
+**Correção pós-conclusão (2026-06-04) — reconvite de quem já tem conta:** convidar um e-mail que **já tem conta no Supabase** (ex.: ex-membro removido) não enviava e-mail — o `POST /auth/v1/invite` só dispara e-mail ao criar conta nova; para conta existente devolve 422 e o cérebro engolia o erro. **Solução (escolha do maestro): "aviso dentro do Batuta"** — novo `GET /convites/pendentes` (autentica pelo token direto, não `usuario_atual`) + banner no **layout** (`interface/app/banner-convites.tsx` em `app/layout.tsx`, aparece em toda tela autenticada) que reusa `POST /convites/aceitar`; `criar_convite` passou a devolver `email_enviado` e a tela de acesso avisa o admin quando o e-mail não saiu. +3 testes pytest (22 verdes). Validado pelo maestro. Commits `993ed7c` e `eb0100b`.
+
 ### Definition of Done — Fase 6 ✅
 - [x] Cérebro: login real + três papéis em todas as rotas + convites/desativação + auditoria — **19 testes verdes**.
 - [x] Interface: login funcionando, token encaminhado, telas de gestão, UI por papel — **tsc/eslint verdes**.
@@ -661,8 +663,26 @@ Trocar o usuário fixo por **login real (Supabase Auth)** e **três papéis** (a
 - [x] Envio de e-mail de convite funcionando (Resend).
 - [x] `PRODUTO.md`/`BUILD-PLAN.md` atualizados; commit da branch. Push/merge em `main` com confirmação do maestro.
 
-## FASE 7 — Cofre de chaves por projeto
-Cofre criptografado; chave por projeto + **chave padrão da consultoria** + fallback; troca de chave (admin); **medição refinada por chave/IA**. As **três** IAs (executora/criadora/companheira) têm chaves **trocáveis** por escolha do admin; medição de tokens obrigatória em tudo quando se usa a chave da consultoria (MIGRACAO Viradas 4/5).
+## FASE 7 — Cofre de chaves por projeto  🚧 EM ANDAMENTO (7.1–7.2 feitas)
+Cofre criptografado; chave por **organização** + **chave-mãe da consultoria** + fallback; troca de chave (admin); **medição refinada por chave/IA**. As **três** IAs (executora/criadora/companheira) têm chaves **trocáveis** por escolha do admin; medição de tokens obrigatória em tudo quando se usa a chave da consultoria (MIGRACAO Viradas 4/5).
+
+**Decisões fixadas com o maestro (2026-06-04):**
+- A chave de IA vincula-se à **Organização** (o cliente); todos os times dela usam. `organizacao_id` nulo na `chaves_api` = **chave-mãe da consultoria** (fallback).
+- A chave-mãe é gerida só por **"admins da consultoria"**, definidos por uma **lista de e-mails no `.env`** do cérebro (leve, seguro; pode evoluir depois).
+- Os **três tipos de IA** (`tipo_ia`: executora/criadora/companheira) são modelados desde já; nesta fase só a **executora** é consumida pelo motor (criadora/companheira chegam nas Fases 9/10).
+- Resolução da chave na execução: **chave da organização → chave-mãe da consultoria → `ANTHROPIC_API_KEY` legado do `.env`** (retrocompatibilidade; nada quebra antes de qualquer chave cadastrada).
+- Provedor: campo `provedor` pronto (anthropic/openai/google…), mas só **Anthropic** implementado agora.
+
+**Tarefas:**
+- **7.1 — A tabela do cofre ✅** (`fd47141`): modelo `ChaveApi` + migration aditiva `73ecf4dbc909` (`chaves_api`: `organizacao_id` nulável, `tipo_ia`, `provedor`, `valor_cifrado`, `ultimos4`, `apelido`, `ativa`; índice único `(org,tipo,provedor)` com `NULLS NOT DISTINCT`). Verificado no Postgres real.
+- **7.2 — Criptografia ✅** (`99a920f`): `cofre.py` (Fernet/AES+HMAC) `cifrar`/`decifrar`/`ultimos4`; chave-mestra `COFRE_CHAVE_MESTRA` no `.env` (gerada por `scripts/gerar_chave_mestra.py` sem expor o valor); `cryptography` vira dep direta. Verificado: segredo não vaza no token, roundtrip, adulteração detectada.
+- **7.3 — Resolução com fallback + ligação no motor** (pendente): resolver org → consultoria → `.env` legado; costura mínima em `orquestracao/llm.py` (núcleo congelado — só troca de onde a chave vem).
+- **7.4 — Endpoints + permissão** (pendente): só **admin** cadastra/troca/remove chave da org; chave-mãe só "admin da consultoria".
+- **7.5 — Tela de gestão de chaves** (pendente): crua; mostra estado + 4 últimos dígitos, nunca o valor.
+- **7.6 — Medição refinada por chave** (pendente): registrar qual chave rodou cada passo; tela de uso separa consumo por origem (consultoria × cliente).
+- **7.7 — Auditoria de troca de chave** (pendente): reusa a infra de auditoria da Fase 6.
+
+**DoD:** testes pytest verdes; chave cifrada nunca reexibida; agente executa com a chave certa e o fallback; só admin troca; medição separa por chave; auditoria registra; tsc/eslint verdes; commit + push.
 
 ## FASE 8 — Identidade visual
 Aplicar o `DESIGN-SYSTEM.md` sobre as telas cruas do core.
