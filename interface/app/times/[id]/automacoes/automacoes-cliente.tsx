@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ChevronLeft, Plus, X, Zap } from "lucide-react";
 
 import {
   api,
@@ -16,7 +17,14 @@ import {
   type Time,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
+import { Aviso } from "@/components/ui/aviso";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EstadoVazio } from "@/components/ui/estado-vazio";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 type SaidasPorAgente = Record<string, SaidaCadeia[]>;
 type PausaPorAgente = Record<string, boolean>;
@@ -225,66 +233,61 @@ export function AutomacoesCliente({
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl p-8">
+    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
       <Link
         href={`/times/${time.id}`}
-        className="text-sm text-blue-600 underline underline-offset-4"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
-        ← Voltar ao time
+        <ChevronLeft className="size-4" />
+        Voltar ao time
       </Link>
-      <h1 className="mt-2 mb-1 text-2xl font-bold">{time.nome}</h1>
-      <p className="mb-6 text-sm text-zinc-500">Automações do time</p>
+      <h1 className="mt-2 text-2xl font-medium text-foreground">{time.nome}</h1>
+      <p className="mb-6 mt-1 text-sm text-muted-foreground">
+        Automações do time
+      </p>
 
-      {erro && (
-        <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <Aviso className="mb-4">{erro}</Aviso>}
 
       {agentes.length === 0 ? (
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-muted-foreground">
           Crie agentes no time antes de montar uma automação.
         </p>
       ) : (
         modo === null &&
         souOperador && (
           <Button className="mb-6" onClick={abrirNovo}>
-            + Nova automação
+            <Plus />
+            Nova automação
           </Button>
         )
       )}
 
       {modo !== null && (
-        <div className="mb-6 flex flex-col gap-4 rounded border border-zinc-300 bg-zinc-50 p-4">
-          <h2 className="font-semibold">
+        <div className="mb-6 flex flex-col gap-4 rounded-lg border border-border bg-card p-6">
+          <h2 className="text-lg font-medium text-foreground">
             {modo === "novo" ? "Nova automação" : "Editar automação"}
           </h2>
-          <label className="flex flex-col gap-1 text-xs text-zinc-600">
+          <Label className="flex-col items-start gap-1">
             Nome
-            <input
-              className="rounded border border-zinc-300 px-2 py-1 text-sm"
+            <Input
               value={nome}
               onChange={(e) => setNome(e.target.value)}
               autoFocus
             />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-zinc-600">
+          </Label>
+          <Label className="flex-col items-start gap-1">
             Agente inicial (por onde a tarefa entra)
-            <select
-              className="rounded border border-zinc-300 px-2 py-1 text-sm"
-              value={inicio}
-              onChange={(e) => setInicio(e.target.value)}
-            >
+            <Select value={inicio} onChange={(e) => setInicio(e.target.value)}>
               {agentes.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.nome}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </Label>
 
-          <div className="flex flex-col gap-2 rounded border border-zinc-200 bg-white p-3">
-            <span className="text-xs font-semibold text-zinc-700">
+          <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-4">
+            <span className="text-sm font-medium text-foreground">
               Gatilho — o que inicia este fluxo
             </span>
             <div className="flex flex-wrap gap-3 text-sm">
@@ -293,6 +296,7 @@ export function AutomacoesCliente({
                   <input
                     type="radio"
                     name="gatilho"
+                    className="accent-primary"
                     checked={tipoGatilho === t}
                     onChange={() => setTipoGatilho(t)}
                   />
@@ -302,7 +306,7 @@ export function AutomacoesCliente({
             </div>
 
             {tipoGatilho === "manual" && (
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-muted-foreground">
                 Dispara apenas pelo botão de teste, na tela da automação.
               </p>
             )}
@@ -310,23 +314,23 @@ export function AutomacoesCliente({
             {tipoGatilho === "agendamento" && (
               <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-end gap-2">
-                  <label className="flex flex-col gap-1 text-xs text-zinc-600">
+                  <Label className="flex-col items-start gap-1">
                     Frequência
-                    <select
-                      className="rounded border border-zinc-300 px-2 py-1 text-sm"
+                    <Select
+                      className="w-auto"
                       value={frequencia}
                       onChange={(e) => setFrequencia(e.target.value as Frequencia)}
                     >
                       <option value="diaria">Todo dia</option>
                       <option value="semanal">Toda semana</option>
                       <option value="mensal">Todo mês</option>
-                    </select>
-                  </label>
+                    </Select>
+                  </Label>
                   {frequencia === "semanal" && (
-                    <label className="flex flex-col gap-1 text-xs text-zinc-600">
+                    <Label className="flex-col items-start gap-1">
                       Dia da semana
-                      <select
-                        className="rounded border border-zinc-300 px-2 py-1 text-sm"
+                      <Select
+                        className="w-auto"
                         value={diaSemana}
                         onChange={(e) => setDiaSemana(Number(e.target.value))}
                       >
@@ -335,58 +339,60 @@ export function AutomacoesCliente({
                             {d}
                           </option>
                         ))}
-                      </select>
-                    </label>
+                      </Select>
+                    </Label>
                   )}
                   {frequencia === "mensal" && (
-                    <label className="flex flex-col gap-1 text-xs text-zinc-600">
+                    <Label className="flex-col items-start gap-1">
                       Dia do mês
-                      <input
+                      <Input
                         type="number"
                         min={1}
                         max={31}
-                        className="w-20 rounded border border-zinc-300 px-2 py-1 text-sm"
+                        className="w-20"
                         value={diaMes}
                         onChange={(e) => setDiaMes(Number(e.target.value))}
                       />
-                    </label>
+                    </Label>
                   )}
-                  <label className="flex flex-col gap-1 text-xs text-zinc-600">
+                  <Label className="flex-col items-start gap-1">
                     Horário
-                    <input
+                    <Input
                       type="time"
-                      className="rounded border border-zinc-300 px-2 py-1 text-sm"
+                      className="w-auto"
                       value={horario}
                       onChange={(e) => setHorario(e.target.value)}
                     />
-                  </label>
+                  </Label>
                 </div>
-                <label className="flex flex-col gap-1 text-xs text-zinc-600">
+                <Label className="flex-col items-start gap-1">
                   Mensagem que o gatilho envia ao fluxo (a entrada do agente inicial)
-                  <textarea
-                    className="min-h-16 rounded border border-zinc-300 px-2 py-1 text-sm"
+                  <Textarea
+                    className="min-h-16"
                     placeholder="Ex.: Gere o lembrete mensal de fechamento."
                     value={entradaAgendada}
                     onChange={(e) => setEntradaAgendada(e.target.value)}
                   />
-                </label>
-                <p className="text-xs text-zinc-400">Horário no fuso de Brasília.</p>
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Horário no fuso de Brasília.
+                </p>
               </div>
             )}
 
             {tipoGatilho === "webhook" && (
-              <div className="flex flex-col gap-1 text-xs text-zinc-600">
+              <div className="flex flex-col gap-1 text-xs text-muted-foreground">
                 <p>
                   Um sistema externo dispara este fluxo por uma URL (POST). O corpo
                   enviado vira a entrada — o campo <code>entrada</code> do JSON, se
                   houver; senão, o corpo inteiro.
                 </p>
                 {modo !== "novo" ? (
-                  <code className="break-all rounded bg-zinc-100 px-2 py-1 text-zinc-800">
+                  <code className="break-all rounded-sm bg-secondary px-2 py-1 text-foreground">
                     {URL_CEREBRO}/webhooks/automacoes/{modo}
                   </code>
                 ) : (
-                  <p className="text-amber-700">
+                  <p className="text-warning">
                     Salve a automação para gerar a URL do webhook.
                   </p>
                 )}
@@ -394,9 +400,10 @@ export function AutomacoesCliente({
             )}
 
             {tipoGatilho !== "manual" && (
-              <label className="flex items-center gap-1.5 text-xs text-zinc-600">
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <input
                   type="checkbox"
+                  className="accent-primary"
                   checked={ativa}
                   onChange={(e) => setAtiva(e.target.checked)}
                 />
@@ -406,7 +413,7 @@ export function AutomacoesCliente({
             )}
           </div>
 
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-muted-foreground">
             Para cada agente, defina suas saídas: o rótulo, quando segui-la, e o
             destino (outro agente — pode ser anterior — ou o fim). Sem saídas = o
             agente encerra a cadeia.
@@ -414,23 +421,24 @@ export function AutomacoesCliente({
 
           <div className="flex flex-col gap-3">
             {agentes.map((a) => (
-              <div key={a.id} className="rounded border border-zinc-200 bg-white p-3">
+              <div
+                key={a.id}
+                className="rounded-md border border-border bg-background p-3"
+              >
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-medium">
+                  <span className="flex items-center gap-2 text-sm font-medium text-foreground">
                     {a.nome}
-                    {a.id === inicio && (
-                      <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">
-                        inicial
-                      </span>
-                    )}
+                    {a.id === inicio && <Badge variant="info">inicial</Badge>}
                   </span>
                   <Button size="xs" variant="outline" onClick={() => addSaida(a.id)}>
-                    + saída
+                    <Plus />
+                    saída
                   </Button>
                 </div>
-                <label className="mb-2 flex items-center gap-1.5 text-xs text-zinc-600">
+                <label className="mb-2 flex items-start gap-1.5 text-xs text-muted-foreground">
                   <input
                     type="checkbox"
+                    className="mt-0.5 accent-primary"
                     checked={pausa[a.id] ?? false}
                     onChange={(e) =>
                       setPausa((p) => ({ ...p, [a.id]: e.target.checked }))
@@ -442,7 +450,7 @@ export function AutomacoesCliente({
                   com o trabalho do agente ao próximo
                 </label>
                 {pausa[a.id] && (saidas[a.id] ?? []).length === 0 && (
-                  <p className="mb-2 text-xs text-amber-700">
+                  <p className="mb-2 text-xs text-warning">
                     ⚠ Este agente espera resposta mas não tem saída: ao responder,
                     o fluxo encerra. Para ele reagir à sua resposta, adicione uma
                     saída (pode apontar para este mesmo agente, criando uma
@@ -450,25 +458,27 @@ export function AutomacoesCliente({
                   </p>
                 )}
                 {(saidas[a.id] ?? []).length === 0 ? (
-                  <p className="text-xs text-zinc-400">Sem saídas (encerra aqui).</p>
+                  <p className="text-xs text-muted-foreground">
+                    Sem saídas (encerra aqui).
+                  </p>
                 ) : (
                   <div className="flex flex-col gap-2">
                     {(saidas[a.id] ?? []).map((s, i) => (
                       <div key={i} className="flex flex-wrap items-center gap-2">
-                        <input
-                          className="w-20 rounded border border-zinc-300 px-2 py-1 text-xs"
+                        <Input
+                          className="h-8 w-20 text-xs"
                           placeholder="rótulo"
                           value={s.rotulo}
                           onChange={(e) => mudarSaida(a.id, i, "rotulo", e.target.value)}
                         />
-                        <input
-                          className="flex-1 rounded border border-zinc-300 px-2 py-1 text-xs"
+                        <Input
+                          className="h-8 flex-1 text-xs"
                           placeholder="quando seguir por aqui"
                           value={s.quando}
                           onChange={(e) => mudarSaida(a.id, i, "quando", e.target.value)}
                         />
-                        <select
-                          className="rounded border border-zinc-300 px-2 py-1 text-xs"
+                        <Select
+                          className="h-8 w-auto text-xs"
                           value={s.destino ?? ""}
                           onChange={(e) =>
                             mudarSaida(a.id, i, "destino", e.target.value || null)
@@ -480,13 +490,14 @@ export function AutomacoesCliente({
                               → {d.nome}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                         <Button
-                          size="xs"
+                          size="icon-sm"
                           variant="ghost"
+                          aria-label="Remover saída"
                           onClick={() => removerSaida(a.id, i)}
                         >
-                          ✕
+                          <X />
                         </Button>
                       </div>
                     ))}
@@ -506,17 +517,20 @@ export function AutomacoesCliente({
       )}
 
       {inicial.length === 0 ? (
-        <p className="text-sm text-zinc-500">Nenhuma automação ainda.</p>
+        <EstadoVazio icone={Zap} titulo="Nenhuma automação ainda.">
+          {souOperador && agentes.length > 0
+            ? "Monte a primeira automação encadeando os agentes do time."
+            : "As automações deste time aparecerão aqui."}
+        </EstadoVazio>
       ) : (
-        <ul className="divide-y divide-zinc-200 rounded border border-zinc-200">
+        <ul className="divide-y divide-border rounded-lg border border-border bg-card">
           {inicial.map((a) => (
             <li key={a.id} className="flex items-center gap-2 p-3">
-              <Link
-                href={`/automacoes/${a.id}`}
-                className="flex-1 text-sm text-blue-600 underline underline-offset-4"
-              >
-                {a.nome}
-                <span className="ml-2 text-xs text-zinc-400">
+              <Link href={`/automacoes/${a.id}`} className="group flex-1">
+                <span className="text-sm font-medium text-foreground group-hover:text-primary group-hover:underline">
+                  {a.nome}
+                </span>
+                <span className="block text-xs text-muted-foreground">
                   {ROTULO_GATILHO[a.tipo_gatilho] ?? a.tipo_gatilho}
                   {a.tipo_gatilho !== "manual" && !a.ativa && " (pausado)"}
                   {" · início: "}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, ListChecks, Pause } from "lucide-react";
 
 import {
   api,
@@ -15,18 +16,25 @@ import {
 } from "@/lib/api";
 import { podeOperar } from "@/lib/permissoes";
 import { rotuloOrigem } from "@/lib/uso";
+import { Aviso } from "@/components/ui/aviso";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EstadoVazio } from "@/components/ui/estado-vazio";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 // Estados em que a execução parou de avançar (não há mais o que acompanhar).
 const ESTADOS_TERMINAIS = ["concluida", "falhou", "aguardando_humano", "cancelada"];
 
-const COR_ESTADO: Record<string, string> = {
-  concluida: "bg-green-100 text-green-800",
-  falhou: "bg-red-100 text-red-800",
-  em_andamento: "bg-amber-100 text-amber-800",
-  aguardando: "bg-zinc-100 text-zinc-600",
-  aguardando_humano: "bg-blue-100 text-blue-800",
-  cancelada: "bg-zinc-200 text-zinc-700",
+// Cada estado vira uma variante do selo (cor + sentido), DS §9.
+type VarianteBadge = "neutral" | "info" | "success" | "warning" | "error";
+const VARIANTE_ESTADO: Record<string, VarianteBadge> = {
+  concluida: "success",
+  falhou: "error",
+  em_andamento: "warning",
+  aguardando: "neutral",
+  aguardando_humano: "info",
+  cancelada: "neutral",
 };
 
 function Passos({
@@ -39,32 +47,31 @@ function Passos({
   return (
     <div className="mt-2 flex flex-col gap-2">
       {execucao.resultado?.erro && (
-        <p className="rounded border border-red-300 bg-red-50 p-2 text-xs text-red-700">
-          Erro: {execucao.resultado.erro}
-        </p>
+        <Aviso className="text-xs">Erro: {execucao.resultado.erro}</Aviso>
       )}
       <ol className="flex flex-col gap-2">
         {execucao.passos.map((p) => (
-          <li key={p.id} className="rounded border border-zinc-200 p-2 text-xs">
-            <div className="mb-1 font-medium">
+          <li
+            key={p.id}
+            className="rounded-md border border-border bg-card p-2 text-xs"
+          >
+            <div className="mb-1 flex flex-wrap items-center gap-2 font-medium text-foreground">
               {p.ordem}. {nomeAgente(p.agente_id)}
               {p.saida?.saida_escolhida && (
-                <span className="ml-2 rounded bg-violet-100 px-1.5 py-0.5 text-violet-700">
-                  saída: {p.saida.saida_escolhida}
-                </span>
+                <Badge variant="info">saída: {p.saida.saida_escolhida}</Badge>
               )}
               {(p.saida?.instrumentos_acionados ?? []).length > 0 && (
-                <span className="ml-2 text-zinc-400">
+                <span className="font-normal text-muted-foreground">
                   🔧 {p.saida!.instrumentos_acionados!.join(", ")}
                 </span>
               )}
             </div>
-            <div className="text-zinc-500">entrada: {p.entrada?.texto}</div>
-            <div className="whitespace-pre-wrap text-zinc-800">
+            <div className="text-muted-foreground">entrada: {p.entrada?.texto}</div>
+            <div className="whitespace-pre-wrap text-foreground">
               saída: {p.saida?.texto}
             </div>
             {(p.saida?.uso ?? []).length > 0 && (
-              <div className="mt-1 text-zinc-400">
+              <div className="mt-1 text-muted-foreground">
                 🪙{" "}
                 {(p.saida?.uso ?? [])
                   .reduce((s, u) => s + u.tokens_entrada, 0)
@@ -80,7 +87,7 @@ function Passos({
         ))}
       </ol>
       {execucao.resultado?.texto && (
-        <div className="rounded bg-zinc-900 p-3 text-xs whitespace-pre-wrap text-zinc-100">
+        <div className="rounded-md bg-foreground p-3 text-xs whitespace-pre-wrap text-background">
           {execucao.resultado.texto}
         </div>
       )}
@@ -210,30 +217,29 @@ export function AutomacaoDetalheCliente({
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl p-8">
+    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
       <Link
         href={`/times/${automacao.time_id}/automacoes`}
-        className="text-sm text-blue-600 underline underline-offset-4"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
-        ← Voltar às automações
+        <ChevronLeft className="size-4" />
+        Voltar às automações
       </Link>
-      <h1 className="mt-2 mb-1 text-2xl font-bold">{automacao.nome}</h1>
-      <p className="mb-6 text-sm text-zinc-500">
+      <h1 className="mt-2 text-2xl font-medium text-foreground">
+        {automacao.nome}
+      </h1>
+      <p className="mb-6 mt-1 text-sm text-muted-foreground">
         Gatilho: {automacao.tipo_gatilho} · início:{" "}
         {nomeAgente(automacao.cadeia?.inicio ?? null)}
       </p>
 
-      {erro && (
-        <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <Aviso className="mb-4">{erro}</Aviso>}
 
       {souOperador && (
-        <div className="mb-6 flex flex-col gap-2 rounded border border-zinc-300 bg-zinc-50 p-4">
-          <label className="text-sm font-medium">Disparar (teste manual)</label>
-          <textarea
-            className="min-h-20 rounded border border-zinc-300 px-2 py-1 text-sm"
+        <div className="mb-6 flex flex-col gap-2 rounded-lg border border-border bg-card p-6">
+          <Label>Disparar (teste manual)</Label>
+          <Textarea
+            className="min-h-20"
             placeholder="Mensagem/tarefa de entrada"
             value={entrada}
             onChange={(e) => setEntrada(e.target.value)}
@@ -245,26 +251,22 @@ export function AutomacaoDetalheCliente({
       )}
 
       {aberta && (
-        <div className="mb-6 rounded border border-zinc-300 p-4">
+        <div className="mb-6 rounded-lg border border-border bg-card p-4">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold">Execução</span>
-            <span
-              className={`rounded px-1.5 py-0.5 text-xs ${
-                COR_ESTADO[aberta.estado] ?? "bg-zinc-100 text-zinc-600"
-              }`}
-            >
+            <span className="text-sm font-medium text-foreground">Execução</span>
+            <Badge variant={VARIANTE_ESTADO[aberta.estado] ?? "neutral"}>
               {aberta.estado}
-            </span>
+            </Badge>
           </div>
           {aberta.estado === "aguardando" && (
-            <p className="mt-2 flex items-center gap-2 text-sm text-zinc-500">
-              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-zinc-400" />
+            <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-muted-foreground" />
               Na fila, aguardando um trabalhador…
             </p>
           )}
           {aberta.estado === "em_andamento" && (
-            <p className="mt-2 flex items-center gap-2 text-sm text-amber-700">
-              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+            <p className="mt-2 flex items-center gap-2 text-sm text-warning">
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-warning" />
               Em andamento — {aberta.passos.length} passo(s) concluído(s), rodando o
               próximo…
             </p>
@@ -273,13 +275,13 @@ export function AutomacaoDetalheCliente({
 
           {aberta.uso &&
             aberta.uso.tokens_entrada + aberta.uso.tokens_saida > 0 && (
-              <div className="mt-3 rounded border border-zinc-200 bg-zinc-50 p-2 text-xs text-zinc-600">
-                <span className="font-medium">Uso (estimado):</span>{" "}
+              <div className="mt-3 rounded-md border border-border bg-background p-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Uso (estimado):</span>{" "}
                 {aberta.uso.tokens_entrada.toLocaleString("pt-BR")} entrada +{" "}
                 {aberta.uso.tokens_saida.toLocaleString("pt-BR")} saída tokens · ~US${" "}
                 {aberta.uso.custo_usd.toFixed(4)}
                 {Object.entries(aberta.uso.por_modelo).map(([modelo, u]) => (
-                  <div key={modelo} className="text-zinc-400">
+                  <div key={modelo} className="text-muted-foreground/70">
                     {modelo}: {u.tokens_entrada.toLocaleString("pt-BR")}+
                     {u.tokens_saida.toLocaleString("pt-BR")} tok · ~US$
                     {u.custo_usd.toFixed(4)}
@@ -287,9 +289,11 @@ export function AutomacaoDetalheCliente({
                 ))}
                 {Object.keys(aberta.uso.por_origem ?? {}).length > 0 && (
                   <div className="mt-1">
-                    <span className="font-medium">Por origem da chave:</span>
+                    <span className="font-medium text-foreground">
+                      Por origem da chave:
+                    </span>
                     {Object.entries(aberta.uso.por_origem).map(([origem, u]) => (
-                      <div key={origem} className="text-zinc-400">
+                      <div key={origem} className="text-muted-foreground/70">
                         {rotuloOrigem(origem)}:{" "}
                         {u.tokens_entrada.toLocaleString("pt-BR")}+
                         {u.tokens_saida.toLocaleString("pt-BR")} tok · ~US$
@@ -298,7 +302,7 @@ export function AutomacaoDetalheCliente({
                     ))}
                   </div>
                 )}
-                <div className="mt-1 text-zinc-400">
+                <div className="mt-1 text-muted-foreground/70">
                   Custo aproximado, apenas informativo — não é cobrança.
                 </div>
               </div>
@@ -311,15 +315,16 @@ export function AutomacaoDetalheCliente({
                 ? automacao.cadeia?.nos?.[ultimo.agente_id]?.saidas ?? []
                 : [];
               return (
-                <div className="mt-3 flex flex-col gap-2 rounded border border-blue-300 bg-blue-50 p-3">
-                  <span className="text-sm font-medium text-blue-900">
-                    ⏸ Aguardando sua decisão
+                <div className="mt-3 flex flex-col gap-2 rounded-md border border-accent-foreground/20 bg-accent p-3">
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-accent-foreground">
+                    <Pause className="size-4" />
+                    Aguardando sua decisão
                   </span>
-                  <p className="text-sm whitespace-pre-wrap text-blue-900">
+                  <p className="text-sm whitespace-pre-wrap text-accent-foreground">
                     {ultimo?.saida?.texto}
                   </p>
-                  <textarea
-                    className="min-h-16 rounded border border-zinc-300 px-2 py-1 text-sm"
+                  <Textarea
+                    className="min-h-16"
                     placeholder={
                       saidasPausa.length > 0
                         ? "Feedback (opcional) — acompanha a decisão que você escolher abaixo"
@@ -330,7 +335,9 @@ export function AutomacaoDetalheCliente({
                   />
                   {saidasPausa.length > 0 ? (
                     <div className="flex flex-col gap-1.5">
-                      <span className="text-xs text-blue-900">Sua decisão:</span>
+                      <span className="text-xs text-accent-foreground">
+                        Sua decisão:
+                      </span>
                       {saidasPausa.map((s) => (
                         <div key={s.rotulo} className="flex items-center gap-2">
                           <Button
@@ -340,7 +347,9 @@ export function AutomacaoDetalheCliente({
                           >
                             {s.rotulo}
                           </Button>
-                          <span className="text-xs text-zinc-500">{s.quando}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {s.quando}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -359,21 +368,23 @@ export function AutomacaoDetalheCliente({
         </div>
       )}
 
-      <h2 className="mb-2 text-sm font-semibold">Execuções anteriores</h2>
+      <h2 className="mb-2 text-sm font-medium text-foreground">
+        Execuções anteriores
+      </h2>
       {execucoes.length === 0 ? (
-        <p className="text-sm text-zinc-500">Nenhuma execução ainda.</p>
+        <EstadoVazio icone={ListChecks} titulo="Nenhuma execução ainda.">
+          Dispare a automação acima para ver o passo a passo aqui.
+        </EstadoVazio>
       ) : (
-        <ul className="divide-y divide-zinc-200 rounded border border-zinc-200">
+        <ul className="divide-y divide-border rounded-lg border border-border bg-card">
           {execucoes.map((e) => (
             <li key={e.id} className="flex items-center gap-2 p-3 text-sm">
-              <span
-                className={`rounded px-1.5 py-0.5 text-xs ${
-                  COR_ESTADO[e.estado] ?? "bg-zinc-100 text-zinc-600"
-                }`}
-              >
+              <Badge variant={VARIANTE_ESTADO[e.estado] ?? "neutral"}>
                 {e.estado}
+              </Badge>
+              <span className="flex-1 truncate text-muted-foreground">
+                {e.entrada?.texto}
               </span>
-              <span className="flex-1 text-zinc-500">{e.entrada?.texto}</span>
               <Button size="sm" variant="outline" onClick={() => abrir(e.id)}>
                 Ver passos
               </Button>
