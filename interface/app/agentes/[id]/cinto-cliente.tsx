@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ChevronLeft, Wrench } from "lucide-react";
 
 import {
   api,
@@ -12,7 +13,11 @@ import {
   type PapelAcesso,
 } from "@/lib/api";
 import { podeOperar } from "@/lib/permissoes";
+import { Aviso } from "@/components/ui/aviso";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EstadoVazio } from "@/components/ui/estado-vazio";
+import { Select } from "@/components/ui/select";
 
 export function CintoCliente({
   agente,
@@ -63,38 +68,30 @@ export function CintoCliente({
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl p-8">
+    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
       <Link
         href={`/times/${agente.time_id}`}
-        className="text-sm text-blue-600 underline underline-offset-4"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
-        ← Voltar ao time
+        <ChevronLeft className="size-4" />
+        Voltar ao time
       </Link>
-      <h1 className="mt-2 mb-1 text-2xl font-bold">
+      <h1 className="mt-2 flex flex-wrap items-center gap-2 text-2xl font-medium text-foreground">
         {agente.nome}
-        <span
-          className={`ml-2 rounded px-1.5 py-0.5 align-middle text-xs ${
-            agente.papel === "lider"
-              ? "bg-amber-100 text-amber-800"
-              : "bg-zinc-100 text-zinc-600"
-          }`}
-        >
+        <Badge variant={agente.papel === "lider" ? "info" : "neutral"}>
           {agente.papel === "lider" ? "Líder" : "Agente"}
-        </span>
+        </Badge>
       </h1>
-      <p className="mb-6 text-sm text-zinc-500">Cinto de instrumentos</p>
+      <p className="mb-6 mt-1 text-sm text-muted-foreground">
+        Cinto de instrumentos
+      </p>
 
-      {erro && (
-        <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <Aviso className="mb-4">{erro}</Aviso>}
 
       {souOperador && (
         <>
-          <div className="mb-6 flex gap-2">
-            <select
-              className="flex-1 rounded border border-zinc-300 px-2 py-1.5 text-sm"
+          <div className="mb-2 flex gap-2">
+            <Select
               value={selecionado}
               onChange={(e) => setSelecionado(e.target.value)}
             >
@@ -108,17 +105,17 @@ export function CintoCliente({
                   {i.nome} ({i.tipo})
                 </option>
               ))}
-            </select>
+            </Select>
             <Button onClick={pendurar} disabled={!selecionado}>
               Pendurar no cinto
             </Button>
           </div>
 
-          <p className="mb-2 text-xs text-zinc-500">
+          <p className="mb-6 text-xs text-muted-foreground">
             Para criar instrumentos, vá em{" "}
             <Link
               href={`/times/${agente.time_id}/instrumentos`}
-              className="text-blue-600 underline underline-offset-4"
+              className="font-medium text-primary hover:underline"
             >
               Instrumentos do time
             </Link>
@@ -128,14 +125,18 @@ export function CintoCliente({
       )}
 
       {cinto.length === 0 ? (
-        <p className="text-sm text-zinc-500">O cinto está vazio.</p>
+        <EstadoVazio icone={Wrench} titulo="O cinto está vazio.">
+          {souOperador
+            ? "Pendure um instrumento do time acima."
+            : "Os instrumentos deste agente aparecerão aqui."}
+        </EstadoVazio>
       ) : (
-        <ul className="divide-y divide-zinc-200 rounded border border-zinc-200">
+        <ul className="divide-y divide-border rounded-lg border border-border bg-card">
           {cinto.map((inst) => (
             <li key={inst.id} className="flex items-center gap-2 p-3">
-              <span className="flex-1 text-sm">
+              <span className="flex flex-1 flex-wrap items-center gap-2 text-sm font-medium text-foreground">
                 {inst.nome}
-                <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs text-zinc-600">
+                <span className="rounded-sm bg-secondary px-1.5 py-0.5 font-mono text-xs font-normal text-muted-foreground">
                   {inst.tipo}
                 </span>
               </span>

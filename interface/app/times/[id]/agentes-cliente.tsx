@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Bot, ChevronLeft, Plus, Settings2, Zap } from "lucide-react";
 
 import {
   api,
@@ -18,7 +19,14 @@ import {
   PROVEDORES,
   ROTULO_PROVEDOR,
 } from "@/lib/modelos";
+import { Aviso } from "@/components/ui/aviso";
+import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { EstadoVazio } from "@/components/ui/estado-vazio";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 type Formulario = {
   nome: string;
@@ -137,73 +145,70 @@ export function AgentesCliente({
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl p-8">
+    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
       <Link
         href={`/organizacoes/${time.organizacao_id}`}
-        className="text-sm text-blue-600 underline underline-offset-4"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
-        ← Voltar à organização
+        <ChevronLeft className="size-4" />
+        Voltar à organização
       </Link>
-      <h1 className="mt-2 mb-1 text-2xl font-bold">{time.nome}</h1>
-      <div className="mb-6 flex items-center gap-3">
-        <p className="text-sm text-zinc-500">Agentes do time</p>
+      <h1 className="mt-2 text-2xl font-medium text-foreground">{time.nome}</h1>
+      <div className="mb-6 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <p className="text-sm text-muted-foreground">Agentes do time</p>
         <Link
           href={`/times/${time.id}/instrumentos`}
-          className="text-sm text-blue-600 underline underline-offset-4"
+          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
         >
-          Instrumentos do time →
+          <Settings2 className="size-3.5" />
+          Instrumentos do time
         </Link>
         <Link
           href={`/times/${time.id}/automacoes`}
-          className="text-sm text-blue-600 underline underline-offset-4"
+          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
         >
-          Automações do time →
+          <Zap className="size-3.5" />
+          Automações do time
         </Link>
       </div>
 
-      {erro && (
-        <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <Aviso className="mb-4">{erro}</Aviso>}
 
       {modo === null && souOperador && (
         <Button className="mb-6" onClick={abrirNovo}>
-          + Novo agente
+          <Plus />
+          Novo agente
         </Button>
       )}
 
       {modo !== null && (
-        <div className="mb-6 flex flex-col gap-3 rounded border border-zinc-300 bg-zinc-50 p-4">
-          <h2 className="font-semibold">
+        <div className="mb-6 flex flex-col gap-3 rounded-lg border border-border bg-card p-6">
+          <h2 className="text-lg font-medium text-foreground">
             {modo === "novo" ? "Novo agente" : "Editar agente"}
           </h2>
 
           <div className="flex flex-wrap gap-3">
-            <label className="flex flex-1 flex-col gap-1 text-xs text-zinc-600">
+            <Label className="flex-1 flex-col items-start gap-1">
               Nome
-              <input
-                className="rounded border border-zinc-300 px-2 py-1 text-sm"
+              <Input
                 value={form.nome}
                 onChange={(e) => campo("nome", e.target.value)}
                 autoFocus
               />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-600">
+            </Label>
+            <Label className="flex-col items-start gap-1">
               Papel
-              <select
-                className="rounded border border-zinc-300 px-2 py-1 text-sm"
+              <Select
                 value={form.papel}
                 onChange={(e) => campo("papel", e.target.value as Papel)}
               >
                 <option value="agente">Agente</option>
                 <option value="lider">Líder</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-600">
+              </Select>
+            </Label>
+            <Label className="flex-col items-start gap-1">
               Modelo de IA
-              <select
-                className="rounded border border-zinc-300 px-2 py-1 text-sm"
+              <Select
                 value={form.modelo_ia}
                 onChange={(e) => campo("modelo_ia", e.target.value)}
               >
@@ -217,8 +222,8 @@ export function AgentesCliente({
                     ))}
                   </optgroup>
                 ))}
-              </select>
-            </label>
+              </Select>
+            </Label>
           </div>
 
           {(
@@ -229,17 +234,14 @@ export function AgentesCliente({
               ["soul_md", "soul.md — personalidade, tom, jeito de falar"],
             ] as const
           ).map(([chave, rotulo]) => (
-            <label
-              key={chave}
-              className="flex flex-col gap-1 text-xs text-zinc-600"
-            >
+            <Label key={chave} className="flex-col items-start gap-1">
               {rotulo}
-              <textarea
-                className="min-h-24 rounded border border-zinc-300 px-2 py-1 font-mono text-sm"
+              <Textarea
+                className="min-h-24 font-mono"
                 value={form[chave]}
                 onChange={(e) => campo(chave, e.target.value)}
               />
-            </label>
+            </Label>
           ))}
 
           <div className="flex gap-2">
@@ -252,24 +254,24 @@ export function AgentesCliente({
       )}
 
       {inicial.length === 0 ? (
-        <p className="text-sm text-zinc-500">Nenhum agente ainda.</p>
+        <EstadoVazio icone={Bot} titulo="Nenhum agente ainda.">
+          {souOperador
+            ? "Crie o primeiro agente para montar este time."
+            : "Os agentes deste time aparecerão aqui."}
+        </EstadoVazio>
       ) : (
-        <ul className="divide-y divide-zinc-200 rounded border border-zinc-200">
+        <ul className="divide-y divide-border rounded-lg border border-border bg-card">
           {inicial.map((a) => (
             <li key={a.id} className="flex items-center gap-2 p-3">
-              <span className="flex-1 text-sm">
+              <span className="flex flex-1 flex-wrap items-center gap-2 text-sm font-medium text-foreground">
                 {a.nome}
-                <span
-                  className={`ml-2 rounded px-1.5 py-0.5 text-xs ${
-                    a.papel === "lider"
-                      ? "bg-amber-100 text-amber-800"
-                      : "bg-zinc-100 text-zinc-600"
-                  }`}
-                >
+                <Badge variant={a.papel === "lider" ? "info" : "neutral"}>
                   {a.papel === "lider" ? "Líder" : "Agente"}
-                </span>
+                </Badge>
                 {a.modelo_ia && (
-                  <span className="ml-2 text-xs text-zinc-400">{a.modelo_ia}</span>
+                  <span className="font-normal text-xs text-muted-foreground">
+                    {a.modelo_ia}
+                  </span>
                 )}
               </span>
               <Link
