@@ -737,8 +737,8 @@ Conectar MCP (adiado da frente 5.6) + demais instrumentos do `PRODUTO.md` §13, 
 **Escopo desta fase (decisão do maestro 2026-06-06): MCP + Banco de dados direto (SQL) + Gerar imagem.** Contas Google/MS (OAuth) e multimídia "de entendimento" (ler imagem/PDF, transcrever áudio) ficam para **fases próprias** depois (OAuth é grande; multimídia é entrada multimodal, outro mecanismo). Ritmo: MCP primeiro, sozinho.
 
 - **MCP ✅** (commit na branch): novo `instrumentos/mcp.py` (`conectar_mcp`). O encaixe ganhou `expandir_ferramentas(config)` opcional (`base.py`): um instrumento MCP expõe VÁRIAS ferramentas; o motor (`agente.py` `_ferramentas_de_instrumento`) usa todas no cinto, mantendo o caminho de ferramenta única para os demais. As chamadas assíncronas do MCP são embrulhadas SÍNCRONAS (`asyncio.run`, conexão por chamada) — motor síncrono intocado. Transporte `streamable_http` (padrão) ou `sse`; token de auth é campo secreto (cofre 7-B → `Authorization: Bearer`). "Acionar" testa a conexão e lista as ferramentas. Deps `langchain-mcp-adapters`+`mcp`. UI sem mudança (catálogo dinâmico). 68 testes pytest verdes (6 novos; conexão mockada — teste LIVE precisa de servidor MCP real).
-- **Banco de dados direto (SQL)** ⏳ a seguir.
-- **Gerar imagem** ⏳ depois.
+- **Banco de dados direto (SQL) ✅** (commit na branch): `instrumentos/sql.py` (`banco_sql`). Config = componentes de conexão (host/porta/banco/usuário públicos + **senha secreta** no cofre 7-B + modo `ssl`); a IA passa SQL + parâmetros nomeados (`:nome`, evitam injeção). SELECT → linhas (teto 100); escrita → linhas afetadas (commit). Conexão por chamada (NullPool, `connect_timeout`). Falha de conexão → falha do instrumento (retentável); erro de SQL → volta à IA como dado. PostgreSQL via `psycopg` (campo `tipo_banco` pronto para outros). 74 testes pytest verdes (6 novos, contra o Postgres real). UI sem mudança.
+- **Gerar imagem** ⏳ a seguir (último do escopo desta fase).
 
 ## FASE final — Implantação em produção
 Railway, domínio definitivo, teste de ponta a ponta.
