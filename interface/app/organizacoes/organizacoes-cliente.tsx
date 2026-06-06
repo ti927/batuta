@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Building2, KeyRound } from "lucide-react";
 
 import {
   api,
@@ -11,7 +12,10 @@ import {
   type PapelAcesso,
 } from "@/lib/api";
 import { podeAdmin } from "@/lib/permissoes";
+import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
+import { EstadoVazio } from "@/components/ui/estado-vazio";
+import { Input } from "@/components/ui/input";
 
 export function OrganizacoesCliente({
   inicial,
@@ -69,28 +73,24 @@ export function OrganizacoesCliente({
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl p-8">
-      <div className="mb-6 flex items-center gap-3">
-        <h1 className="text-2xl font-bold">Organizações</h1>
+    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+      <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <h1 className="text-2xl font-medium text-foreground">Organizações</h1>
         {adminConsultoria && (
           <Link
             href="/chaves-consultoria"
-            className="text-sm text-blue-600 underline underline-offset-4"
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
           >
-            Chave-mãe da consultoria →
+            <KeyRound className="size-3.5" />
+            Chave-mãe da consultoria
           </Link>
         )}
       </div>
 
-      {erro && (
-        <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <Aviso className="mb-4">{erro}</Aviso>}
 
       <div className="mb-6 flex gap-2">
-        <input
-          className="flex-1 rounded border border-zinc-300 px-3 py-1.5 text-sm"
+        <Input
           placeholder="Nome da nova organização"
           value={nomeNovo}
           onChange={(e) => setNomeNovo(e.target.value)}
@@ -100,15 +100,17 @@ export function OrganizacoesCliente({
       </div>
 
       {inicial.length === 0 ? (
-        <p className="text-sm text-zinc-500">Nenhuma organização ainda.</p>
+        <EstadoVazio icone={Building2} titulo="Você ainda não tem organizações.">
+          Crie a primeira acima para começar.
+        </EstadoVazio>
       ) : (
-        <ul className="divide-y divide-zinc-200 rounded border border-zinc-200">
+        <ul className="divide-y divide-border rounded-lg border border-border bg-card">
           {inicial.map((org) => (
             <li key={org.id} className="flex items-center gap-2 p-3">
               {editandoId === org.id ? (
                 <>
-                  <input
-                    className="flex-1 rounded border border-zinc-300 px-2 py-1 text-sm"
+                  <Input
+                    className="h-8 flex-1"
                     value={nomeEdicao}
                     onChange={(e) => setNomeEdicao(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && salvarEdicao(org.id)}
@@ -129,7 +131,7 @@ export function OrganizacoesCliente({
                 <>
                   <Link
                     href={`/organizacoes/${org.id}`}
-                    className="flex-1 text-sm text-blue-600 underline underline-offset-4"
+                    className="flex-1 text-sm font-medium text-foreground hover:text-primary hover:underline"
                   >
                     {org.nome}
                   </Link>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ChevronLeft, KeyRound, Users, UsersRound } from "lucide-react";
 
 import {
   api,
@@ -12,7 +13,10 @@ import {
   type Time,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
+import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
+import { EstadoVazio } from "@/components/ui/estado-vazio";
+import { Input } from "@/components/ui/input";
 
 export function TimesCliente({
   organizacao,
@@ -81,50 +85,49 @@ export function TimesCliente({
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl p-8">
+    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
       <Link
         href="/organizacoes"
-        className="text-sm text-blue-600 underline underline-offset-4"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
-        ← Organizações
+        <ChevronLeft className="size-4" />
+        Organizações
       </Link>
-      <h1 className="mt-2 mb-1 text-2xl font-bold">{organizacao.nome}</h1>
-      <div className="mb-6 flex items-center gap-3">
-        <p className="text-sm text-zinc-500">Times da organização</p>
+      <h1 className="mt-2 text-2xl font-medium text-foreground">
+        {organizacao.nome}
+      </h1>
+      <div className="mb-6 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <p className="text-sm text-muted-foreground">Times da organização</p>
         {souAdmin && (
           <>
             <Link
               href={`/organizacoes/${organizacao.id}/acesso`}
-              className="text-sm text-blue-600 underline underline-offset-4"
+              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
             >
-              Gerir acesso →
+              <UsersRound className="size-3.5" />
+              Gerir acesso
             </Link>
             <Link
               href={`/organizacoes/${organizacao.id}/chaves`}
-              className="text-sm text-blue-600 underline underline-offset-4"
+              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
             >
-              Chaves de IA →
+              <KeyRound className="size-3.5" />
+              Chaves de IA
             </Link>
           </>
         )}
       </div>
 
-      {erro && (
-        <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <Aviso className="mb-4">{erro}</Aviso>}
 
       {souAdmin && (
-        <div className="mb-6 flex flex-col gap-2 rounded border border-zinc-200 p-3">
-          <input
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm"
+        <div className="mb-6 flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
+          <Input
             placeholder="Nome do novo time"
             value={nomeNovo}
             onChange={(e) => setNomeNovo(e.target.value)}
           />
-          <input
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm"
+          <Input
             placeholder="Descrição (opcional)"
             value={descNova}
             onChange={(e) => setDescNova(e.target.value)}
@@ -137,21 +140,25 @@ export function TimesCliente({
       )}
 
       {inicial.length === 0 ? (
-        <p className="text-sm text-zinc-500">Nenhum time ainda.</p>
+        <EstadoVazio icone={Users} titulo="Nenhum time ainda.">
+          {souAdmin
+            ? "Crie o primeiro time acima para começar."
+            : "Os times desta organização aparecerão aqui."}
+        </EstadoVazio>
       ) : (
-        <ul className="divide-y divide-zinc-200 rounded border border-zinc-200">
+        <ul className="divide-y divide-border rounded-lg border border-border bg-card">
           {inicial.map((time) => (
             <li key={time.id} className="p-3">
               {editandoId === time.id ? (
                 <div className="flex flex-col gap-2">
-                  <input
-                    className="rounded border border-zinc-300 px-2 py-1 text-sm"
+                  <Input
+                    className="h-8"
                     value={nomeEdicao}
                     onChange={(e) => setNomeEdicao(e.target.value)}
                     autoFocus
                   />
-                  <input
-                    className="rounded border border-zinc-300 px-2 py-1 text-sm"
+                  <Input
+                    className="h-8"
                     placeholder="Descrição (opcional)"
                     value={descEdicao}
                     onChange={(e) => setDescEdicao(e.target.value)}
@@ -172,13 +179,12 @@ export function TimesCliente({
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <Link
-                    href={`/times/${time.id}`}
-                    className="flex-1 text-blue-600 underline underline-offset-4"
-                  >
-                    <span className="text-sm">{time.nome}</span>
+                  <Link href={`/times/${time.id}`} className="group flex-1">
+                    <span className="text-sm font-medium text-foreground group-hover:text-primary group-hover:underline">
+                      {time.nome}
+                    </span>
                     {time.descricao && (
-                      <span className="block text-xs text-zinc-500 no-underline">
+                      <span className="block text-xs text-muted-foreground">
                         {time.descricao}
                       </span>
                     )}

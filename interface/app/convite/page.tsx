@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { buttonVariants } from "@/components/ui/button";
 import { criarClienteServidor } from "@/lib/supabase/cliente-servidor";
 import { ConviteCliente } from "./convite-cliente";
 
@@ -14,17 +15,14 @@ export default async function ConvitePage() {
 
   if (!user?.email) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
-        <h1 className="text-2xl font-bold">Convite</h1>
-        <p className="max-w-sm text-sm text-zinc-600">
+      <main className="flex min-h-screen flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+        <h1 className="text-xl font-medium text-foreground">Convite</h1>
+        <p className="max-w-sm text-sm text-muted-foreground">
           Abra o link do convite que você recebeu por e-mail para continuar. Se
           já tem conta, faça login.
         </p>
-        <Link
-          href="/login"
-          className="text-sm text-blue-600 underline underline-offset-4"
-        >
-          Ir para o login →
+        <Link href="/login" className={buttonVariants({ variant: "outline" })}>
+          Ir para o login
         </Link>
       </main>
     );

@@ -12,5 +12,10 @@ export function StatusCerebro() {
       .catch(() => setMensagem("não foi possível falar com o cérebro"));
   }, []);
 
-  return <p className="text-sm text-zinc-600">Cérebro diz: {mensagem}</p>;
+  return (
+    <p className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+      <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />
+      Cérebro: {mensagem}
+    </p>
+  );
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ChevronLeft, Plus, Wrench } from "lucide-react";
 
 import {
   api,
@@ -13,7 +14,13 @@ import {
   type Time,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
+import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
+import { EstadoVazio } from "@/components/ui/estado-vazio";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 // Tenta interpretar um texto como objeto JSON. Devolve [valor, null] ou
 // [null, mensagemDeErro]. Vazio vira objeto vazio.
@@ -156,46 +163,44 @@ export function InstrumentosCliente({
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl p-8">
+    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
       <Link
         href={`/times/${time.id}`}
-        className="text-sm text-blue-600 underline underline-offset-4"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
-        ← Voltar ao time
+        <ChevronLeft className="size-4" />
+        Voltar ao time
       </Link>
-      <h1 className="mt-2 mb-1 text-2xl font-bold">{time.nome}</h1>
-      <p className="mb-6 text-sm text-zinc-500">Instrumentos do time</p>
+      <h1 className="mt-2 text-2xl font-medium text-foreground">{time.nome}</h1>
+      <p className="mb-6 mt-1 text-sm text-muted-foreground">
+        Instrumentos do time
+      </p>
 
-      {erro && (
-        <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <Aviso className="mb-4">{erro}</Aviso>}
 
       {modo === null && souOperador && (
         <Button className="mb-6" onClick={abrirNovo} disabled={tipos.length === 0}>
-          + Novo instrumento
+          <Plus />
+          Novo instrumento
         </Button>
       )}
 
       {modo !== null && (
-        <div className="mb-6 flex flex-col gap-3 rounded border border-zinc-300 bg-zinc-50 p-4">
-          <h2 className="font-semibold">
+        <div className="mb-6 flex flex-col gap-3 rounded-lg border border-border bg-card p-6">
+          <h2 className="text-lg font-medium text-foreground">
             {modo === "novo" ? "Novo instrumento" : "Editar instrumento"}
           </h2>
-          <label className="flex flex-col gap-1 text-xs text-zinc-600">
+          <Label className="flex-col items-start gap-1">
             Nome
-            <input
-              className="rounded border border-zinc-300 px-2 py-1 text-sm"
+            <Input
               value={nome}
               onChange={(e) => setNome(e.target.value)}
               autoFocus
             />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-zinc-600">
+          </Label>
+          <Label className="flex-col items-start gap-1">
             Tipo
-            <select
-              className="rounded border border-zinc-300 px-2 py-1 text-sm disabled:opacity-60"
+            <Select
               value={tipoSel}
               onChange={(e) => setTipoSel(e.target.value)}
               disabled={modo !== "novo"}
@@ -205,10 +210,10 @@ export function InstrumentosCliente({
                   {t.nome_exibicao}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </Label>
           {tipoAtual && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground">
               {tipoAtual.descricao}
               {camposDoEsquema(tipoAtual).length > 0 && (
                 <>
@@ -223,33 +228,35 @@ export function InstrumentosCliente({
             </p>
           )}
           {tipoAtual && tipoAtual.campos_secretos.length > 0 && (
-            <p className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
-              Campos secretos (guardados cifrados, nunca reexibidos):{" "}
-              <span className="font-mono">
-                {tipoAtual.campos_secretos.join(", ")}
+            <Aviso variant="atencao" className="text-xs">
+              <span>
+                Campos secretos (guardados cifrados, nunca reexibidos):{" "}
+                <span className="font-mono">
+                  {tipoAtual.campos_secretos.join(", ")}
+                </span>
+                .
+                {instEditando &&
+                  Object.keys(instEditando.segredos).length > 0 && (
+                    <>
+                      {" "}
+                      Já guardados:{" "}
+                      {Object.entries(instEditando.segredos)
+                        .map(([c, u]) => `${c} (••••${u})`)
+                        .join(", ")}
+                      . Reinforme um campo só se quiser trocá-lo.
+                    </>
+                  )}
               </span>
-              .
-              {instEditando &&
-                Object.keys(instEditando.segredos).length > 0 && (
-                  <>
-                    {" "}
-                    Já guardados:{" "}
-                    {Object.entries(instEditando.segredos)
-                      .map(([c, u]) => `${c} (••••${u})`)
-                      .join(", ")}
-                    . Reinforme um campo só se quiser trocá-lo.
-                  </>
-                )}
-            </p>
+            </Aviso>
           )}
-          <label className="flex flex-col gap-1 text-xs text-zinc-600">
+          <Label className="flex-col items-start gap-1">
             Configuração (JSON)
-            <textarea
-              className="min-h-32 rounded border border-zinc-300 px-2 py-1 font-mono text-sm"
+            <Textarea
+              className="min-h-32 font-mono"
               value={configTexto}
               onChange={(e) => setConfigTexto(e.target.value)}
             />
-          </label>
+          </Label>
           <div className="flex gap-2">
             <Button onClick={salvar}>Salvar</Button>
             <Button variant="ghost" onClick={() => setModo(null)}>
@@ -260,15 +267,19 @@ export function InstrumentosCliente({
       )}
 
       {inicial.length === 0 ? (
-        <p className="text-sm text-zinc-500">Nenhum instrumento ainda.</p>
+        <EstadoVazio icone={Wrench} titulo="Nenhum instrumento ainda.">
+          {souOperador
+            ? "Crie o primeiro instrumento para este time."
+            : "Os instrumentos deste time aparecerão aqui."}
+        </EstadoVazio>
       ) : (
-        <ul className="divide-y divide-zinc-200 rounded border border-zinc-200">
+        <ul className="divide-y divide-border rounded-lg border border-border bg-card">
           {inicial.map((inst) => (
             <li key={inst.id} className="flex flex-col gap-2 p-3">
               <div className="flex items-center gap-2">
-                <span className="flex-1 text-sm">
+                <span className="flex flex-1 flex-wrap items-center gap-2 text-sm font-medium text-foreground">
                   {inst.nome}
-                  <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs text-zinc-600">
+                  <span className="rounded-sm bg-secondary px-1.5 py-0.5 font-mono text-xs font-normal text-muted-foreground">
                     {inst.tipo}
                   </span>
                 </span>
@@ -302,15 +313,15 @@ export function InstrumentosCliente({
               </div>
 
               {testandoId === inst.id && (
-                <div className="flex flex-col gap-2 rounded border border-zinc-200 bg-white p-3">
-                  <label className="flex flex-col gap-1 text-xs text-zinc-600">
+                <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-3">
+                  <Label className="flex-col items-start gap-1">
                     Argumentos (JSON)
-                    <textarea
-                      className="min-h-20 rounded border border-zinc-300 px-2 py-1 font-mono text-sm"
+                    <Textarea
+                      className="min-h-20 font-mono"
                       value={argsTexto}
                       onChange={(e) => setArgsTexto(e.target.value)}
                     />
-                  </label>
+                  </Label>
                   <div className="flex gap-2">
                     <Button size="sm" onClick={() => acionar(inst)}>
                       Acionar
@@ -324,7 +335,7 @@ export function InstrumentosCliente({
                     </Button>
                   </div>
                   {resultado && (
-                    <pre className="max-h-72 overflow-auto rounded bg-zinc-900 p-3 text-xs text-zinc-100">
+                    <pre className="max-h-72 overflow-auto rounded-md bg-foreground p-3 text-xs text-background">
                       {resultado}
                     </pre>
                   )}

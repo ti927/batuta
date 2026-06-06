@@ -5,7 +5,10 @@ import { useState } from "react";
 
 import { api, ErroDaApi } from "@/lib/api";
 import { criarClienteNavegador } from "@/lib/supabase/cliente-navegador";
+import { SimboloBatuta } from "@/components/logo";
+import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 // O convidado já está logado (via link do e-mail). Aqui ele define a senha
 // (o convite nasce sem senha — ela é necessária para logar de novo depois) e
@@ -54,33 +57,30 @@ export function ConviteCliente({ email }: { email: string }) {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-8">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold">Bem-vindo ao Batuta</h1>
-        <p className="mt-1 text-sm text-zinc-500">
+    <main className="flex min-h-screen flex-1 flex-col items-center justify-center gap-6 p-8">
+      <div className="flex flex-col items-center gap-2 text-center">
+        <SimboloBatuta className="size-8" />
+        <h1 className="text-xl font-medium text-foreground">
+          Bem-vindo ao Batuta
+        </h1>
+        <p className="text-sm text-muted-foreground">
           Defina uma senha para concluir seu acesso.
         </p>
-        <p className="mt-1 text-xs text-zinc-400">{email}</p>
+        <p className="text-xs text-muted-foreground/70">{email}</p>
       </div>
 
       <div className="w-full max-w-sm">
-        {erro && (
-          <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
-            {erro}
-          </p>
-        )}
+        {erro && <Aviso className="mb-4">{erro}</Aviso>}
         <div className="flex flex-col gap-3">
-          <input
+          <Input
             type="password"
-            className="rounded border border-zinc-300 px-3 py-2 text-sm"
             placeholder="Nova senha"
             value={senha}
             autoComplete="new-password"
             onChange={(e) => setSenha(e.target.value)}
           />
-          <input
+          <Input
             type="password"
-            className="rounded border border-zinc-300 px-3 py-2 text-sm"
             placeholder="Confirme a senha"
             value={confirma}
             autoComplete="new-password"

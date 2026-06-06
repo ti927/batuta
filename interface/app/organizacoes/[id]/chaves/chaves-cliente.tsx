@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 
 import { type ChaveApiLer, type Organizacao, type PapelAcesso } from "@/lib/api";
 import { GestaoChaves } from "@/components/gestao-chaves";
+import { Aviso } from "@/components/ui/aviso";
 
 export function ChavesCliente({
   organizacao,
@@ -17,17 +19,18 @@ export function ChavesCliente({
   const souAdmin = meuPapel === "admin";
 
   return (
-    <main className="mx-auto w-full max-w-3xl p-8">
-      <div className="mb-1 text-sm">
-        <Link
-          href={`/organizacoes/${organizacao.id}`}
-          className="text-blue-600 underline underline-offset-4"
-        >
-          ← {organizacao.nome}
-        </Link>
-      </div>
-      <h1 className="mb-2 text-2xl font-bold">Chaves de IA</h1>
-      <p className="mb-6 text-sm text-zinc-500">
+    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+      <Link
+        href={`/organizacoes/${organizacao.id}`}
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ChevronLeft className="size-4" />
+        {organizacao.nome}
+      </Link>
+      <h1 className="mb-2 mt-2 text-2xl font-medium text-foreground">
+        Chaves de IA
+      </h1>
+      <p className="mb-6 text-sm text-muted-foreground">
         As chaves de API que esta organização usa. Quando não há chave própria, o
         Batuta usa a chave-mãe da consultoria. O valor nunca é reexibido depois de
         salvo.
@@ -39,10 +42,10 @@ export function ChavesCliente({
           chavesIniciais={chaves}
         />
       ) : (
-        <p className="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-800">
+        <Aviso variant="atencao">
           Somente administradores desta organização podem ver e gerir as chaves de
           IA.
-        </p>
+        </Aviso>
       )}
     </main>
   );

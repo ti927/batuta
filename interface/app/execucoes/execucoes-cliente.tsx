@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ChevronLeft, ListChecks } from "lucide-react";
 
 import {
   api,
@@ -13,15 +14,20 @@ import {
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { rotuloOrigem } from "@/lib/uso";
+import { Aviso } from "@/components/ui/aviso";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EstadoVazio } from "@/components/ui/estado-vazio";
 
-const COR_ESTADO: Record<string, string> = {
-  aguardando: "bg-zinc-100 text-zinc-600",
-  em_andamento: "bg-amber-100 text-amber-800",
-  aguardando_humano: "bg-blue-100 text-blue-800",
-  concluida: "bg-green-100 text-green-800",
-  falhou: "bg-red-100 text-red-800",
-  cancelada: "bg-zinc-200 text-zinc-700",
+// Cada estado vira uma variante do selo (cor + sentido), DS §9.
+type VarianteBadge = "neutral" | "info" | "success" | "warning" | "error";
+const VARIANTE_ESTADO: Record<string, VarianteBadge> = {
+  aguardando: "neutral",
+  em_andamento: "warning",
+  aguardando_humano: "info",
+  concluida: "success",
+  falhou: "error",
+  cancelada: "neutral",
 };
 
 // Estados já encerrados: podem ser apagados, mas não cancelados.
@@ -86,52 +92,53 @@ export function ExecucoesCliente({
   }
 
   return (
-    <main className="mx-auto w-full max-w-4xl p-8">
+    <main className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6">
       <Link
         href="/"
-        className="text-sm text-blue-600 underline underline-offset-4"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
-        ← Início
+        <ChevronLeft className="size-4" />
+        Início
       </Link>
-      <h1 className="mt-2 mb-1 text-2xl font-bold">Execuções</h1>
-      <p className="mb-6 text-sm text-zinc-500">
+      <h1 className="mt-2 text-2xl font-medium text-foreground">Execuções</h1>
+      <p className="mb-6 mt-1 text-sm text-muted-foreground">
         Todas as execuções, de todas as automações. Cancele as que estão em curso
         ou paradas; apague as já encerradas.
       </p>
 
       {uso && uso.tokens_entrada + uso.tokens_saida > 0 && (
-        <div className="mb-6 rounded border border-zinc-200 bg-zinc-50 p-3 text-sm">
-          <p className="mb-1 font-medium">
+        <div className="mb-6 rounded-lg border border-border bg-card p-4 text-sm">
+          <p className="mb-1 font-medium text-foreground">
             Uso por origem da chave{" "}
-            <span className="text-xs font-normal text-zinc-500">
+            <span className="text-xs font-normal text-muted-foreground">
               (estimado, informativo — não é cobrança)
             </span>
           </p>
-          <p className="mb-2 text-xs text-zinc-500">
+          <p className="mb-2 text-xs text-muted-foreground">
             Total: {uso.tokens_entrada.toLocaleString("pt-BR")} entrada +{" "}
             {uso.tokens_saida.toLocaleString("pt-BR")} saída tokens · ~US$
             {uso.custo_usd.toFixed(4)}
           </p>
-          <ul className="divide-y divide-zinc-200 rounded border border-zinc-200 bg-white">
+          <ul className="divide-y divide-border rounded-md border border-border bg-background">
             {Object.entries(uso.por_origem).map(([origem, u]) => (
               <li key={origem} className="flex items-center gap-2 p-2 text-xs">
-                <span className="flex-1">{rotuloOrigem(origem)}</span>
-                <span className="text-zinc-500">
+                <span className="flex-1 text-foreground">
+                  {rotuloOrigem(origem)}
+                </span>
+                <span className="text-muted-foreground">
                   {u.tokens_entrada.toLocaleString("pt-BR")}+
                   {u.tokens_saida.toLocaleString("pt-BR")} tok
                 </span>
-                <span className="font-medium">~US${u.custo_usd.toFixed(4)}</span>
+                <span className="font-medium text-foreground">
+                  ~US${u.custo_usd.toFixed(4)}
+                </span>
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {erro && (
-        <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <Aviso className="mb-4">{erro}</Aviso>}
 
       <div className="mb-4 flex flex-wrap gap-2">
         {FILTROS.map((f) => {
@@ -140,45 +147,40 @@ export function ExecucoesCliente({
               ? inicial.length
               : inicial.filter((e) => e.estado === f.valor).length;
           return (
-            <button
+            <Button
               key={f.valor}
+              size="sm"
+              variant={filtro === f.valor ? "default" : "outline"}
               onClick={() => setFiltro(f.valor)}
-              className={`rounded border px-2 py-1 text-xs ${
-                filtro === f.valor
-                  ? "border-zinc-800 bg-zinc-800 text-white"
-                  : "border-zinc-300 text-zinc-600 hover:bg-zinc-100"
-              }`}
             >
               {f.rotulo} ({n})
-            </button>
+            </Button>
           );
         })}
       </div>
 
       {lista.length === 0 ? (
-        <p className="text-sm text-zinc-500">Nenhuma execução neste filtro.</p>
+        <EstadoVazio icone={ListChecks} titulo="Nenhuma execução neste filtro.">
+          Troque o filtro acima ou dispare uma automação.
+        </EstadoVazio>
       ) : (
-        <ul className="divide-y divide-zinc-200 rounded border border-zinc-200">
+        <ul className="divide-y divide-border rounded-lg border border-border bg-card">
           {lista.map((e) => {
             const encerrada = ENCERRADOS.includes(e.estado);
             const papel = papeis[e.organizacao_id];
             return (
               <li key={e.id} className="flex items-center gap-3 p-3 text-sm">
-                <span
-                  className={`rounded px-1.5 py-0.5 text-xs ${
-                    COR_ESTADO[e.estado] ?? "bg-zinc-100 text-zinc-600"
-                  }`}
-                >
+                <Badge variant={VARIANTE_ESTADO[e.estado] ?? "neutral"}>
                   {e.estado}
-                </span>
+                </Badge>
                 <div className="min-w-0 flex-1">
                   <Link
                     href={`/automacoes/${e.automacao_id}`}
-                    className="text-blue-600 underline underline-offset-4"
+                    className="font-medium text-foreground hover:text-primary hover:underline"
                   >
                     {e.automacao_nome}
                   </Link>
-                  <div className="truncate text-xs text-zinc-400">
+                  <div className="truncate text-xs text-muted-foreground">
                     {e.entrada?.texto ?? "—"}
                   </div>
                 </div>
