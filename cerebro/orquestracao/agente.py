@@ -45,24 +45,13 @@ def _nome_de_ferramenta(inst: Instrumento, tipo_fallback: str) -> str:
     return f"{base or tipo_fallback}_{inst.id.hex[:8]}"
 
 
-def _ferramenta_de_instrumento(
-    inst: Instrumento, falhas: list[str]
-) -> StructuredTool | None:
-    """Transforma um instrumento do cinto numa ferramenta da IA pelo encaixe.
-    Devolve None se o tipo for desconhecido (instrumento ignorado).
+def _ferramenta_unica(inst, tipo, config, falhas: list[str]) -> StructuredTool:
+    """A ferramenta única derivada do `executar` de um instrumento (o caso comum).
 
     Em falha definitiva do instrumento (esgotadas as retentativas, ou falha não
     retentável), registra em `falhas` e informa o erro à IA. A orquestração, ao
     fim do laço, transforma isso numa falha visível — sem depender da narração
     do agente (PRODUTO §16: "nunca morre em silêncio")."""
-    tipo = encaixe.obter_tipo(inst.tipo)
-    if tipo is None:
-        return None
-    # Fase 7-B: mescla os segredos decifrados (anexados ao carregar o cinto) na
-    # config; ficam só em memória, nunca no banco em claro.
-    config = tipo.Config.model_validate(
-        {**(inst.configuracao or {}), **getattr(inst, "segredos_decifrados", {})}
-    )
 
     def executar(**kwargs) -> str:
         args = tipo.Args.model_validate(kwargs)
@@ -82,6 +71,26 @@ def _ferramenta_de_instrumento(
     )
 
 
+def _ferramentas_de_instrumento(inst: Instrumento, falhas: list[str]) -> list:
+    """As ferramentas que um instrumento do cinto oferece à IA pelo encaixe.
+
+    O caso comum é UMA ferramenta (derivada do `executar`). Um instrumento
+    MULTI-FERRAMENTA (MCP) devolve VÁRIAS, via `expandir_ferramentas`. Tipo
+    desconhecido → nenhuma (instrumento ignorado)."""
+    tipo = encaixe.obter_tipo(inst.tipo)
+    if tipo is None:
+        return []
+    # Fase 7-B: mescla os segredos decifrados (anexados ao carregar o cinto) na
+    # config; ficam só em memória, nunca no banco em claro.
+    config = tipo.Config.model_validate(
+        {**(inst.configuracao or {}), **getattr(inst, "segredos_decifrados", {})}
+    )
+    expandidas = tipo.expandir_ferramentas(config)
+    if expandidas is not None:
+        return expandidas
+    return [_ferramenta_unica(inst, tipo, config, falhas)]
+
+
 def executar_agente(
     agente: Agente, cinto: list[Instrumento], entrada: str
 ) -> dict:
@@ -92,9 +101,7 @@ def executar_agente(
     a execução então fica num estado de falha claro e visível (Tarefa 5.1)."""
     modelo = construir_modelo(agente.modelo_ia)
     falhas: list[str] = []
-    ferramentas = [
-        f for f in (_ferramenta_de_instrumento(i, falhas) for i in cinto) if f is not None
-    ]
+    ferramentas = [f for i in cinto for f in _ferramentas_de_instrumento(i, falhas)]
     app = create_react_agent(modelo, ferramentas, prompt=montar_instrucoes(agente))
     resultado = app.invoke({"messages": [{"role": "user", "content": entrada}]})
 
