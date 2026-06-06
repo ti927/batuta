@@ -43,14 +43,14 @@ from modelos import (
     Time,
     Usuario,
 )
-from chaves import resolver_chave_e_origem_por_time
+from chaves import resolver_chaves_por_time
 from orquestracao.cadeia import (
     _DESTINOS_FIM,
     _escolher_saida,
     executar_cadeia,
     validar_cadeia,
 )
-from orquestracao.llm import usar_chave
+from orquestracao.llm import usar_chaves
 from orquestracao.disparo import (
     _aplicar_resultado,
     _fazer_registrador,
@@ -214,10 +214,10 @@ def responder(
             status.HTTP_409_CONFLICT, "Esta execução não está aguardando resposta."
         )
 
-    # Fase 7.3/7.6: mesma chave da organização vale para o roteamento da retomada
-    # e para o restante da cadeia (fallback consultoria → .env legado), com a
-    # origem para carimbar a medição dos passos da retomada.
-    chave, origem = resolver_chave_e_origem_por_time(sessao, auto.time_id)
+    # Fases 7.3/7.6/7-A: as mesmas chaves (por provedor) da organização valem para
+    # o roteamento da retomada e para o restante da cadeia (fallback consultoria →
+    # .env legado p/ Anthropic), com as origens para carimbar a medição.
+    chaves, origens = resolver_chaves_por_time(sessao, auto.time_id)
 
     # Auditoria (§3.7): a aprovação humana de um portão é ação sensível.
     auditoria.registrar(
@@ -249,7 +249,7 @@ def responder(
     elif len(saidas) == 1:
         escolhida = saidas[0]
     else:
-        with usar_chave(chave):
+        with usar_chaves(chaves):
             escolhida, _ = _escolher_saida(dados.resposta, saidas)
     destino = escolhida.get("destino") if escolhida else None
     proximo = None if destino in _DESTINOS_FIM else destino
@@ -270,14 +270,14 @@ def responder(
     execucao.estado = "em_andamento"
     sessao.commit()
     try:
-        with usar_chave(chave):
+        with usar_chaves(chaves):
             r = executar_cadeia(
                 sessao,
                 cadeia,
                 entrada_proxima,
                 no_inicial=proximo,
                 ordem_inicial=ultimo.ordem,
-                registrar_passo=_fazer_registrador(sessao, execucao.id, origem),
+                registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
             )
         _aplicar_resultado(execucao, r)
     except Exception as e:

@@ -18,14 +18,17 @@ from chaves import (
     resolver_chave_por_time,
 )
 from modelos import ChaveApi
-from orquestracao.llm import construir_modelo, usar_chave
+from orquestracao.llm import construir_modelo, usar_chaves
+from orquestracao.modelos_ia import provedor_do_modelo
 
 
-def _add_chave(sessao, organizacao_id, segredo, *, tipo_ia="executora", ativa=True):
+def _add_chave(
+    sessao, organizacao_id, segredo, *, tipo_ia="executora", provedor="anthropic", ativa=True
+):
     chave = ChaveApi(
         organizacao_id=organizacao_id,
         tipo_ia=tipo_ia,
-        provedor="anthropic",
+        provedor=provedor,
         valor_cifrado=cifrar(segredo),
         ultimos4=ultimos4(segredo),
         ativa=ativa,
@@ -107,17 +110,57 @@ def test_origem_legado_sem_chave(sessao, dados):
 
 
 def test_construir_modelo_usa_chave_do_contexto():
-    """A chave fixada por `usar_chave` chega ao cliente da LLM."""
-    with usar_chave("sk-do-contexto"):
+    """A chave do provedor fixada por `usar_chaves` chega ao cliente da LLM."""
+    with usar_chaves({"anthropic": "sk-do-contexto"}):
         modelo = construir_modelo("claude-haiku-4-5")
     assert modelo.anthropic_api_key.get_secret_value() == "sk-do-contexto"
 
 
 def test_fora_do_contexto_cai_no_ambiente():
-    """Sem chave no contexto, o cliente usa a ANTHROPIC_API_KEY do ambiente —
-    o comportamento legado, preservado (retrocompatibilidade da 7.3)."""
+    """Sem chave no contexto, o cliente Anthropic usa a ANTHROPIC_API_KEY do
+    ambiente — o comportamento legado, preservado (retrocompatibilidade)."""
     import os
 
     esperado = os.environ.get("ANTHROPIC_API_KEY", "")
     modelo = construir_modelo("claude-haiku-4-5")
     assert modelo.anthropic_api_key.get_secret_value() == esperado
+
+
+# ─────────────────── Multi-provedor (Fase 7-A) ────────────────────
+
+
+def test_provedor_do_modelo_por_prefixo():
+    assert provedor_do_modelo("claude-haiku-4-5") == "anthropic"
+    assert provedor_do_modelo("gpt-4o") == "openai"
+    assert provedor_do_modelo("gemini-2.0-flash") == "google"
+
+
+def test_construir_modelo_openai_usa_chave_do_contexto():
+    """Modelo OpenAI constrói um ChatOpenAI com a chave OpenAI do contexto."""
+    with usar_chaves({"openai": "sk-openai-xyz"}):
+        modelo = construir_modelo("gpt-4o")
+    assert type(modelo).__name__ == "ChatOpenAI"
+    assert modelo.openai_api_key.get_secret_value() == "sk-openai-xyz"
+
+
+def test_construir_modelo_sem_chave_do_provedor_falha(dados):
+    """Modelo OpenAI sem chave OpenAI no contexto falha de forma clara (não há
+    fallback de ambiente para os provedores não-Anthropic)."""
+    import pytest
+
+    with usar_chaves({"anthropic": "sk-só-anthropic"}):
+        with pytest.raises(RuntimeError, match="OpenAI"):
+            construir_modelo("gpt-4o")
+
+
+def test_resolver_chaves_por_time_mapa_por_provedor(sessao, dados):
+    """A fronteira resolve um mapa {provedor: chave} para a org do time."""
+    from chaves import resolver_chaves_por_time
+
+    _add_chave(sessao, dados["orgA"].id, "sk-org-anthropic")
+    _add_chave(sessao, dados["orgA"].id, "sk-org-openai", provedor="openai")
+    chaves, origens = resolver_chaves_por_time(sessao, dados["timeA"].id)
+    assert chaves["anthropic"] == "sk-org-anthropic"
+    assert chaves["openai"] == "sk-org-openai"
+    assert origens["anthropic"] == ORIGEM_ORGANIZACAO
+    assert "google" not in chaves  # sem chave Google cadastrada

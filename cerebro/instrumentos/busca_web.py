@@ -25,10 +25,14 @@ MAX_CONSULTA = 400
 
 
 class ConfigBuscaWeb(BaseModel):
-    """Configuração fixa. A chave NÃO fica aqui (vem do ambiente)."""
+    """Configuração fixa. `chave_api` é SEGREDO (cofre, Fase 7-B); se vazia, cai
+    na TAVILY_API_KEY do .env (fallback legado)."""
 
     max_resultados: int = Field(
         default=5, ge=1, le=10, description="Quantos resultados trazer (1 a 10)."
+    )
+    chave_api: str = Field(
+        default="", description="Chave da API de busca (Tavily) — segredo."
     )
 
 
@@ -48,9 +52,11 @@ class BuscaWeb(TipoInstrumento):
     )
     Config = ConfigBuscaWeb
     Args = ArgsBuscaWeb
+    campos_secretos = ("chave_api",)
 
     def executar(self, config: ConfigBuscaWeb, args: ArgsBuscaWeb) -> dict:
-        chave = os.environ.get("TAVILY_API_KEY")
+        # Fase 7-B: prioriza o cofre (config), com o .env como fallback legado.
+        chave = config.chave_api or os.environ.get("TAVILY_API_KEY")
         if not chave:
             raise FalhaInstrumento(
                 "a busca na web não está configurada (falta a chave TAVILY_API_KEY "

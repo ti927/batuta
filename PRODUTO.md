@@ -268,7 +268,7 @@ O coração do modelo BYOK. As chaves de IA do cliente, e as credenciais dos ins
 - Nunca deixá-las aparecer em logs, telas de erro, ou qualquer lugar.
 Como tudo no Batuta depende dessas chaves, esta é uma peça central de segurança.
 
-> **Nota de implementação (jun/2026):** as **chaves de IA** entraram no cofre na **Fase 7**. As **credenciais de instrumentos** (senha de app do WordPress, chave Tavily, auth de REST/webhook) entram no mesmo cofre criptografado, por organização, na **Fase 7-B** do `BUILD-PLAN.md` — até lá, vivem no `.env` (paliativo) ou, no caso de REST/webhook, na config do instrumento (a corrigir).
+> **Nota de implementação (jun/2026):** as **chaves de IA** entraram no cofre na **Fase 7** e as **credenciais de instrumentos** (senha de app do WordPress, chave Tavily, token de REST/webhook) na **Fase 7-B** — ambas cifradas, por organização, nunca reexibidas. O `.env` segue como fallback legado dos instrumentos já configurados.
 
 ## 27. Planos da plataforma
 

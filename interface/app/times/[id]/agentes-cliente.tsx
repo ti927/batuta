@@ -13,10 +13,12 @@ import {
   type Time,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
+import {
+  MODELOS_POR_PROVEDOR,
+  PROVEDORES,
+  ROTULO_PROVEDOR,
+} from "@/lib/modelos";
 import { Button, buttonVariants } from "@/components/ui/button";
-
-// Modelos de IA conhecidos (Etapa 1). Lista crua; refina-se depois.
-const MODELOS = ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"];
 
 type Formulario = {
   nome: string;
@@ -206,10 +208,14 @@ export function AgentesCliente({
                 onChange={(e) => campo("modelo_ia", e.target.value)}
               >
                 <option value="">(não definido)</option>
-                {MODELOS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
+                {PROVEDORES.map((p) => (
+                  <optgroup key={p} label={ROTULO_PROVEDOR[p]}>
+                    {MODELOS_POR_PROVEDOR[p].map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </label>

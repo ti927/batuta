@@ -10,6 +10,11 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { api, ErroDaApi, type ChaveApiLer, type TipoIA } from "@/lib/api";
+import {
+  PROVEDORES,
+  ROTULO_PROVEDOR,
+  type Provedor,
+} from "@/lib/modelos";
 import { Button } from "@/components/ui/button";
 
 const TIPOS: TipoIA[] = ["executora", "criadora", "companheira"];
@@ -24,10 +29,13 @@ export function GestaoChaves({
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
   const [tipo, setTipo] = useState<TipoIA>("executora");
+  const [provedor, setProvedor] = useState<Provedor>("anthropic");
   const [valor, setValor] = useState("");
   const [apelido, setApelido] = useState("");
 
-  const jaTem = chavesIniciais.some((c) => c.tipo_ia === tipo);
+  const jaTem = chavesIniciais.some(
+    (c) => c.tipo_ia === tipo && c.provedor === provedor,
+  );
 
   function tratar(e: unknown, padrao: string) {
     setErro(e instanceof ErroDaApi ? e.message : padrao);
@@ -38,7 +46,7 @@ export function GestaoChaves({
     try {
       await api.put(basePath, {
         tipo_ia: tipo,
-        provedor: "anthropic",
+        provedor,
         valor: valor.trim(),
         apelido: apelido.trim() || null,
       });
@@ -115,9 +123,17 @@ export function GestaoChaves({
               </option>
             ))}
           </select>
-          <span className="self-center rounded bg-zinc-100 px-2 py-1.5 text-sm text-zinc-600">
-            anthropic
-          </span>
+          <select
+            className="rounded border border-zinc-300 px-2 py-1.5 text-sm"
+            value={provedor}
+            onChange={(e) => setProvedor(e.target.value as Provedor)}
+          >
+            {PROVEDORES.map((p) => (
+              <option key={p} value={p}>
+                {ROTULO_PROVEDOR[p]}
+              </option>
+            ))}
+          </select>
         </div>
         <input
           type="password"
@@ -136,7 +152,8 @@ export function GestaoChaves({
         />
         {jaTem && (
           <p className="text-xs text-amber-700">
-            Já existe uma chave “{tipo}”. Salvar vai substituí-la.
+            Já existe uma chave “{tipo}” em {ROTULO_PROVEDOR[provedor]}. Salvar vai
+            substituí-la.
           </p>
         )}
         <p className="text-xs text-zinc-500">

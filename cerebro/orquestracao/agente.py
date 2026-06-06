@@ -58,7 +58,11 @@ def _ferramenta_de_instrumento(
     tipo = encaixe.obter_tipo(inst.tipo)
     if tipo is None:
         return None
-    config = tipo.Config.model_validate(inst.configuracao or {})
+    # Fase 7-B: mescla os segredos decifrados (anexados ao carregar o cinto) na
+    # config; ficam só em memória, nunca no banco em claro.
+    config = tipo.Config.model_validate(
+        {**(inst.configuracao or {}), **getattr(inst, "segredos_decifrados", {})}
+    )
 
     def executar(**kwargs) -> str:
         args = tipo.Args.model_validate(kwargs)

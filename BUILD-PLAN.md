@@ -686,9 +686,11 @@ Cofre criptografado; chave por **organização** + **chave-mãe da consultoria**
 
 > **Fase 7 COMPLETA (2026-06-06):** 7.1–7.7 todas ✅ (50 pytest + tsc/eslint verdes). Falta só o **merge em `main` + push** da branch `migracao-etapa-2` (pende confirmação do maestro). Próximo: Fase 7-A.
 
-## FASE 7-A — Múltiplos provedores de IA  ⏳ (a executar após a Fase 7)
+## FASE 7-A — Múltiplos provedores de IA  ✅ CONCLUÍDA (2026-06-06)
 
-> **Origem (2026-06-06, decisão do maestro):** o motor hoje só constrói `ChatAnthropic` — um agente com `modelo_ia` de outro provedor falharia. O `PRODUTO.md §11` ("cada Agente pode usar uma LLM diferente") e o `MIGRACAO Virada 5` (OpenAI, Google, etc.) exigem multi-provedor. A `chaves_api` já tem o campo `provedor`, mas a resolução e o endpoint estão fixos em `anthropic`. Esta fase é dedicada, **logo após a Fase 7** (antes da identidade visual). Lembrete: `executora/criadora/companheira` são *papéis* de IA, não modelos — o modelo é o `modelo_ia` do agente.
+> **Origem (2026-06-06, decisão do maestro):** o motor hoje só constrói `ChatAnthropic` — um agente com `modelo_ia` de outro provedor falharia. O `PRODUTO.md §11` ("cada Agente pode usar uma LLM diferente") e o `MIGRACAO Virada 5` (OpenAI, Google, etc.) exigem multi-provedor. A `chaves_api` já tem o campo `provedor`, mas a resolução e o endpoint estavam fixos em `anthropic`. Esta fase é dedicada, **logo após a Fase 7** (antes da identidade visual). Lembrete: `executora/criadora/companheira` são *papéis* de IA, não modelos — o modelo é o `modelo_ia` do agente.
+
+> **FEITO (2026-06-06):** novo `cerebro/orquestracao/modelos_ia.py` (registro modelo→provedor, com inferência por prefixo). `orquestracao/llm.py`: o contextvar virou um MAPA `{provedor: chave}` (`usar_chaves`) e `construir_modelo` despacha por provedor — `ChatAnthropic`/`ChatOpenAI`/`ChatGoogleGenerativeAI` (imports preguiçosos), Anthropic com fallback `.env`, OpenAI/Google exigem chave do cofre (erro claro se faltar). `chaves.resolver_chaves_por_time` resolve a chave de cada provedor + origens por provedor (a medição 7.6 agora carimba a origem pelo provedor do modelo de cada passo). Fronteiras (disparo/retomada/agente isolado) e `_fazer_registrador` ajustados. Endpoint `chaves_api`: `PROVEDORES_SUPORTADOS={anthropic,openai,google}`. Deps `langchain-openai`+`langchain-google-genai`. UI: `lib/modelos.ts` (registro espelhado), seletor de modelo do agente agrupado por provedor (`<optgroup>`), seleção de provedor ao cadastrar chave. **55 testes pytest + tsc/eslint verdes** (5 novos: registro, build OpenAI, falha sem chave, mapa por provedor). Verificação de chamada LIVE a OpenAI/Google depende de chave real do maestro.
 
 **Objetivo:** um agente roda em modelo não-Anthropic (OpenAI, Google) com a chave do provedor certo, do cofre, mantendo o fallback consultoria → `.env` da 7.3.
 
@@ -702,9 +704,11 @@ Cofre criptografado; chave por **organização** + **chave-mãe da consultoria**
 
 **DoD:** agente em OpenAI/Google executa de fato com a chave certa; resolução por provedor com fallback; endpoint aceita os novos provedores; tela escolhe provedor+modelo; pytest + tsc/eslint verdes; commit + push.
 
-## FASE 7-B — Cofre de segredos de instrumentos  ⏳ (a executar antes da identidade visual)
+## FASE 7-B — Cofre de segredos de instrumentos  ✅ CONCLUÍDA (2026-06-06)
 
 > **Origem (2026-06-06, decisão do maestro):** o `PRODUTO.md §26` prevê as credenciais de instrumentos no mesmo cofre criptografado. Hoje WordPress/Tavily leem do `.env` (paliativo por-cérebro) e **REST/webhook guardam o token em texto plano** na config JSONB do banco — viola o §26. Fase dedicada, **antes da identidade visual**. (Recupera o slot que a renumeração do MIGRACAO sobrescreveu.)
+
+> **FEITO (2026-06-06):** mecanismo geral `campos_secretos` no encaixe (`instrumentos/base.py`) + `preparar_config` (separa config pública × segredos). Nova tabela `segredos_instrumento` (migration aditiva `b26cc22ca49a`, aplicada) + módulo `cerebro/segredos_instrumento.py` (reusa `cofre.py`: cifrar/decifrar/ultimos4; upsert que preserva ao omitir; `anexar_aos_instrumentos` injeta os segredos decifrados num atributo transitório). Instrumentos migrados: WordPress (`site_url`/`usuario` na config + `senha_app` secreto), busca web (`chave_api` secreto), REST e webhook (`token_bearer` secreto → `Authorization: Bearer`) — todos com **`.env` como fallback legado** (não quebra os já configurados). Injeção na execução: `cadeia._carregar_cinto` + `agente._ferramenta_de_instrumento` mesclam os segredos só em memória; rota `acionar` idem; rota CRUD separa/cifra os segredos e audita (`instrumento.segredo_alterado`); leitura devolve só `ultimos4`, nunca o valor. UI: aviso dos campos secretos + o que já está guardado (mascarado). **62 testes pytest + tsc/eslint verdes** (8 novos). Atende a parte de credenciais de instrumentos do `PRODUTO §26`.
 
 **Objetivo:** credenciais de instrumento guardadas cifradas por organização, nunca em texto plano, injetadas só na execução; reusa a cripto do `cofre.py`.
 

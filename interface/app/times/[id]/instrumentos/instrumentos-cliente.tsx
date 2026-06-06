@@ -66,6 +66,8 @@ export function InstrumentosCliente({
   const [resultado, setResultado] = useState<string | null>(null);
 
   const tipoAtual = tipos.find((t) => t.tipo === tipoSel);
+  const instEditando =
+    modo && modo !== "novo" ? inicial.find((i) => i.id === modo) : undefined;
 
   function tratar(e: unknown, padrao: string) {
     setErro(e instanceof ErroDaApi ? e.message : padrao);
@@ -218,6 +220,26 @@ export function InstrumentosCliente({
                   .
                 </>
               )}
+            </p>
+          )}
+          {tipoAtual && tipoAtual.campos_secretos.length > 0 && (
+            <p className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+              Campos secretos (guardados cifrados, nunca reexibidos):{" "}
+              <span className="font-mono">
+                {tipoAtual.campos_secretos.join(", ")}
+              </span>
+              .
+              {instEditando &&
+                Object.keys(instEditando.segredos).length > 0 && (
+                  <>
+                    {" "}
+                    Já guardados:{" "}
+                    {Object.entries(instEditando.segredos)
+                      .map(([c, u]) => `${c} (••••${u})`)
+                      .join(", ")}
+                    . Reinforme um campo só se quiser trocá-lo.
+                  </>
+                )}
             </p>
           )}
           <label className="flex flex-col gap-1 text-xs text-zinc-600">

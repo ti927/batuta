@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import segredos_instrumento
 from modelos import Agente, AgenteInstrumento, Instrumento
 from orquestracao.agente import executar_agente
 from orquestracao.llm import MODELO_PADRAO, construir_modelo
@@ -80,7 +81,7 @@ def validar_cadeia(cadeia: dict, ids_agentes_validos: set[str]) -> None:
 
 
 def _carregar_cinto(sessao: Session, agente_id: uuid.UUID) -> list[Instrumento]:
-    return list(
+    cinto = list(
         sessao.scalars(
             select(Instrumento)
             .join(
@@ -90,6 +91,10 @@ def _carregar_cinto(sessao: Session, agente_id: uuid.UUID) -> list[Instrumento]:
             .where(AgenteInstrumento.agente_id == agente_id)
         )
     )
+    # Fase 7-B: decifra e anexa os segredos de cada instrumento (em memória), para
+    # a execução mesclá-los na config sem que eles fiquem em claro no banco.
+    segredos_instrumento.anexar_aos_instrumentos(sessao, cinto)
+    return cinto
 
 
 def _escolher_saida(saida_texto: str, saidas: list[dict]) -> tuple[dict, dict]:

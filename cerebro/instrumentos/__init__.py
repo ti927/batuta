@@ -10,7 +10,9 @@ Importar este pacote registra os tipos disponíveis.
 
 from instrumentos.base import (
     TipoInstrumento,
+    campos_secretos,
     obter_tipo,
+    preparar_config,
     tipos_disponiveis,
     validar_configuracao,
 )
@@ -24,7 +26,9 @@ from instrumentos import wordpress  # noqa: E402, F401  (efeito colateral: regis
 
 __all__ = [
     "TipoInstrumento",
+    "campos_secretos",
     "obter_tipo",
+    "preparar_config",
     "tipos_disponiveis",
     "validar_configuracao",
 ]

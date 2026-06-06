@@ -26,7 +26,9 @@ TIMEOUT_S = 20.0
 
 
 class ConfigWordpress(BaseModel):
-    """Configuração fixa (quem monta o agente). As credenciais NÃO ficam aqui."""
+    """Configuração fixa (quem monta o agente). A `senha_app` é SEGREDO (cofre,
+    Fase 7-B); `site_url`/`usuario` são públicos. Se vazios, caem no `.env`
+    legado (WORDPRESS_*), preservando os instrumentos já configurados."""
 
     status: Literal["draft", "publish"] = Field(
         default="draft",
@@ -38,6 +40,13 @@ class ConfigWordpress(BaseModel):
             "Nomes das categorias onde publicar (ex.: ['Controladoria Financeira']). "
             "Vazio = categoria padrão do site. Categoria inexistente é ignorada."
         ),
+    )
+    site_url: str = Field(
+        default="", description="Endereço do site WordPress (ex.: https://blog.x.com)."
+    )
+    usuario: str = Field(default="", description="Usuário do WordPress.")
+    senha_app: str = Field(
+        default="", description="Senha de aplicativo do WordPress (segredo)."
     )
 
 
@@ -121,11 +130,13 @@ class PublicarWordpress(TipoInstrumento):
     )
     Config = ConfigWordpress
     Args = ArgsWordpress
+    campos_secretos = ("senha_app",)
 
     def executar(self, config: ConfigWordpress, args: ArgsWordpress) -> dict:
-        url = os.environ.get("WORDPRESS_URL")
-        usuario = os.environ.get("WORDPRESS_USUARIO")
-        senha = os.environ.get("WORDPRESS_APP_PASSWORD")
+        # Fase 7-B: prioriza o cofre (config), com o .env como fallback legado.
+        url = config.site_url or os.environ.get("WORDPRESS_URL")
+        usuario = config.usuario or os.environ.get("WORDPRESS_USUARIO")
+        senha = config.senha_app or os.environ.get("WORDPRESS_APP_PASSWORD")
         if not (url and usuario and senha):
             raise FalhaInstrumento(
                 "o WordPress não está configurado no cérebro (faltam WORDPRESS_URL, "

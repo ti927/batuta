@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 import auditoria
 import instrumentos as encaixe
+import segredos_instrumento as segredos
 from auth import usuario_atual
 from esquemas import (
     AcionarInstrumento,
@@ -28,6 +29,13 @@ from sessao import obter_sessao
 rotas = APIRouter(tags=["instrumentos"])
 
 
+def _ler(sessao: Session, inst: Instrumento) -> Instrumento:
+    """Anexa o resumo mascarado dos segredos (campo → 4 últimos dígitos) ao
+    instrumento, para o `InstrumentoLer` o devolver sem nunca expor o valor."""
+    inst.segredos = segredos.resumo(sessao, inst.id)
+    return inst
+
+
 # Declarado ANTES de /instrumentos/{id} para que "tipos" não seja lido como UUID.
 @rotas.get("/instrumentos/tipos", response_model=list[TipoInstrumentoLer])
 def listar_tipos(usuario: Usuario = Depends(usuario_atual)):
@@ -40,6 +48,7 @@ def listar_tipos(usuario: Usuario = Depends(usuario_atual)):
             descricao=t.descricao,
             esquema_config=t.Config.model_json_schema(),
             esquema_args=t.Args.model_json_schema(),
+            campos_secretos=list(t.campos_secretos),
         )
         for t in encaixe.tipos_disponiveis()
     ]
@@ -57,7 +66,7 @@ def listar(
         .where(Instrumento.time_id == time_id)
         .order_by(Instrumento.criado_em)
     )
-    return sessao.scalars(consulta).all()
+    return [_ler(sessao, inst) for inst in sessao.scalars(consulta).all()]
 
 
 @rotas.post(
@@ -73,7 +82,10 @@ def criar(
 ):
     time = time_acessivel(sessao, usuario, time_id, minimo="operador")
     try:
-        config_limpa = encaixe.validar_configuracao(dados.tipo, dados.configuracao)
+        # Fase 7-B: separa os segredos da config pública antes de gravar.
+        config_limpa, segredos_novos = encaixe.preparar_config(
+            dados.tipo, dados.configuracao
+        )
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
     inst = Instrumento(
@@ -84,14 +96,16 @@ def criar(
     )
     sessao.add(inst)
     sessao.flush()
+    segredos.salvar_segredos(sessao, inst.id, segredos_novos)
     auditoria.registrar(
         sessao, usuario=usuario, acao="instrumento.criado",
         recurso_tipo="instrumento", recurso_id=inst.id,
         organizacao_id=time.organizacao_id,
+        detalhe={"segredos": list(segredos_novos)} if segredos_novos else None,
     )
     sessao.commit()
     sessao.refresh(inst)
-    return inst
+    return _ler(sessao, inst)
 
 
 @rotas.get("/instrumentos/{instrumento_id}", response_model=InstrumentoLer)
@@ -100,7 +114,7 @@ def obter(
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
-    return instrumento_acessivel(sessao, usuario, instrumento_id)
+    return _ler(sessao, instrumento_acessivel(sessao, usuario, instrumento_id))
 
 
 @rotas.put("/instrumentos/{instrumento_id}", response_model=InstrumentoLer)
@@ -112,14 +126,25 @@ def editar(
 ):
     inst = instrumento_acessivel(sessao, usuario, instrumento_id, minimo="operador")
     try:
-        config_limpa = encaixe.validar_configuracao(inst.tipo, dados.configuracao)
+        # Fase 7-B: separa os segredos; um segredo omitido preserva o atual.
+        config_limpa, segredos_novos = encaixe.preparar_config(
+            inst.tipo, dados.configuracao
+        )
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
     inst.nome = dados.nome
     inst.configuracao = config_limpa
+    alterados = segredos.salvar_segredos(sessao, inst.id, segredos_novos)
+    if alterados:
+        auditoria.registrar(
+            sessao, usuario=usuario, acao="instrumento.segredo_alterado",
+            recurso_tipo="instrumento", recurso_id=inst.id,
+            organizacao_id=auditoria.org_do_time(sessao, inst.time_id),
+            detalhe={"segredos": alterados},
+        )
     sessao.commit()
     sessao.refresh(inst)
-    return inst
+    return _ler(sessao, inst)
 
 
 @rotas.delete(
@@ -157,7 +182,12 @@ def acionar(
             f"Tipo de instrumento desconhecido: {inst.tipo!r}",
         )
     try:
-        config = tipo.Config.model_validate(inst.configuracao or {})
+        # Fase 7-B: mescla os segredos decifrados na config só agora, em memória.
+        config_efetiva = {
+            **(inst.configuracao or {}),
+            **segredos.decifrar(sessao, inst.id),
+        }
+        config = tipo.Config.model_validate(config_efetiva)
         args = tipo.Args.model_validate(dados.argumentos or {})
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
