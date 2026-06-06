@@ -2,8 +2,18 @@
 
 Documento vivo da identidade visual da Batuta. Atualizar sempre que uma decisão de marca for tomada ou refinada. Este é o documento que **designers, devs e profissionais de marketing consultam** antes de produzir qualquer artefato visual ou textual da marca.
 
-**Última atualização:** maio de 2026
-**Versão:** 1.0 (inicial)
+**Última atualização:** junho de 2026
+**Versão:** 1.1 (aplicado ao produto na Fase 8)
+
+> **Estado de implementação (Fase 8, 2026-06-06):** este sistema foi aplicado sobre as
+> telas do core. **No ar:** paleta Batuta nos tokens (tema claro; escuro pronto, sem botão
+> de troca), Inter (interface) + Bricolage Grotesque (logotipo), primitivos (Button, Input,
+> Textarea, Select, Label, Card, Badge, Aviso, EstadoVazio), header com logotipo, sentence
+> case, pesos 400/500, ícones lucide, estados vazios e erros com ícone. **Pendente de arte:**
+> mascote, ilustrações de empty state e favicon final (§13) — por ora há um símbolo
+> tipográfico provisório. **Decisão do maestro:** nas telas (de operador) vale o vocabulário
+> de produto — "Agente/Instrumento/Automação" —, NÃO a tradução "Assistente/Habilidade" do
+> tom de voz (§2), que fica reservada à futura camada do cliente final.
 
 ---
 
