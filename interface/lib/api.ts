@@ -174,14 +174,19 @@ export type UsoChamada = {
   tokens_saida: number;
 };
 
+export type UsoAgrupado = {
+  tokens_entrada: number;
+  tokens_saida: number;
+  custo_usd: number;
+};
+
 export type ResumoUso = {
   tokens_entrada: number;
   tokens_saida: number;
   custo_usd: number;
-  por_modelo: Record<
-    string,
-    { tokens_entrada: number; tokens_saida: number; custo_usd: number }
-  >;
+  por_modelo: Record<string, UsoAgrupado>;
+  // Consumo separado por origem da chave (cliente × consultoria × legado) — 7.6.
+  por_origem: Record<string, UsoAgrupado>;
 };
 
 export type PassoExecucao = {

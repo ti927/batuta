@@ -9,7 +9,14 @@ de onde veio a chave.
 import uuid
 
 from cofre import cifrar, ultimos4
-from chaves import resolver_chave, resolver_chave_por_time
+from chaves import (
+    ORIGEM_CONSULTORIA,
+    ORIGEM_LEGADO,
+    ORIGEM_ORGANIZACAO,
+    resolver_chave,
+    resolver_chave_e_origem_por_time,
+    resolver_chave_por_time,
+)
 from modelos import ChaveApi
 from orquestracao.llm import construir_modelo, usar_chave
 
@@ -77,6 +84,26 @@ def test_resolver_por_time_inexistente_resolve_none(sessao, dados):
     _add_chave(sessao, None, "sk-consultoria")
     # Time fora do banco: organização indefinida → ainda assim cai na chave-mãe.
     assert resolver_chave_por_time(sessao, uuid.uuid4()) == "sk-consultoria"
+
+
+# ─────────────────── Origem da chave (medição, Fase 7.6) ────────────────────
+
+
+def test_origem_organizacao(sessao, dados):
+    _add_chave(sessao, dados["orgA"].id, "sk-org-A")
+    chave, origem = resolver_chave_e_origem_por_time(sessao, dados["timeA"].id)
+    assert chave == "sk-org-A" and origem == ORIGEM_ORGANIZACAO
+
+
+def test_origem_consultoria(sessao, dados):
+    _add_chave(sessao, None, "sk-mae")
+    chave, origem = resolver_chave_e_origem_por_time(sessao, dados["timeA"].id)
+    assert chave == "sk-mae" and origem == ORIGEM_CONSULTORIA
+
+
+def test_origem_legado_sem_chave(sessao, dados):
+    chave, origem = resolver_chave_e_origem_por_time(sessao, dados["timeA"].id)
+    assert chave is None and origem == ORIGEM_LEGADO
 
 
 def test_construir_modelo_usa_chave_do_contexto():

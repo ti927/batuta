@@ -9,8 +9,10 @@ import {
   ErroDaApi,
   type ExecucaoNaLista,
   type PapelAcesso,
+  type ResumoUso,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
+import { rotuloOrigem } from "@/lib/uso";
 import { Button } from "@/components/ui/button";
 
 const COR_ESTADO: Record<string, string> = {
@@ -37,9 +39,11 @@ const FILTROS: { valor: string; rotulo: string }[] = [
 
 export function ExecucoesCliente({
   inicial,
+  uso,
   papeis,
 }: {
   inicial: ExecucaoNaLista[];
+  uso: ResumoUso | null;
   papeis: Record<string, PapelAcesso>;
 }) {
   const router = useRouter();
@@ -94,6 +98,34 @@ export function ExecucoesCliente({
         Todas as execuções, de todas as automações. Cancele as que estão em curso
         ou paradas; apague as já encerradas.
       </p>
+
+      {uso && uso.tokens_entrada + uso.tokens_saida > 0 && (
+        <div className="mb-6 rounded border border-zinc-200 bg-zinc-50 p-3 text-sm">
+          <p className="mb-1 font-medium">
+            Uso por origem da chave{" "}
+            <span className="text-xs font-normal text-zinc-500">
+              (estimado, informativo — não é cobrança)
+            </span>
+          </p>
+          <p className="mb-2 text-xs text-zinc-500">
+            Total: {uso.tokens_entrada.toLocaleString("pt-BR")} entrada +{" "}
+            {uso.tokens_saida.toLocaleString("pt-BR")} saída tokens · ~US$
+            {uso.custo_usd.toFixed(4)}
+          </p>
+          <ul className="divide-y divide-zinc-200 rounded border border-zinc-200 bg-white">
+            {Object.entries(uso.por_origem).map(([origem, u]) => (
+              <li key={origem} className="flex items-center gap-2 p-2 text-xs">
+                <span className="flex-1">{rotuloOrigem(origem)}</span>
+                <span className="text-zinc-500">
+                  {u.tokens_entrada.toLocaleString("pt-BR")}+
+                  {u.tokens_saida.toLocaleString("pt-BR")} tok
+                </span>
+                <span className="font-medium">~US${u.custo_usd.toFixed(4)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {erro && (
         <p className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">

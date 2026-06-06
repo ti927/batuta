@@ -14,6 +14,7 @@ import {
   type PapelAcesso,
 } from "@/lib/api";
 import { podeOperar } from "@/lib/permissoes";
+import { rotuloOrigem } from "@/lib/uso";
 import { Button } from "@/components/ui/button";
 
 // Estados em que a execução parou de avançar (não há mais o que acompanhar).
@@ -284,6 +285,19 @@ export function AutomacaoDetalheCliente({
                     {u.custo_usd.toFixed(4)}
                   </div>
                 ))}
+                {Object.keys(aberta.uso.por_origem ?? {}).length > 0 && (
+                  <div className="mt-1">
+                    <span className="font-medium">Por origem da chave:</span>
+                    {Object.entries(aberta.uso.por_origem).map(([origem, u]) => (
+                      <div key={origem} className="text-zinc-400">
+                        {rotuloOrigem(origem)}:{" "}
+                        {u.tokens_entrada.toLocaleString("pt-BR")}+
+                        {u.tokens_saida.toLocaleString("pt-BR")} tok · ~US$
+                        {u.custo_usd.toFixed(4)}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="mt-1 text-zinc-400">
                   Custo aproximado, apenas informativo — não é cobrança.
                 </div>

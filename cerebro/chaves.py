@@ -47,6 +47,29 @@ def _buscar(
     return decifrar(chave.valor_cifrado) if chave else None
 
 
+# Rótulos de ORIGEM da chave, para a medição refinada (Fase 7.6): de qual chave
+# saiu o consumo de cada passo. "legado" = nenhuma chave no cofre, caiu na
+# ANTHROPIC_API_KEY do .env (que, na prática, é da consultoria).
+ORIGEM_ORGANIZACAO = "organizacao"  # chave própria do cliente
+ORIGEM_CONSULTORIA = "consultoria"  # chave-mãe da consultoria
+ORIGEM_LEGADO = "legado"  # .env legado (sem chave cadastrada)
+
+
+def _resolver(
+    sessao: Session, organizacao_id: uuid.UUID | None, tipo_ia: str, provedor: str
+) -> tuple[str | None, str | None]:
+    """Núcleo da resolução: devolve (chave, origem). origem é ORIGEM_ORGANIZACAO
+    ou ORIGEM_CONSULTORIA quando achou no cofre; (None, None) quando nada há."""
+    if organizacao_id is not None:
+        propria = _buscar(sessao, organizacao_id, tipo_ia, provedor, mae=False)
+        if propria:
+            return propria, ORIGEM_ORGANIZACAO
+    mae = _buscar(sessao, None, tipo_ia, provedor, mae=True)
+    if mae:
+        return mae, ORIGEM_CONSULTORIA
+    return None, None
+
+
 def resolver_chave(
     sessao: Session,
     organizacao_id: uuid.UUID | None,
@@ -56,11 +79,13 @@ def resolver_chave(
 ) -> str | None:
     """Resolve a chave de IA pela ordem de fallback. Devolve a chave decifrada
     ou None (quando nem a organização nem a consultoria têm chave cadastrada)."""
-    if organizacao_id is not None:
-        propria = _buscar(sessao, organizacao_id, tipo_ia, provedor, mae=False)
-        if propria:
-            return propria
-    return _buscar(sessao, None, tipo_ia, provedor, mae=True)
+    return _resolver(sessao, organizacao_id, tipo_ia, provedor)[0]
+
+
+def _org_do_time(sessao: Session, time_id: uuid.UUID | None) -> uuid.UUID | None:
+    if time_id is None:
+        return None
+    return sessao.scalar(select(Time.organizacao_id).where(Time.id == time_id))
 
 
 def resolver_chave_por_time(
@@ -72,11 +97,22 @@ def resolver_chave_por_time(
 ) -> str | None:
     """Conveniência para as fronteiras do motor, que conhecem o time da execução
     (automação ou agente): descobre a organização do time e resolve a chave."""
-    organizacao_id = (
-        sessao.scalar(select(Time.organizacao_id).where(Time.id == time_id))
-        if time_id is not None
-        else None
-    )
+    organizacao_id = _org_do_time(sessao, time_id)
     return resolver_chave(
         sessao, organizacao_id, tipo_ia=tipo_ia, provedor=provedor
     )
+
+
+def resolver_chave_e_origem_por_time(
+    sessao: Session,
+    time_id: uuid.UUID | None,
+    *,
+    tipo_ia: str = "executora",
+    provedor: str = "anthropic",
+) -> tuple[str | None, str]:
+    """Como `resolver_chave_por_time`, mas devolve também a ORIGEM da chave para
+    a medição (Fase 7.6). Quando nada há no cofre, a origem é ORIGEM_LEGADO (o
+    motor usará a ANTHROPIC_API_KEY do .env)."""
+    organizacao_id = _org_do_time(sessao, time_id)
+    chave, origem = _resolver(sessao, organizacao_id, tipo_ia, provedor)
+    return chave, (origem or ORIGEM_LEGADO)

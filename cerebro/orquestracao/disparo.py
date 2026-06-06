@@ -13,16 +13,24 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from chaves import resolver_chave_por_time
+from chaves import resolver_chave_e_origem_por_time
 from modelos import Automacao, Execucao, PassoExecucao
 from orquestracao.cadeia import executar_cadeia
 from orquestracao.llm import usar_chave
 
 
-def _fazer_registrador(sessao: Session, execucao_id: uuid.UUID):
-    """Callback que grava cada passo da cadeia em `passos_execucao`."""
+def _fazer_registrador(
+    sessao: Session, execucao_id: uuid.UUID, origem: str | None = None
+):
+    """Callback que grava cada passo da cadeia em `passos_execucao`. `origem`
+    (Fase 7.6) é carimbada em cada entrada de `uso`, registrando de qual chave
+    (cliente/consultoria/legado) saiu o consumo daquele passo."""
 
     def registrar(passo: dict, ordem: int) -> None:
+        uso = passo.get("uso") or []
+        if origem:
+            for e in uso:
+                e.setdefault("origem", origem)
         sessao.add(
             PassoExecucao(
                 execucao_id=execucao_id,
@@ -33,7 +41,7 @@ def _fazer_registrador(sessao: Session, execucao_id: uuid.UUID):
                     "texto": passo["saida"],
                     "instrumentos_acionados": passo["instrumentos_acionados"],
                     "saida_escolhida": passo["saida_escolhida"],
-                    "uso": passo.get("uso") or [],
+                    "uso": uso,
                 },
                 estado="concluido",
                 iniciado_em=passo["iniciado_em"],
@@ -95,17 +103,19 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
     Devolve a execução."""
     automacao = sessao.get(Automacao, execucao.automacao_id)
     entrada = (execucao.entrada or {}).get("texto", "")
-    # Fase 7.3: resolve a chave da organização desta automação (com fallback para
-    # a chave-mãe da consultoria e, por fim, o .env legado) e a fixa no contexto
-    # durante toda a cadeia, sem tocar no motor de grafo.
-    chave = resolver_chave_por_time(sessao, automacao.time_id if automacao else None)
+    # Fase 7.3/7.6: resolve a chave da organização desta automação (fallback
+    # chave-mãe da consultoria → .env legado), com a ORIGEM para a medição, e a
+    # fixa no contexto durante toda a cadeia, sem tocar no motor de grafo.
+    chave, origem = resolver_chave_e_origem_por_time(
+        sessao, automacao.time_id if automacao else None
+    )
     try:
         with usar_chave(chave):
             r = executar_cadeia(
                 sessao,
                 (automacao.cadeia if automacao else None) or {},
                 entrada,
-                registrar_passo=_fazer_registrador(sessao, execucao.id),
+                registrar_passo=_fazer_registrador(sessao, execucao.id, origem),
                 cancelado=lambda: _esta_cancelada(sessao, execucao.id),
             )
         _aplicar_resultado(execucao, r)
