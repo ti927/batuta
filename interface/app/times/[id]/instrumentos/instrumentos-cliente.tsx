@@ -227,20 +227,20 @@ export function InstrumentosCliente({
               )}
             </p>
           )}
-          {tipoAtual && tipoAtual.campos_secretos.length > 0 && (
+          {tipoAtual && (tipoAtual.campos_secretos?.length ?? 0) > 0 && (
             <Aviso variant="atencao" className="text-xs">
               <span>
                 Campos secretos (guardados cifrados, nunca reexibidos):{" "}
                 <span className="font-mono">
-                  {tipoAtual.campos_secretos.join(", ")}
+                  {(tipoAtual.campos_secretos ?? []).join(", ")}
                 </span>
                 .
                 {instEditando &&
-                  Object.keys(instEditando.segredos).length > 0 && (
+                  Object.keys(instEditando.segredos ?? {}).length > 0 && (
                     <>
                       {" "}
                       Já guardados:{" "}
-                      {Object.entries(instEditando.segredos)
+                      {Object.entries(instEditando.segredos ?? {})
                         .map(([c, u]) => `${c} (••••${u})`)
                         .join(", ")}
                       . Reinforme um campo só se quiser trocá-lo.
