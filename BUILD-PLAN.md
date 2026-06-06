@@ -733,6 +733,20 @@ Aplicar o `DESIGN-SYSTEM.md` sobre as telas cruas do core.
 > cópia para o "tom consumidor" do DS §12 NÃO foi feita por decisão do maestro (telas de
 > operador usam vocab de produto). Mascote/favicon final pendem de arte (DS §13 TODO).
 > Verificação: `tsc`+`eslint`+`next build` verdes a cada commit (8.1→8.8).
+>
+> **Pós-QA (2026-06-06):** durante o QA do maestro surgiram dois tropeços, ambos por **processo
+> de longa duração servindo código velho** (não bug de código): (a) as fontes não pareciam mudar —
+> dev server `next dev` em cache (resolvido reiniciando após limpar `interface/.next`); (b) clicar
+> "Novo instrumento" quebrava (`Cannot read properties of undefined`) porque o **cérebro estava no
+> ar desde antes da Fase 7-B** e devolvia tipos sem `campos_secretos` (resolvido reiniciando o
+> uvicorn). Além do restart, blindou-se a tela com `?.`/`?? []` (commit `802d949`) para um campo
+> ausente nunca derrubar a página. Lição: **reiniciar cérebro + dev server ao iniciar o QA de uma
+> fase.**
+>
+> **Handoff de design recebido:** pasta `design_handoff_batuta_ai_first/` (na raiz, fora do git por
+> ora) com mockups da visão AI-first (dashboard, criação, companheira, execução) e os **assets de
+> marca que faltavam** (`mascote.png`, `mascote-completo.png`, `simbolo.png`, `logo-lockup.png`) +
+> screenshots + README. Insumo para fechar o §13 do DS (mascote/favicon) e para a Fase 9.
 
 > **Decisões do maestro (2026-06-06):** (1) **vocabulário de produto** mantido nas telas
 > ("Agente/Instrumento/Automação"), NÃO a tradução "Assistente/Habilidade" do tom de voz do
