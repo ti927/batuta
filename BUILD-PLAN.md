@@ -722,8 +722,17 @@ Cofre criptografado; chave por **organização** + **chave-mãe da consultoria**
 
 **DoD:** segredo salvo cifrado e nunca reexibido; instrumento executa com o segredo decifrado; nenhum segredo novo em texto plano no banco; `.env` como fallback legado; auditoria registra; pytest + tsc/eslint verdes; commit + push. Atende a parte de "credenciais de instrumentos" do `PRODUTO §26`.
 
-## FASE 8 — Identidade visual  🚧 EM ANDAMENTO (iniciada 2026-06-06)
+## FASE 8 — Identidade visual  ✅ CONCLUÍDA (2026-06-06)
 Aplicar o `DESIGN-SYSTEM.md` sobre as telas cruas do core.
+
+> **Feito:** fundação (paleta Batuta + Inter/Bricolage), primitivos (Button DS, Input,
+> Textarea, Select, Label, Card, Badge, Aviso, EstadoVazio), casca (header com logotipo),
+> e varredura das 19 telas — zero cor crua, sentence case, só pesos 400/500 (Bricolage 600
+> só no logotipo), ícones lucide, estados vazios e erros com ícone. Tema só claro (escuro
+> pronto nos tokens). 8.9 (voz): estados vazios/erros/tipografia entregues; a reescrita de
+> cópia para o "tom consumidor" do DS §12 NÃO foi feita por decisão do maestro (telas de
+> operador usam vocab de produto). Mascote/favicon final pendem de arte (DS §13 TODO).
+> Verificação: `tsc`+`eslint`+`next build` verdes a cada commit (8.1→8.8).
 
 > **Decisões do maestro (2026-06-06):** (1) **vocabulário de produto** mantido nas telas
 > ("Agente/Instrumento/Automação"), NÃO a tradução "Assistente/Habilidade" do tom de voz do
