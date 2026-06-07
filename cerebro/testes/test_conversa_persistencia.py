@@ -1,28 +1,28 @@
-"""Testes do laço de conversa da IA criadora (Fase 9), com o agente MOCKADO.
+"""Testes do laço de conversa da IA criadora, com o agente MOCKADO.
 
-Garantem que um turno persiste o histórico e o rascunho mutado pelas ferramentas,
-mede os tokens, e que o turno seguinte recebe o histórico anterior. Sem LLM real:
+Garantem que um turno persiste o histórico, mede os tokens, escreve no TIME REAL
+pelas ferramentas, e que o turno seguinte recebe o histórico anterior. Sem LLM real:
 `create_react_agent` e `construir_modelo` são substituídos."""
 
 from langchain_core.messages import AIMessage, ToolMessage
+from sqlalchemy import select
 
 import criacao.loop as loop
 from criacao.loop import responder_turno
-from modelos import ConversaCriacao
+from modelos import ConversaCriacao, Time
 
 
 def _uso(entrada, saida):
     return {"input_tokens": entrada, "output_tokens": saida, "total_tokens": entrada + saida}
 
 
-def test_turno_persiste_mensagens_e_rascunho(monkeypatch, sessao, dados):
+def test_turno_persiste_mensagens_e_cria_time(monkeypatch, sessao, dados):
     def fake_create(modelo, ferramentas, prompt=None):
         porta = {t.name: t for t in ferramentas}
 
         class App:
             def invoke(self, payload):
-                # a IA "decide" montar o time via a ferramenta — muta o rascunho.
-                # Como o react agent real, devolve o histórico recebido + a nova.
+                # a IA "decide" criar o time via a ferramenta — escreve no time REAL.
                 porta["definir_time"].func(nome="Time da Conversa")
                 return {
                     "messages": payload["messages"]
@@ -40,9 +40,13 @@ def test_turno_persiste_mensagens_e_rascunho(monkeypatch, sessao, dados):
     sessao.add(conversa)
     sessao.flush()
 
-    r = responder_turno(conversa, "Quero um time de blog")
+    r = responder_turno(sessao, conversa, "Quero um time de blog", usuario=dados["admin"])
     assert r["resposta"] == "Montei o time."
-    assert conversa.rascunho["time_nome"] == "Time da Conversa"
+    # o time foi criado de verdade e vinculado à conversa
+    assert conversa.time_id is not None
+    time = sessao.get(Time, conversa.time_id)
+    assert time.nome == "Time da Conversa"
+    assert r["time"]["time"]["nome"] == "Time da Conversa"
     assert len(conversa.mensagens) == 2
     assert conversa.mensagens[0]["papel"] == "usuario"
     assert conversa.mensagens[-1]["uso"]["tokens_entrada"] == 12
@@ -65,9 +69,7 @@ def test_texto_vem_de_turno_anterior_quando_o_ultimo_vem_vazio(
                 return {
                     "messages": payload["messages"]
                     + [
-                        AIMessage(
-                            content="Vou montar seu time!", usage_metadata=_uso(10, 5)
-                        ),
+                        AIMessage(content="Vou montar seu time!", usage_metadata=_uso(10, 5)),
                         ToolMessage(content="{}", tool_call_id="x"),
                         AIMessage(content="", usage_metadata=_uso(8, 0)),
                     ]
@@ -82,9 +84,8 @@ def test_texto_vem_de_turno_anterior_quando_o_ultimo_vem_vazio(
     sessao.add(conversa)
     sessao.flush()
 
-    r = responder_turno(conversa, "oi")
+    r = responder_turno(sessao, conversa, "oi", usuario=dados["admin"])
     assert r["resposta"] == "Vou montar seu time!"
-    # mediu os tokens dos dois turnos do modelo
     assert conversa.mensagens[-1]["uso"]["tokens_entrada"] == 18
 
 
@@ -111,12 +112,11 @@ def test_turno_recebe_o_historico_anterior(monkeypatch, sessao, dados):
             {"papel": "usuario", "conteudo": "oi"},
             {"papel": "ia", "conteudo": "olá, vamos criar?"},
         ],
-        rascunho={},
     )
     sessao.add(conversa)
     sessao.flush()
 
-    responder_turno(conversa, "segunda mensagem")
+    responder_turno(sessao, conversa, "segunda mensagem", usuario=dados["admin"])
     papeis = [m["role"] for m in capturado["messages"]]
     assert papeis == ["user", "assistant", "user"]
     assert capturado["messages"][-1]["content"] == "segunda mensagem"

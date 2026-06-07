@@ -215,6 +215,52 @@ def _ids_agentes(sessao: Session, time_id: uuid.UUID) -> set[str]:
     }
 
 
+def _obter_ou_criar_automacao(sessao: Session, time: Time) -> Automacao:
+    """A automação única do time (no fluxo da IA). Cria uma inativa e vazia se não
+    houver — gatilho 'manual', cadeia vazia, nome derivado do time."""
+    auto = sessao.scalars(
+        select(Automacao).where(Automacao.time_id == time.id).order_by(Automacao.criado_em)
+    ).first()
+    if auto is None:
+        auto = Automacao(
+            time_id=time.id, nome=f"Automação de {time.nome}", tipo_gatilho="manual",
+            configuracao_gatilho={}, cadeia={}, ativa=False,
+        )
+        sessao.add(auto)
+        sessao.flush()
+    return auto
+
+
+def definir_cadeia(
+    sessao: Session, time: Time, cadeia: dict, *, usuario: Usuario | None = None
+) -> Automacao:
+    """Define só a CADEIA da automação do time (upsert), validando contra os agentes
+    reais. Mantém gatilho e nome. Se ativar uma cadeia que tira o portão de um agente
+    irreversível, a ativação (à parte) é que vai recusar."""
+    try:
+        validar_cadeia(cadeia or {}, _ids_agentes(sessao, time.id))
+    except ValueError as e:
+        raise ConflitoDominio(f"Cadeia inválida: {e}")
+    auto = _obter_ou_criar_automacao(sessao, time)
+    auto.cadeia = cadeia or {}
+    sessao.flush()
+    _audit(sessao, usuario, "automacao.definida", "automacao", auto.id, time.organizacao_id)
+    return auto
+
+
+def definir_gatilho(
+    sessao: Session, time: Time, *, tipo_gatilho: str,
+    configuracao_gatilho: dict | None = None, usuario: Usuario | None = None,
+) -> Automacao:
+    """Define só o GATILHO da automação do time (upsert). Mantém a cadeia e o nome."""
+    auto = _obter_ou_criar_automacao(sessao, time)
+    auto.tipo_gatilho = tipo_gatilho
+    auto.configuracao_gatilho = configuracao_gatilho or {}
+    sessao.flush()
+    _audit(sessao, usuario, "automacao.definida", "automacao", auto.id, time.organizacao_id)
+    return auto
+
+
 def definir_automacao(
     sessao: Session, time: Time, *, nome: str, tipo_gatilho: str,
     configuracao_gatilho: dict | None = None, cadeia: dict | None = None,

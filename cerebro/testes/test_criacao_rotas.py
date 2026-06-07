@@ -1,50 +1,36 @@
-"""Testes das rotas da IA criadora (Fase 9).
+"""Testes das rotas da IA criadora — conversa eterna.
 
-Cobrem o gating por papel (observador vê, operador conversa, só admin aprova),
-o isolamento entre organizações, o ciclo conversar → aprovar/descartar, e a
-recusa de rascunho inválido. O turno da IA é MOCKADO (sem LLM): aqui se testa a
-rota e a transação, não o modelo."""
+Cobrem o gating por papel (observador vê; operador conversa), o isolamento entre
+organizações, e o ciclo iniciar → conversar. Não há mais aprovar/descartar/rascunho:
+a IA escreve no time real e o consultor ativa pela tela do time. O turno é MOCKADO
+(sem LLM): aqui se testa a rota e a transação, não o modelo."""
 
 import uuid
 
 import pytest
-from sqlalchemy import select
 
-from criacao.rascunho import AgenteRascunho, Rascunho
-from modelos import ConversaCriacao, Time
+from modelos import ConversaCriacao
 
 
 @pytest.fixture
 def turno_falso(monkeypatch):
-    """Substitui o turno da IA por um que monta um rascunho fixo, sem LLM."""
+    """Substitui o turno da IA por um que só registra a fala, sem LLM nem time."""
 
-    def _fake(conversa, mensagem, *, chaves=None, origem="legado", **kw):
-        conversa.rascunho = {"time_nome": "Time Proposto", "agentes": []}
+    def _fake(sessao, conversa, mensagem, *, usuario=None, chaves=None, origem="legado", **kw):
         conversa.mensagens = (conversa.mensagens or []) + [
             {"papel": "usuario", "conteudo": mensagem},
-            {
-                "papel": "ia",
-                "conteudo": "Proposta montada!",
-                "chips": ["Sim", "Ajustar"],
-                "uso": {"modelo": "x", "tokens_entrada": 1, "tokens_saida": 1, "origem": origem},
-            },
+            {"papel": "ia", "conteudo": "Proposta montada!", "chips": ["Sim", "Ajustar"], "uso": {}},
         ]
         return {
-            "resposta": "Proposta montada!",
-            "chips": ["Sim", "Ajustar"],
-            "rascunho": conversa.rascunho,
-            "uso": {},
+            "resposta": "Proposta montada!", "chips": ["Sim", "Ajustar"],
+            "time_id": None, "time": None, "uso": {},
         }
 
     monkeypatch.setattr("rotas.criacao.responder_turno", _fake)
 
 
-def _conversa_com_rascunho(sessao, org, usuario, rascunho: Rascunho) -> uuid.UUID:
-    c = ConversaCriacao(
-        organizacao_id=org.id,
-        criada_por_id=usuario.id,
-        rascunho=rascunho.model_dump(mode="json"),
-    )
+def _conversa(sessao, org, usuario) -> uuid.UUID:
+    c = ConversaCriacao(organizacao_id=org.id, criada_por_id=usuario.id)
     sessao.add(c)
     sessao.commit()
     return c.id
@@ -52,13 +38,11 @@ def _conversa_com_rascunho(sessao, org, usuario, rascunho: Rascunho) -> uuid.UUI
 
 def test_iniciar_sem_mensagem(cliente, entrar, dados):
     entrar(dados["operador"])
-    resp = cliente.post(
-        f"/organizacoes/{dados['orgA'].id}/conversas-criacao", json={}
-    )
+    resp = cliente.post(f"/organizacoes/{dados['orgA'].id}/conversas-criacao", json={})
     assert resp.status_code == 201
     corpo = resp.json()
-    assert corpo["estado"] == "rascunho"
     assert corpo["mensagens"] == []
+    assert corpo["time_id"] is None and corpo["time"] is None
 
 
 def test_iniciar_com_mensagem_roda_turno(cliente, entrar, dados, turno_falso):
@@ -68,30 +52,24 @@ def test_iniciar_com_mensagem_roda_turno(cliente, entrar, dados, turno_falso):
         json={"mensagem_inicial": "Quero um time de blog"},
     )
     assert resp.status_code == 201
-    corpo = resp.json()
-    assert len(corpo["mensagens"]) == 2
-    assert corpo["rascunho"]["time_nome"] == "Time Proposto"
+    assert len(resp.json()["mensagens"]) == 2
 
 
 def test_observador_nao_inicia(cliente, entrar, dados):
     entrar(dados["observador"])
-    resp = cliente.post(
-        f"/organizacoes/{dados['orgA'].id}/conversas-criacao", json={}
-    )
+    resp = cliente.post(f"/organizacoes/{dados['orgA'].id}/conversas-criacao", json={})
     assert resp.status_code == 403
 
 
 def test_estranho_nao_enxerga_organizacao(cliente, entrar, dados):
     entrar(dados["estranho"])  # membro só da Org B
-    resp = cliente.post(
-        f"/organizacoes/{dados['orgA'].id}/conversas-criacao", json={}
-    )
+    resp = cliente.post(f"/organizacoes/{dados['orgA'].id}/conversas-criacao", json={})
     assert resp.status_code == 404
 
 
 def test_enviar_mensagem_operador(cliente, entrar, dados, turno_falso, sessao):
     entrar(dados["operador"])
-    cid = _conversa_com_rascunho(sessao, dados["orgA"], dados["operador"], Rascunho())
+    cid = _conversa(sessao, dados["orgA"], dados["operador"])
     resp = cliente.post(
         f"/conversas-criacao/{cid}/mensagens", json={"mensagem": "Adiciona um redator"}
     )
@@ -102,54 +80,14 @@ def test_enviar_mensagem_operador(cliente, entrar, dados, turno_falso, sessao):
 
 def test_observador_nao_envia_mensagem(cliente, entrar, dados, sessao):
     entrar(dados["observador"])
-    cid = _conversa_com_rascunho(sessao, dados["orgA"], dados["admin"], Rascunho())
-    resp = cliente.post(
-        f"/conversas-criacao/{cid}/mensagens", json={"mensagem": "oi"}
-    )
+    cid = _conversa(sessao, dados["orgA"], dados["admin"])
+    resp = cliente.post(f"/conversas-criacao/{cid}/mensagens", json={"mensagem": "oi"})
     assert resp.status_code == 403
 
 
 def test_observador_ve_a_conversa(cliente, entrar, dados, sessao):
     entrar(dados["observador"])
-    cid = _conversa_com_rascunho(sessao, dados["orgA"], dados["admin"], Rascunho())
+    cid = _conversa(sessao, dados["orgA"], dados["admin"])
     resp = cliente.get(f"/conversas-criacao/{cid}")
     assert resp.status_code == 200
-
-
-def test_aprovar_so_admin(cliente, entrar, dados, sessao):
-    rasc = Rascunho(
-        time_nome="Time Aprovado",
-        agentes=[AgenteRascunho(nome="Chefe", papel="lider")],
-    )
-    cid = _conversa_com_rascunho(sessao, dados["orgA"], dados["admin"], rasc)
-
-    # operador NÃO aprova
-    entrar(dados["operador"])
-    assert cliente.post(f"/conversas-criacao/{cid}/aprovar").status_code == 403
-
-    # admin aprova → cria o time
-    entrar(dados["admin"])
-    resp = cliente.post(f"/conversas-criacao/{cid}/aprovar")
-    assert resp.status_code == 200
-    assert resp.json()["agentes"] == 1
-    assert sessao.scalars(
-        select(Time).where(Time.nome == "Time Aprovado")
-    ).first() is not None
-
-
-def test_aprovar_rascunho_invalido_422(cliente, entrar, dados, sessao):
-    cid = _conversa_com_rascunho(sessao, dados["orgA"], dados["admin"], Rascunho())
-    entrar(dados["admin"])
-    resp = cliente.post(f"/conversas-criacao/{cid}/aprovar")
-    assert resp.status_code == 422
-
-
-def test_descartar_e_depois_bloqueia(cliente, entrar, dados, sessao):
-    cid = _conversa_com_rascunho(sessao, dados["orgA"], dados["operador"], Rascunho())
-    entrar(dados["operador"])
-    assert cliente.post(f"/conversas-criacao/{cid}/descartar").status_code == 204
-    # mensagem após descartar → 409
-    resp = cliente.post(
-        f"/conversas-criacao/{cid}/mensagens", json={"mensagem": "oi"}
-    )
-    assert resp.status_code == 409
+    assert resp.json()["id"] == str(cid)

@@ -1,36 +1,34 @@
-"""Endpoints da IA criadora (Fase 9).
+"""Endpoints da IA criadora — UMA conversa que nunca termina (paradigma novo).
 
-A conversa de criação vive por ORGANIZAÇÃO (o time ainda não existe). Acesso por
-papel (matriz da Fase 6, consistente com o resto): observador VÊ; operador
-CONVERSA e monta o rascunho; só ADMIN aprova (materializar cria um time, e criar
-time é admin). Modo rascunho (MIGRACAO §6.4): conversar/montar nunca escreve nas
-tabelas de negócio — só `aprovar` o faz, em ação humana explícita.
+A conversa nasce na ORGANIZAÇÃO e ganha um time assim que a IA o cria (no primeiro
+`definir_time`). A partir daí a IA escreve no TIME REAL pela porta de
+`criacao.servicos`; nada roda até o consultor ATIVAR (parede de ativação). Não há
+mais 'aprovar/descartar' nem rascunho.
+
+Acesso por papel (Fase 6): observador VÊ; operador CONVERSA (cria e edita o time pela
+IA). Criar/editar via IA é equiparado ao CRUD de operador.
 """
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import agendador
 import auditoria
 from auth import usuario_atual
 from chaves import ORIGEM_LEGADO, resolver_chaves_por_organizacao
+from criacao.ferramentas import snapshot_time
 from criacao.loop import MODELO_CRIADORA, responder_turno
-from criacao.materializar import (
-    ConflitoMaterializacao,
-    RascunhoInvalido,
-    materializar,
-)
 from esquemas import (
     ConversaCriacaoLer,
     ConversaCriacaoResumo,
     IniciarConversaCriacao,
-    MaterializacaoResultado,
     MensagemTurno,
     RespostaTurno,
 )
-from modelos import ConversaCriacao, Usuario
+from modelos import Automacao, ConversaCriacao, Usuario
 from orquestracao.modelos_ia import provedor_do_modelo
 from rotas._comum import conversa_criacao_acessivel, organizacao_acessivel
 from sessao import obter_sessao
@@ -38,24 +36,37 @@ from sessao import obter_sessao
 rotas = APIRouter(tags=["criacao"])
 
 
-def _rodar_turno(sessao: Session, conversa: ConversaCriacao, mensagem: str) -> dict:
-    """Resolve a chave da criadora (por organização, tipo 'criadora') e roda um
-    turno, persistindo a conversa. Devolve {resposta, chips, rascunho, uso}."""
+def _rodar_turno(
+    sessao: Session, conversa: ConversaCriacao, mensagem: str, usuario: Usuario
+) -> dict:
+    """Resolve a chave da criadora (por organização) e roda um turno, persistindo a
+    conversa e o time real. Depois, sincroniza o agendador (a IA pode ter ativado/
+    mudado o gatilho). Devolve {resposta, chips, time_id, time, uso}."""
     chaves, origens = resolver_chaves_por_organizacao(
         sessao, conversa.organizacao_id, tipo_ia="criadora"
     )
     origem = origens.get(provedor_do_modelo(MODELO_CRIADORA), ORIGEM_LEGADO)
-    resultado = responder_turno(conversa, mensagem, chaves=chaves, origem=origem)
+    resultado = responder_turno(
+        sessao, conversa, mensagem, usuario=usuario, chaves=chaves, origem=origem
+    )
     sessao.commit()
+    # A IA pode ter ativado a automação ou mudado o gatilho: (re)agenda no relógio.
+    if conversa.time_id:
+        auto = sessao.scalars(
+            select(Automacao)
+            .where(Automacao.time_id == conversa.time_id)
+            .order_by(Automacao.criado_em)
+        ).first()
+        if auto is not None:
+            agendador.sincronizar(auto)
     return resultado
 
 
-def _exigir_rascunho(conversa: ConversaCriacao) -> None:
-    if conversa.estado != "rascunho":
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            "Esta conversa já foi materializada ou descartada.",
-        )
+def _ler(sessao: Session, conversa: ConversaCriacao) -> ConversaCriacaoLer:
+    """A conversa + a fotografia do time real (para o front desenhar o canvas)."""
+    lido = ConversaCriacaoLer.model_validate(conversa)
+    lido.time = snapshot_time(sessao, conversa)
+    return lido
 
 
 @rotas.post(
@@ -71,10 +82,7 @@ def iniciar(
 ):
     organizacao_acessivel(sessao, usuario, organizacao_id, minimo="operador")
     conversa = ConversaCriacao(
-        organizacao_id=organizacao_id,
-        criada_por_id=usuario.id,
-        titulo=dados.titulo,
-        modo="investigacao",  # toda conversa nasce entendendo o processo
+        organizacao_id=organizacao_id, criada_por_id=usuario.id, titulo=dados.titulo
     )
     sessao.add(conversa)
     sessao.flush()
@@ -84,11 +92,11 @@ def iniciar(
         organizacao_id=organizacao_id,
     )
     if dados.mensagem_inicial:
-        _rodar_turno(sessao, conversa, dados.mensagem_inicial)
+        _rodar_turno(sessao, conversa, dados.mensagem_inicial, usuario)
     else:
         sessao.commit()
     sessao.refresh(conversa)
-    return conversa
+    return _ler(sessao, conversa)
 
 
 @rotas.get(
@@ -114,17 +122,8 @@ def obter(
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
-    return conversa_criacao_acessivel(sessao, usuario, conversa_id)
-
-
-@rotas.get("/conversas-criacao/{conversa_id}/rascunho")
-def obter_rascunho(
-    conversa_id: uuid.UUID,
-    sessao: Session = Depends(obter_sessao),
-    usuario: Usuario = Depends(usuario_atual),
-):
     conversa = conversa_criacao_acessivel(sessao, usuario, conversa_id)
-    return conversa.rascunho
+    return _ler(sessao, conversa)
 
 
 @rotas.post("/conversas-criacao/{conversa_id}/mensagens", response_model=RespostaTurno)
@@ -135,45 +134,4 @@ def enviar_mensagem(
     usuario: Usuario = Depends(usuario_atual),
 ):
     conversa = conversa_criacao_acessivel(sessao, usuario, conversa_id, minimo="operador")
-    _exigir_rascunho(conversa)
-    return _rodar_turno(sessao, conversa, dados.mensagem)
-
-
-@rotas.post(
-    "/conversas-criacao/{conversa_id}/aprovar",
-    response_model=MaterializacaoResultado,
-)
-def aprovar(
-    conversa_id: uuid.UUID,
-    sessao: Session = Depends(obter_sessao),
-    usuario: Usuario = Depends(usuario_atual),
-):
-    conversa = conversa_criacao_acessivel(sessao, usuario, conversa_id, minimo="admin")
-    try:
-        return materializar(sessao, conversa, usuario)
-    except RascunhoInvalido as e:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, {"problemas": e.problemas}
-        )
-    except ConflitoMaterializacao as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
-
-
-@rotas.post(
-    "/conversas-criacao/{conversa_id}/descartar",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-def descartar(
-    conversa_id: uuid.UUID,
-    sessao: Session = Depends(obter_sessao),
-    usuario: Usuario = Depends(usuario_atual),
-):
-    conversa = conversa_criacao_acessivel(sessao, usuario, conversa_id, minimo="operador")
-    _exigir_rascunho(conversa)
-    conversa.estado = "descartada"
-    auditoria.registrar(
-        sessao, usuario=usuario, acao="criacao.descartada",
-        recurso_tipo="conversa_criacao", recurso_id=conversa.id,
-        organizacao_id=conversa.organizacao_id,
-    )
-    sessao.commit()
+    return _rodar_turno(sessao, conversa, dados.mensagem, usuario)

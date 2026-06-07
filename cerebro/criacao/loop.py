@@ -1,37 +1,38 @@
-"""O laço de conversa da IA criadora (Fase 9).
+"""O laço de conversa da IA criadora — conversa eterna sobre o time real.
 
-Um turno: a mensagem do consultor entra, a IA raciocina e usa as ferramentas
-(que mutam o rascunho em memória), e devolvemos a resposta + os chips + o rascunho
-atualizado. Reusa o `create_react_agent` do LangGraph (mesmo motor de tool-use do
-`orquestracao.agente`).
+Um turno: a mensagem do consultor entra, a IA raciocina e usa as ferramentas (que
+agora escrevem no TIME REAL, via `criacao.servicos`), e devolvemos a resposta + os
+chips + a fotografia do time. Reusa o `create_react_agent` do LangGraph (mesmo motor
+de tool-use do `orquestracao.agente`).
 
-A persistência entre turnos é simples e inspecionável: o histórico vive em
-`conversas_criacao.mensagens` (JSONB) e o ESTADO real (o rascunho) em
-`conversas_criacao.rascunho` (JSONB). A cada turno, recarregamos os dois,
-rodamos, e regravamos — sem checkpointer do LangGraph. `responder_turno` muta o
-objeto da conversa mas NÃO faz commit; quem chama (a rota) controla a transação.
+A persistência é direta e inspecionável: o histórico vive em
+`conversas_criacao.mensagens` (JSONB) e o ESTADO real é o próprio time (tabelas).
+`responder_turno` muta a conversa e as linhas do time na sessão recebida, mas NÃO faz
+commit — quem chama (a rota) controla a transação do turno.
 """
 
 from langchain_core.messages import AIMessage
 from langgraph.prebuilt import create_react_agent
+from sqlalchemy.orm import Session
 
-from criacao.ferramentas import EstadoCriacao, montar_ferramentas
+from criacao.ferramentas import (
+    ContextoCriacao,
+    montar_ferramentas,
+    snapshot_time,
+)
 from criacao.prompt import montar_prompt_criadora
-from criacao.rascunho import Rascunho
 from orquestracao.llm import construir_modelo, texto_da_resposta, usar_chaves
 
 # Modelo da criadora: o MAIS capaz (Opus). A criadora é uma consultora sênior que
 # projeta o time inteiro e escreve a documentação de cada agente — qualidade de
-# raciocínio importa mais que custo aqui (uso esporádico, só ao montar um time).
-# Sonnet ficava raso e apressado (decisão do maestro: subir para Opus). É
-# Anthropic, então cai na ANTHROPIC_API_KEY do .env quando não há chave de
-# 'criadora' no cofre. Facilmente trocável.
+# raciocínio importa mais que custo aqui (uso esporádico). É Anthropic, então cai na
+# ANTHROPIC_API_KEY do .env quando não há chave de 'criadora' no cofre.
 MODELO_CRIADORA = "claude-opus-4-8"
 
 
 def _historico_para_mensagens(mensagens: list | None) -> list[dict]:
     """Converte o histórico salvo (papel/conteúdo) no formato de mensagens do
-    agente. Só as falas de texto entram; o estado real vem do rascunho."""
+    agente. Só as falas de texto entram; o estado real vem do time."""
     saida: list[dict] = []
     for m in mensagens or []:
         papel = m.get("papel")
@@ -44,18 +45,20 @@ def _historico_para_mensagens(mensagens: list | None) -> list[dict]:
 
 
 def responder_turno(
+    sessao: Session,
     conversa,
     mensagem_usuario: str,
     *,
+    usuario=None,
     chaves: dict[str, str] | None = None,
     origem: str = "legado",
     modelo: str = MODELO_CRIADORA,
 ) -> dict:
-    """Roda um turno da conversa. Muta `conversa.rascunho` e `conversa.mensagens`
-    (sem commit) e devolve {resposta, chips, rascunho, uso}."""
-    estado = EstadoCriacao(rascunho=Rascunho.model_validate(conversa.rascunho or {}))
-    ferramentas = montar_ferramentas(estado)
-    prompt = montar_prompt_criadora(estado.rascunho)
+    """Roda um turno. Muta `conversa.mensagens` e, via ferramentas, o time real (sem
+    commit) e devolve {resposta, chips, time_id, time, uso}."""
+    ctx = ContextoCriacao(sessao=sessao, conversa=conversa, usuario=usuario)
+    ferramentas = montar_ferramentas(ctx)
+    prompt = montar_prompt_criadora(snapshot_time(sessao, conversa))
 
     historico = _historico_para_mensagens(conversa.mensagens) + [
         {"role": "user", "content": mensagem_usuario}
@@ -66,16 +69,12 @@ def responder_turno(
         resultado = app.invoke({"messages": historico})
 
     # O react agent devolve o HISTÓRICO INTEIRO + as mensagens novas deste turno.
-    # Só nos interessam as NOVAS (o que veio depois do que enviamos): considerar
-    # todas repetiria as respostas anteriores e somaria tokens já contados.
+    # Só nos interessam as NOVAS (depois do que enviamos).
     novas = resultado["messages"][len(historico) :]
 
-    # Texto da resposta + medição num passo só. CUIDADO: o modelo (Anthropic)
-    # costuma emitir o texto JUNTO com as chamadas de ferramenta, e o ÚLTIMO
-    # AIMessage — depois de rodar as ferramentas (inclusive a dos chips) — pode
-    # vir VAZIO. Por isso juntamos o texto de todos os turnos do modelo DESTE
-    # turno, não só do último; senão a bolha da IA fica vazia. Medição (MIGRACAO
-    # §3.6): soma os tokens, com a origem da chave carimbada (transparência).
+    # Texto da resposta + medição num passo só. O modelo (Anthropic) costuma emitir o
+    # texto JUNTO com as chamadas de ferramenta, e o ÚLTIMO AIMessage pode vir vazio —
+    # por isso juntamos o texto de TODOS os turnos do modelo deste turno.
     textos: list[str] = []
     tokens_entrada = tokens_saida = 0
     for m in novas:
@@ -86,7 +85,7 @@ def responder_turno(
             u = m.usage_metadata or {}
             tokens_entrada += u.get("input_tokens", 0)
             tokens_saida += u.get("output_tokens", 0)
-    resposta_texto = "\n\n".join(textos) if textos else "Pronto, atualizei o rascunho."
+    resposta_texto = "\n\n".join(textos) if textos else "Pronto, atualizei o time."
     uso = {
         "modelo": modelo,
         "tokens_entrada": tokens_entrada,
@@ -94,20 +93,14 @@ def responder_turno(
         "origem": origem,
     }
 
-    # Persiste reatribuindo (o ORM detecta a troca do JSONB; mutação in-place não).
-    conversa.rascunho = estado.rascunho.model_dump(mode="json")
     conversa.mensagens = (conversa.mensagens or []) + [
         {"papel": "usuario", "conteudo": mensagem_usuario},
-        {
-            "papel": "ia",
-            "conteudo": resposta_texto,
-            "chips": estado.chips,
-            "uso": uso,
-        },
+        {"papel": "ia", "conteudo": resposta_texto, "chips": ctx.chips, "uso": uso},
     ]
     return {
         "resposta": resposta_texto,
-        "chips": estado.chips,
-        "rascunho": conversa.rascunho,
+        "chips": ctx.chips,
+        "time_id": str(conversa.time_id) if conversa.time_id else None,
+        "time": snapshot_time(sessao, conversa),
         "uso": uso,
     }

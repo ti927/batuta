@@ -424,12 +424,14 @@ class MensagemTurno(BaseModel):
 
 
 class RespostaTurno(BaseModel):
-    """O resultado de um turno: a resposta da IA, os chips sugeridos e o rascunho
-    atualizado (para o canvas se redesenhar)."""
+    """O resultado de um turno: a resposta da IA, os chips, e a fotografia do TIME
+    REAL atualizado (para o canvas se redesenhar). `time_id`/`time` ficam nulos
+    enquanto a IA ainda não criou o time."""
 
     resposta: str
     chips: list[str]
-    rascunho: dict
+    time_id: str | None = None
+    time: dict | None = None
     uso: dict
 
 
@@ -441,24 +443,14 @@ class ConversaCriacaoResumo(BaseModel):
     id: uuid.UUID
     organizacao_id: uuid.UUID
     titulo: str | None
-    estado: str
-    modo: str
     time_id: uuid.UUID | None
     criado_em: datetime
     atualizado_em: datetime
 
 
 class ConversaCriacaoLer(ConversaCriacaoResumo):
-    """Uma conversa de criação completa: com as mensagens e o rascunho."""
+    """Uma conversa completa: histórico + a fotografia do time real (preenchida pela
+    rota, para o front desenhar o canvas sem mais idas ao servidor)."""
 
     mensagens: list
-    rascunho: dict
-
-
-class MaterializacaoResultado(BaseModel):
-    """O que a aprovação criou (para o card de sucesso)."""
-
-    time_id: str
-    agentes: int
-    instrumentos: int
-    automacao: bool
+    time: dict | None = None
