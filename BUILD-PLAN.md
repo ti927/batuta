@@ -791,9 +791,23 @@ de design, não código de produção — recriar com Next + Tailwind + shadcn/u
 
 Ordem de implementação sugerida no `docs/design/README.md` §13.
 
-## FASE 9 — Camada conversacional de criação (IA criadora)
+## FASE 9 — Camada conversacional de criação (IA criadora)  🚧 IMPLEMENTADA (aguarda validação manual ao vivo)
 Chat que estrutura projeto/time por conversa; tool use para a IA executar as operações do Batuta; **modo rascunho** (nada vira definitivo sem aprovação humana); desfazer cirúrgico.
 - **Spec visual/UX:** `docs/design/` — `app-creation.jsx` (tela dividida chat + canvas de rascunho), README §6.2/§6.5; roteiros de conversa §8; mapa de dados→cérebro §9; regra de modo rascunho (`MIGRACAO.md` §6.4).
+
+**O que foi feito (commits `cfc1dc4` cérebro + `00f77b5` interface, branch `migracao-etapa-2`):**
+- **Arquitetura "rascunho-como-documento"** (a decisão central, MIGRACAO §6.4): as ferramentas da IA mutam só um documento JSON (`cerebro/criacao/rascunho.py`) — NENHUMA tabela de negócio é tocada até a aprovação humana. A separação "a IA propõe / o consultor confirma" é uma **garantia estrutural**, não disciplina.
+- **Cérebro** (`cerebro/criacao/`): `rascunho` (schema), `ferramentas` (tool-use local, mesmo encaixe do motor), `materializar` (o portão: grava tudo em UMA transação atômica, com rollback total em falha; automação nasce inativa), `loop` (turno via `create_react_agent`), `prompt` (system prompt embutido — a criadora é infraestrutura). Modelo `ConversaCriacao` + migração aditiva `fcf05d5f64f7`. `chaves.resolver_chaves_por_organizacao` (criadora resolve por org, `tipo_ia='criadora'`). Rotas `rotas/criacao.py`: iniciar/listar/obter/mensagens/rascunho/aprovar/descartar. **Gating:** observador vê, operador conversa, só **admin** aprova (criar time é admin). Auditoria em iniciar/materializar/descartar.
+- **Interface** (`interface/app/criar/`): tela dividida — chat (bolhas, digitação, chips, card de aprovação, card de sucesso) + canvas do rascunho (agentes com `RobotFace`, gatilho, cadeia vertical, custo) + drawer do agente com os 4 markdowns. Entrada "Criar com a IA" no cabeçalho.
+- **Verificação:** 123 testes pytest verdes cobrindo atomicidade, invariantes (um líder só), recusa de rascunho incompleto, isolamento entre organizações, persistência de conversa, catálogo de instrumentos/gatilho e resolução de chave (LLM mockado). Interface: `tsc` + `eslint` + `next build` verdes.
+
+**Refino de qualidade da IA (rodadas de teste ao vivo, ainda na branch):** os primeiros testes ao vivo expuseram que o motor funciona, mas a IA precisava de mais competência e expertise. Ajustes feitos:
+- **Modelo → `claude-opus-4-8`** (`MODELO_CRIADORA` em `loop.py`). Sonnet ficava raso/apressado; Opus dá a profundidade de consultor. **Pegadinha resolvida:** Opus 4.8 NÃO aceita o parâmetro `temperature` (a API responde 400); `construir_modelo` agora omite `temperature` para os modelos da lista `MODELOS_SEM_TEMPERATURA` (`orquestracao/llm.py`).
+- **A IA passou a conhecer os FORMATOS que precisa acertar:** `catalogo_de_instrumentos()` expõe os campos de cada instrumento (público/obrigatório/secreto) — sem isso ela não sabia perguntar a URL/usuário do WordPress; e o formato exato do gatilho de agendamento, com **validação** em `definir_gatilho` (recusa `dia_semana` em texto, etc.).
+- **Prompt virou um PLAYBOOK de consultora sênior** (`prompt.py`): descoberta profunda mas que converge → monta o time COMPLETO (todos os agentes com modelo por papel, instrumentos com os dados de conexão coletados, cadeia com **portão de aprovação** antes de ações irreversíveis, gatilho, custo) → só oferece aprovar quando completo. Régua de markdowns rica.
+- **Dois bugs do laço corrigidos:** texto da resposta vinha vazio (o texto do modelo Anthropic vem junto das tool calls; agora junta o texto de TODAS as mensagens novas do turno) e repetição das respostas anteriores (considera só as mensagens NOVAS, não o histórico reenviado).
+- **Abertura instantânea (UX):** a conversa abre vazia e a 1ª mensagem é enviada já no chat (com "digitando…"), para o Opus lento não travar a tela de início.
+- **Falta:** o maestro confirmar, clicando, que a conversa agora ficou no nível "consultora" e monta um time completo e correto. Desfazer cirúrgico = descartar a conversa (nada escrito); o materializado usa as telas/rotas de exclusão existentes.
 
 ## FASE 10 — IA companheira de projeto
 Histórico de conversa por projeto; tool use para consultar o estado do projeto; **memória vetorial** com isolamento estrito entre projetos.

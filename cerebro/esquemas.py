@@ -401,3 +401,60 @@ class ChaveApiLer(BaseModel):
     ativa: bool
     criado_em: datetime
     atualizado_em: datetime
+
+
+# ──────────────────── IA criadora (Fase 9) ───────────────────────
+
+
+class IniciarConversaCriacao(BaseModel):
+    """Abre uma conversa de criação. Se vier `mensagem_inicial`, o primeiro turno
+    já roda."""
+
+    mensagem_inicial: str | None = None
+    titulo: str | None = Field(default=None, max_length=200)
+
+
+class MensagemTurno(BaseModel):
+    """Uma fala do consultor para a IA criadora."""
+
+    mensagem: str = Field(min_length=1)
+
+
+class RespostaTurno(BaseModel):
+    """O resultado de um turno: a resposta da IA, os chips sugeridos e o rascunho
+    atualizado (para o canvas se redesenhar)."""
+
+    resposta: str
+    chips: list[str]
+    rascunho: dict
+    uso: dict
+
+
+class ConversaCriacaoResumo(BaseModel):
+    """Uma conversa de criação na listagem (sem o histórico inteiro)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organizacao_id: uuid.UUID
+    titulo: str | None
+    estado: str
+    time_id: uuid.UUID | None
+    criado_em: datetime
+    atualizado_em: datetime
+
+
+class ConversaCriacaoLer(ConversaCriacaoResumo):
+    """Uma conversa de criação completa: com as mensagens e o rascunho."""
+
+    mensagens: list
+    rascunho: dict
+
+
+class MaterializacaoResultado(BaseModel):
+    """O que a aprovação criou (para o card de sucesso)."""
+
+    time_id: str
+    agentes: int
+    instrumentos: int
+    automacao: bool

@@ -119,21 +119,23 @@ def resolver_chave_e_origem_por_time(
     return chave, (origem or ORIGEM_LEGADO)
 
 
-def resolver_chaves_por_time(
+def resolver_chaves_por_organizacao(
     sessao: Session,
-    time_id: uuid.UUID | None,
+    organizacao_id: uuid.UUID | None,
     *,
     tipo_ia: str = "executora",
 ) -> tuple[dict[str, str], dict[str, str]]:
-    """Resolve a chave de CADA provedor suportado para a organização do time
-    (Fase 7-A: o motor é multi-provedor). Devolve dois mapas por provedor:
-    `chaves` {provedor: chave} (só os provedores com chave no cofre) e `origens`
-    {provedor: origem} (para a medição da 7.6).
+    """Resolve a chave de CADA provedor suportado para uma ORGANIZAÇÃO (Fase 7-A:
+    multi-provedor). Devolve dois mapas por provedor: `chaves` {provedor: chave}
+    (só os provedores com chave no cofre) e `origens` {provedor: origem} (medição
+    7.6).
 
     A Anthropic ganha origem ORIGEM_LEGADO mesmo sem chave no cofre, pois o motor
     cai na ANTHROPIC_API_KEY do .env; OpenAI/Google sem chave ficam de fora (o
-    motor exige a chave do cofre e falha de forma clara se um modelo deles rodar)."""
-    organizacao_id = _org_do_time(sessao, time_id)
+    motor exige a chave do cofre e falha de forma clara se um modelo deles rodar).
+
+    É por aqui que a IA criadora (Fase 9) resolve sua chave: ela trabalha por
+    organização (o time ainda não existe), com `tipo_ia='criadora'`."""
     chaves: dict[str, str] = {}
     origens: dict[str, str] = {}
     for provedor in PROVEDORES:
@@ -144,3 +146,16 @@ def resolver_chaves_por_time(
         elif provedor == PROVEDOR_ANTHROPIC:
             origens[provedor] = ORIGEM_LEGADO
     return chaves, origens
+
+
+def resolver_chaves_por_time(
+    sessao: Session,
+    time_id: uuid.UUID | None,
+    *,
+    tipo_ia: str = "executora",
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Como `resolver_chaves_por_organizacao`, mas a partir do time da execução
+    (automação ou agente): descobre a organização do time e resolve por ela."""
+    return resolver_chaves_por_organizacao(
+        sessao, _org_do_time(sessao, time_id), tipo_ia=tipo_ia
+    )

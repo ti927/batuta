@@ -12,6 +12,7 @@ from rotas import (
     automacoes,
     chaves_api,
     cinto,
+    criacao,
     execucao,
     instrumentos,
     membros,
@@ -56,6 +57,7 @@ app.include_router(cinto.rotas)
 app.include_router(execucao.rotas)
 app.include_router(automacoes.rotas)
 app.include_router(chaves_api.rotas)
+app.include_router(criacao.rotas)
 app.include_router(webhooks.rotas)
 
 # Arquivos gerados (ex.: PDFs do instrumento gerar_pdf), servidos localmente.

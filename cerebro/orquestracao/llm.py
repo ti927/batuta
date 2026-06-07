@@ -34,6 +34,12 @@ MODELO_PADRAO = "claude-haiku-4-5"
 # (tabelas, vários candidatos, artigos) — 2048 cortava saídas ricas no meio.
 MAX_TOKENS = 8192
 
+# Modelos que NÃO aceitam o parâmetro `temperature` (a API responde 400
+# "temperature is deprecated for this model"). Para eles, omitimos o parâmetro.
+# Centralizado aqui para valer tanto para a IA criadora quanto para qualquer
+# agente que rode num desses modelos.
+MODELOS_SEM_TEMPERATURA = {"claude-opus-4-8"}
+
 # Mapa {provedor: chave} resolvido para a execução em curso (Fases 7.3/7-A). É um
 # contextvar para atravessar o stack do motor sem mudar a assinatura de nenhuma
 # função do grafo: a fronteira (disparo/retomada/agente isolado) põe o mapa aqui
@@ -72,8 +78,11 @@ def construir_modelo(
         parametros: dict = {
             "model": modelo,
             "max_tokens": MAX_TOKENS,
-            "temperature": temperatura,
         }
+        # Opus 4.8 (e afins) rejeitam `temperature`; só enviamos quando o modelo
+        # aceita.
+        if modelo not in MODELOS_SEM_TEMPERATURA:
+            parametros["temperature"] = temperatura
         if chave:
             parametros["api_key"] = chave
         elif not os.environ.get("ANTHROPIC_API_KEY"):

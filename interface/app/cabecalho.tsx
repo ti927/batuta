@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Sparkles } from "lucide-react";
 
 import { Logo } from "@/components/logo";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { criarClienteNavegador } from "@/lib/supabase/cliente-navegador";
 
 // Cabeçalho do app (DESIGN-SYSTEM §3): logotipo "Batuta" à esquerda (leva à
@@ -30,6 +31,14 @@ export function Cabecalho({ email }: { email: string }) {
           <Logo />
         </Link>
         <div className="flex items-center gap-3">
+          <Link
+            href="/criar"
+            className={buttonVariants({ size: "sm", className: "gap-1.5" })}
+          >
+            <Sparkles className="size-4" />
+            <span className="hidden sm:inline">Criar com a IA</span>
+            <span className="sm:hidden">Criar</span>
+          </Link>
           <span className="hidden text-sm text-muted-foreground sm:inline">
             {email}
           </span>
