@@ -103,6 +103,7 @@ class ConectarMCP(TipoInstrumento):
     Config = ConfigMCP
     Args = ArgsMCP
     campos_secretos = ("token_bearer",)
+    acao_irreversivel = True  # não sabemos o que o servidor MCP faz; por segurança
 
     def executar(self, config: ConfigMCP, args: ArgsMCP) -> dict:
         """Acionamento isolado: testa a conexão e lista as ferramentas do

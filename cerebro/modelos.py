@@ -343,21 +343,21 @@ class SegredoInstrumento(IdData, Base):
 
 
 class ConversaCriacao(IdData, Base):
-    """Sessão conversacional da IA criadora (Fase 9, MIGRACAO §6.4).
+    """Conversa da IA criadora — UMA conversa que nunca termina (paradigma novo).
 
-    A IA propõe; o consultor confirma. Nada entra em produção sem aprovação
-    humana explícita: as ferramentas da IA mutam APENAS o `rascunho` (JSONB) —
-    nenhuma tabela de negócio é tocada até `materializar`. É o ponto de maior
-    risco da migração (MIGRACAO §6.4), e a separação 'a IA propõe / o consultor
-    confirma' é aqui uma garantia estrutural, não disciplina.
+    A IA opera sobre o TIME REAL desde o começo: as ferramentas escrevem direto
+    nas tabelas (Time/Agente/Instrumento/cinto/Automacao), pela porta validada de
+    `criacao/servicos.py`. Não há mais rascunho-como-documento nem ritual de
+    'aprovar e criar'. A proteção mudou de lugar: tudo é real mas DORME — a
+    automação nasce inativa e nada roda até o consultor ATIVAR, e a parede de
+    ativação exige portão humano antes de ação irreversível (ver portao_ativacao).
 
-    Vínculo à ORGANIZAÇÃO (não a um time): durante a criação o time ainda não
-    existe — é o que está sendo proposto. `mensagens` é o histórico append-only
-    da conversa; `rascunho` é o documento estruturado do time proposto. Ao
-    aprovar, `materializar` grava tudo de uma vez e preenche `time_id`.
+    O 'estado' do time (rascunho | ativo) é DERIVADO da automação (ativa?), não uma
+    coluna. A conversa segue viva depois de ativar, para editar e consertar.
 
-    Distinta da futura `conversas_projeto` (Fase 10, IA companheira), que será
-    vinculada a um time já existente."""
+    Vínculo: nasce na ORGANIZAÇÃO (o time ainda não existe) e ganha `time_id` assim
+    que a IA cria o time (preguiçosamente, no primeiro `definir_time`). `mensagens`
+    é o histórico append-only."""
 
     __tablename__ = "conversas_criacao"
     organizacao_id: Mapped[uuid.UUID] = mapped_column(
@@ -367,17 +367,11 @@ class ConversaCriacao(IdData, Base):
         ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
     )
     titulo: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    estado: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default=text("'rascunho'")
-    )  # rascunho | materializada | descartada
     mensagens: Mapped[list] = mapped_column(
         JSONB, nullable=False, server_default=text("'[]'::jsonb")
     )
-    rascunho: Mapped[dict] = mapped_column(
-        JSONB, nullable=False, server_default=text("'{}'::jsonb")
-    )
-    # Preenchido ao materializar: o time real criado (rastreio/auditoria). SET
-    # NULL para o registro da conversa sobreviver à exclusão do time.
+    # O time que esta conversa cria e mantém. Nulo até o primeiro `definir_time`.
+    # SET NULL para a conversa sobreviver à exclusão do time.
     time_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("times.id", ondelete="SET NULL"), nullable=True
     )

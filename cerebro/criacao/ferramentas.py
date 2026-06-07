@@ -1,41 +1,60 @@
-"""As ferramentas da IA criadora (Fase 9).
+"""As ferramentas da IA criadora — conversa eterna sobre o TIME REAL.
 
-Mesmo encaixe de tool-use do motor (`orquestracao.agente`): cada operação vira uma
-`StructuredTool` que a IA aciona. A diferença essencial do modo rascunho: estas
-ferramentas mutam APENAS um documento `Rascunho` em memória — nenhuma sessão de
-banco, nenhuma escrita em tabela de negócio. A IA propõe aqui; o consultor
-confirma depois (em `materializar`). Erros viram texto de volta para a IA (como
-em `orquestracao.agente`), que corrige na conversa em vez de quebrar.
+Mesmo encaixe de tool-use do motor (`orquestracao.agente`): cada operação é uma
+`StructuredTool` que a IA aciona. No paradigma novo, elas NÃO mexem mais num
+rascunho JSON — escrevem direto nas tabelas reais, pela porta única e validada de
+`criacao.servicos`. O time é criado preguiçosamente no primeiro `definir_time` e
+fica vinculado à conversa (`conversa.time_id`). Tudo nasce inativo e DORME até o
+consultor `ativar_time` — a parede de ativação recusa ligar uma ação irreversível
+sem portão humano antes. Erros de regra viram texto de volta para a IA corrigir.
 
-`montar_ferramentas(estado)` constrói as ferramentas fechadas sobre um
-`EstadoCriacao` (o rascunho corrente + os chips sugeridos), para o laço de
-conversa ler o resultado depois de a IA agir.
+`montar_ferramentas(ctx)` constrói as ferramentas fechadas sobre um
+`ContextoCriacao` (sessão + conversa + usuário + chips), sempre TODAS disponíveis
+(sem modos): a IA investiga, monta, ativa e conserta na mesma conversa.
 """
 
+import functools
 import json
+import threading
+import uuid
 from dataclasses import dataclass, field
 
 from langchain_core.tools import StructuredTool
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 import instrumentos as encaixe
 import precos
-from criacao.rascunho import (
-    AgenteRascunho,
-    AutomacaoRascunho,
-    CustoEstimado,
-    InstrumentoRascunho,
-    Rascunho,
+from criacao import servicos
+from criacao.servicos import ConflitoDominio
+from modelos import (
+    Agente,
+    AgenteInstrumento,
+    Automacao,
+    ConversaCriacao,
+    Instrumento,
+    SegredoInstrumento,
+    Time,
+    Usuario,
 )
-from orquestracao.cadeia import validar_cadeia
 from orquestracao.llm import MODELO_PADRAO
 
 
 @dataclass
-class EstadoCriacao:
-    """O que as ferramentas mutam durante um turno da conversa."""
+class ContextoCriacao:
+    """O que as ferramentas precisam para agir no time real durante um turno: a
+    sessão (transação do turno), a conversa (de onde sai o time e a organização),
+    o usuário que age (auditoria) e os chips sugeridos."""
 
-    rascunho: Rascunho = field(default_factory=Rascunho)
+    sessao: Session
+    conversa: ConversaCriacao
+    usuario: Usuario | None = None
     chips: list[str] = field(default_factory=list)
+
+    def time(self) -> Time | None:
+        if self.conversa.time_id is None:
+            return None
+        return self.sessao.get(Time, self.conversa.time_id)
 
 
 def catalogo_de_instrumentos() -> list[dict]:
@@ -43,10 +62,8 @@ def catalogo_de_instrumentos() -> list[dict]:
 
     É o que destrava a IA criadora: sem saber que o WordPress precisa de `site_url`
     e `usuario`, ela não tem como PERGUNTAR ao consultor por eles. Para cada tipo,
-    lista os campos da `Config` marcando `obrigatorio` (no `required` do schema) e
-    `secreto` (em `campos_secretos`) — os secretos NÃO são preenchidos pela IA
-    (ficam pendentes para o cofre); os públicos a IA deve perguntar e preencher.
-    Usado pela ferramenta `listar_tipos_instrumento` e injetado no prompt."""
+    lista os campos da `Config` marcando `obrigatorio` e `secreto`, e se o tipo faz
+    `acao_irreversivel` (a IA precisa pôr portão humano antes na cadeia)."""
     catalogo: list[dict] = []
     for tipo in encaixe.tipos_disponiveis():
         esquema = tipo.Config.model_json_schema()
@@ -67,6 +84,7 @@ def catalogo_de_instrumentos() -> list[dict]:
                 "nome": tipo.nome_exibicao,
                 "descricao": tipo.descricao,
                 "campos": campos,
+                "acao_irreversivel": tipo.acao_irreversivel,
             }
         )
     return catalogo
@@ -80,9 +98,16 @@ def _erro(mensagem: str) -> str:
     return json.dumps({"ok": False, "erro": mensagem}, ensure_ascii=False)
 
 
+def _uuid(valor: str) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(str(valor))
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
 # Tipos de gatilho e o formato EXATO da config de agendamento que o `agendador`
-# espera (agendador._trigger_da_config). A IA erra por não conhecer este formato —
-# por isso ele é documentado aqui, injetado no prompt e validado em definir_gatilho.
+# espera. A IA erra por não conhecer este formato — por isso ele é documentado
+# aqui, injetado no prompt e validado em definir_gatilho.
 TIPOS_GATILHO = ("manual", "agendamento", "webhook")
 FORMATO_GATILHO = (
     "Tipos de gatilho:\n"
@@ -103,8 +128,7 @@ def _inteiro_no_intervalo(valor, minimo: int, maximo: int) -> bool:
 
 
 def _validar_gatilho(tipo: str, config: dict) -> str | None:
-    """Devolve uma mensagem de erro se o gatilho estiver malformado (None = ok).
-    Garante que um 'agendamento' siga o formato que o agendador entende."""
+    """Devolve uma mensagem de erro se o gatilho estiver malformado (None = ok)."""
     if tipo not in TIPOS_GATILHO:
         return f"Gatilho desconhecido: '{tipo}'. Use um de: {', '.join(TIPOS_GATILHO)}."
     if tipo != "agendamento":
@@ -123,248 +147,357 @@ def _validar_gatilho(tipo: str, config: dict) -> str | None:
     return None
 
 
-def montar_ferramentas(estado: EstadoCriacao) -> list[StructuredTool]:
-    """Cria as ferramentas da IA criadora ligadas a `estado`. Cada uma muta
-    `estado.rascunho` (ou `estado.chips`) e devolve um JSON com o resultado."""
-    r = estado.rascunho
+def _snapshot_time(ctx: ContextoCriacao) -> dict:
+    """Fotografia do time REAL para a IA se situar (e o front redesenhar): agentes
+    com seus markdowns e cinto, instrumentos com config e segredos pendentes, e a
+    automação (cadeia + gatilho + se está ativa)."""
+    sess, time = ctx.sessao, ctx.time()
+    if time is None:
+        return {}
+    agentes = sess.scalars(
+        select(Agente).where(Agente.time_id == time.id).order_by(Agente.criado_em)
+    ).all()
+    cinto: dict[str, list[str]] = {}
+    for aid, iid in sess.execute(
+        select(AgenteInstrumento.agente_id, AgenteInstrumento.instrumento_id)
+        .join(Agente, Agente.id == AgenteInstrumento.agente_id)
+        .where(Agente.time_id == time.id)
+    ).all():
+        cinto.setdefault(str(aid), []).append(str(iid))
+    instrumentos = sess.scalars(
+        select(Instrumento).where(Instrumento.time_id == time.id).order_by(Instrumento.criado_em)
+    ).all()
+    guardados: dict[str, set[str]] = {}
+    for iid, campo in sess.execute(
+        select(SegredoInstrumento.instrumento_id, SegredoInstrumento.campo)
+        .join(Instrumento, Instrumento.id == SegredoInstrumento.instrumento_id)
+        .where(Instrumento.time_id == time.id)
+    ).all():
+        guardados.setdefault(str(iid), set()).add(campo)
+    auto = sess.scalars(
+        select(Automacao).where(Automacao.time_id == time.id).order_by(Automacao.criado_em)
+    ).first()
+    return {
+        "time": {"id": str(time.id), "nome": time.nome, "descricao": time.descricao},
+        "agentes": [
+            {
+                "id": str(a.id), "nome": a.nome, "papel": a.papel, "modelo_ia": a.modelo_ia,
+                "agent_md": a.agent_md, "skill_md": a.skill_md, "tools_md": a.tools_md,
+                "soul_md": a.soul_md, "cinto": cinto.get(str(a.id), []),
+            }
+            for a in agentes
+        ],
+        "instrumentos": [
+            {
+                "id": str(i.id), "nome": i.nome, "tipo": i.tipo,
+                "configuracao": i.configuracao,
+                "acao_irreversivel": encaixe.acao_irreversivel(i.tipo),
+                "segredos_pendentes": [
+                    c for c in encaixe.campos_secretos(i.tipo)
+                    if c not in guardados.get(str(i.id), set())
+                ],
+            }
+            for i in instrumentos
+        ],
+        "automacao": None if auto is None else {
+            "id": str(auto.id), "nome": auto.nome, "tipo_gatilho": auto.tipo_gatilho,
+            "configuracao_gatilho": auto.configuracao_gatilho, "cadeia": auto.cadeia,
+            "ativa": auto.ativa,
+        },
+    }
+
+
+def snapshot_time(sessao: Session, conversa: ConversaCriacao) -> dict | None:
+    """Fotografia do time real de uma conversa (ou None se ainda não há time).
+    Conveniência pública para o loop e as rotas redesenharem o canvas."""
+    return _snapshot_time(ContextoCriacao(sessao=sessao, conversa=conversa)) or None
+
+
+def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
+    """As ferramentas da IA criadora ligadas a `ctx`, TODAS disponíveis. Cada uma
+    escreve no time real (via `criacao.servicos`) e devolve um JSON com o resultado;
+    erros de regra voltam como texto para a IA corrigir."""
+    sess = ctx.sessao
+
+    def _exigir_time() -> Time | None:
+        return ctx.time()
+
+    def _agente(agente_id: str) -> Agente | None:
+        aid = _uuid(agente_id)
+        ag = sess.get(Agente, aid) if aid else None
+        return ag if ag and ag.time_id == ctx.conversa.time_id else None
+
+    def _instrumento(instrumento_id: str) -> Instrumento | None:
+        iid = _uuid(instrumento_id)
+        inst = sess.get(Instrumento, iid) if iid else None
+        return inst if inst and inst.time_id == ctx.conversa.time_id else None
+
+    def _automacao() -> Automacao | None:
+        if ctx.conversa.time_id is None:
+            return None
+        return sess.scalars(
+            select(Automacao)
+            .where(Automacao.time_id == ctx.conversa.time_id)
+            .order_by(Automacao.criado_em)
+        ).first()
 
     def definir_time(nome: str, descricao: str | None = None) -> str:
-        """Define o nome e a descrição do time que está sendo criado."""
-        r.time_nome = nome
-        if descricao is not None:
-            r.time_descricao = descricao
-        return _ok(f"Time '{nome}' definido.")
+        """Define o nome e a descrição do time. Na PRIMEIRA vez cria o time (ainda
+        inativo, em construção); depois atualiza nome/descrição."""
+        time = ctx.time()
+        if time is None:
+            time = servicos.criar_time(
+                sess, ctx.conversa.organizacao_id, nome, descricao, usuario=ctx.usuario
+            )
+            ctx.conversa.time_id = time.id
+            sess.flush()
+            return _ok(f"Time '{nome}' criado.", time_id=str(time.id))
+        servicos.editar_time(sess, time, nome=nome, descricao=descricao)
+        return _ok(f"Time '{nome}' atualizado.", time_id=str(time.id))
 
     def adicionar_agente(
-        nome: str,
-        papel: str = "agente",
-        agent_md: str | None = None,
-        skill_md: str | None = None,
-        tools_md: str | None = None,
-        soul_md: str | None = None,
-        modelo_ia: str | None = None,
+        nome: str, papel: str = "agente", agent_md: str | None = None,
+        skill_md: str | None = None, tools_md: str | None = None,
+        soul_md: str | None = None, modelo_ia: str | None = None,
     ) -> str:
         """Adiciona um agente ao time. `papel` é 'lider' ou 'agente' (no máximo um
-        líder por time). Os quatro markdowns documentam o agente: agent_md (quem
-        é), skill_md (habilidades), tools_md (cinto), soul_md (personalidade).
-        Devolve o `ref` do agente, usado para o cinto e a cadeia."""
-        if papel not in ("lider", "agente"):
-            return _erro("O papel precisa ser 'lider' ou 'agente'.")
-        if papel == "lider" and r.tem_lider():
-            return _erro("Já existe um líder no time; só pode haver um.")
-        agente = AgenteRascunho(
-            nome=nome,
-            papel=papel,
-            agent_md=agent_md,
-            skill_md=skill_md,
-            tools_md=tools_md,
-            soul_md=soul_md,
-            modelo_ia=modelo_ia,
-        )
-        r.agentes.append(agente)
-        return _ok(f"Agente '{nome}' adicionado.", ref=agente.ref)
+        líder). Os quatro markdowns documentam o agente: agent_md (quem é), skill_md
+        (habilidades), tools_md (cinto), soul_md (personalidade). Devolve o `id` do
+        agente — use-o no cinto e na cadeia. Defina o time antes (definir_time)."""
+        time = _exigir_time()
+        if time is None:
+            return _erro("Defina o time primeiro, com definir_time.")
+        try:
+            agente = servicos.adicionar_agente(
+                sess, time, nome=nome, papel=papel, agent_md=agent_md, skill_md=skill_md,
+                tools_md=tools_md, soul_md=soul_md, modelo_ia=modelo_ia, usuario=ctx.usuario,
+            )
+        except ConflitoDominio as e:
+            return _erro(str(e))
+        return _ok(f"Agente '{nome}' adicionado.", id=str(agente.id))
 
     def editar_agente(
-        ref: str,
-        nome: str | None = None,
-        papel: str | None = None,
-        agent_md: str | None = None,
-        skill_md: str | None = None,
-        tools_md: str | None = None,
-        soul_md: str | None = None,
+        agente_id: str, nome: str | None = None, papel: str | None = None,
+        agent_md: str | None = None, skill_md: str | None = None,
+        tools_md: str | None = None, soul_md: str | None = None,
         modelo_ia: str | None = None,
     ) -> str:
-        """Edita um agente já existente (pelo `ref`). Só os campos informados
-        mudam."""
-        agente = r.agente_por_ref(ref)
+        """Edita um agente já existente (pelo `id`). Só os campos informados mudam."""
+        agente = _agente(agente_id)
         if agente is None:
-            return _erro(f"Não há agente com ref {ref}.")
-        if papel is not None:
-            if papel not in ("lider", "agente"):
-                return _erro("O papel precisa ser 'lider' ou 'agente'.")
-            if papel == "lider" and r.tem_lider(exceto_ref=ref):
-                return _erro("Já existe outro líder no time.")
-            agente.papel = papel
-        for campo, valor in {
-            "nome": nome,
-            "agent_md": agent_md,
-            "skill_md": skill_md,
-            "tools_md": tools_md,
-            "soul_md": soul_md,
-            "modelo_ia": modelo_ia,
-        }.items():
-            if valor is not None:
-                setattr(agente, campo, valor)
+            return _erro(f"Não há agente com id {agente_id} neste time.")
+        try:
+            servicos.editar_agente(
+                sess, agente, usuario=ctx.usuario, nome=nome, papel=papel,
+                agent_md=agent_md, skill_md=skill_md, tools_md=tools_md,
+                soul_md=soul_md, modelo_ia=modelo_ia,
+            )
+        except ConflitoDominio as e:
+            return _erro(str(e))
         return _ok(f"Agente '{agente.nome}' atualizado.")
 
-    def remover_agente(ref: str) -> str:
-        """Remove um agente do time (pelo `ref`) e limpa as referências a ele na
-        cadeia."""
-        agente = r.agente_por_ref(ref)
+    def remover_agente(agente_id: str) -> str:
+        """Remove um agente do time (pelo `id`) e o tira da cadeia."""
+        agente = _agente(agente_id)
         if agente is None:
-            return _erro(f"Não há agente com ref {ref}.")
-        r.agentes.remove(agente)
-        # limpa o agente da cadeia, se estiver lá
-        if r.automacao and r.automacao.cadeia:
-            nos = r.automacao.cadeia.get("nos") or {}
-            nos.pop(ref, None)
-            for no in nos.values():
-                no["saidas"] = [
-                    s for s in (no.get("saidas") or []) if s.get("destino") != ref
-                ]
-            if r.automacao.cadeia.get("inicio") == ref:
-                r.automacao.cadeia["inicio"] = None
-        return _ok(f"Agente '{agente.nome}' removido.")
+            return _erro(f"Não há agente com id {agente_id} neste time.")
+        nome = agente.nome
+        servicos.remover_agente(sess, agente, usuario=ctx.usuario)
+        return _ok(f"Agente '{nome}' removido.")
 
     def configurar_instrumento(
         nome: str, tipo: str, configuracao: dict | None = None
     ) -> str:
-        """Configura um instrumento para o time. `tipo` precisa ser um dos tipos
-        do catálogo (use listar_tipos_instrumento para ver os CAMPOS de cada um).
-        Em `configuracao`, passe os campos PÚBLICOS de conexão que você já coletou
-        do consultor (ex.: para o WordPress, `site_url` e `usuario`) — não deixe em
-        branco um campo que o instrumento precisa para funcionar. NÃO passe os
-        campos secretos (senhas, tokens): eles ficam pendentes e o consultor os
-        cadastra no cofre depois de aprovar. Devolve o `ref` (para o cinto) e a
-        lista de segredos pendentes."""
-        if encaixe.obter_tipo(tipo) is None:
-            return _erro(
-                f"Tipo de instrumento desconhecido: {tipo}. "
-                "Use listar_tipos_instrumento para ver os tipos válidos."
-            )
+        """Configura um instrumento para o time. `tipo` precisa ser do catálogo (use
+        listar_tipos_instrumento para ver os CAMPOS). Em `configuracao` passe os
+        campos PÚBLICOS que você coletou do consultor (ex.: WordPress → site_url,
+        usuario). NÃO passe segredos (senhas, tokens): ficam pendentes para o cofre.
+        Devolve o `id` (para o cinto) e os segredos pendentes."""
+        time = _exigir_time()
+        if time is None:
+            return _erro("Defina o time primeiro, com definir_time.")
         try:
-            config_publica, _segredos = encaixe.preparar_config(tipo, configuracao or {})
-        except ValueError as e:
-            return _erro(f"Configuração inválida: {e}")
-        instrumento = InstrumentoRascunho(
-            nome=nome,
-            tipo=tipo,
-            configuracao=config_publica,
-            segredos_pendentes=list(encaixe.campos_secretos(tipo)),
-        )
-        r.instrumentos.append(instrumento)
+            inst, pendentes = servicos.configurar_instrumento(
+                sess, time, nome=nome, tipo=tipo, configuracao=configuracao, usuario=ctx.usuario
+            )
+        except ConflitoDominio as e:
+            return _erro(str(e))
         return _ok(
-            f"Instrumento '{nome}' configurado.",
-            ref=instrumento.ref,
-            segredos_pendentes=instrumento.segredos_pendentes,
+            f"Instrumento '{nome}' configurado.", id=str(inst.id), segredos_pendentes=pendentes
         )
 
-    def encaixar_instrumento(agente_ref: str, instrumento_ref: str) -> str:
-        """Pendura um instrumento no cinto de um agente (ambos pelo `ref`)."""
-        agente = r.agente_por_ref(agente_ref)
+    def editar_instrumento(
+        instrumento_id: str, nome: str | None = None, configuracao: dict | None = None
+    ) -> str:
+        """Edita um instrumento (pelo `id`): nome e/ou configuração pública. O tipo é
+        fixo."""
+        inst = _instrumento(instrumento_id)
+        if inst is None:
+            return _erro(f"Não há instrumento com id {instrumento_id} neste time.")
+        try:
+            servicos.editar_instrumento(
+                sess, inst, nome=nome, configuracao=configuracao, usuario=ctx.usuario
+            )
+        except ConflitoDominio as e:
+            return _erro(str(e))
+        return _ok(f"Instrumento '{inst.nome}' atualizado.")
+
+    def encaixar_instrumento(agente_id: str, instrumento_id: str) -> str:
+        """Pendura um instrumento no cinto de um agente (ambos pelo `id`)."""
+        agente = _agente(agente_id)
         if agente is None:
-            return _erro(f"Não há agente com ref {agente_ref}.")
-        if r.instrumento_por_ref(instrumento_ref) is None:
-            return _erro(f"Não há instrumento com ref {instrumento_ref}.")
-        if instrumento_ref not in agente.cinto:
-            agente.cinto.append(instrumento_ref)
+            return _erro(f"Não há agente com id {agente_id} neste time.")
+        inst = _instrumento(instrumento_id)
+        if inst is None:
+            return _erro(f"Não há instrumento com id {instrumento_id} neste time.")
+        try:
+            servicos.encaixar(sess, agente, inst)
+        except ConflitoDominio as e:
+            return _erro(str(e))
         return _ok(f"Instrumento encaixado no cinto de '{agente.nome}'.")
 
+    def desencaixar_instrumento(agente_id: str, instrumento_id: str) -> str:
+        """Tira um instrumento do cinto de um agente (ambos pelo `id`)."""
+        agente = _agente(agente_id)
+        if agente is None:
+            return _erro(f"Não há agente com id {agente_id} neste time.")
+        iid = _uuid(instrumento_id)
+        servicos.desencaixar(sess, agente.id, iid) if iid else None
+        return _ok("Instrumento tirado do cinto.")
+
     def montar_cadeia(cadeia: dict) -> str:
-        """Define a cadeia (o fluxo) da automação. Formato de grafo:
-        {"inicio": "<ref de agente>", "nos": {"<ref>": {"saidas": [{"rotulo":
-        "1", "quando": "descrição de quando seguir", "destino": "<ref ou null
-        para fim>", "pausa_humano": false}]}}}. Use os `ref`s dos agentes. Marque
-        "pausa_humano": true num nó que deve esperar uma aprovação humana."""
+        """Define a cadeia (o fluxo) da automação. Grafo: {"inicio": "<id de
+        agente>", "nos": {"<id>": {"pausa_humano": false, "saidas": [{"rotulo": "1",
+        "quando": "quando seguir por aqui", "destino": "<id ou null para fim>"}]}}}.
+        Use os `id`s dos agentes. PORTÃO DE APROVAÇÃO: marque "pausa_humano": true NO
+        NÓ do agente que vem ANTES de uma ação irreversível — o fluxo pausa depois
+        desse agente e espera um humano aprovar antes de seguir para quem publica/
+        envia. (A pausa fica no NÓ, não na saída.)"""
+        time = _exigir_time()
+        if time is None:
+            return _erro("Defina o time primeiro, com definir_time.")
         try:
-            validar_cadeia(cadeia, {a.ref for a in r.agentes})
-        except ValueError as e:
-            return _erro(f"Cadeia inválida: {e}")
-        if r.automacao is None:
-            r.automacao = AutomacaoRascunho()
-        r.automacao.cadeia = cadeia
+            servicos.definir_cadeia(sess, time, cadeia, usuario=ctx.usuario)
+        except ConflitoDominio as e:
+            return _erro(str(e))
         return _ok("Cadeia montada.")
 
     def definir_gatilho(
         tipo_gatilho: str, configuracao_gatilho: dict | None = None
     ) -> str:
-        """Define o gatilho da automação. Tipos e formato EXATO da config:
+        """Define o gatilho da automação. Tipos e formato EXATO:
         - 'manual': sem config (o consultor dispara quando quiser).
         - 'webhook': sem config (uma chamada externa dispara).
         - 'agendamento': config = {frequencia: 'diaria'|'semanal'|'mensal',
           hora: 0-23, minuto: 0-59, dia_semana: 0-6 (0=segunda, só semanal),
-          dia_mes: 1-31 (só mensal), entrada?: texto}. Use INTEIROS para
-          hora/minuto/dia_semana/dia_mes — não nomes de dia."""
+          dia_mes: 1-31 (só mensal), entrada?: texto}. Use INTEIROS."""
+        time = _exigir_time()
+        if time is None:
+            return _erro("Defina o time primeiro, com definir_time.")
         config = configuracao_gatilho or {}
         erro = _validar_gatilho(tipo_gatilho, config)
         if erro:
             return _erro(erro)
-        if r.automacao is None:
-            r.automacao = AutomacaoRascunho()
-        r.automacao.gatilho.tipo_gatilho = tipo_gatilho
-        if configuracao_gatilho is not None:
-            r.automacao.gatilho.configuracao_gatilho = config
+        servicos.definir_gatilho(
+            sess, time, tipo_gatilho=tipo_gatilho, configuracao_gatilho=config, usuario=ctx.usuario
+        )
         return _ok(f"Gatilho '{tipo_gatilho}' definido.")
 
     def estimar_custo(
-        execucoes_por_mes: int,
-        tokens_entrada_por_execucao: int,
-        tokens_saida_por_execucao: int,
-        modelo: str | None = None,
+        execucoes_por_mes: int, tokens_entrada_por_execucao: int,
+        tokens_saida_por_execucao: int, modelo: str | None = None,
     ) -> str:
         """Estima o custo do time, em dólares, por execução e por mês. Informe sua
-        estimativa de tokens de entrada e de saída por execução (somando a cadeia)
-        e quantas execuções por mês. O `modelo` padrão é o do líder."""
+        estimativa de tokens de entrada e de saída por execução (somando a cadeia) e
+        quantas execuções por mês. O `modelo` padrão é o do líder. Só calcula e
+        informa — não grava nada."""
+        time = _exigir_time()
+        if time is None:
+            return _erro("Defina o time primeiro, com definir_time.")
         if modelo is None:
-            lider = next((a for a in r.agentes if a.papel == "lider"), None)
+            lider = sess.scalars(
+                select(Agente).where(Agente.time_id == time.id, Agente.papel == "lider")
+            ).first()
             modelo = (lider.modelo_ia if lider else None) or MODELO_PADRAO
         por_execucao = precos.custo_usd(
             modelo, tokens_entrada_por_execucao, tokens_saida_por_execucao
         )
-        por_mes = por_execucao * execucoes_por_mes
-        r.custo_estimado = CustoEstimado(
-            por_execucao_usd=round(por_execucao, 4),
-            por_mes_usd=round(por_mes, 2),
-            detalhe={
-                "execucoes_por_mes": execucoes_por_mes,
-                "tokens_entrada_por_execucao": tokens_entrada_por_execucao,
-                "tokens_saida_por_execucao": tokens_saida_por_execucao,
-                "modelo": modelo,
-            },
-        )
         return _ok(
             "Custo estimado.",
-            por_execucao_usd=r.custo_estimado.por_execucao_usd,
-            por_mes_usd=r.custo_estimado.por_mes_usd,
+            por_execucao_usd=round(por_execucao, 4),
+            por_mes_usd=round(por_execucao * execucoes_por_mes, 2),
         )
 
-    def ver_rascunho() -> str:
-        """Mostra o rascunho atual do time inteiro (para a IA se situar)."""
-        return json.dumps(r.model_dump(mode="json"), ensure_ascii=False)
+    def ativar_time() -> str:
+        """LIGA a automação do time (passa a poder disparar). A PAREDE: se algum
+        agente com instrumento de ação irreversível (publicar/enviar/gravar) não
+        tiver portão de aprovação humana antes na cadeia, a ativação é RECUSADA com a
+        explicação — ajuste a cadeia (pausa_humano no nó anterior) e tente de novo."""
+        auto = _automacao()
+        if auto is None:
+            return _erro("Monte a automação primeiro (cadeia e gatilho).")
+        try:
+            servicos.ativar(sess, auto, usuario=ctx.usuario)
+        except ConflitoDominio as e:
+            return _erro(str(e))
+        return _ok("Time ativado: a automação está ligada.")
+
+    def desativar_time() -> str:
+        """DESLIGA a automação do time (para de disparar). Use para pausar ou ajustar
+        com calma; pode religar depois com ativar_time."""
+        auto = _automacao()
+        if auto is None:
+            return _erro("Este time ainda não tem automação.")
+        servicos.desativar(sess, auto, usuario=ctx.usuario)
+        return _ok("Time desativado: a automação está desligada.")
+
+    def ver_time() -> str:
+        """Mostra o time REAL inteiro (agentes com seus textos e cinto, instrumentos,
+        automação, se está ativa) — para você se situar e conferir os `id`s."""
+        if ctx.time() is None:
+            return _ok("Ainda não há time. Comece com definir_time.", time=None)
+        return json.dumps(_snapshot_time(ctx), ensure_ascii=False)
 
     def listar_tipos_instrumento() -> str:
-        """Lista os tipos de instrumento disponíveis, com o que cada um faz e —
-        importante — os CAMPOS de configuração de cada um (obrigatório/secreto).
-        Use isto para saber o que PERGUNTAR ao consultor: os campos públicos você
-        coleta e preenche; os secretos ele cadastra no cofre depois de aprovar."""
+        """Lista os tipos de instrumento disponíveis, com o que cada um faz, os
+        CAMPOS de configuração (obrigatório/secreto) e se a ação é irreversível.
+        Use para saber o que PERGUNTAR ao consultor (públicos você coleta; secretos
+        ele cadastra no cofre) e o que precisa de portão de aprovação."""
         return json.dumps(catalogo_de_instrumentos(), ensure_ascii=False)
 
     def sugerir_proximos_passos(chips: list[str]) -> str:
-        """Sugere de 1 a 4 respostas curtas que o consultor pode escolher para
-        seguir a conversa (os 'chips' de sugestão). Chame ao fim de cada turno."""
-        estado.chips = list(chips)[:4]
+        """Sugere de 1 a 4 respostas curtas que o consultor pode escolher para seguir
+        a conversa (os 'chips'). Chame ao fim de cada turno."""
+        ctx.chips = list(chips)[:4]
         return _ok("Sugestões registradas.")
 
     funcoes = [
-        definir_time,
-        adicionar_agente,
-        editar_agente,
-        remover_agente,
-        configurar_instrumento,
-        encaixar_instrumento,
-        montar_cadeia,
-        definir_gatilho,
-        estimar_custo,
-        ver_rascunho,
-        listar_tipos_instrumento,
+        definir_time, adicionar_agente, editar_agente, remover_agente,
+        configurar_instrumento, editar_instrumento, encaixar_instrumento,
+        desencaixar_instrumento, montar_cadeia, definir_gatilho, estimar_custo,
+        ativar_time, desativar_time, ver_time, listar_tipos_instrumento,
         sugerir_proximos_passos,
     ]
+
+    # O react agent do LangGraph roda as ferramentas de UM turno EM PARALELO (pool de
+    # threads). Como todas mexem na MESMA sessão do banco (não thread-safe), dois
+    # flush() concorrentes quebram com "Session is already flushing". Serializamos as
+    # chamadas com uma trava por turno — elas continuam todas rodando, uma de cada vez.
+    trava = threading.Lock()
+
+    def _serial(f):
+        @functools.wraps(f)  # preserva nome/assinatura (StructuredTool infere o schema)
+        def wrapper(*args, **kwargs):
+            with trava:
+                return f(*args, **kwargs)
+        return wrapper
+
     return [
-        StructuredTool.from_function(func=f, name=f.__name__, description=f.__doc__)
+        StructuredTool.from_function(func=_serial(f), name=f.__name__, description=f.__doc__)
         for f in funcoes
     ]
 
 
-def ferramenta_por_nome(estado: EstadoCriacao) -> dict[str, StructuredTool]:
+def ferramenta_por_nome(ctx: ContextoCriacao) -> dict[str, StructuredTool]:
     """Conveniência para os testes: as ferramentas indexadas por nome."""
-    return {t.name: t for t in montar_ferramentas(estado)}
+    return {t.name: t for t in montar_ferramentas(ctx)}

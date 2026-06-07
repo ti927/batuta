@@ -305,57 +305,46 @@ export type ChaveApiLer = {
   atualizado_em: string;
 };
 
-// ───────────────────── IA criadora (Fase 9) ─────────────────────
-// O rascunho do time que a IA monta por conversa. Espelha cerebro/criacao/
-// rascunho.py. Os `ref` são ids locais (sobrevivem a edições); viram uuids reais
-// só ao aprovar (materializar). Segredos nunca trafegam no rascunho.
+// ───────────────────── IA criadora ─────────────────────
+// A IA opera sobre o TIME REAL (não há mais rascunho). Em cada turno — e na
+// conversa — vem a FOTOGRAFIA do time para o canvas desenhar. Espelha
+// criacao/ferramentas._snapshot_time. O time nasce dormindo; ativa-se à parte.
 
-export type InstrumentoRascunho = {
-  ref: string;
-  nome: string;
-  tipo: string;
-  configuracao: Record<string, unknown>;
-  segredos_pendentes: string[];
-};
-
-export type AgenteRascunho = {
-  ref: string;
+export type AgenteTime = {
+  id: string;
   nome: string;
   papel: Papel;
+  modelo_ia: string | null;
   agent_md: string | null;
   skill_md: string | null;
   tools_md: string | null;
   soul_md: string | null;
-  modelo_ia: string | null;
-  cinto: string[];
+  cinto: string[]; // ids de instrumento
 };
 
-export type GatilhoRascunho = {
+export type InstrumentoTime = {
+  id: string;
+  nome: string;
+  tipo: string;
+  configuracao: Record<string, unknown> | null;
+  acao_irreversivel: boolean;
+  segredos_pendentes: string[];
+};
+
+export type AutomacaoTime = {
+  id: string;
+  nome: string;
   tipo_gatilho: string;
-  configuracao_gatilho: Record<string, unknown>;
-};
-
-export type AutomacaoRascunho = {
-  nome: string | null;
+  configuracao_gatilho: Record<string, unknown> | null;
   cadeia: Cadeia;
-  gatilho: GatilhoRascunho;
+  ativa: boolean;
 };
 
-export type CustoEstimado = {
-  por_execucao_usd: number | null;
-  por_mes_usd: number | null;
-  detalhe: Record<string, unknown>;
-};
-
-// O rascunho pode vir como {} (conversa recém-aberta). Por isso os campos são
-// opcionais aqui; a UI normaliza com `agentes ?? []`, etc.
-export type Rascunho = {
-  time_nome?: string | null;
-  time_descricao?: string | null;
-  agentes?: AgenteRascunho[];
-  instrumentos?: InstrumentoRascunho[];
-  automacao?: AutomacaoRascunho | null;
-  custo_estimado?: CustoEstimado | null;
+export type SnapshotTime = {
+  time: { id: string; nome: string; descricao: string | null };
+  agentes: AgenteTime[];
+  instrumentos: InstrumentoTime[];
+  automacao: AutomacaoTime | null;
 };
 
 export type MensagemConversa = {
@@ -365,30 +354,21 @@ export type MensagemConversa = {
   uso?: UsoChamada & { origem?: string };
 };
 
-export type EstadoConversa = "rascunho" | "materializada" | "descartada";
-
 export type ConversaCriacao = {
   id: string;
   organizacao_id: string;
   titulo: string | null;
-  estado: EstadoConversa;
   time_id: string | null;
   criado_em: string;
   atualizado_em: string;
   mensagens: MensagemConversa[];
-  rascunho: Rascunho;
+  time: SnapshotTime | null;
 };
 
 export type RespostaTurno = {
   resposta: string;
   chips: string[];
-  rascunho: Rascunho;
+  time_id: string | null;
+  time: SnapshotTime | null;
   uso: Record<string, unknown>;
-};
-
-export type MaterializacaoResultado = {
-  time_id: string;
-  agentes: number;
-  instrumentos: number;
-  automacao: boolean;
 };
