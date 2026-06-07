@@ -4,15 +4,16 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
-  Check,
+  AlertTriangle,
   ChevronLeft,
   Clock,
+  ExternalLink,
   GitBranch,
   Loader2,
   MessageSquare,
+  Power,
   Send,
   Sparkles,
-  Trash2,
   Wrench,
   X,
 } from "lucide-react";
@@ -20,16 +21,16 @@ import {
 import { RobotFace } from "@/components/robot-face";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { podeAdmin, podeOperar } from "@/lib/permissoes";
+import { podeOperar } from "@/lib/permissoes";
 import {
   api,
   ErroDaApi,
-  type AgenteRascunho,
+  type AgenteTime,
+  type Cadeia,
   type ConversaCriacao,
-  type MaterializacaoResultado,
   type MensagemConversa,
   type PapelAcesso,
-  type Rascunho,
+  type SnapshotTime,
   type RespostaTurno,
 } from "@/lib/api";
 
@@ -45,15 +46,12 @@ export function CriacaoCliente({
   const [mensagens, setMensagens] = useState<MensagemConversa[]>(
     conversaInicial.mensagens,
   );
-  const [rascunho, setRascunho] = useState<Rascunho>(conversaInicial.rascunho);
-  const [estado, setEstado] = useState(conversaInicial.estado);
-  const [timeId, setTimeId] = useState(conversaInicial.time_id);
+  const [time, setTime] = useState<SnapshotTime | null>(conversaInicial.time);
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
-  const [aprovando, setAprovando] = useState(false);
+  const [ativando, setAtivando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [agenteAberto, setAgenteAberto] = useState<AgenteRascunho | null>(null);
-  const [resultado, setResultado] = useState<MaterializacaoResultado | null>(null);
+  const [agenteAberto, setAgenteAberto] = useState<AgenteTime | null>(null);
 
   const fimDoChat = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -68,7 +66,6 @@ export function CriacaoCliente({
       primeiraMensagem &&
       !primeiraEnviada.current &&
       conversaInicial.mensagens.length === 0 &&
-      conversaInicial.estado === "rascunho" &&
       podeOperar(meuPapel)
     ) {
       primeiraEnviada.current = true;
@@ -78,13 +75,15 @@ export function CriacaoCliente({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const agentes = rascunho.agentes ?? [];
-  const montou = Boolean(rascunho.time_nome) || agentes.length > 0;
-  const emRascunho = estado === "rascunho";
-  const podeConversar = podeOperar(meuPapel) && emRascunho;
-  const podeAprovar = podeAdmin(meuPapel) && emRascunho && agentes.length > 0;
+  const podeConversar = podeOperar(meuPapel); // a conversa nunca termina
+  const agentes = time?.agentes ?? [];
+  const instrumentos = time?.instrumentos ?? [];
+  const automacao = time?.automacao ?? null;
+  const ativo = automacao?.ativa ?? false;
+  const montou = time != null;
+  const pendentes = instrumentos.flatMap((i) => i.segredos_pendentes);
   const ultimaIA = [...mensagens].reverse().find((m) => m.papel === "ia");
-  const chips = emRascunho && !enviando ? (ultimaIA?.chips ?? []) : [];
+  const chips = !enviando ? (ultimaIA?.chips ?? []) : [];
 
   async function enviar(conteudo: string) {
     const limpo = conteudo.trim();
@@ -98,11 +97,8 @@ export function CriacaoCliente({
         `/conversas-criacao/${conversaInicial.id}/mensagens`,
         { mensagem: limpo },
       );
-      setMensagens((m) => [
-        ...m,
-        { papel: "ia", conteudo: r.resposta, chips: r.chips },
-      ]);
-      setRascunho(r.rascunho);
+      setMensagens((m) => [...m, { papel: "ia", conteudo: r.resposta, chips: r.chips }]);
+      setTime(r.time);
     } catch (e) {
       setErro(e instanceof ErroDaApi ? e.message : "Falha ao enviar a mensagem.");
     } finally {
@@ -110,34 +106,27 @@ export function CriacaoCliente({
     }
   }
 
-  async function aprovar() {
-    if (!podeAprovar || aprovando) return;
-    setAprovando(true);
+  async function alternarAtivacao() {
+    if (!automacao || ativando || !podeConversar) return;
+    setAtivando(true);
     setErro(null);
     try {
-      const r = await api.post<MaterializacaoResultado>(
-        `/conversas-criacao/${conversaInicial.id}/aprovar`,
-        {},
+      await api.put(`/automacoes/${automacao.id}`, {
+        nome: automacao.nome,
+        tipo_gatilho: automacao.tipo_gatilho,
+        configuracao_gatilho: automacao.configuracao_gatilho ?? {},
+        cadeia: automacao.cadeia,
+        ativa: !ativo,
+      });
+      setTime((t) =>
+        t && t.automacao
+          ? { ...t, automacao: { ...t.automacao, ativa: !ativo } }
+          : t,
       );
-      setResultado(r);
-      setEstado("materializada");
-      setTimeId(r.time_id);
     } catch (e) {
-      setErro(traduzirErroAprovacao(e));
+      setErro(traduzirErroParede(e));
     } finally {
-      setAprovando(false);
-    }
-  }
-
-  async function descartar() {
-    if (!podeConversar) return;
-    if (!confirm("Descartar este rascunho? Nada foi criado; a conversa será encerrada."))
-      return;
-    try {
-      await api.post(`/conversas-criacao/${conversaInicial.id}/descartar`, {});
-      setEstado("descartada");
-    } catch (e) {
-      setErro(e instanceof ErroDaApi ? e.message : "Falha ao descartar.");
+      setAtivando(false);
     }
   }
 
@@ -153,11 +142,9 @@ export function CriacaoCliente({
             <Sparkles className="size-4.5" />
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-foreground">
-              IA criadora
-            </p>
+            <p className="truncate text-sm font-medium text-foreground">IA criadora</p>
             <p className="truncate text-xs text-muted-foreground">
-              Monta seu time por conversa — tudo em rascunho
+              Monta e cuida do seu time por conversa
             </p>
           </div>
         </header>
@@ -165,26 +152,14 @@ export function CriacaoCliente({
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
           {mensagens.length === 0 && !enviando && (
             <p className="text-sm text-muted-foreground">
-              Conte o que você quer que esse time faça. Eu proponho a estrutura e
-              vou montando do lado direito.
+              Conte o que você quer que esse time faça. Eu pergunto, monto do lado
+              direito, e fico por aqui para ajustar quando precisar.
             </p>
           )}
           {mensagens.map((m, i) => (
             <Bolha key={i} mensagem={m} />
           ))}
           {enviando && <Digitando />}
-
-          {estado === "materializada" && (
-            <CardSucesso resultado={resultado} timeId={timeId} />
-          )}
-          {estado === "descartada" && (
-            <div className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">
-              Rascunho descartado. Nada foi criado.{" "}
-              <Link href="/criar" className="text-primary hover:underline">
-                Começar de novo
-              </Link>
-            </div>
-          )}
 
           {erro && (
             <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -194,21 +169,29 @@ export function CriacaoCliente({
           <div ref={fimDoChat} />
         </div>
 
-        {/* Card de aprovação */}
-        {podeAprovar && (
+        {/* Ativar / desativar — só quando há automação montada */}
+        {podeConversar && automacao && (
           <div
             className="border-t border-[#E6DEFB] px-4 py-3"
             style={{ background: "linear-gradient(135deg,#F4F1FE,#FBF7EF)" }}
           >
             <p className="text-sm text-[#2A2150]">
-              Tudo em rascunho. Ao aprovar, eu crio o time, os{" "}
-              {agentes.length} agente{agentes.length > 1 ? "s" : ""}
-              {rascunho.automacao?.cadeia?.inicio ? ", o gatilho e a cadeia" : ""} de
-              uma vez.
+              {ativo
+                ? "O time está ativo — a automação pode disparar. Você pode continuar ajustando aqui."
+                : "Tudo pronto e em repouso. Ative quando quiser que a automação comece a valer."}
             </p>
-            <Button className="mt-2.5 w-full" onClick={aprovar} disabled={aprovando}>
-              {aprovando ? <Loader2 className="animate-spin" /> : <Check />}
-              {aprovando ? "Criando o time…" : "Aprovar e criar time"}
+            <Button
+              className="mt-2.5 w-full"
+              variant={ativo ? "outline" : "default"}
+              onClick={alternarAtivacao}
+              disabled={ativando}
+            >
+              {ativando ? <Loader2 className="animate-spin" /> : <Power />}
+              {ativando
+                ? "Aplicando…"
+                : ativo
+                  ? "Desativar o time"
+                  : "Ativar o time"}
             </Button>
           </div>
         )}
@@ -240,13 +223,7 @@ export function CriacaoCliente({
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
             disabled={!podeConversar || enviando}
-            placeholder={
-              estado === "materializada"
-                ? "Time criado ✨"
-                : podeConversar
-                  ? "Responder à IA criadora…"
-                  : "Conversa encerrada"
-            }
+            placeholder={podeConversar ? "Responder à IA criadora…" : "Somente leitura"}
             className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-60"
           />
           <Button
@@ -261,7 +238,7 @@ export function CriacaoCliente({
         </form>
       </section>
 
-      {/* ───────────── Direita: canvas do rascunho ───────────── */}
+      {/* ───────────── Direita: canvas do time ───────────── */}
       <section className="flex-1 overflow-y-auto bg-background">
         <div className="mx-auto w-full max-w-2xl px-5 py-8 sm:px-8">
           <Link
@@ -284,25 +261,39 @@ export function CriacaoCliente({
                 O time aparece aqui
               </p>
               <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                Conforme você conversa com a IA criadora, o time vai se montando
-                neste painel — peça por peça, em rascunho.
+                Conforme você conversa com a IA criadora, o time vai se montando neste
+                painel — peça por peça. Nada dispara até você ativar.
               </p>
             </div>
           ) : (
             <Canvas
-              rascunho={rascunho}
-              estado={estado}
+              time={time!}
+              ativo={ativo}
               onAbrirAgente={setAgenteAberto}
             />
           )}
 
-          {podeConversar && montou && (
-            <button
-              onClick={descartar}
-              className="mt-8 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive"
+          {montou && pendentes.length > 0 && (
+            <div className="mt-6 flex items-start gap-2 rounded-lg border border-[#F3D9A8] bg-[#FDF6EA] px-4 py-3 text-sm text-[#8A5A12]">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <span>
+                Faltam {pendentes.length} segredo(s) para os instrumentos funcionarem
+                (senhas/tokens). Cadastre no cofre, na tela do time.
+              </span>
+            </div>
+          )}
+
+          {montou && time?.time.id && (
+            <Link
+              href={`/times/${time.time.id}`}
+              className={buttonVariants({
+                size: "sm",
+                variant: "outline",
+                className: "mt-6",
+              })}
             >
-              <Trash2 className="size-3.5" /> Descartar rascunho
-            </button>
+              <ExternalLink className="size-4" /> Abrir a tela do time
+            </Link>
           )}
         </div>
       </section>
@@ -328,16 +319,8 @@ function Bolha({ mensagem }: { mensagem: MensagemConversa }) {
         className="max-w-[88%] whitespace-pre-wrap px-3.5 py-2 text-sm leading-relaxed"
         style={
           ehIA
-            ? {
-                background: "#F4F1FE",
-                color: "#2A2150",
-                borderRadius: "4px 14px 14px 14px",
-              }
-            : {
-                background: "#1A1730",
-                color: "#fff",
-                borderRadius: "14px 14px 4px 14px",
-              }
+            ? { background: "#F4F1FE", color: "#2A2150", borderRadius: "4px 14px 14px 14px" }
+            : { background: "#1A1730", color: "#fff", borderRadius: "14px 14px 4px 14px" }
         }
       >
         {mensagem.conteudo}
@@ -365,35 +348,6 @@ function Digitando() {
   );
 }
 
-function CardSucesso({
-  resultado,
-  timeId,
-}: {
-  resultado: MaterializacaoResultado | null;
-  timeId: string | null;
-}) {
-  return (
-    <div className="rounded-lg border border-[#BBE3C6] bg-[#E6F4EA] px-4 py-3">
-      <p className="text-sm font-medium text-[#256B3A]">Time criado! ✨</p>
-      <p className="mt-0.5 text-sm text-[#2F7A45]">
-        {resultado
-          ? `${resultado.agentes} agente(s), ${resultado.instrumentos} instrumento(s)${
-              resultado.automacao ? " e a automação" : ""
-            }.`
-          : "Tudo pronto."}
-      </p>
-      {timeId && (
-        <Link
-          href={`/times/${timeId}`}
-          className={buttonVariants({ size: "sm", variant: "outline", className: "mt-2.5" })}
-        >
-          Abrir o time
-        </Link>
-      )}
-    </div>
-  );
-}
-
 // ───────────────────────── Canvas ─────────────────────────
 
 function RotuloSecao({
@@ -413,35 +367,32 @@ function RotuloSecao({
 }
 
 function Canvas({
-  rascunho,
-  estado,
+  time,
+  ativo,
   onAbrirAgente,
 }: {
-  rascunho: Rascunho;
-  estado: ConversaCriacao["estado"];
-  onAbrirAgente: (a: AgenteRascunho) => void;
+  time: SnapshotTime;
+  ativo: boolean;
+  onAbrirAgente: (a: AgenteTime) => void;
 }) {
-  const agentes = rascunho.agentes ?? [];
-  const instrumentos = rascunho.instrumentos ?? [];
-  const custo = rascunho.custo_estimado;
-  const automacao = rascunho.automacao;
-  const nomePorRef = (ref: string) =>
-    instrumentos.find((i) => i.ref === ref)?.nome ?? "instrumento";
+  const agentes = time.agentes ?? [];
+  const instrumentos = time.instrumentos ?? [];
+  const automacao = time.automacao;
+  const nomePorId = (id: string) =>
+    instrumentos.find((i) => i.id === id)?.nome ?? "instrumento";
 
   return (
     <div>
       <div className="flex items-start justify-between gap-3">
         <h1 className="font-heading text-2xl font-semibold text-foreground">
-          {rascunho.time_nome ?? "Time sem nome"}
+          {time.time.nome ?? "Time sem nome"}
         </h1>
-        <Badge variant={estado === "materializada" ? "success" : "neutral"}>
-          {estado === "materializada" ? "ativo" : "rascunho"}
+        <Badge variant={ativo ? "success" : "neutral"}>
+          {ativo ? "ativo" : "em repouso"}
         </Badge>
       </div>
-      {rascunho.time_descricao && (
-        <p className="mt-1 text-sm text-muted-foreground">
-          {rascunho.time_descricao}
-        </p>
+      {time.time.descricao && (
+        <p className="mt-1 text-sm text-muted-foreground">{time.time.descricao}</p>
       )}
 
       {agentes.length > 0 && (
@@ -450,7 +401,7 @@ function Canvas({
           <div className="space-y-2.5">
             {agentes.map((a, i) => (
               <button
-                key={a.ref}
+                key={a.id}
                 onClick={() => onAbrirAgente(a)}
                 className="flex w-full items-start gap-3 rounded-lg border border-border bg-card p-3 text-left transition-all hover:border-[#D6D3E8] hover:shadow-sm"
               >
@@ -476,13 +427,13 @@ function Canvas({
                         {a.modelo_ia}
                       </span>
                     )}
-                    {a.cinto.map((ref) => (
+                    {a.cinto.map((id) => (
                       <span
-                        key={ref}
+                        key={id}
                         className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-accent-foreground"
                       >
                         <Wrench className="size-3" />
-                        {nomePorRef(ref)}
+                        {nomePorId(id)}
                       </span>
                     ))}
                   </span>
@@ -493,7 +444,7 @@ function Canvas({
         </>
       )}
 
-      {automacao?.gatilho && (
+      {automacao && (
         <>
           <RotuloSecao Icone={Clock}>Gatilho</RotuloSecao>
           <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
@@ -501,7 +452,7 @@ function Canvas({
               <Clock className="size-4.5" />
             </span>
             <span className="text-sm text-foreground">
-              {rotuloGatilho(automacao.gatilho.tipo_gatilho)}
+              {rotuloGatilho(automacao.tipo_gatilho)}
             </span>
           </div>
         </>
@@ -513,26 +464,6 @@ function Canvas({
           <CadeiaVertical cadeia={automacao.cadeia} agentes={agentes} />
         </>
       )}
-
-      {custo && (custo.por_execucao_usd != null || custo.por_mes_usd != null) && (
-        <>
-          <RotuloSecao Icone={Clock}>Custo estimado</RotuloSecao>
-          <div className="flex divide-x divide-border rounded-lg border border-border bg-card">
-            <div className="flex-1 p-4 text-center">
-              <p className="font-heading text-xl font-semibold text-foreground">
-                {fmtUSD(custo.por_execucao_usd)}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">por execução</p>
-            </div>
-            <div className="flex-1 p-4 text-center">
-              <p className="font-heading text-xl font-semibold text-foreground">
-                {fmtUSD(custo.por_mes_usd)}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">por mês (est.)</p>
-            </div>
-          </div>
-        </>
-      )}
     </div>
   );
 }
@@ -541,11 +472,11 @@ function CadeiaVertical({
   cadeia,
   agentes,
 }: {
-  cadeia: NonNullable<Rascunho["automacao"]>["cadeia"];
-  agentes: AgenteRascunho[];
+  cadeia: Cadeia;
+  agentes: AgenteTime[];
 }) {
-  const nome = (ref: string | null | undefined) =>
-    agentes.find((a) => a.ref === ref)?.nome ?? "—";
+  const nome = (id: string | null | undefined) =>
+    agentes.find((a) => a.id === id)?.nome ?? "—";
   // ordem simples: começa no início e segue a primeira saída até o fim/repetição.
   const ordem: string[] = [];
   let atual = cadeia.inicio ?? null;
@@ -559,21 +490,21 @@ function CadeiaVertical({
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
-      {ordem.map((ref, i) => {
-        const no = cadeia.nos?.[ref];
+      {ordem.map((id, i) => {
+        const no = cadeia.nos?.[id];
         const pausa = no?.pausa_humano;
         return (
-          <div key={ref}>
+          <div key={id}>
             <div className="flex items-center gap-3">
               <RobotFace
                 size={28}
-                indice={agentes.findIndex((a) => a.ref === ref)}
-                lider={agentes.find((a) => a.ref === ref)?.papel === "lider"}
+                indice={agentes.findIndex((a) => a.id === id)}
+                lider={agentes.find((a) => a.id === id)?.papel === "lider"}
               />
-              <span className="text-sm text-foreground">{nome(ref)}</span>
+              <span className="text-sm text-foreground">{nome(id)}</span>
               {pausa && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-[#FDF1E3] px-2 py-0.5 text-xs text-[#A05E16]">
-                  <MessageSquare className="size-3" /> espera você responder
+                  <MessageSquare className="size-3" /> portão de aprovação
                 </span>
               )}
             </div>
@@ -589,7 +520,7 @@ function CadeiaVertical({
 
 // ───────────────────────── Drawer do agente ─────────────────────────
 
-const MARKDOWNS: { campo: keyof AgenteRascunho; rotulo: string; arquivo: string }[] = [
+const MARKDOWNS: { campo: keyof AgenteTime; rotulo: string; arquivo: string }[] = [
   { campo: "agent_md", rotulo: "Quem é", arquivo: "agent.md" },
   { campo: "skill_md", rotulo: "Habilidades", arquivo: "skill.md" },
   { campo: "tools_md", rotulo: "Cinto de instrumentos", arquivo: "tools.md" },
@@ -601,7 +532,7 @@ function DrawerAgente({
   indice,
   onFechar,
 }: {
-  agente: AgenteRascunho;
+  agente: AgenteTime;
   indice: number;
   onFechar: () => void;
 }) {
@@ -623,9 +554,6 @@ function DrawerAgente({
                   líder
                 </Badge>
               )}
-              <Badge variant="neutral" className="text-[10px]">
-                rascunho
-              </Badge>
             </div>
             {agente.modelo_ia && (
               <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
@@ -634,12 +562,7 @@ function DrawerAgente({
               </p>
             )}
           </div>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={onFechar}
-            aria-label="Fechar"
-          >
+          <Button size="icon" variant="ghost" onClick={onFechar} aria-label="Fechar">
             <X className="size-4" />
           </Button>
         </header>
@@ -650,18 +573,14 @@ function DrawerAgente({
             return (
               <div key={campo}>
                 <div className="mb-1.5 flex items-center gap-2">
-                  <span className="text-sm font-medium text-foreground">
-                    {rotulo}
-                  </span>
+                  <span className="text-sm font-medium text-foreground">{rotulo}</span>
                   <span className="font-mono text-xs text-muted-foreground">
                     {arquivo}
                   </span>
                 </div>
                 <p className="whitespace-pre-wrap rounded-md bg-background p-3 text-sm text-foreground">
                   {valor?.trim() || (
-                    <span className="text-muted-foreground/70">
-                      (ainda não escrito)
-                    </span>
+                    <span className="text-muted-foreground/70">(ainda não escrito)</span>
                   )}
                 </p>
               </div>
@@ -675,11 +594,6 @@ function DrawerAgente({
 
 // ───────────────────────── utilidades ─────────────────────────
 
-function fmtUSD(v: number | null | undefined): string {
-  if (v == null) return "—";
-  return `US$ ${v.toFixed(v < 1 ? 4 : 2)}`;
-}
-
 function rotuloGatilho(tipo: string): string {
   const mapa: Record<string, string> = {
     manual: "Manual (você dispara quando quiser)",
@@ -689,17 +603,17 @@ function rotuloGatilho(tipo: string): string {
   return mapa[tipo] ?? tipo;
 }
 
-function traduzirErroAprovacao(e: unknown): string {
+function traduzirErroParede(e: unknown): string {
   if (e instanceof ErroDaApi) {
     try {
       const corpo = JSON.parse(e.message);
       if (Array.isArray(corpo?.problemas)) {
-        return "Ainda falta para aprovar: " + corpo.problemas.join("; ");
+        return "Não dá para ativar ainda: " + corpo.problemas.join(" ");
       }
     } catch {
       // mensagem não era JSON
     }
     return e.message;
   }
-  return "Falha ao aprovar.";
+  return "Falha ao ativar o time.";
 }
