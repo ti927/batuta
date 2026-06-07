@@ -13,7 +13,9 @@ sem portão humano antes. Erros de regra viram texto de volta para a IA corrigir
 (sem modos): a IA investiga, monta, ativa e conserta na mesma conversa.
 """
 
+import functools
 import json
+import threading
 import uuid
 from dataclasses import dataclass, field
 
@@ -476,8 +478,22 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         ativar_time, desativar_time, ver_time, listar_tipos_instrumento,
         sugerir_proximos_passos,
     ]
+
+    # O react agent do LangGraph roda as ferramentas de UM turno EM PARALELO (pool de
+    # threads). Como todas mexem na MESMA sessão do banco (não thread-safe), dois
+    # flush() concorrentes quebram com "Session is already flushing". Serializamos as
+    # chamadas com uma trava por turno — elas continuam todas rodando, uma de cada vez.
+    trava = threading.Lock()
+
+    def _serial(f):
+        @functools.wraps(f)  # preserva nome/assinatura (StructuredTool infere o schema)
+        def wrapper(*args, **kwargs):
+            with trava:
+                return f(*args, **kwargs)
+        return wrapper
+
     return [
-        StructuredTool.from_function(func=f, name=f.__name__, description=f.__doc__)
+        StructuredTool.from_function(func=_serial(f), name=f.__name__, description=f.__doc__)
         for f in funcoes
     ]
 
