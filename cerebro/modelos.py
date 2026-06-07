@@ -370,6 +370,11 @@ class ConversaCriacao(IdData, Base):
     estado: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default=text("'rascunho'")
     )  # rascunho | materializada | descartada
+    # Fase da criadora (gate de prompt + ferramentas): a conversa começa entendendo
+    # o processo e só avança quando o consultor libera (ver criacao/prompt.py).
+    modo: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'investigacao'")
+    )  # investigacao | projeto | montagem
     mensagens: Mapped[list] = mapped_column(
         JSONB, nullable=False, server_default=text("'[]'::jsonb")
     )

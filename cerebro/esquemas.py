@@ -439,6 +439,7 @@ class ConversaCriacaoResumo(BaseModel):
     organizacao_id: uuid.UUID
     titulo: str | None
     estado: str
+    modo: str
     time_id: uuid.UUID | None
     criado_em: datetime
     atualizado_em: datetime

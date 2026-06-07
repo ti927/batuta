@@ -74,6 +74,7 @@ def iniciar(
         organizacao_id=organizacao_id,
         criada_por_id=usuario.id,
         titulo=dados.titulo,
+        modo="investigacao",  # toda conversa nasce entendendo o processo
     )
     sessao.add(conversa)
     sessao.flush()
