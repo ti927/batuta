@@ -67,6 +67,10 @@ def catalogo_de_instrumentos() -> list[dict]:
                 "nome": tipo.nome_exibicao,
                 "descricao": tipo.descricao,
                 "campos": campos,
+                # Ação irreversível (publicar/enviar/gravar externo): a IA precisa
+                # saber para pôr o portão humano antes na cadeia, e o app valida na
+                # ativação. Ver instrumentos/base.py e a parede de ativação.
+                "acao_irreversivel": tipo.acao_irreversivel,
             }
         )
     return catalogo

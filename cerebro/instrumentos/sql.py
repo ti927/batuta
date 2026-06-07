@@ -69,6 +69,7 @@ class BancoSQL(TipoInstrumento):
     Config = ConfigSQL
     Args = ArgsSQL
     campos_secretos = ("senha",)
+    acao_irreversivel = True  # INSERT/UPDATE/DELETE mudam dados externos
 
     def executar(self, config: ConfigSQL, args: ArgsSQL) -> dict:
         url = URL.create(

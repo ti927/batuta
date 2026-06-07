@@ -57,6 +57,7 @@ class ChamarApiRest(TipoInstrumento):
     Config = ConfigRest
     Args = ArgsRest
     campos_secretos = ("token_bearer",)
+    acao_irreversivel = True  # por segurança (pode ser POST/PUT/DELETE)
 
     def executar(self, config: ConfigRest, args: ArgsRest) -> dict:
         cabecalhos = dict(config.cabecalhos or {})

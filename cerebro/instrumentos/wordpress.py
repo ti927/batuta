@@ -131,6 +131,7 @@ class PublicarWordpress(TipoInstrumento):
     Config = ConfigWordpress
     Args = ArgsWordpress
     campos_secretos = ("senha_app",)
+    acao_irreversivel = True  # publica no blog do cliente
 
     def executar(self, config: ConfigWordpress, args: ArgsWordpress) -> dict:
         # Fase 7-B: prioriza o cofre (config), com o .env como fallback legado.

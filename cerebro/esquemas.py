@@ -161,6 +161,9 @@ class TipoInstrumentoLer(BaseModel):
     esquema_config: dict
     esquema_args: dict
     campos_secretos: list[str] = Field(default_factory=list)
+    # Ação irreversível (publicar/enviar/gravar externo): o front mostra um aviso
+    # e a parede de ativação exige portão humano antes de um agente que a use.
+    acao_irreversivel: bool = False
 
 
 class AcionarInstrumento(BaseModel):

@@ -74,6 +74,12 @@ class TipoInstrumento(ABC):
     # `instrumentos.configuracao` (JSONB em claro), são cifrados no cofre de
     # segredos do instrumento e injetados só na execução. Top-level, string.
     campos_secretos: tuple[str, ...] = ()
+    # AÇÃO IRREVERSÍVEL: o instrumento age no mundo externo de forma que não dá
+    # para desfazer (publicar, enviar, gravar em sistema de terceiros). É a base
+    # da parede de ativação: um agente com instrumento irreversível só pode ser
+    # ATIVADO se a cadeia tiver portão de aprovação humana (pausa_humano) antes
+    # dele. O padrão é False (só lê / só gera artefato local).
+    acao_irreversivel: bool = False
 
     @abstractmethod
     def executar(self, config: BaseModel, args: BaseModel) -> dict:
@@ -137,6 +143,13 @@ def campos_secretos(tipo: str) -> tuple[str, ...]:
     """Os campos secretos de um tipo (vazio se o tipo não tem segredos)."""
     t = obter_tipo(tipo)
     return tuple(getattr(t, "campos_secretos", ()) or ()) if t else ()
+
+
+def acao_irreversivel(tipo: str) -> bool:
+    """Se um tipo de instrumento faz ação irreversível (tipo desconhecido = False).
+    Base da parede de ativação (portão humano antes de agente irreversível)."""
+    t = obter_tipo(tipo)
+    return bool(getattr(t, "acao_irreversivel", False)) if t else False
 
 
 def preparar_config(tipo: str, configuracao: dict | None) -> tuple[dict, dict]:

@@ -54,6 +54,7 @@ class DispararWebhook(TipoInstrumento):
     Config = ConfigWebhook
     Args = ArgsWebhook
     campos_secretos = ("token_bearer",)
+    acao_irreversivel = True  # aciona sistema externo
 
     def executar(self, config: ConfigWebhook, args: ArgsWebhook) -> dict:
         cabecalhos = dict(config.cabecalhos or {})
