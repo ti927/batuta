@@ -20,10 +20,13 @@ from criacao.prompt import montar_prompt_criadora
 from criacao.rascunho import Rascunho
 from orquestracao.llm import construir_modelo, texto_da_resposta, usar_chaves
 
-# Modelo da criadora: um modelo forte de raciocínio monta uma estrutura melhor.
-# É Anthropic, então cai na ANTHROPIC_API_KEY do .env quando não há chave de
+# Modelo da criadora: o MAIS capaz (Opus). A criadora é uma consultora sênior que
+# projeta o time inteiro e escreve a documentação de cada agente — qualidade de
+# raciocínio importa mais que custo aqui (uso esporádico, só ao montar um time).
+# Sonnet ficava raso e apressado (decisão do maestro: subir para Opus). É
+# Anthropic, então cai na ANTHROPIC_API_KEY do .env quando não há chave de
 # 'criadora' no cofre. Facilmente trocável.
-MODELO_CRIADORA = "claude-sonnet-4-6"
+MODELO_CRIADORA = "claude-opus-4-8"
 
 
 def _historico_para_mensagens(mensagens: list | None) -> list[dict]:
@@ -54,25 +57,36 @@ def responder_turno(
     ferramentas = montar_ferramentas(estado)
     prompt = montar_prompt_criadora(estado.rascunho)
 
+    historico = _historico_para_mensagens(conversa.mensagens) + [
+        {"role": "user", "content": mensagem_usuario}
+    ]
     with usar_chaves(chaves):
         modelo_chat = construir_modelo(modelo, temperatura=0.3)
         app = create_react_agent(modelo_chat, ferramentas, prompt=prompt)
-        historico = _historico_para_mensagens(conversa.mensagens) + [
-            {"role": "user", "content": mensagem_usuario}
-        ]
         resultado = app.invoke({"messages": historico})
 
-    mensagens_resultado = resultado["messages"]
-    resposta_texto = texto_da_resposta(mensagens_resultado[-1])
+    # O react agent devolve o HISTÓRICO INTEIRO + as mensagens novas deste turno.
+    # Só nos interessam as NOVAS (o que veio depois do que enviamos): considerar
+    # todas repetiria as respostas anteriores e somaria tokens já contados.
+    novas = resultado["messages"][len(historico) :]
 
-    # Medição (MIGRACAO §3.6): soma os tokens dos turnos do modelo, com a origem
-    # da chave (cliente × consultoria × legado) carimbada para a transparência.
+    # Texto da resposta + medição num passo só. CUIDADO: o modelo (Anthropic)
+    # costuma emitir o texto JUNTO com as chamadas de ferramenta, e o ÚLTIMO
+    # AIMessage — depois de rodar as ferramentas (inclusive a dos chips) — pode
+    # vir VAZIO. Por isso juntamos o texto de todos os turnos do modelo DESTE
+    # turno, não só do último; senão a bolha da IA fica vazia. Medição (MIGRACAO
+    # §3.6): soma os tokens, com a origem da chave carimbada (transparência).
+    textos: list[str] = []
     tokens_entrada = tokens_saida = 0
-    for m in mensagens_resultado:
+    for m in novas:
         if isinstance(m, AIMessage):
+            trecho = texto_da_resposta(m).strip()
+            if trecho:
+                textos.append(trecho)
             u = m.usage_metadata or {}
             tokens_entrada += u.get("input_tokens", 0)
             tokens_saida += u.get("output_tokens", 0)
+    resposta_texto = "\n\n".join(textos) if textos else "Pronto, atualizei o rascunho."
     uso = {
         "modelo": modelo,
         "tokens_entrada": tokens_entrada,

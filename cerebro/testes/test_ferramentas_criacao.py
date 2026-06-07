@@ -7,7 +7,11 @@ exceção (a IA corrige na conversa)."""
 
 import json
 
-from criacao.ferramentas import EstadoCriacao, ferramenta_por_nome
+from criacao.ferramentas import (
+    EstadoCriacao,
+    catalogo_de_instrumentos,
+    ferramenta_por_nome,
+)
 
 
 def _estado():
@@ -126,6 +130,39 @@ def test_definir_gatilho():
     assert e.rascunho.automacao.gatilho.tipo_gatilho == "manual"
 
 
+def test_definir_gatilho_agendamento_valido():
+    e, f = _estado()
+    r = _chamar(
+        f,
+        "definir_gatilho",
+        tipo_gatilho="agendamento",
+        configuracao_gatilho={"frequencia": "semanal", "dia_semana": 0, "hora": 8, "minuto": 0},
+    )
+    assert r["ok"]
+    assert e.rascunho.automacao.gatilho.configuracao_gatilho["dia_semana"] == 0
+
+
+def test_definir_gatilho_malformado_recusado():
+    """Regressão: a IA escrevia 'segunda-feira' (texto) em vez do inteiro 0-6, e o
+    agendador quebra com isso. Agora o erro volta para a IA corrigir."""
+    e, f = _estado()
+    # dia_semana em texto
+    r1 = _chamar(
+        f,
+        "definir_gatilho",
+        tipo_gatilho="agendamento",
+        configuracao_gatilho={"frequencia": "semanal", "dia_semana": "segunda-feira", "hora": 8},
+    )
+    assert r1["ok"] is False
+    # frequência ausente
+    r2 = _chamar(
+        f, "definir_gatilho", tipo_gatilho="agendamento", configuracao_gatilho={"hora": 8}
+    )
+    assert r2["ok"] is False
+    # tipo desconhecido
+    assert _chamar(f, "definir_gatilho", tipo_gatilho="telepatia")["ok"] is False
+
+
 def test_estimar_custo():
     e, f = _estado()
     _chamar(f, "adicionar_agente", nome="Chefe", papel="lider", modelo_ia="claude-haiku-4-5")
@@ -141,11 +178,30 @@ def test_estimar_custo():
     assert e.rascunho.custo_estimado.por_mes_usd > 0
 
 
-def test_listar_tipos_instrumento():
+def test_listar_tipos_instrumento_traz_os_campos():
+    """A IA precisa enxergar os CAMPOS de cada instrumento (com obrigatório/
+    secreto) — é o que destrava perguntar pelos dados certos (ex.: URL do blog)."""
     e, f = _estado()
     catalogo = json.loads(f["listar_tipos_instrumento"].func())
-    tipos = {c["tipo"] for c in catalogo}
-    assert "busca_web" in tipos and "publicar_wordpress" in tipos
+    por_tipo = {c["tipo"]: c for c in catalogo}
+    assert "busca_web" in por_tipo and "publicar_wordpress" in por_tipo
+
+    wp = por_tipo["publicar_wordpress"]
+    campos = {c["nome"]: c for c in wp["campos"]}
+    # campos públicos de conexão que a IA deve PERGUNTAR e preencher
+    assert "site_url" in campos and campos["site_url"]["secreto"] is False
+    assert "usuario" in campos and campos["usuario"]["secreto"] is False
+    # o segredo, que a IA NÃO preenche (vai para o cofre depois)
+    assert "senha_app" in campos and campos["senha_app"]["secreto"] is True
+
+
+def test_catalogo_de_instrumentos_marca_obrigatorio_e_secreto():
+    catalogo = {c["tipo"]: c for c in catalogo_de_instrumentos()}
+    rest = catalogo["chamar_api_rest"]
+    campos = {c["nome"]: c for c in rest["campos"]}
+    # 'url' é obrigatório e público; 'token_bearer' é secreto
+    assert campos["url"]["obrigatorio"] is True and campos["url"]["secreto"] is False
+    assert campos["token_bearer"]["secreto"] is True
 
 
 def test_sugerir_proximos_passos():

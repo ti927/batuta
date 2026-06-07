@@ -38,12 +38,89 @@ class EstadoCriacao:
     chips: list[str] = field(default_factory=list)
 
 
+def catalogo_de_instrumentos() -> list[dict]:
+    """O catálogo de tipos de instrumento COM os campos de configuração de cada um.
+
+    É o que destrava a IA criadora: sem saber que o WordPress precisa de `site_url`
+    e `usuario`, ela não tem como PERGUNTAR ao consultor por eles. Para cada tipo,
+    lista os campos da `Config` marcando `obrigatorio` (no `required` do schema) e
+    `secreto` (em `campos_secretos`) — os secretos NÃO são preenchidos pela IA
+    (ficam pendentes para o cofre); os públicos a IA deve perguntar e preencher.
+    Usado pela ferramenta `listar_tipos_instrumento` e injetado no prompt."""
+    catalogo: list[dict] = []
+    for tipo in encaixe.tipos_disponiveis():
+        esquema = tipo.Config.model_json_schema()
+        obrigatorios = set(esquema.get("required", []))
+        secretos = set(tipo.campos_secretos)
+        campos = [
+            {
+                "nome": nome,
+                "descricao": prop.get("description", ""),
+                "obrigatorio": nome in obrigatorios,
+                "secreto": nome in secretos,
+            }
+            for nome, prop in (esquema.get("properties") or {}).items()
+        ]
+        catalogo.append(
+            {
+                "tipo": tipo.tipo,
+                "nome": tipo.nome_exibicao,
+                "descricao": tipo.descricao,
+                "campos": campos,
+            }
+        )
+    return catalogo
+
+
 def _ok(mensagem: str, **extra) -> str:
     return json.dumps({"ok": True, "mensagem": mensagem, **extra}, ensure_ascii=False)
 
 
 def _erro(mensagem: str) -> str:
     return json.dumps({"ok": False, "erro": mensagem}, ensure_ascii=False)
+
+
+# Tipos de gatilho e o formato EXATO da config de agendamento que o `agendador`
+# espera (agendador._trigger_da_config). A IA erra por não conhecer este formato —
+# por isso ele é documentado aqui, injetado no prompt e validado em definir_gatilho.
+TIPOS_GATILHO = ("manual", "agendamento", "webhook")
+FORMATO_GATILHO = (
+    "Tipos de gatilho:\n"
+    "- 'manual': sem config. Você dispara quando quiser.\n"
+    "- 'webhook': sem config. Uma chamada externa (URL pública) dispara o fluxo.\n"
+    "- 'agendamento': roda no relógio. config = {frequencia: 'diaria'|'semanal'|"
+    "'mensal', hora: 0-23, minuto: 0-59, dia_semana: 0-6 (0=segunda, SÓ p/ semanal), "
+    "dia_mes: 1-31 (SÓ p/ mensal), entrada?: texto que vira a entrada do fluxo}. "
+    "Ex. semanal: {frequencia:'semanal', dia_semana:0, hora:8, minuto:0}."
+)
+
+
+def _inteiro_no_intervalo(valor, minimo: int, maximo: int) -> bool:
+    try:
+        return minimo <= int(valor) <= maximo
+    except (TypeError, ValueError):
+        return False
+
+
+def _validar_gatilho(tipo: str, config: dict) -> str | None:
+    """Devolve uma mensagem de erro se o gatilho estiver malformado (None = ok).
+    Garante que um 'agendamento' siga o formato que o agendador entende."""
+    if tipo not in TIPOS_GATILHO:
+        return f"Gatilho desconhecido: '{tipo}'. Use um de: {', '.join(TIPOS_GATILHO)}."
+    if tipo != "agendamento":
+        return None
+    freq = config.get("frequencia")
+    if freq not in ("diaria", "semanal", "mensal"):
+        return "Agendamento exige frequencia 'diaria', 'semanal' ou 'mensal'."
+    if not _inteiro_no_intervalo(config.get("hora", 0), 0, 23):
+        return "Agendamento exige 'hora' inteiro de 0 a 23."
+    if not _inteiro_no_intervalo(config.get("minuto", 0), 0, 59):
+        return "Agendamento exige 'minuto' inteiro de 0 a 59."
+    if freq == "semanal" and not _inteiro_no_intervalo(config.get("dia_semana"), 0, 6):
+        return "Agendamento semanal exige 'dia_semana' inteiro de 0 (segunda) a 6 (domingo)."
+    if freq == "mensal" and not _inteiro_no_intervalo(config.get("dia_mes"), 1, 31):
+        return "Agendamento mensal exige 'dia_mes' inteiro de 1 a 31."
+    return None
 
 
 def montar_ferramentas(estado: EstadoCriacao) -> list[StructuredTool]:
@@ -143,10 +220,13 @@ def montar_ferramentas(estado: EstadoCriacao) -> list[StructuredTool]:
         nome: str, tipo: str, configuracao: dict | None = None
     ) -> str:
         """Configura um instrumento para o time. `tipo` precisa ser um dos tipos
-        do catálogo (use listar_tipos_instrumento). `configuracao` traz só os
-        campos PÚBLICOS — os campos secretos (senhas, tokens) ficam pendentes para
-        o consultor preencher depois. Devolve o `ref` do instrumento, usado no
-        cinto."""
+        do catálogo (use listar_tipos_instrumento para ver os CAMPOS de cada um).
+        Em `configuracao`, passe os campos PÚBLICOS de conexão que você já coletou
+        do consultor (ex.: para o WordPress, `site_url` e `usuario`) — não deixe em
+        branco um campo que o instrumento precisa para funcionar. NÃO passe os
+        campos secretos (senhas, tokens): eles ficam pendentes e o consultor os
+        cadastra no cofre depois de aprovar. Devolve o `ref` (para o cinto) e a
+        lista de segredos pendentes."""
         if encaixe.obter_tipo(tipo) is None:
             return _erro(
                 f"Tipo de instrumento desconhecido: {tipo}. "
@@ -198,14 +278,22 @@ def montar_ferramentas(estado: EstadoCriacao) -> list[StructuredTool]:
     def definir_gatilho(
         tipo_gatilho: str, configuracao_gatilho: dict | None = None
     ) -> str:
-        """Define o gatilho da automação (ex.: 'manual', 'agendamento',
-        'webhook'). A configuração depende do tipo (ex.: para agendamento,
-        frequência e horário)."""
+        """Define o gatilho da automação. Tipos e formato EXATO da config:
+        - 'manual': sem config (o consultor dispara quando quiser).
+        - 'webhook': sem config (uma chamada externa dispara).
+        - 'agendamento': config = {frequencia: 'diaria'|'semanal'|'mensal',
+          hora: 0-23, minuto: 0-59, dia_semana: 0-6 (0=segunda, só semanal),
+          dia_mes: 1-31 (só mensal), entrada?: texto}. Use INTEIROS para
+          hora/minuto/dia_semana/dia_mes — não nomes de dia."""
+        config = configuracao_gatilho or {}
+        erro = _validar_gatilho(tipo_gatilho, config)
+        if erro:
+            return _erro(erro)
         if r.automacao is None:
             r.automacao = AutomacaoRascunho()
         r.automacao.gatilho.tipo_gatilho = tipo_gatilho
         if configuracao_gatilho is not None:
-            r.automacao.gatilho.configuracao_gatilho = configuracao_gatilho
+            r.automacao.gatilho.configuracao_gatilho = config
         return _ok(f"Gatilho '{tipo_gatilho}' definido.")
 
     def estimar_custo(
@@ -245,18 +333,11 @@ def montar_ferramentas(estado: EstadoCriacao) -> list[StructuredTool]:
         return json.dumps(r.model_dump(mode="json"), ensure_ascii=False)
 
     def listar_tipos_instrumento() -> str:
-        """Lista os tipos de instrumento disponíveis no catálogo, com o que cada
-        um faz e quais campos de configuração e segredos pede."""
-        catalogo = [
-            {
-                "tipo": t.tipo,
-                "nome": t.nome_exibicao,
-                "descricao": t.descricao,
-                "campos_secretos": list(t.campos_secretos),
-            }
-            for t in encaixe.tipos_disponiveis()
-        ]
-        return json.dumps(catalogo, ensure_ascii=False)
+        """Lista os tipos de instrumento disponíveis, com o que cada um faz e —
+        importante — os CAMPOS de configuração de cada um (obrigatório/secreto).
+        Use isto para saber o que PERGUNTAR ao consultor: os campos públicos você
+        coleta e preenche; os secretos ele cadastra no cofre depois de aprovar."""
+        return json.dumps(catalogo_de_instrumentos(), ensure_ascii=False)
 
     def sugerir_proximos_passos(chips: list[str]) -> str:
         """Sugere de 1 a 4 respostas curtas que o consultor pode escolher para
