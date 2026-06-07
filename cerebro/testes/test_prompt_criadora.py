@@ -9,21 +9,23 @@ from criacao.prompt import montar_prompt_criadora
 
 def test_prompt_tem_as_pecas_essenciais():
     p = montar_prompt_criadora()
-    # conversa que não termina + segurança por ativação (não por rascunho)
-    assert "não termina" in p.lower() or "nunca termina" in p.lower()
-    assert "dorme" in p.lower()
-    # investiga incorporando o ofício, uma pergunta por vez
-    assert "OFÍCIO" in p
-    assert "Uma pergunta por mensagem" in p
-    # vocabulário e regra dos markdowns
+    # conversa que não termina
+    assert "nunca termina" in p.lower()
+    # as DUAS lentes: engenheiro de processos + profissional do ofício
+    assert "Engenheiro de processos" in p
+    assert "Profissional do ofício" in p
+    # investiga ANTES de propor estrutura, uma pergunta por vez
+    assert "uma pergunta por vez" in p
+    assert "ANTES de propor" in p
+    # vocabulário e regra dos 4 textos
     assert "agent_md" in p and "soul_md" in p
     assert "AGE, não pergunta" in p and "REPASSE LIMPO" in p
     # a PAREDE: portão no NÓ anterior (não na saída)
     assert "pausa_humano" in p
     assert "NÓ" in p
-    # modelos por papel e formato de gatilho injetado
+    # sinaliza ativação (não decide sozinha) e modelos válidos por papel
+    assert "SINALIZE" in p and "nunca ativa sozinho" in p.lower()
     assert "claude-haiku-4-5" in p
-    assert "frequencia" in p
     # catálogo de instrumentos injetado (com a marca de irreversível)
     assert "publicar_wordpress" in p
     assert "acao_irreversivel" in p
