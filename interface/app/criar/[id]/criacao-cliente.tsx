@@ -36,9 +36,11 @@ import {
 export function CriacaoCliente({
   conversaInicial,
   meuPapel,
+  primeiraMensagem,
 }: {
   conversaInicial: ConversaCriacao;
   meuPapel: PapelAcesso | null;
+  primeiraMensagem?: string;
 }) {
   const [mensagens, setMensagens] = useState<MensagemConversa[]>(
     conversaInicial.mensagens,
@@ -57,6 +59,24 @@ export function CriacaoCliente({
   useEffect(() => {
     fimDoChat.current?.scrollIntoView({ behavior: "smooth" });
   }, [mensagens, enviando]);
+
+  // Primeira mensagem (vinda da tela de início via ?primeira=): enviada uma vez,
+  // já dentro do chat, para a abertura ser instantânea mesmo com o Opus lento.
+  const primeiraEnviada = useRef(false);
+  useEffect(() => {
+    if (
+      primeiraMensagem &&
+      !primeiraEnviada.current &&
+      conversaInicial.mensagens.length === 0 &&
+      conversaInicial.estado === "rascunho" &&
+      podeOperar(meuPapel)
+    ) {
+      primeiraEnviada.current = true;
+      void enviar(primeiraMensagem);
+    }
+    // só na montagem
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const agentes = rascunho.agentes ?? [];
   const montou = Boolean(rascunho.time_nome) || agentes.length > 0;

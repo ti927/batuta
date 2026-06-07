@@ -42,11 +42,17 @@ export function IniciarCliente({
     setIniciando(true);
     setErro(null);
     try {
+      // Cria a conversa VAZIA (rápido). A primeira mensagem é enviada já dentro
+      // do chat, com o indicador de "digitando" — assim a abertura é instantânea
+      // mesmo com o Opus demorando no primeiro turno.
       const conversa = await api.post<ConversaCriacao>(
         `/organizacoes/${orgId}/conversas-criacao`,
-        { mensagem_inicial: mensagem.trim() || null },
+        {},
       );
-      router.push(`/criar/${conversa.id}`);
+      const primeira = mensagem.trim();
+      router.push(
+        `/criar/${conversa.id}${primeira ? `?primeira=${encodeURIComponent(primeira)}` : ""}`,
+      );
     } catch (e) {
       setErro(
         e instanceof ErroDaApi ? e.message : "Não consegui abrir a conversa.",

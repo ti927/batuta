@@ -24,13 +24,21 @@ async function carregar(id: string): Promise<{
 
 export default async function ConversaCriacaoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const primeira = typeof sp.primeira === "string" ? sp.primeira : undefined;
   const dados = await carregar(id);
   if (!dados) notFound();
   return (
-    <CriacaoCliente conversaInicial={dados.conversa} meuPapel={dados.meuPapel} />
+    <CriacaoCliente
+      conversaInicial={dados.conversa}
+      meuPapel={dados.meuPapel}
+      primeiraMensagem={primeira}
+    />
   );
 }
