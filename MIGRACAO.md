@@ -208,18 +208,27 @@ A Etapa 2 original tinha sete fases (6 a 12). Com as viradas, ela encolhe e se r
 **Fase 8 — Identidade visual**
 - Aplicar o `DESIGN-SYSTEM.md` sobre as telas cruas do core.
 
-**Fase 9 — Camada conversacional de criação (IA criadora)**
+**Fase 9 — Camada conversacional de criação (IA criadora)** — IMPLEMENTADA
+> **Revisão de paradigma (2026-06-07):** a Fase 9 foi entregue primeiro em "modo
+> rascunho + 3 modos + Aprovar e criar time", e depois **redesenhada** para o
+> paradigma definitivo abaixo (que também absorve a parte conversacional da Fase 10).
 - Tela de chat para criação de projeto/time por conversa.
-- Tool use no padrão Claude/OpenAI para a IA executar as operações já existentes do Batuta (criar time, criar agente, configurar instrumento, montar automação).
-- Modo rascunho — o que a IA criou só vira definitivo após revisão e aprovação do consultor.
-- Desfazer cirúrgico — apagar tudo que foi criado naquela sessão de conversa, se necessário.
+- Tool use para a IA executar as operações do Batuta (criar time, agente, configurar
+  instrumento, montar automação) escrevendo no **time real**, por uma porta única e
+  validada (`cerebro/criacao/servicos.py`).
+- **Uma IA, uma conversa que nunca termina:** investiga, monta, ativa e mantém
+  (edita/diagnostica/conserta) — sem ritual de "aprovar e criar". Não há mais rascunho
+  em JSON nem os 3 modos.
+- **Segurança por ativação** (ver §6.4, revisto): tudo é real mas DORME até o consultor
+  ATIVAR; a parede de ativação exige portão humano antes de ação irreversível.
 
-**Fase 10 — IA companheira de projeto**
-- Histórico de conversa por projeto, ligado ao projeto.
-- Tool use para a IA consultar o estado do projeto (agentes, instrumentos, execuções, configurações).
-- Memória vetorial para fatos/decisões/preferências do projeto.
-- Tela para abrir conversa sobre um projeto a qualquer momento.
-- Isolamento estrito de memória entre projetos.
+**Fase 10 — IA companheira de projeto** — parcialmente absorvida pela Fase 9
+- A parte "conversa viva que continua sobre o projeto" **já está pronta**: é a mesma
+  conversa única e eterna da Fase 9 (a IA criadora e a companheira viraram uma só).
+- Tool use para a IA consultar o estado do projeto (agentes, instrumentos, automação) —
+  já existe (`ver_time` e a fotografia do time injetada a cada turno).
+- **Falta** (escopo remanescente da Fase 10): memória vetorial de longo prazo para
+  fatos/decisões/preferências, com isolamento estrito entre projetos.
 
 **Fase adicional — MCP e instrumentos restantes** (era a Fase 8 antiga, deliberadamente adiada na Etapa 1)
 - Conectar instrumento de MCP.
@@ -304,7 +313,7 @@ Quando todas as fases desta migração estiverem concluídas e os documentos vig
 
 - **Substituição do usuário fixo de testes (Fase 6):** este ponto é delicado. O usuário fixo está embutido em vários lugares do cérebro. Ao introduzir o sistema de autenticação real, garanta retrocompatibilidade — execuções e dados criados pelo usuário fixo devem ser corretamente migrados para o admin real correspondente. Faça em passo único, com testes, sem perder histórico.
 
-- **IA criadora executando criação no Batuta (Fase 9):** este é o ponto de maior risco da migração inteira. A IA estará chamando operações que **escrevem no banco**. Modo rascunho não-negociável: nada que a IA cria entra em produção sem revisão e aprovação humana explícita. Implementar antes a infraestrutura de "rascunho" e só então conectar a IA. Forte separação entre "a IA propõe" e "o consultor confirma".
+- **IA criadora executando criação no Batuta (Fase 9):** este é o ponto de maior risco da migração inteira — a IA chama operações que **escrevem no banco**. **Modelo de proteção (revisto em 2026-06-07):** abandonamos o "modo rascunho" (nada é real até aprovar) em favor de **"tudo é real mas DORME até ativar"**. A IA escreve no time real desde o começo, mas a automação nasce **inativa** e **nada dispara** até o consultor ATIVAR. A única parede técnica é a **ativação**: um agente com instrumento de **ação irreversível** (publicar/enviar/gravar em sistema externo) só pode ser ativado se a cadeia tiver **portão de aprovação humana (`pausa_humano`) no nó anterior** a ele — o app recusa a ativação caso contrário. Salvaguardas que permanecem: automação inativa por padrão, toda ação da IA auditada, papéis e isolamento por organização. (Por que mudou: o ritual de "aprovar e criar" entregava raso e a conversa morria; consertar conversando é melhor, e o risco real — disparar no mundo sem aprovação — é exatamente o que a parede de ativação cobre.)
 
 - **IA companheira e contaminação de memória (Fase 10):** o isolamento entre projetos é absoluto. Use a chave do projeto como **chave de partição obrigatória** em todas as consultas à memória vetorial. Teste explicitamente: crie dois projetos com nomes parecidos, popule memórias distintas em cada um, abra conversa em um deles e confirme que a IA não recupera, em momento algum, memória do outro. Esse teste é parte do Definition of Done da fase.
 

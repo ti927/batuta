@@ -791,27 +791,26 @@ de design, não código de produção — recriar com Next + Tailwind + shadcn/u
 
 Ordem de implementação sugerida no `docs/design/README.md` §13.
 
-## FASE 9 — Camada conversacional de criação (IA criadora)  🚧 IMPLEMENTADA (aguarda validação manual ao vivo)
-Chat que estrutura projeto/time por conversa; tool use para a IA executar as operações do Batuta; **modo rascunho** (nada vira definitivo sem aprovação humana); desfazer cirúrgico.
-- **Spec visual/UX:** `docs/design/` — `app-creation.jsx` (tela dividida chat + canvas de rascunho), README §6.2/§6.5; roteiros de conversa §8; mapa de dados→cérebro §9; regra de modo rascunho (`MIGRACAO.md` §6.4).
+## FASE 9 — IA criadora (conversa eterna sobre o time real)  ✅ IMPLEMENTADA E VALIDADA AO VIVO (2026-06-07)
+Uma IA, uma conversa que **nunca termina**: investiga, monta, ativa e mantém o time. A IA escreve no **time real** desde o começo; nada dispara até o consultor ATIVAR.
+- **Spec visual/UX:** `docs/design/` — `app-creation.jsx` (tela dividida chat + canvas), README §6.2/§6.5.
 
-**O que foi feito (commits `cfc1dc4` cérebro + `00f77b5` interface, branch `migracao-etapa-2`):**
-- **Arquitetura "rascunho-como-documento"** (a decisão central, MIGRACAO §6.4): as ferramentas da IA mutam só um documento JSON (`cerebro/criacao/rascunho.py`) — NENHUMA tabela de negócio é tocada até a aprovação humana. A separação "a IA propõe / o consultor confirma" é uma **garantia estrutural**, não disciplina.
-- **Cérebro** (`cerebro/criacao/`): `rascunho` (schema), `ferramentas` (tool-use local, mesmo encaixe do motor), `materializar` (o portão: grava tudo em UMA transação atômica, com rollback total em falha; automação nasce inativa), `loop` (turno via `create_react_agent`), `prompt` (system prompt embutido — a criadora é infraestrutura). Modelo `ConversaCriacao` + migração aditiva `fcf05d5f64f7`. `chaves.resolver_chaves_por_organizacao` (criadora resolve por org, `tipo_ia='criadora'`). Rotas `rotas/criacao.py`: iniciar/listar/obter/mensagens/rascunho/aprovar/descartar. **Gating:** observador vê, operador conversa, só **admin** aprova (criar time é admin). Auditoria em iniciar/materializar/descartar.
-- **Interface** (`interface/app/criar/`): tela dividida — chat (bolhas, digitação, chips, card de aprovação, card de sucesso) + canvas do rascunho (agentes com `RobotFace`, gatilho, cadeia vertical, custo) + drawer do agente com os 4 markdowns. Entrada "Criar com a IA" no cabeçalho.
-- **Verificação:** 123 testes pytest verdes cobrindo atomicidade, invariantes (um líder só), recusa de rascunho incompleto, isolamento entre organizações, persistência de conversa, catálogo de instrumentos/gatilho e resolução de chave (LLM mockado). Interface: `tsc` + `eslint` + `next build` verdes.
+> **Histórico:** a Fase 9 foi entregue primeiro em "modo rascunho + 3 modos (investigação/projeto/montagem) + Aprovar e criar time" (commits `cfc1dc4`/`00f77b5`, depois Opus + playbook). O maestro validou que o motor funcionava, mas **mudou o paradigma** (2026-06-07): some o rascunho, somem os 3 modos, some o ritual de aprovar. O que vale é o estado abaixo.
 
-**Refino de qualidade da IA (rodadas de teste ao vivo, ainda na branch):** os primeiros testes ao vivo expuseram que o motor funciona, mas a IA precisava de mais competência e expertise. Ajustes feitos:
-- **Modelo → `claude-opus-4-8`** (`MODELO_CRIADORA` em `loop.py`). Sonnet ficava raso/apressado; Opus dá a profundidade de consultor. **Pegadinha resolvida:** Opus 4.8 NÃO aceita o parâmetro `temperature` (a API responde 400); `construir_modelo` agora omite `temperature` para os modelos da lista `MODELOS_SEM_TEMPERATURA` (`orquestracao/llm.py`).
-- **A IA passou a conhecer os FORMATOS que precisa acertar:** `catalogo_de_instrumentos()` expõe os campos de cada instrumento (público/obrigatório/secreto) — sem isso ela não sabia perguntar a URL/usuário do WordPress; e o formato exato do gatilho de agendamento, com **validação** em `definir_gatilho` (recusa `dia_semana` em texto, etc.).
-- **Prompt virou um PLAYBOOK de consultora sênior** (`prompt.py`): descoberta profunda mas que converge → monta o time COMPLETO (todos os agentes com modelo por papel, instrumentos com os dados de conexão coletados, cadeia com **portão de aprovação** antes de ações irreversíveis, gatilho, custo) → só oferece aprovar quando completo. Régua de markdowns rica.
-- **Dois bugs do laço corrigidos:** texto da resposta vinha vazio (o texto do modelo Anthropic vem junto das tool calls; agora junta o texto de TODAS as mensagens novas do turno) e repetição das respostas anteriores (considera só as mensagens NOVAS, não o histórico reenviado).
-- **Abertura instantânea (UX):** a conversa abre vazia e a 1ª mensagem é enviada já no chat (com "digitando…"), para o Opus lento não travar a tela de início.
-- **Falta:** o maestro confirmar, clicando, que a conversa agora ficou no nível "consultora" e monta um time completo e correto. Desfazer cirúrgico = descartar a conversa (nada escrito); o materializado usa as telas/rotas de exclusão existentes.
+**Paradigma final (branch `migracao-etapa-2`, PR #1):**
+- **A IA opera no time REAL** por uma porta única e validada — `cerebro/criacao/servicos.py` (criar/editar time, agente com líder único, instrumento com segredos no cofre, cinto, automação, ativar/desativar). As ferramentas (`criacao/ferramentas.py`) e as rotas REST escrevem pela mesma porta.
+- **Segurança por ativação** (substitui o "modo rascunho", MIGRACAO §6.4 revisto): tudo é real mas DORME; a automação nasce inativa e nada roda até ATIVAR. **Parede de ativação** (`cerebro/portao_ativacao.py`): um agente com instrumento de **ação irreversível** (`acao_irreversivel` no tipo) só ativa se a cadeia tiver `pausa_humano` **no nó anterior** — senão o app recusa (422). Pegadinha corrigida: o motor lê `pausa_humano` no NÓ, não na saída.
+- **Conversa**: `ConversaCriacao` perdeu `rascunho`/`modo`/`estado`, ganhou `time_id` (migração `a1b2c3d4e5f6` derruba as 3 colunas). `loop.py` roda o turno (`create_react_agent`) sobre a sessão e devolve a fotografia do time; `rotas/criacao.py` iniciar/listar/obter/mensagens (sem aprovar/descartar). **Pegadinha resolvida:** o LangGraph roda tool calls em paralelo (threads) — como agora escrevem no banco na mesma sessão, uma **trava por turno** serializa-as (`montar_ferramentas`), senão quebra com "Session is already flushing".
+- **Prompt único** (`prompt.py`): duas lentes — **engenheiro de processos** (mapeia fluxo, gargalos, erros; nunca encerra com ponta solta) + **profissional do ofício** (marketing/secretária/tesoureiro). Investiga antes de propor; sinaliza quando dá para ativar; régua de markdowns (AGE/ENTREGA/REPASSE/MATERIALIZA).
+- **Interface** (`interface/app/criar/`): chat + canvas desenhando o **time real** (fotografia a cada turno), botão **"Ativar o time"** (mostra os problemas da parede), aviso de segredos pendentes, link para a tela do time. Sem "Aprovar e criar"/materializada.
+- **Removido:** `materializar.py`, `rascunho.py`, endpoint `aprovar`.
+- **Verificação:** 125 testes pytest verdes (parede de ativação, serviços, ferramentas sobre o time real, persistência, prompt). `tsc` + `eslint` verdes. **Validado ao vivo pelo maestro.**
+- **Follow-ups (não bloqueiam):** consolidar as rotas REST de CRUD na porta única de `servicos.py`; refino fino da conversa (ritmo, construir em passos menores).
 
-## FASE 10 — IA companheira de projeto
-Histórico de conversa por projeto; tool use para consultar o estado do projeto; **memória vetorial** com isolamento estrito entre projetos.
-- **Spec visual/UX:** `docs/design/` — `app-companion.jsx` (chat + painel de memória "O que eu sei deste projeto"), README §6.6.
+## FASE 10 — IA companheira de projeto  ◑ PARCIALMENTE ABSORVIDA PELA FASE 9
+A parte "conversa viva que continua sobre o projeto" **já está pronta**: a IA criadora e a companheira viraram **uma só** conversa eterna (Fase 9). Consultar o estado do projeto via tool use também já existe (`ver_time` + fotografia do time).
+- **Escopo remanescente:** memória vetorial de longo prazo (fatos/decisões/preferências) com **isolamento estrito entre projetos**, e o painel de memória "O que eu sei deste projeto".
+- **Spec visual/UX:** `docs/design/` — `app-companion.jsx` (README §6.6).
 
 ## FASE adicional — MCP e instrumentos restantes  ✅ ESCOPO DESTA FASE CONCLUÍDO (2026-06-06)
 Conectar MCP (adiado da frente 5.6) + demais instrumentos do `PRODUTO.md` §13, no encaixe já provado. Ordem da janela entre a Fase 7 e a Fase 8: **7-A → 7-B → esta → Fase 8 (visual)**. Os instrumentos novos já nascem usando o cofre de segredos da 7-B.
