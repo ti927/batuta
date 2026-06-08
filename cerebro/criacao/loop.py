@@ -9,12 +9,28 @@ A persistência é direta e inspecionável: o histórico vive em
 `conversas_criacao.mensagens` (JSONB) e o ESTADO real é o próprio time (tabelas).
 `responder_turno` muta a conversa e as linhas do time na sessão recebida, mas NÃO faz
 commit — quem chama (a rota) controla a transação do turno.
+
+PEGADINHA ESTRUTURAL (corrigida): se o histórico reenviado ao modelo a cada turno for
+só TEXTO (sem as chamadas de ferramenta dos turnos passados), numa conversa longa o
+modelo passa a imitar o padrão "responder com prosa" e PARA de chamar as ferramentas —
+ele diz que editou, mas não chama editar_agente. Por isso guardamos, em cada turno da
+IA, a sequência REAL de mensagens (AIMessage com tool_calls + ToolMessage) no campo
+`lc`, e a reproduzimos no próximo turno. Assim o modelo vê que, nesta conversa, agir =
+chamar ferramenta. (Os resultados de ferramenta são truncados ao guardar para não
+inflar o histórico — o estado atual de verdade já é injetado no prompt do sistema.)
 """
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import (
+    AIMessage,
+    HumanMessage,
+    ToolMessage,
+    messages_from_dict,
+    messages_to_dict,
+)
 from langgraph.prebuilt import create_react_agent
 from sqlalchemy.orm import Session
 
+from criacao import memoria
 from criacao.ferramentas import (
     ContextoCriacao,
     montar_ferramentas,
@@ -29,18 +45,45 @@ from orquestracao.llm import construir_modelo, texto_da_resposta, usar_chaves
 # ANTHROPIC_API_KEY do .env quando não há chave de 'criadora' no cofre.
 MODELO_CRIADORA = "claude-opus-4-8"
 
+# Teto do conteúdo de um resultado de ferramenta guardado no histórico. O modelo só
+# precisa VER que chamou a ferramenta e que veio um retorno — não do retorno inteiro
+# (o estado real vem fresco no prompt). Truncar evita inflar o JSONB e os tokens.
+_MAX_RESULTADO_FERRAMENTA = 500
 
-def _historico_para_mensagens(mensagens: list | None) -> list[dict]:
-    """Converte o histórico salvo (papel/conteúdo) no formato de mensagens do
-    agente. Só as falas de texto entram; o estado real vem do time."""
-    saida: list[dict] = []
+
+def _compactar_para_guardar(mensagens: list) -> list:
+    """Trunca o conteúdo dos ToolMessage antes de serializar para o histórico, sem
+    perder a marca de que a ferramenta foi chamada (preserva tool_calls e ids)."""
+    compactas = []
+    for m in mensagens:
+        if (
+            isinstance(m, ToolMessage)
+            and isinstance(m.content, str)
+            and len(m.content) > _MAX_RESULTADO_FERRAMENTA
+        ):
+            m = m.model_copy(
+                update={"content": m.content[:_MAX_RESULTADO_FERRAMENTA] + "…(truncado)"}
+            )
+        compactas.append(m)
+    return compactas
+
+
+def _historico_para_mensagens(mensagens: list | None) -> list:
+    """Reconstrói o histórico de mensagens para o modelo. Para cada turno da IA, se
+    houver a sequência real salva em `lc` (com as chamadas de ferramenta), reproduz
+    ela inteira — é o que mantém o modelo agindo por ferramenta numa conversa longa.
+    Mensagens antigas (sem `lc`) caem no texto puro."""
+    saida: list = []
     for m in mensagens or []:
         papel = m.get("papel")
-        conteudo = m.get("conteudo", "")
         if papel == "usuario":
-            saida.append({"role": "user", "content": conteudo})
+            saida.append(HumanMessage(content=m.get("conteudo", "")))
         elif papel == "ia":
-            saida.append({"role": "assistant", "content": conteudo})
+            lc = m.get("lc")
+            if lc:
+                saida.extend(messages_from_dict(lc))
+            else:
+                saida.append(AIMessage(content=m.get("conteudo", "")))
     return saida
 
 
@@ -58,10 +101,12 @@ def responder_turno(
     commit) e devolve {resposta, chips, time_id, time, uso}."""
     ctx = ContextoCriacao(sessao=sessao, conversa=conversa, usuario=usuario)
     ferramentas = montar_ferramentas(ctx)
-    prompt = montar_prompt_criadora(snapshot_time(sessao, conversa))
+    prompt = montar_prompt_criadora(
+        snapshot_time(sessao, conversa), memoria.para_o_prompt(sessao, conversa)
+    )
 
     historico = _historico_para_mensagens(conversa.mensagens) + [
-        {"role": "user", "content": mensagem_usuario}
+        HumanMessage(content=mensagem_usuario)
     ]
     with usar_chaves(chaves):
         modelo_chat = construir_modelo(modelo, temperatura=0.3)
@@ -95,12 +140,23 @@ def responder_turno(
 
     conversa.mensagens = (conversa.mensagens or []) + [
         {"papel": "usuario", "conteudo": mensagem_usuario},
-        {"papel": "ia", "conteudo": resposta_texto, "chips": ctx.chips, "uso": uso},
+        {
+            "papel": "ia",
+            "conteudo": resposta_texto,
+            "chips": ctx.chips,
+            "uso": uso,
+            # A sequência REAL deste turno (com as chamadas de ferramenta), para o
+            # próximo turno reproduzir o padrão de AGIR por ferramenta. Ver a nota no
+            # topo do módulo. O front ignora `lc`; lê só papel/conteudo/chips.
+            "lc": messages_to_dict(_compactar_para_guardar(novas)),
+        },
     ]
     return {
         "resposta": resposta_texto,
         "chips": ctx.chips,
         "time_id": str(conversa.time_id) if conversa.time_id else None,
         "time": snapshot_time(sessao, conversa),
+        # Recalculada DEPOIS do turno: a IA pode ter acabado de lembrar/esquecer algo.
+        "memoria": memoria.para_o_prompt(sessao, conversa),
         "uso": uso,
     }

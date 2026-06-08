@@ -117,6 +117,71 @@ def test_turno_recebe_o_historico_anterior(monkeypatch, sessao, dados):
     sessao.flush()
 
     responder_turno(sessao, conversa, "segunda mensagem", usuario=dados["admin"])
-    papeis = [m["role"] for m in capturado["messages"]]
-    assert papeis == ["user", "assistant", "user"]
-    assert capturado["messages"][-1]["content"] == "segunda mensagem"
+    # O histórico agora é reconstruído como objetos de mensagem (não dicts), para
+    # poder reproduzir as chamadas de ferramenta dos turnos passados. Mensagens
+    # antigas (sem `lc`) viram human/ai de texto puro.
+    papeis = [m.type for m in capturado["messages"]]
+    assert papeis == ["human", "ai", "human"]
+    assert capturado["messages"][-1].content == "segunda mensagem"
+
+
+def test_historico_preserva_chamadas_de_ferramenta_entre_turnos(monkeypatch, sessao, dados):
+    """A correção da confabulação: o turno que chama ferramenta guarda a sequência
+    real (`lc`), e o turno seguinte a REPRODUZ no histórico — assim o modelo continua
+    vendo que, nesta conversa, agir = chamar ferramenta (e não imita prosa)."""
+    monkeypatch.setattr(loop, "construir_modelo", lambda *a, **k: object())
+
+    # Turno 1: a IA chama editar_agente (tool_call + tool_result na sequência).
+    def fake_turno1(modelo, ferramentas, prompt=None):
+        class App:
+            def invoke(self, payload):
+                return {
+                    "messages": payload["messages"]
+                    + [
+                        AIMessage(
+                            content="",
+                            tool_calls=[
+                                {"name": "editar_agente", "args": {"agente_id": "x"},
+                                 "id": "call_1", "type": "tool_call"}
+                            ],
+                            usage_metadata=_uso(5, 3),
+                        ),
+                        ToolMessage(content="Agente atualizado.", tool_call_id="call_1"),
+                        AIMessage(content="Pronto, ajustei o agente.", usage_metadata=_uso(2, 2)),
+                    ]
+                }
+
+        return App()
+
+    monkeypatch.setattr(loop, "create_react_agent", fake_turno1)
+    conversa = ConversaCriacao(organizacao_id=dados["orgA"].id)
+    sessao.add(conversa)
+    sessao.flush()
+    responder_turno(sessao, conversa, "ajuste o agente", usuario=dados["admin"])
+
+    # O turno da IA guardou a sequência real em `lc`.
+    ia = conversa.mensagens[-1]
+    assert "lc" in ia and ia["papel"] == "ia"
+
+    # Turno 2: capturamos o histórico que vai ao modelo e conferimos que a chamada de
+    # ferramenta do turno 1 foi REPRODUZIDA (não virou prosa).
+    capturado = {}
+
+    def fake_turno2(modelo, ferramentas, prompt=None):
+        class App:
+            def invoke(self, payload):
+                capturado["messages"] = payload["messages"]
+                return {"messages": payload["messages"]
+                        + [AIMessage(content="ok", usage_metadata=_uso(0, 0))]}
+
+        return App()
+
+    monkeypatch.setattr(loop, "create_react_agent", fake_turno2)
+    responder_turno(sessao, conversa, "e agora o próximo", usuario=dados["admin"])
+
+    tipos = [m.type for m in capturado["messages"]]
+    assert "tool" in tipos  # o tool_result foi reproduzido
+    chamou = any(
+        getattr(m, "tool_calls", None) for m in capturado["messages"] if m.type == "ai"
+    )
+    assert chamou  # a AIMessage com tool_calls foi reproduzida

@@ -807,9 +807,12 @@ Uma IA, uma conversa que **nunca termina**: investiga, monta, ativa e mantém o 
 - **Verificação:** 125 testes pytest verdes (parede de ativação, serviços, ferramentas sobre o time real, persistência, prompt). `tsc` + `eslint` verdes. **Validado ao vivo pelo maestro.**
 - **Follow-ups (não bloqueiam):** consolidar as rotas REST de CRUD na porta única de `servicos.py`; refino fino da conversa (ritmo, construir em passos menores).
 
-## FASE 10 — IA companheira de projeto  ◑ PARCIALMENTE ABSORVIDA PELA FASE 9
-A parte "conversa viva que continua sobre o projeto" **já está pronta**: a IA criadora e a companheira viraram **uma só** conversa eterna (Fase 9). Consultar o estado do projeto via tool use também já existe (`ver_time` + fotografia do time).
-- **Escopo remanescente:** memória vetorial de longo prazo (fatos/decisões/preferências) com **isolamento estrito entre projetos**, e o painel de memória "O que eu sei deste projeto".
+## FASE 10 — IA companheira de projeto  ✅ CONCLUÍDA (2026-06-07)
+A parte "conversa viva que continua sobre o projeto" **já estava pronta**: a IA criadora e a companheira viraram **uma só** conversa eterna (Fase 9). Consultar o estado do projeto via tool use também já existe (`ver_time` + fotografia do time). Faltava só a **memória de longo prazo**, agora entregue.
+- **Escopo remanescente (entregue):** memória de longo prazo (fatos/decisões/preferências) com **isolamento estrito entre projetos**, e o painel "O que eu sei deste projeto".
+- **Abordagem DESTILADA, não vetorial (decisão do maestro 2026-06-07):** a IA cura o que vale lembrar (ferramentas `lembrar`/`recordar`/`esquecer`) e o conjunto — dezenas de memórias por projeto, não milhares — é injetado no contexto do modelo a cada turno. ZERO infra nova: sem pgvector, sem chave de embeddings, sem provedor extra (a Anthropic não tem embeddings). Evolui para vetorial depois, se um projeto crescer demais.
+  - **Cérebro:** tabela `memorias_projeto` (migração aditiva `c3d4e5f6a7b8`), serviço `criacao/memoria.py`, três ferramentas no encaixe da criadora, injeção no `prompt.py`, memória exposta em `ConversaCriacaoLer`/`RespostaTurno`. Isolamento preso à conversa (o fio do projeto) + `organizacao_id` como parede dura. **134 testes pytest verdes** (9 novos: gravar/listar/buscar/esquecer, isolamento entre projetos, injeção no prompt).
+  - **Interface:** painel "O que eu sei deste projeto" no canvas da conversa (`app/criar/[id]`), atualiza a cada turno. `tsc`+`eslint` verdes.
 - **Spec visual/UX:** `docs/design/` — `app-companion.jsx` (README §6.6).
 
 ## FASE adicional — MCP e instrumentos restantes  ✅ ESCOPO DESTA FASE CONCLUÍDO (2026-06-06)

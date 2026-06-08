@@ -160,7 +160,7 @@ O protótipo usa dados fake. No sistema, puxar das tabelas/endpoints existentes 
 - **Cadeia / gatilho:** `automacoes` (`tipo_gatilho`, `config_gatilho`, `cadeia` JSONB = grafo de nós). A cadeia visual lê esse grafo.
 - **Execução / passos:** `execucoes` (`estado`: aguardando | em_andamento | aguardando_humano | concluida | falhou; entrada; resultado) e `passos_execucao` (ordem, agente, entrada, saída, estado, datas). Timeline = `passos_execucao`. Tokens/custo via medição de uso (Fase 5.4 / 7.6, `uso` por passo + origem da chave).
 - **Espera-por-humano:** retomar via `POST /execucoes/{id}/responder` (já existe).
-- **IA criadora/companheira:** `conversas_projeto` (histórico por projeto), `memoria_projeto` (vetorial). Tool use chamando as operações existentes (criar time/agente, configurar instrumento, montar automação). Chave resolvida por projeto→consultoria→`.env` (Fase 7).
+- **IA criadora/companheira:** `conversas_criacao` (a conversa eterna por projeto, com histórico) e `memorias_projeto` (memória de longo prazo — **destilada, não vetorial**: fatos/decisões/preferências curados pela IA, isolados por projeto; Fase 10). Tool use chamando as operações existentes (criar time/agente, configurar instrumento, montar automação) + `lembrar`/`recordar`/`esquecer`. Chave resolvida por projeto→consultoria→`.env` (Fase 7).
 - **Papéis:** Observador responde portões/perguntas; Operador cria/edita/dispara; Admin troca chaves/apaga (MIGRACAO §3.7). Gating de UI por papel (já há `lib/permissoes.ts`).
 
 ---

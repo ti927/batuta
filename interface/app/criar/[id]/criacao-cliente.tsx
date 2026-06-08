@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Brain,
   ChevronLeft,
   Clock,
   ExternalLink,
@@ -28,6 +29,7 @@ import {
   type AgenteTime,
   type Cadeia,
   type ConversaCriacao,
+  type MemoriaProjeto,
   type MensagemConversa,
   type PapelAcesso,
   type SnapshotTime,
@@ -47,6 +49,9 @@ export function CriacaoCliente({
     conversaInicial.mensagens,
   );
   const [time, setTime] = useState<SnapshotTime | null>(conversaInicial.time);
+  const [memoria, setMemoria] = useState<MemoriaProjeto[]>(
+    conversaInicial.memoria ?? [],
+  );
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [ativando, setAtivando] = useState(false);
@@ -99,6 +104,7 @@ export function CriacaoCliente({
       );
       setMensagens((m) => [...m, { papel: "ia", conteudo: r.resposta, chips: r.chips }]);
       setTime(r.time);
+      setMemoria(r.memoria ?? []);
     } catch (e) {
       setErro(e instanceof ErroDaApi ? e.message : "Falha ao enviar a mensagem.");
     } finally {
@@ -295,6 +301,8 @@ export function CriacaoCliente({
               <ExternalLink className="size-4" /> Abrir a tela do time
             </Link>
           )}
+
+          {memoria.length > 0 && <MemoriaPainel memoria={memoria} />}
         </div>
       </section>
 
@@ -514,6 +522,44 @@ function CadeiaVertical({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ──────────────────── Memória de longo prazo ────────────────────
+
+const ROTULO_CATEGORIA: Record<MemoriaProjeto["categoria"], string> = {
+  fato: "Fato",
+  decisao: "Decisão",
+  preferencia: "Preferência",
+};
+
+function MemoriaPainel({ memoria }: { memoria: MemoriaProjeto[] }) {
+  return (
+    <div className="mt-8">
+      <RotuloSecao Icone={Brain}>O que eu sei deste projeto</RotuloSecao>
+      <div className="rounded-lg border border-border bg-card p-4">
+        <p className="mb-3 text-xs text-muted-foreground">
+          O que a IA aprendeu e lembra entre conversas — fatos, decisões e
+          preferências deste projeto.
+        </p>
+        <ul className="space-y-2.5">
+          {memoria.map((m) => (
+            <li key={m.id} className="flex items-start gap-2.5 text-sm">
+              <span
+                className="mt-1.5 size-1.5 shrink-0 rounded-full"
+                style={{ background: "#B19CD9" }}
+              />
+              <span className="min-w-0 text-foreground">
+                <span className="mr-1.5 text-xs font-medium text-[#3D2A99]">
+                  {ROTULO_CATEGORIA[m.categoria] ?? "Memória"}
+                </span>
+                {m.conteudo}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
