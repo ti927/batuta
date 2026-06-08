@@ -377,3 +377,32 @@ class ConversaCriacao(IdData, Base):
     )
 
     __table_args__ = (Index("ix_conversa_criacao_org", "organizacao_id"),)
+
+
+class MemoriaProjeto(IdData, Base):
+    """Memória de LONGO PRAZO da IA sobre um projeto (Fase 10).
+
+    O que a IA aprende e deve lembrar entre sessões: fatos do cliente, decisões
+    tomadas com o consultor, preferências de tom/forma. A própria IA cura o que vale
+    guardar (ferramenta `lembrar`) e pode corrigir o que mudou (`esquecer`).
+
+    Abordagem DESTILADA, não vetorial (decisão do maestro 2026-06-07): um projeto
+    acumula dezenas de memórias, não milhares — cabem no contexto do modelo, então a
+    recuperação é por recência/filtro simples, sem embeddings nem busca semântica.
+
+    Isolamento estrito: presa à CONVERSA (o fio eterno do projeto, 1:1 com o time) e
+    carregando `organizacao_id` como parede dura — uma organização nunca vê a memória
+    de outra. Sobrevive à exclusão do time (a conversa sobrevive)."""
+
+    __tablename__ = "memorias_projeto"
+    conversa_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("conversas_criacao.id", ondelete="CASCADE"), nullable=False
+    )
+    organizacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    # 'fato' | 'decisao' | 'preferencia' — o tipo da memória, para o painel agrupar.
+    categoria: Mapped[str] = mapped_column(String(20), nullable=False)
+    conteudo: Mapped[str] = mapped_column(Text, nullable=False)
+
+    __table_args__ = (Index("ix_memoria_projeto_conversa", "conversa_id"),)

@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 import instrumentos as encaixe
 import precos
-from criacao import servicos
+from criacao import memoria, servicos
 from criacao.servicos import ConflitoDominio
 from modelos import (
     Agente,
@@ -471,12 +471,42 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         ctx.chips = list(chips)[:4]
         return _ok("Sugestões registradas.")
 
+    def lembrar(categoria: str, conteudo: str) -> str:
+        """Guarda na MEMÓRIA de longo prazo deste projeto algo que você deve lembrar
+        nas próximas conversas. Use para fatos do cliente, decisões tomadas com o
+        consultor e preferências dele (tom, forma, restrições) — não para detalhes
+        triviais nem para o que já está no time (isso você vê com ver_time).
+        `categoria` é 'fato', 'decisao' ou 'preferencia'. Escreva `conteudo` curto e
+        autossuficiente (ex.: 'O público do blog é o decisor, não o analista')."""
+        memoria.lembrar(sess, ctx.conversa, categoria=categoria, conteudo=conteudo)
+        return _ok("Memória guardada.")
+
+    def recordar(busca: str | None = None) -> str:
+        """Lembra o que você já sabe deste projeto (a memória de longo prazo). Sem
+        `busca`, devolve as memórias mais recentes; com `busca`, filtra por uma
+        palavra/trecho. As memórias recentes já vêm no seu contexto — use isto para
+        buscar algo específico ou conferir o id de uma memória antes de esquecê-la."""
+        itens = [
+            memoria.serializar(m)
+            for m in memoria.listar(sess, ctx.conversa, busca=busca)
+        ]
+        return json.dumps({"ok": True, "memorias": itens}, ensure_ascii=False)
+
+    def esquecer(memoria_id: str) -> str:
+        """Apaga uma memória de longo prazo que ficou ERRADA ou que o consultor mudou
+        (ex.: ele revisou uma decisão). Pegue o `id` com recordar. Não apague memória
+        ainda válida."""
+        mid = _uuid(memoria_id)
+        if mid and memoria.esquecer(sess, ctx.conversa, mid):
+            return _ok("Memória apagada.")
+        return _erro(f"Não há memória com id {memoria_id} neste projeto.")
+
     funcoes = [
         definir_time, adicionar_agente, editar_agente, remover_agente,
         configurar_instrumento, editar_instrumento, encaixar_instrumento,
         desencaixar_instrumento, montar_cadeia, definir_gatilho, estimar_custo,
         ativar_time, desativar_time, ver_time, listar_tipos_instrumento,
-        sugerir_proximos_passos,
+        sugerir_proximos_passos, lembrar, recordar, esquecer,
     ]
 
     # O react agent do LangGraph roda as ferramentas de UM turno EM PARALELO (pool de

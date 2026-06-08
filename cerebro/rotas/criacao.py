@@ -19,6 +19,7 @@ import agendador
 import auditoria
 from auth import usuario_atual
 from chaves import ORIGEM_LEGADO, resolver_chaves_por_organizacao
+from criacao import memoria
 from criacao.ferramentas import snapshot_time
 from criacao.loop import MODELO_CRIADORA, responder_turno
 from esquemas import (
@@ -28,7 +29,7 @@ from esquemas import (
     MensagemTurno,
     RespostaTurno,
 )
-from modelos import Automacao, ConversaCriacao, Usuario
+from modelos import Automacao, ConversaCriacao, Time, Usuario
 from orquestracao.modelos_ia import provedor_do_modelo
 from rotas._comum import conversa_criacao_acessivel, organizacao_acessivel
 from sessao import obter_sessao
@@ -63,9 +64,11 @@ def _rodar_turno(
 
 
 def _ler(sessao: Session, conversa: ConversaCriacao) -> ConversaCriacaoLer:
-    """A conversa + a fotografia do time real (para o front desenhar o canvas)."""
+    """A conversa + a fotografia do time real + a memória de longo prazo (para o
+    front desenhar o canvas e o painel 'O que eu sei deste projeto')."""
     lido = ConversaCriacaoLer.model_validate(conversa)
     lido.time = snapshot_time(sessao, conversa)
+    lido.memoria = memoria.para_o_prompt(sessao, conversa)
     return lido
 
 
@@ -109,11 +112,20 @@ def listar(
     usuario: Usuario = Depends(usuario_atual),
 ):
     organizacao_acessivel(sessao, usuario, organizacao_id)
-    return sessao.scalars(
-        select(ConversaCriacao)
+    # Junta o nome do time (LEFT JOIN: a conversa pode ainda não ter criado um) para a
+    # tela de retomar projeto rotular cada conversa. Mais recentes primeiro.
+    linhas = sessao.execute(
+        select(ConversaCriacao, Time.nome)
+        .outerjoin(Time, Time.id == ConversaCriacao.time_id)
         .where(ConversaCriacao.organizacao_id == organizacao_id)
-        .order_by(ConversaCriacao.criado_em.desc())
+        .order_by(ConversaCriacao.atualizado_em.desc())
     ).all()
+    resumos: list[ConversaCriacaoResumo] = []
+    for conversa, time_nome in linhas:
+        resumo = ConversaCriacaoResumo.model_validate(conversa)
+        resumo.time_nome = time_nome
+        resumos.append(resumo)
+    return resumos
 
 
 @rotas.get("/conversas-criacao/{conversa_id}", response_model=ConversaCriacaoLer)

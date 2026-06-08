@@ -432,11 +432,15 @@ class RespostaTurno(BaseModel):
     chips: list[str]
     time_id: str | None = None
     time: dict | None = None
+    # Memória de longo prazo do projeto, recalculada após o turno (o painel atualiza).
+    memoria: list = []
     uso: dict
 
 
 class ConversaCriacaoResumo(BaseModel):
-    """Uma conversa de criação na listagem (sem o histórico inteiro)."""
+    """Uma conversa de criação na listagem (sem o histórico inteiro). `time_nome` é o
+    nome do time que esta conversa mantém (nulo se ela ainda não criou um), para a
+    tela de retomar projeto rotular cada conversa."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -444,13 +448,16 @@ class ConversaCriacaoResumo(BaseModel):
     organizacao_id: uuid.UUID
     titulo: str | None
     time_id: uuid.UUID | None
+    time_nome: str | None = None
     criado_em: datetime
     atualizado_em: datetime
 
 
 class ConversaCriacaoLer(ConversaCriacaoResumo):
-    """Uma conversa completa: histórico + a fotografia do time real (preenchida pela
-    rota, para o front desenhar o canvas sem mais idas ao servidor)."""
+    """Uma conversa completa: histórico + a fotografia do time real + a memória de
+    longo prazo do projeto (preenchidas pela rota, para o front desenhar o canvas e o
+    painel 'O que eu sei deste projeto' sem mais idas ao servidor)."""
 
     mensagens: list
     time: dict | None = None
+    memoria: list = []

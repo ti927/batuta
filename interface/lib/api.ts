@@ -354,6 +354,17 @@ export type MensagemConversa = {
   uso?: UsoChamada & { origem?: string };
 };
 
+// Memória de longo prazo do projeto (Fase 10): o que a IA aprendeu e lembra entre
+// conversas. Abordagem destilada — fatos/decisões/preferências curados pela IA.
+export type CategoriaMemoria = "fato" | "decisao" | "preferencia";
+
+export type MemoriaProjeto = {
+  id: string;
+  categoria: CategoriaMemoria;
+  conteudo: string;
+  criado_em: string | null;
+};
+
 export type ConversaCriacao = {
   id: string;
   organizacao_id: string;
@@ -363,6 +374,19 @@ export type ConversaCriacao = {
   atualizado_em: string;
   mensagens: MensagemConversa[];
   time: SnapshotTime | null;
+  memoria: MemoriaProjeto[];
+};
+
+// Conversa na listagem (para retomar um projeto): sem o histórico, com o nome do
+// time que ela mantém (nulo se ainda não criou um).
+export type ConversaCriacaoResumo = {
+  id: string;
+  organizacao_id: string;
+  titulo: string | null;
+  time_id: string | null;
+  time_nome: string | null;
+  criado_em: string;
+  atualizado_em: string;
 };
 
 export type RespostaTurno = {
@@ -370,5 +394,6 @@ export type RespostaTurno = {
   chips: string[];
   time_id: string | null;
   time: SnapshotTime | null;
+  memoria: MemoriaProjeto[];
   uso: Record<string, unknown>;
 };

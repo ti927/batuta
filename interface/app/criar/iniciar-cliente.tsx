@@ -15,8 +15,12 @@ import { api, ErroDaApi, type ConversaCriacao, type Organizacao } from "@/lib/ap
 // tela da conversa.
 export function IniciarCliente({
   organizacoes,
+  compacto = false,
 }: {
   organizacoes: Organizacao[];
+  // Quando já há projetos para retomar acima, a tela de novo time fica enxuta
+  // (sem o herói centralizado), para não competir com a lista.
+  compacto?: boolean;
 }) {
   const router = useRouter();
   const [orgId, setOrgId] = useState(organizacoes[0]?.id ?? "");
@@ -26,15 +30,59 @@ export function IniciarCliente({
 
   if (organizacoes.length === 0) {
     return (
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-16 sm:px-6">
-        <EstadoVazio
-          icone={Sparkles}
-          titulo="Nenhuma organização para criar"
-        >
-          Você precisa ser operador ou admin de alguma organização para montar um
-          time com a IA. Fale com um admin da sua organização.
-        </EstadoVazio>
-      </main>
+      <EstadoVazio icone={Sparkles} titulo="Nenhuma organização para criar">
+        Você precisa ser operador ou admin de alguma organização para montar um time
+        com a IA. Fale com um admin da sua organização.
+      </EstadoVazio>
+    );
+  }
+
+  if (compacto) {
+    return (
+      <section className="text-left">
+        <h2 className="font-heading text-xl font-semibold text-foreground">
+          Criar um time novo
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Descreva o que você quer que esse time faça. A IA monta o time aqui mesmo —
+          nada dispara até você ativar.
+        </p>
+
+        {organizacoes.length > 1 && (
+          <div className="mt-4">
+            <label htmlFor="org" className="mb-1.5 block text-sm font-medium text-foreground">
+              Organização
+            </label>
+            <select
+              id="org"
+              value={orgId}
+              onChange={(e) => setOrgId(e.target.value)}
+              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+            >
+              {organizacoes.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <Textarea
+          value={mensagem}
+          onChange={(e) => setMensagem(e.target.value)}
+          placeholder="Ex.: um time que escreve e publica artigos de blog otimizados para SEO toda semana."
+          rows={3}
+          className="mt-4 w-full"
+        />
+
+        {erro && <p className="mt-3 text-sm text-destructive">{erro}</p>}
+
+        <Button className="mt-4" onClick={comecar} disabled={iniciando || !orgId}>
+          <Sparkles />
+          {iniciando ? "Abrindo conversa…" : "Começar a montar"}
+        </Button>
+      </section>
     );
   }
 
@@ -76,8 +124,8 @@ export function IniciarCliente({
       </h1>
       <p className="mt-2 max-w-md text-sm text-muted-foreground">
         Descreva o que você quer que esse time faça. A IA criadora vai propor os
-        agentes, os instrumentos e o fluxo — tudo em rascunho, nada é criado sem a
-        sua aprovação.
+        agentes, os instrumentos e o fluxo, e monta tudo aqui — nada dispara até você
+        ativar.
       </p>
 
       {organizacoes.length > 1 && (
