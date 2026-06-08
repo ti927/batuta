@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ChevronLeft, Plus, Wrench } from "lucide-react";
+import { ChevronLeft, Lock, Plus, Wrench } from "lucide-react";
 
 import {
   api,
@@ -37,13 +37,111 @@ function lerJson(texto: string): [Record<string, unknown> | null, string | null]
   }
 }
 
-// Nomes dos campos esperados na configuração, lidos do JSON Schema do tipo.
-function camposDoEsquema(tipo: TipoInstrumento | undefined): string[] {
+// Um campo da configuração, com o que o formulário precisa para se desenhar.
+type CampoConfig = {
+  nome: string;
+  tipo: string; // "string" | "integer" | "number" | "boolean" | "array" | "object"
+  descricao: string;
+  obrigatorio: boolean;
+  secreto: boolean;
+};
+
+// Lê o tipo de um campo do JSON Schema, lidando com Optional (anyOf [tipo, null]).
+function tipoDoCampo(prop: Record<string, unknown>): string {
+  if (typeof prop.type === "string") return prop.type;
+  const anyOf = prop.anyOf as Array<Record<string, unknown>> | undefined;
+  const achado = anyOf?.find((p) => p.type && p.type !== "null");
+  return (achado?.type as string) ?? "string";
+}
+
+// Campos da configuração de um tipo, com metadados para gerar o formulário —
+// inclusive quais são secretos (vão como senha e cifrados; Fase 7-B).
+function camposDoTipo(tipo: TipoInstrumento | undefined): CampoConfig[] {
   if (!tipo) return [];
-  const props = tipo.esquema_config?.properties as
-    | Record<string, unknown>
-    | undefined;
-  return props ? Object.keys(props) : [];
+  const esquema = (tipo.esquema_config ?? {}) as Record<string, unknown>;
+  const props =
+    (esquema.properties as Record<string, Record<string, unknown>>) ?? {};
+  const obrigatorios = new Set((esquema.required as string[]) ?? []);
+  const secretos = new Set(tipo.campos_secretos ?? []);
+  return Object.entries(props).map(([nome, prop]) => ({
+    nome,
+    tipo: tipoDoCampo(prop),
+    descricao: (prop.description as string) ?? "",
+    obrigatorio: obrigatorios.has(nome),
+    secreto: secretos.has(nome),
+  }));
+}
+
+// Um campo do formulário de configuração, desenhado conforme o tipo: senha para
+// secretos, número para number/integer, sim/não para boolean, JSON para
+// array/object, texto para o resto.
+function CampoConfigInput({
+  campo,
+  valor,
+  jaGuardado,
+  onChange,
+}: {
+  campo: CampoConfig;
+  valor: string;
+  jaGuardado: string | undefined; // 4 últimos dígitos, se já há segredo guardado
+  onChange: (v: string) => void;
+}) {
+  let entrada;
+  if (campo.tipo === "boolean") {
+    entrada = (
+      <Select value={valor} onChange={(e) => onChange(e.target.value)}>
+        <option value="">—</option>
+        <option value="true">Sim</option>
+        <option value="false">Não</option>
+      </Select>
+    );
+  } else if (campo.tipo === "array" || campo.tipo === "object") {
+    entrada = (
+      <Textarea
+        className="min-h-20 font-mono"
+        value={valor}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={campo.tipo === "array" ? '["a", "b"]' : '{ "chave": "valor" }'}
+      />
+    );
+  } else {
+    entrada = (
+      <Input
+        type={
+          campo.secreto
+            ? "password"
+            : campo.tipo === "integer" || campo.tipo === "number"
+              ? "number"
+              : "text"
+        }
+        value={valor}
+        onChange={(e) => onChange(e.target.value)}
+        autoComplete={campo.secreto ? "new-password" : undefined}
+        placeholder={
+          campo.secreto && jaGuardado
+            ? `•••• ${jaGuardado} — em branco para manter`
+            : campo.secreto
+              ? "deixe em branco se não tiver"
+              : undefined
+        }
+      />
+    );
+  }
+  return (
+    <Label className="flex-col items-start gap-1">
+      <span className="flex items-center gap-1.5">
+        {campo.secreto && <Lock className="size-3 text-muted-foreground" />}
+        {campo.nome}
+        {campo.obrigatorio && <span className="text-destructive">*</span>}
+      </span>
+      {entrada}
+      {campo.descricao && (
+        <span className="text-xs font-normal text-muted-foreground">
+          {campo.descricao}
+        </span>
+      )}
+    </Label>
+  );
 }
 
 export function InstrumentosCliente({
@@ -65,7 +163,9 @@ export function InstrumentosCliente({
   const [modo, setModo] = useState<null | "novo" | string>(null);
   const [nome, setNome] = useState("");
   const [tipoSel, setTipoSel] = useState(tipos[0]?.tipo ?? "");
-  const [configTexto, setConfigTexto] = useState("{}");
+  // Valor (como texto) de cada campo da configuração. Campos secretos começam
+  // vazios — nunca são reexibidos; em branco = manter o que já está guardado.
+  const [valores, setValores] = useState<Record<string, string>>({});
 
   // Estado do "Testar": instrumento sendo testado, argumentos e resultado.
   const [testandoId, setTestandoId] = useState<string | null>(null);
@@ -83,15 +183,28 @@ export function InstrumentosCliente({
   function abrirNovo() {
     setNome("");
     setTipoSel(tipos[0]?.tipo ?? "");
-    setConfigTexto("{}");
+    setValores({});
     setErro(null);
     setModo("novo");
   }
 
   function abrirEdicao(inst: Instrumento) {
+    const tipo = tipos.find((t) => t.tipo === inst.tipo);
+    const config = (inst.configuracao ?? {}) as Record<string, unknown>;
+    const v: Record<string, string> = {};
+    for (const campo of camposDoTipo(tipo)) {
+      if (campo.secreto) {
+        v[campo.nome] = ""; // segredo nunca é reexibido; em branco = manter
+        continue;
+      }
+      const atual = config[campo.nome];
+      if (atual === undefined || atual === null) v[campo.nome] = "";
+      else if (typeof atual === "object") v[campo.nome] = JSON.stringify(atual);
+      else v[campo.nome] = String(atual);
+    }
     setNome(inst.nome);
     setTipoSel(inst.tipo);
-    setConfigTexto(JSON.stringify(inst.configuracao ?? {}, null, 2));
+    setValores(v);
     setErro(null);
     setModo(inst.id);
   }
@@ -101,10 +214,46 @@ export function InstrumentosCliente({
       setErro("O nome é obrigatório.");
       return;
     }
-    const [config, erroJson] = lerJson(configTexto);
-    if (erroJson) {
-      setErro(erroJson);
-      return;
+    // Monta a configuração a partir dos campos do formulário, coagindo cada um
+    // pelo seu tipo. Segredo preenchido vai cifrado; segredo em branco é OMITIDO
+    // (o cérebro mantém o que já está guardado).
+    const config: Record<string, unknown> = {};
+    for (const campo of camposDoTipo(tipoAtual)) {
+      const bruto = (valores[campo.nome] ?? "").trim();
+      if (campo.secreto) {
+        if (bruto) config[campo.nome] = bruto;
+        else if (campo.obrigatorio && modo === "novo") {
+          setErro(`Preencha o campo "${campo.nome}".`);
+          return;
+        }
+        continue;
+      }
+      if (bruto === "") {
+        if (campo.obrigatorio) {
+          setErro(`Preencha o campo "${campo.nome}".`);
+          return;
+        }
+        continue;
+      }
+      if (campo.tipo === "integer" || campo.tipo === "number") {
+        const n = Number(bruto);
+        if (Number.isNaN(n)) {
+          setErro(`O campo "${campo.nome}" precisa ser um número.`);
+          return;
+        }
+        config[campo.nome] = campo.tipo === "integer" ? Math.trunc(n) : n;
+      } else if (campo.tipo === "boolean") {
+        config[campo.nome] = bruto === "true";
+      } else if (campo.tipo === "array" || campo.tipo === "object") {
+        try {
+          config[campo.nome] = JSON.parse(bruto);
+        } catch {
+          setErro(`O campo "${campo.nome}" precisa ser um JSON válido.`);
+          return;
+        }
+      } else {
+        config[campo.nome] = bruto;
+      }
     }
     try {
       if (modo === "novo") {
@@ -212,51 +361,34 @@ export function InstrumentosCliente({
               ))}
             </Select>
           </Label>
-          {tipoAtual && (
-            <p className="text-xs text-muted-foreground">
-              {tipoAtual.descricao}
-              {camposDoEsquema(tipoAtual).length > 0 && (
-                <>
-                  {" "}
-                  Campos da configuração:{" "}
-                  <span className="font-mono">
-                    {camposDoEsquema(tipoAtual).join(", ")}
-                  </span>
-                  .
-                </>
-              )}
-            </p>
+          {tipoAtual?.descricao && (
+            <p className="text-xs text-muted-foreground">{tipoAtual.descricao}</p>
           )}
-          {tipoAtual && (tipoAtual.campos_secretos?.length ?? 0) > 0 && (
+
+          {(tipoAtual?.campos_secretos?.length ?? 0) > 0 && (
             <Aviso variant="atencao" className="text-xs">
-              <span>
-                Campos secretos (guardados cifrados, nunca reexibidos):{" "}
-                <span className="font-mono">
-                  {(tipoAtual.campos_secretos ?? []).join(", ")}
-                </span>
-                .
-                {instEditando &&
-                  Object.keys(instEditando.segredos ?? {}).length > 0 && (
-                    <>
-                      {" "}
-                      Já guardados:{" "}
-                      {Object.entries(instEditando.segredos ?? {})
-                        .map(([c, u]) => `${c} (••••${u})`)
-                        .join(", ")}
-                      . Reinforme um campo só se quiser trocá-lo.
-                    </>
-                  )}
-              </span>
+              Os campos com cadeado são secretos: vão guardados cifrados e nunca são
+              reexibidos. Ao editar, deixe um secreto em branco para manter o atual.
             </Aviso>
           )}
-          <Label className="flex-col items-start gap-1">
-            Configuração (JSON)
-            <Textarea
-              className="min-h-32 font-mono"
-              value={configTexto}
-              onChange={(e) => setConfigTexto(e.target.value)}
+
+          {camposDoTipo(tipoAtual).map((campo) => (
+            <CampoConfigInput
+              key={campo.nome}
+              campo={campo}
+              valor={valores[campo.nome] ?? ""}
+              jaGuardado={instEditando?.segredos?.[campo.nome]}
+              onChange={(v) =>
+                setValores((atual) => ({ ...atual, [campo.nome]: v }))
+              }
             />
-          </Label>
+          ))}
+
+          {camposDoTipo(tipoAtual).length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Este tipo não precisa de configuração.
+            </p>
+          )}
           <div className="flex gap-2">
             <Button onClick={salvar}>Salvar</Button>
             <Button variant="ghost" onClick={() => setModo(null)}>
