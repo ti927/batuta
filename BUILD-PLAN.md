@@ -832,6 +832,19 @@ Ajustes nascidos do uso real do maestro (montar/testar times pela IA criadora). 
 - **UX da tela de conversa** (interface): o casco do app trava em `h-dvh` e a área abaixo do cabeçalho rola por dentro — a conversa não estica mais o documento; chat e canvas rolam por coluna. O campo "Responder à IA" virou textarea que cresce com as linhas (Enter envia, Shift+Enter quebra).
 - **Aprovação humana por instrumento, não fixa por tipo** (cérebro + interface, merge `3697e74`): antes todo `chamar_api_rest`/`banco_sql`/`conectar_mcp` era irreversível por tipo e exigia portão — inviável para **consultas**. Agora a irreversibilidade é **resolvida por instância** (`instrumentos.exige_portao(tipo, config, override)`): REST deriva do `metodo` (GET=leitura, sem portão; POST/PUT/DELETE=escrita, com portão); SQL ganhou `somente_leitura` (o instrumento **recusa** escrita → sem portão); webhook-saída/WordPress seguem sempre com portão. Interruptor por instância `instrumentos.exige_aprovacao` (coluna nullable, migração `d4e5f6a7b8c9`: NULL=auto/True=sempre/False=nunca) sobrepõe a derivação — pode liberar até uma escrita, com aviso na UI + auditoria `instrumento.aprovacao_alterada`. A parede de ativação e a fotografia da criadora leem por instância; o prompt da IA só põe portão em ESCRITA. **Motor de orquestração intocado.** 146 testes pytest. (Ver `PRODUTO.md` §19.) **Pegadinha:** times criados ANTES disto têm o portão preso na cadeia — pedir à IA para remover quando for só consulta.
 
+## FASE de Design hi-fi — realizar o handoff por inteiro  🚧 EM ANDAMENTO (2026-06-09)
+A Fase 8 aplicou só a MARCA (cores/fontes/tokens) e as Fases 9/10 entregaram as telas AI-first de forma funcional. Falta realizar o **handoff hi-fi** (`docs/design/`, fonte da verdade visual): o shell, os dashboards ricos e os refinos de tela. Feito **tela a tela**.
+
+**Reconciliar com o pivô:** o handoff é anterior ao pivô (mostra "modo rascunho + Aprovar e criar time"). Onde conflitar com a conversa eterna sobre o time real, **vale o paradigma atual** — o design é referência VISUAL, não de fluxo.
+
+Ordem de execução (handoff §13, reconciliada):
+1. **Shell de sidebar** (README §5) + header de conteúdo (breadcrumb) + gating por papel — substitui o header simples atual pela sidebar escura definitiva (246px, `#1A1730`): Criar com a IA, Início, Times (expansível), Execuções, Biblioteca, Uso e custos; Acesso, Chaves, Configurações; seletor de organização + chip do usuário + Sair. **← EM ANDAMENTO (branch `design-shell-sidebar`).**
+2. **Dashboard do time** (`/times/[id]`, hoje só lista de agentes → hub rico): stat cards (próxima execução / aguardando você / custo no mês), cadeia visual, execuções recentes, grid de agentes (`app-dashboard.jsx`).
+3. **Inspeção de execução** (`app-execution.jsx`): timeline com dots de estado, painel de aprovação com card do rascunho, legenda das 3 formas de espera-por-humano, toast.
+4. **Painel da IA companheira** em 3 camadas — estado atual / últimas execuções / decisões lembradas (`app-companion.jsx` §6.6); hoje há só uma seção de memória.
+5. **Telas placeholder reais:** Biblioteca, Uso e custos, Configurações (§6.7).
+6. **Polimento transversal:** animações `rise` (framer-motion, DS §13), toasts (sonner), assets de marca (mascote/lockup/favicon).
+
 ## FASE final — Implantação em produção
 Railway, domínio definitivo, teste de ponta a ponta.
 
