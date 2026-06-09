@@ -1,0 +1,361 @@
+"use client";
+
+import { useState } from "react";
+import { Lock, ShieldCheck } from "lucide-react";
+
+import {
+  api,
+  ErroDaApi,
+  type Instrumento,
+  type TipoInstrumento,
+  type Time,
+} from "@/lib/api";
+import { Aviso } from "@/components/ui/aviso";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+
+// Formulário de instrumento, compartilhado entre a tela "Instrumentos do time"
+// (/times/[id]/instrumentos) e o drawer do dashboard. `instrumento=null` cria;
+// com `instrumento` edita (o tipo fica fixo). Os campos da configuração são
+// gerados do `esquema_config` do tipo; segredos vão como senha e cifrados.
+
+type CampoConfig = {
+  nome: string;
+  tipo: string; // string | integer | number | boolean | array | object
+  descricao: string;
+  obrigatorio: boolean;
+  secreto: boolean;
+  opcoes?: string[]; // enum/Literal → vira Select
+};
+
+// Lê o tipo de um campo do JSON Schema, lidando com Optional (anyOf [tipo, null]).
+function tipoDoCampo(prop: Record<string, unknown>): string {
+  if (typeof prop.type === "string") return prop.type;
+  const anyOf = prop.anyOf as Array<Record<string, unknown>> | undefined;
+  const achado = anyOf?.find((p) => p.type && p.type !== "null");
+  return (achado?.type as string) ?? "string";
+}
+
+// Valores fixos de um campo (Literal/enum), inclusive dentro de anyOf (Optional).
+function opcoesDoCampo(prop: Record<string, unknown>): string[] | undefined {
+  if (Array.isArray(prop.enum)) return (prop.enum as unknown[]).map(String);
+  const anyOf = prop.anyOf as Array<Record<string, unknown>> | undefined;
+  const comEnum = anyOf?.find((p) => Array.isArray(p.enum));
+  if (comEnum) return (comEnum.enum as unknown[]).map(String);
+  return undefined;
+}
+
+// Campos da configuração de um tipo, com metadados para gerar o formulário.
+export function camposDoTipo(tipo: TipoInstrumento | undefined): CampoConfig[] {
+  if (!tipo) return [];
+  const esquema = (tipo.esquema_config ?? {}) as Record<string, unknown>;
+  const props =
+    (esquema.properties as Record<string, Record<string, unknown>>) ?? {};
+  const obrigatorios = new Set((esquema.required as string[]) ?? []);
+  const secretos = new Set(tipo.campos_secretos ?? []);
+  return Object.entries(props).map(([nome, prop]) => ({
+    nome,
+    tipo: tipoDoCampo(prop),
+    descricao: (prop.description as string) ?? "",
+    obrigatorio: obrigatorios.has(nome),
+    secreto: secretos.has(nome),
+    opcoes: opcoesDoCampo(prop),
+  }));
+}
+
+// Um campo do formulário, desenhado conforme o tipo: senha p/ secretos, número
+// p/ number/integer, sim/não p/ boolean, JSON p/ array/object, texto p/ o resto.
+function CampoConfigInput({
+  campo,
+  valor,
+  jaGuardado,
+  onChange,
+}: {
+  campo: CampoConfig;
+  valor: string;
+  jaGuardado: string | undefined; // 4 últimos dígitos, se já há segredo guardado
+  onChange: (v: string) => void;
+}) {
+  let entrada;
+  if (campo.tipo === "boolean") {
+    entrada = (
+      <Select value={valor} onChange={(e) => onChange(e.target.value)}>
+        <option value="">—</option>
+        <option value="true">Sim</option>
+        <option value="false">Não</option>
+      </Select>
+    );
+  } else if (campo.opcoes && !campo.secreto) {
+    entrada = (
+      <Select value={valor} onChange={(e) => onChange(e.target.value)}>
+        {!campo.obrigatorio && <option value="">(padrão)</option>}
+        {campo.opcoes.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </Select>
+    );
+  } else if (campo.tipo === "array" || campo.tipo === "object") {
+    entrada = (
+      <Textarea
+        className="min-h-20 font-mono"
+        value={valor}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={campo.tipo === "array" ? '["a", "b"]' : '{ "chave": "valor" }'}
+      />
+    );
+  } else {
+    entrada = (
+      <Input
+        type={
+          campo.secreto
+            ? "password"
+            : campo.tipo === "integer" || campo.tipo === "number"
+              ? "number"
+              : "text"
+        }
+        value={valor}
+        onChange={(e) => onChange(e.target.value)}
+        autoComplete={campo.secreto ? "new-password" : undefined}
+        placeholder={
+          campo.secreto && jaGuardado
+            ? `•••• ${jaGuardado} — em branco para manter`
+            : campo.secreto
+              ? "deixe em branco se não tiver"
+              : undefined
+        }
+      />
+    );
+  }
+  return (
+    <Label className="flex-col items-start gap-1">
+      <span className="flex items-center gap-1.5">
+        {campo.secreto && <Lock className="size-3 text-muted-foreground" />}
+        {campo.nome}
+        {campo.obrigatorio && <span className="text-destructive">*</span>}
+      </span>
+      {entrada}
+      {campo.descricao && (
+        <span className="text-xs font-normal text-muted-foreground">
+          {campo.descricao}
+        </span>
+      )}
+    </Label>
+  );
+}
+
+export function FormularioInstrumento({
+  time,
+  instrumento,
+  tipos,
+  onSalvo,
+  onCancelar,
+}: {
+  time: Time;
+  instrumento: Instrumento | null;
+  tipos: TipoInstrumento[];
+  onSalvo: (salvo: Instrumento) => void;
+  onCancelar: () => void;
+}) {
+  const criando = instrumento === null;
+
+  const [nome, setNome] = useState(instrumento?.nome ?? "");
+  const [tipoSel, setTipoSel] = useState(
+    instrumento?.tipo ?? tipos[0]?.tipo ?? "",
+  );
+  // Valor (texto) de cada campo. Secretos começam vazios — nunca reexibidos;
+  // em branco = manter o que já está guardado.
+  const [valores, setValores] = useState<Record<string, string>>(() => {
+    if (!instrumento) return {};
+    const tipo = tipos.find((t) => t.tipo === instrumento.tipo);
+    const config = (instrumento.configuracao ?? {}) as Record<string, unknown>;
+    const v: Record<string, string> = {};
+    for (const campo of camposDoTipo(tipo)) {
+      if (campo.secreto) {
+        v[campo.nome] = "";
+        continue;
+      }
+      const atual = config[campo.nome];
+      if (atual === undefined || atual === null) v[campo.nome] = "";
+      else if (typeof atual === "object") v[campo.nome] = JSON.stringify(atual);
+      else v[campo.nome] = String(atual);
+    }
+    return v;
+  });
+  const [aprovacao, setAprovacao] = useState<"auto" | "sim" | "nao">(
+    instrumento?.exige_aprovacao == null
+      ? "auto"
+      : instrumento.exige_aprovacao
+        ? "sim"
+        : "nao",
+  );
+  const [erro, setErro] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+
+  const tipoAtual = tipos.find((t) => t.tipo === tipoSel);
+
+  async function salvar() {
+    if (!nome.trim()) {
+      setErro("O nome é obrigatório.");
+      return;
+    }
+    // Monta a configuração a partir dos campos, coagindo cada um pelo seu tipo.
+    // Segredo preenchido vai cifrado; segredo em branco é OMITIDO (mantém).
+    const config: Record<string, unknown> = {};
+    for (const campo of camposDoTipo(tipoAtual)) {
+      const bruto = (valores[campo.nome] ?? "").trim();
+      if (campo.secreto) {
+        if (bruto) config[campo.nome] = bruto;
+        else if (campo.obrigatorio && criando) {
+          setErro(`Preencha o campo "${campo.nome}".`);
+          return;
+        }
+        continue;
+      }
+      if (bruto === "") {
+        if (campo.obrigatorio) {
+          setErro(`Preencha o campo "${campo.nome}".`);
+          return;
+        }
+        continue;
+      }
+      if (campo.tipo === "integer" || campo.tipo === "number") {
+        const n = Number(bruto);
+        if (Number.isNaN(n)) {
+          setErro(`O campo "${campo.nome}" precisa ser um número.`);
+          return;
+        }
+        config[campo.nome] = campo.tipo === "integer" ? Math.trunc(n) : n;
+      } else if (campo.tipo === "boolean") {
+        config[campo.nome] = bruto === "true";
+      } else if (campo.tipo === "array" || campo.tipo === "object") {
+        try {
+          config[campo.nome] = JSON.parse(bruto);
+        } catch {
+          setErro(`O campo "${campo.nome}" precisa ser um JSON válido.`);
+          return;
+        }
+      } else {
+        config[campo.nome] = bruto;
+      }
+    }
+    const exige_aprovacao = aprovacao === "auto" ? null : aprovacao === "sim";
+    setSalvando(true);
+    try {
+      const salvo = criando
+        ? await api.post<Instrumento>(`/times/${time.id}/instrumentos`, {
+            nome: nome.trim(),
+            tipo: tipoSel,
+            configuracao: config,
+            exige_aprovacao,
+          })
+        : await api.put<Instrumento>(`/instrumentos/${instrumento.id}`, {
+            nome: nome.trim(),
+            configuracao: config,
+            exige_aprovacao,
+          });
+      setErro(null);
+      onSalvo(salvo);
+    } catch (e) {
+      setErro(e instanceof ErroDaApi ? e.message : "Falha ao salvar instrumento");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {erro && <Aviso>{erro}</Aviso>}
+
+      <Label className="flex-col items-start gap-1">
+        Nome
+        <Input value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
+      </Label>
+      <Label className="flex-col items-start gap-1">
+        Tipo
+        <Select
+          value={tipoSel}
+          onChange={(e) => setTipoSel(e.target.value)}
+          disabled={!criando}
+        >
+          {tipos.map((t) => (
+            <option key={t.tipo} value={t.tipo}>
+              {t.nome_exibicao}
+            </option>
+          ))}
+        </Select>
+      </Label>
+      {tipoAtual?.descricao && (
+        <p className="text-xs text-muted-foreground">{tipoAtual.descricao}</p>
+      )}
+
+      {(tipoAtual?.campos_secretos?.length ?? 0) > 0 && (
+        <Aviso variant="atencao" className="text-xs">
+          Os campos com cadeado são secretos: vão guardados cifrados e nunca são
+          reexibidos. Ao editar, deixe um secreto em branco para manter o atual.
+        </Aviso>
+      )}
+
+      {camposDoTipo(tipoAtual).map((campo) => (
+        <CampoConfigInput
+          key={campo.nome}
+          campo={campo}
+          valor={valores[campo.nome] ?? ""}
+          jaGuardado={instrumento?.segredos?.[campo.nome]}
+          onChange={(v) =>
+            setValores((atual) => ({ ...atual, [campo.nome]: v }))
+          }
+        />
+      ))}
+
+      {camposDoTipo(tipoAtual).length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          Este tipo não precisa de configuração.
+        </p>
+      )}
+
+      <div className="mt-1 border-t border-border pt-3">
+        <Label className="flex-col items-start gap-1">
+          <span className="flex items-center gap-1.5">
+            <ShieldCheck className="size-3.5 text-muted-foreground" />
+            Aprovação humana antes de agir
+          </span>
+          <Select
+            value={aprovacao}
+            onChange={(e) =>
+              setAprovacao(e.target.value as "auto" | "sim" | "nao")
+            }
+          >
+            <option value="auto">Automático (recomendado)</option>
+            <option value="sim">Sempre exigir aprovação</option>
+            <option value="nao">Nunca exigir (rodar direto)</option>
+          </Select>
+          <span className="text-xs font-normal text-muted-foreground">
+            Automático: consultas (leitura) rodam direto; ações que escrevem ou
+            enviam exigem um humano aprovando antes.
+          </span>
+        </Label>
+        {aprovacao === "nao" && tipoAtual?.acao_irreversivel && (
+          <Aviso variant="atencao" className="mt-2 text-xs">
+            Este tipo pode alterar ou enviar dados de verdade. Desligar a aprovação
+            remove a checagem humana — use só se tiver certeza de que esta
+            configuração é segura (ex.: uma leitura).
+          </Aviso>
+        )}
+      </div>
+
+      <div className="flex gap-2">
+        <Button onClick={salvar} disabled={salvando}>
+          {salvando ? "Salvando…" : "Salvar"}
+        </Button>
+        <Button variant="ghost" onClick={onCancelar} disabled={salvando}>
+          Cancelar
+        </Button>
+      </div>
+    </div>
+  );
+}
