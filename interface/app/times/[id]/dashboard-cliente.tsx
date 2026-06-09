@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   Activity,
@@ -10,20 +11,28 @@ import {
   Gauge,
   GitBranch,
   MessageSquare,
+  Pencil,
+  Plus,
   Settings2,
   Sparkles,
+  Trash2,
   Users,
   Wrench,
   X,
   Zap,
 } from "lucide-react";
 
+import { FormularioAgente } from "@/components/formulario-agente";
 import { RobotFace } from "@/components/robot-face";
+import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
-import { podeOperar } from "@/lib/permissoes";
+import { Select } from "@/components/ui/select";
+import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import {
+  api,
+  ErroDaApi,
   type Agente,
   type Automacao,
   type Cadeia,
@@ -73,6 +82,7 @@ export function DashboardCliente({
   meuPapel,
   agentes,
   cintos,
+  instrumentos,
   automacoes,
   recentes,
   aguardando,
@@ -85,6 +95,7 @@ export function DashboardCliente({
   meuPapel: PapelAcesso | null;
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
+  instrumentos: Instrumento[];
   automacoes: Automacao[];
   recentes: ExecucaoRecente[];
   aguardando: number;
@@ -93,8 +104,15 @@ export function DashboardCliente({
   custo: ResumoUso | null;
   conversaId: string | null;
 }) {
-  const [agenteAberto, setAgenteAberto] = useState<Agente | null>(null);
+  // O drawer abre por id (não pelo objeto) para sobreviver ao router.refresh():
+  // o agente é re-derivado da prop recarregada. `criando` abre o drawer vazio.
+  const [abertoId, setAbertoId] = useState<string | null>(null);
+  const [criando, setCriando] = useState(false);
   const souOperador = podeOperar(meuPapel);
+
+  const agenteAberto = abertoId
+    ? (agentes.find((a) => a.id === abertoId) ?? null)
+    : null;
 
   const ativo = automacoes.some((a) => a.ativa);
   const gatilhoLabel =
@@ -253,13 +271,23 @@ export function DashboardCliente({
       )}
 
       {/* Agentes */}
-      <RotuloSecao Icone={Bot} contagem={agentes.length}>
+      <RotuloSecao
+        Icone={Bot}
+        contagem={agentes.length}
+        acao={
+          souOperador ? (
+            <Button size="sm" variant="outline" onClick={() => setCriando(true)}>
+              <Plus className="size-4" /> Novo agente
+            </Button>
+          ) : undefined
+        }
+      >
         Agentes
       </RotuloSecao>
       {agentes.length === 0 ? (
         <EstadoVazio icone={Bot} titulo="Nenhum agente ainda.">
           {souOperador
-            ? "Converse com a IA ou gerencie os agentes para montar o time."
+            ? "Converse com a IA ou clique em Novo agente para montar o time."
             : "Os agentes deste time aparecerão aqui."}
         </EstadoVazio>
       ) : (
@@ -270,18 +298,39 @@ export function DashboardCliente({
               agente={a}
               indice={i}
               cinto={cintos[a.id] ?? []}
-              onAbrir={() => setAgenteAberto(a)}
+              onAbrir={() => setAbertoId(a.id)}
             />
           ))}
         </div>
       )}
 
+      {/* Criar agente */}
+      {criando && (
+        <DrawerAgente
+          key="novo"
+          agente={null}
+          indice={agentes.length}
+          cinto={[]}
+          instrumentosTime={instrumentos}
+          time={time}
+          meuPapel={meuPapel}
+          conversaId={conversaId}
+          onFechar={() => setCriando(false)}
+        />
+      )}
+
+      {/* Ver/editar agente */}
       {agenteAberto && (
         <DrawerAgente
+          key={agenteAberto.id}
           agente={agenteAberto}
           indice={agentes.indexOf(agenteAberto)}
           cinto={cintos[agenteAberto.id] ?? []}
-          onFechar={() => setAgenteAberto(null)}
+          instrumentosTime={instrumentos}
+          time={time}
+          meuPapel={meuPapel}
+          conversaId={conversaId}
+          onFechar={() => setAbertoId(null)}
         />
       )}
     </main>
@@ -492,13 +541,81 @@ function DrawerAgente({
   agente,
   indice,
   cinto,
+  instrumentosTime,
+  time,
+  meuPapel,
+  conversaId,
   onFechar,
 }: {
-  agente: Agente;
+  agente: Agente | null;
   indice: number;
   cinto: Instrumento[];
+  instrumentosTime: Instrumento[];
+  time: Time;
+  meuPapel: PapelAcesso | null;
+  conversaId: string | null;
   onFechar: () => void;
 }) {
+  const router = useRouter();
+  const souOperador = podeOperar(meuPapel);
+  const souAdmin = podeAdmin(meuPapel);
+  const criando = agente === null;
+
+  const [editando, setEditando] = useState(criando);
+  const [erro, setErro] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const [selecionado, setSelecionado] = useState("");
+
+  const disponiveis = instrumentosTime.filter(
+    (i) => !cinto.some((c) => c.id === i.id),
+  );
+
+  async function pendurar() {
+    if (!selecionado || !agente) return;
+    setOcupado(true);
+    setErro(null);
+    try {
+      await api.post(`/agentes/${agente.id}/instrumentos`, {
+        instrumento_id: selecionado,
+      });
+      setSelecionado("");
+      router.refresh();
+    } catch (e) {
+      setErro(e instanceof ErroDaApi ? e.message : "Falha ao pendurar instrumento");
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function tirar(instrumentoId: string) {
+    if (!agente) return;
+    setOcupado(true);
+    setErro(null);
+    try {
+      await api.delete(`/agentes/${agente.id}/instrumentos/${instrumentoId}`);
+      router.refresh();
+    } catch (e) {
+      setErro(e instanceof ErroDaApi ? e.message : "Falha ao tirar instrumento");
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function remover() {
+    if (!agente) return;
+    if (!confirm(`Remover o agente "${agente.nome}"?`)) return;
+    setOcupado(true);
+    setErro(null);
+    try {
+      await api.delete(`/agentes/${agente.id}`);
+      onFechar();
+      router.refresh();
+    } catch (e) {
+      setErro(e instanceof ErroDaApi ? e.message : "Falha ao remover agente");
+      setOcupado(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <button
@@ -508,68 +625,182 @@ function DrawerAgente({
       />
       <aside className="relative flex h-full w-full max-w-[460px] flex-col overflow-y-auto border-l border-border bg-card shadow-xl">
         <header className="flex items-start gap-3 border-b border-border p-4">
-          <RobotFace size={44} indice={indice} lider={agente.papel === "lider"} />
+          <RobotFace
+            size={44}
+            indice={indice}
+            lider={agente?.papel === "lider"}
+          />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="font-medium text-foreground">{agente.nome}</h2>
-              {agente.papel === "lider" && (
+              <h2 className="font-medium text-foreground">
+                {criando ? "Novo agente" : agente.nome}
+              </h2>
+              {agente?.papel === "lider" && (
                 <Badge variant="neutral" className="text-[10px]">
                   líder
                 </Badge>
               )}
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              {agente.modelo_ia && (
-                <span className="inline-flex items-center gap-1">
-                  <Sparkles className="size-3 text-primary" />
-                  {agente.modelo_ia}
-                </span>
-              )}
-              {cinto.map((i) => (
-                <span
-                  key={i.id}
-                  className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-accent-foreground"
-                >
-                  <Wrench className="size-3" />
-                  {i.nome}
-                </span>
-              ))}
-            </div>
+            {agente?.modelo_ia && (
+              <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Sparkles className="size-3 text-primary" />
+                {agente.modelo_ia}
+              </p>
+            )}
           </div>
           <Button size="icon" variant="ghost" onClick={onFechar} aria-label="Fechar">
             <X className="size-4" />
           </Button>
         </header>
 
-        <div className="space-y-5 p-4">
-          {MARKDOWNS.map(({ campo, rotulo, arquivo }) => {
-            const valor = agente[campo] as string | null;
-            return (
-              <div key={campo}>
+        {editando || criando ? (
+          <div className="p-4">
+            <FormularioAgente
+              time={time}
+              agente={agente}
+              onSalvo={() => {
+                if (criando) onFechar();
+                else setEditando(false);
+                router.refresh();
+              }}
+              onCancelar={() => (criando ? onFechar() : setEditando(false))}
+            />
+          </div>
+        ) : (
+          <>
+            {(souOperador || souAdmin) && (
+              <div className="flex gap-2 border-b border-border p-4">
+                {souOperador && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setEditando(true)}
+                  >
+                    <Pencil className="size-4" /> Editar
+                  </Button>
+                )}
+                {souAdmin && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={remover}
+                    disabled={ocupado}
+                  >
+                    <Trash2 className="size-4" /> Remover
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {erro && (
+              <div className="px-4 pt-4">
+                <Aviso>{erro}</Aviso>
+              </div>
+            )}
+
+            <div className="space-y-5 p-4">
+              {MARKDOWNS.map(({ campo, rotulo, arquivo }) => {
+                const valor = agente[campo] as string | null;
+                return (
+                  <div key={campo}>
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <span className="text-sm font-medium text-foreground">
+                        {rotulo}
+                      </span>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {arquivo}
+                      </span>
+                    </div>
+                    <p className="whitespace-pre-wrap rounded-md bg-background p-3 text-sm text-foreground">
+                      {valor?.trim() || (
+                        <span className="text-muted-foreground/70">
+                          (ainda não escrito)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                );
+              })}
+
+              {/* Cinto de instrumentos */}
+              <div>
                 <div className="mb-1.5 flex items-center gap-2">
-                  <span className="text-sm font-medium text-foreground">{rotulo}</span>
-                  <span className="font-mono text-xs text-muted-foreground">
-                    {arquivo}
+                  <Wrench className="size-4 text-primary" />
+                  <span className="text-sm font-medium text-foreground">
+                    Cinto de instrumentos
                   </span>
                 </div>
-                <p className="whitespace-pre-wrap rounded-md bg-background p-3 text-sm text-foreground">
-                  {valor?.trim() || (
-                    <span className="text-muted-foreground/70">(ainda não escrito)</span>
-                  )}
-                </p>
+                {cinto.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum instrumento pendurado.
+                  </p>
+                ) : (
+                  <ul className="flex flex-col gap-1.5">
+                    {cinto.map((i) => (
+                      <li
+                        key={i.id}
+                        className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
+                      >
+                        <Wrench className="size-3.5 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate text-foreground">
+                          {i.nome}
+                        </span>
+                        <span className="text-xs text-muted-foreground">{i.tipo}</span>
+                        {souOperador && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => tirar(i.id)}
+                            disabled={ocupado}
+                          >
+                            Tirar
+                          </Button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {souOperador && disponiveis.length > 0 && (
+                  <div className="mt-2 flex gap-2">
+                    <Select
+                      value={selecionado}
+                      onChange={(e) => setSelecionado(e.target.value)}
+                      className="flex-1"
+                    >
+                      <option value="">Pendurar um instrumento…</option>
+                      {disponiveis.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.nome} ({i.tipo})
+                        </option>
+                      ))}
+                    </Select>
+                    <Button
+                      variant="outline"
+                      onClick={pendurar}
+                      disabled={!selecionado || ocupado}
+                    >
+                      Pendurar
+                    </Button>
+                  </div>
+                )}
               </div>
-            );
-          })}
-        </div>
+            </div>
 
-        <div className="mt-auto border-t border-border p-4">
-          <Link
-            href={`/agentes/${agente.id}`}
-            className={buttonVariants({ variant: "outline", className: "w-full" })}
-          >
-            Abrir o cinto de instrumentos
-          </Link>
-        </div>
+            {souOperador && (
+              <div className="mt-auto border-t border-border p-4">
+                <Link
+                  href={conversaId ? `/criar/${conversaId}` : "/criar"}
+                  className={buttonVariants({
+                    variant: "outline",
+                    className: "w-full",
+                  })}
+                >
+                  <Sparkles className="size-4 text-primary" /> Ajustar com a IA
+                </Link>
+              </div>
+            )}
+          </>
+        )}
       </aside>
     </div>
   );
@@ -580,10 +811,12 @@ function DrawerAgente({
 function RotuloSecao({
   Icone,
   contagem,
+  acao,
   children,
 }: {
   Icone: typeof Clock;
   contagem?: number;
+  acao?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -594,6 +827,7 @@ function RotuloSecao({
         <span className="text-sm text-muted-foreground">{contagem}</span>
       )}
       <span className="h-px flex-1 bg-border" />
+      {acao}
     </div>
   );
 }

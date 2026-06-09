@@ -23,6 +23,7 @@ async function carregar(timeId: string): Promise<{
   meuPapel: PapelAcesso | null;
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
+  instrumentos: Instrumento[];
   automacoes: Automacao[];
   recentes: ExecucaoRecente[];
   aguardando: number;
@@ -45,9 +46,9 @@ async function carregar(timeId: string): Promise<{
   const automacoes = await jsonOu<Automacao[]>(respAutomacoes, []);
   const meuPapel = eu?.papeis[time.organizacao_id] ?? null;
 
-  // Cinto de cada agente, o custo do time, as execuções de cada automação e a
-  // conversa (eterna) que mantém este time — tudo em paralelo.
-  const [cintosPares, custoResp, execPorAutomacao, conversasResp] =
+  // Cinto de cada agente, instrumentos do time, custo, execuções de cada
+  // automação e a conversa (eterna) que mantém este time — tudo em paralelo.
+  const [cintosPares, instrumentosResp, custoResp, execPorAutomacao, conversasResp] =
     await Promise.all([
       Promise.all(
         agentes.map(async (a) => {
@@ -55,6 +56,7 @@ async function carregar(timeId: string): Promise<{
           return [a.id, await jsonOu<Instrumento[]>(r, [])] as const;
         }),
       ),
+      buscarCerebro(`/times/${timeId}/instrumentos`),
       buscarCerebro(`/uso/resumo?time_id=${timeId}`),
       Promise.all(
         automacoes.map(async (auto) => {
@@ -69,6 +71,7 @@ async function carregar(timeId: string): Promise<{
     ]);
 
   const cintos = Object.fromEntries(cintosPares);
+  const instrumentos = await jsonOu<Instrumento[]>(instrumentosResp, []);
   const custo = await jsonOu<ResumoUso | null>(custoResp, null);
 
   const todas: ExecucaoRecente[] = execPorAutomacao
@@ -86,6 +89,7 @@ async function carregar(timeId: string): Promise<{
     meuPapel,
     agentes,
     cintos,
+    instrumentos,
     automacoes,
     recentes: todas.slice(0, 8),
     aguardando,
