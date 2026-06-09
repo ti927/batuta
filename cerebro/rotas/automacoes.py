@@ -353,13 +353,15 @@ def listar_todas_execucoes(
 @rotas.get("/uso/resumo")
 def resumo_uso(
     organizacao_id: uuid.UUID | None = None,
+    time_id: uuid.UUID | None = None,
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
     """Medição consolidada (Fase 7.6): soma o uso de TODOS os passos das execuções
     das organizações em que o usuário é membro, com `por_origem` separando o
-    consumo por chave (cliente × consultoria × legado). Filtro opcional por
-    organização. O isolamento vem do join por `membros` (cada um só vê o seu)."""
+    consumo por chave (cliente × consultoria × legado). Filtros opcionais por
+    organização e por time (o dashboard do time usa `time_id`). O isolamento vem
+    do join por `membros` (cada um só vê o seu)."""
     consulta = (
         select(PassoExecucao)
         .join(Execucao, Execucao.id == PassoExecucao.execucao_id)
@@ -370,6 +372,8 @@ def resumo_uso(
     )
     if organizacao_id is not None:
         consulta = consulta.where(Time.organizacao_id == organizacao_id)
+    if time_id is not None:
+        consulta = consulta.where(Automacao.time_id == time_id)
     passos = sessao.scalars(consulta).all()
     return precos.resumir_uso(passos)
 

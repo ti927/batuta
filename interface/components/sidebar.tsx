@@ -200,7 +200,8 @@ export function Sidebar({
                 className="flex size-6 shrink-0 items-center justify-center rounded-md text-[11px] font-medium text-[#0B2B27]"
                 style={{ background: "linear-gradient(135deg,#3DD8C3,#6D4AFF)" }}
               >
-                {org.nome.slice(0, 1).toUpperCase()}
+                {/* primeiro code point (não quebra emoji em meio surrogate) */}
+                {([...org.nome][0] ?? "?").toUpperCase()}
               </span>
               <span className="min-w-0 flex-1 truncate text-[13px] text-[#C9C6DE]">
                 {org.nome}
