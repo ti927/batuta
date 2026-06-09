@@ -7,6 +7,7 @@ import { ChevronLeft, ListChecks, Pause } from "lucide-react";
 
 import {
   api,
+  URL_CEREBRO,
   ErroDaApi,
   type Agente,
   type Automacao,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/api";
 import { podeOperar } from "@/lib/permissoes";
 import { rotuloOrigem } from "@/lib/uso";
+import { UrlCopiavel } from "@/components/url-copiavel";
 import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -228,10 +230,26 @@ export function AutomacaoDetalheCliente({
       <h1 className="mt-2 text-2xl font-medium text-foreground">
         {automacao.nome}
       </h1>
-      <p className="mb-6 mt-1 text-sm text-muted-foreground">
+      <p className="mb-4 mt-1 text-sm text-muted-foreground">
         Gatilho: {automacao.tipo_gatilho} · início:{" "}
         {nomeAgente(automacao.cadeia?.inicio ?? null)}
       </p>
+
+      {automacao.tipo_gatilho === "webhook" && (
+        <div className="mb-6">
+          <p className="mb-1.5 text-sm font-medium text-foreground">
+            URL do webhook
+          </p>
+          <UrlCopiavel
+            url={`${URL_CEREBRO}/webhooks/automacoes/${automacao.id}`}
+            aviso={
+              automacao.ativa
+                ? "Dispare um POST nessa URL para acionar o fluxo."
+                : "A URL só aceita chamadas com o time ativo."
+            }
+          />
+        </div>
+      )}
 
       {erro && <Aviso className="mb-4">{erro}</Aviso>}
 
