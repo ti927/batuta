@@ -58,6 +58,19 @@ export function CriacaoCliente({
   const [erro, setErro] = useState<string | null>(null);
   const [agenteAberto, setAgenteAberto] = useState<AgenteTime | null>(null);
 
+  // O campo de resposta cresce conforme as linhas (até um teto) e volta ao tamanho
+  // de uma linha ao enviar.
+  const campoRef = useRef<HTMLTextAreaElement>(null);
+  function ajustarAltura() {
+    const el = campoRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }
+  function resetarAltura() {
+    if (campoRef.current) campoRef.current.style.height = "auto";
+  }
+
   const fimDoChat = useRef<HTMLDivElement>(null);
   useEffect(() => {
     fimDoChat.current?.scrollIntoView({ behavior: "smooth" });
@@ -94,6 +107,7 @@ export function CriacaoCliente({
     const limpo = conteudo.trim();
     if (!limpo || enviando || !podeConversar) return;
     setTexto("");
+    resetarAltura();
     setErro(null);
     setMensagens((m) => [...m, { papel: "usuario", conteudo: limpo }]);
     setEnviando(true);
@@ -223,19 +237,36 @@ export function CriacaoCliente({
             e.preventDefault();
             enviar(texto);
           }}
-          className="flex items-center gap-2 border-t border-border px-3 py-3"
+          className="flex items-end gap-2 border-t border-border px-3 py-3"
         >
-          <input
+          <textarea
+            ref={campoRef}
             value={texto}
-            onChange={(e) => setTexto(e.target.value)}
+            onChange={(e) => {
+              setTexto(e.target.value);
+              ajustarAltura();
+            }}
+            onKeyDown={(e) => {
+              // Enter envia; Shift+Enter quebra linha. (isComposing: não envia no
+              // meio de um acento/IME.)
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                enviar(texto);
+              }
+            }}
+            rows={1}
             disabled={!podeConversar || enviando}
-            placeholder={podeConversar ? "Responder à IA criadora…" : "Somente leitura"}
-            className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-60"
+            placeholder={
+              podeConversar
+                ? "Responder à IA criadora…  (Enter envia, Shift+Enter quebra linha)"
+                : "Somente leitura"
+            }
+            className="max-h-[200px] min-h-10 flex-1 resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-60"
           />
           <Button
             type="submit"
             size="icon"
-            className="size-9"
+            className="size-9 shrink-0"
             disabled={!podeConversar || enviando || !texto.trim()}
             aria-label="Enviar"
           >
