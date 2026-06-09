@@ -14,6 +14,7 @@ import {
   Pencil,
   Plus,
   Settings2,
+  ShieldCheck,
   Sparkles,
   Trash2,
   Users,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { FormularioAgente } from "@/components/formulario-agente";
+import { FormularioInstrumento } from "@/components/formulario-instrumento";
 import { RobotFace } from "@/components/robot-face";
 import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +42,7 @@ import {
   type Instrumento,
   type PapelAcesso,
   type ResumoUso,
+  type TipoInstrumento,
   type Time,
 } from "@/lib/api";
 
@@ -83,6 +86,7 @@ export function DashboardCliente({
   agentes,
   cintos,
   instrumentos,
+  tiposInstrumento,
   automacoes,
   recentes,
   aguardando,
@@ -96,6 +100,7 @@ export function DashboardCliente({
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
+  tiposInstrumento: TipoInstrumento[];
   automacoes: Automacao[];
   recentes: ExecucaoRecente[];
   aguardando: number;
@@ -108,6 +113,8 @@ export function DashboardCliente({
   // o agente é re-derivado da prop recarregada. `criando` abre o drawer vazio.
   const [abertoId, setAbertoId] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
+  // Drawer de instrumento: null = fechado; "novo" = criando; instrumento = editando.
+  const [instrAberto, setInstrAberto] = useState<null | "novo" | Instrumento>(null);
   const souOperador = podeOperar(meuPapel);
 
   const agenteAberto = abertoId
@@ -302,6 +309,78 @@ export function DashboardCliente({
             />
           ))}
         </div>
+      )}
+
+      {/* Instrumentos */}
+      <RotuloSecao
+        Icone={Wrench}
+        contagem={instrumentos.length}
+        acao={
+          souOperador ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setInstrAberto("novo")}
+              disabled={tiposInstrumento.length === 0}
+            >
+              <Plus className="size-4" /> Novo instrumento
+            </Button>
+          ) : undefined
+        }
+      >
+        Instrumentos
+      </RotuloSecao>
+      {instrumentos.length === 0 ? (
+        <EstadoVazio icone={Wrench} titulo="Nenhum instrumento ainda.">
+          {souOperador
+            ? "Crie instrumentos para os agentes usarem (APIs, banco, web…)."
+            : "Os instrumentos deste time aparecerão aqui."}
+        </EstadoVazio>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          {instrumentos.map((inst, i) => (
+            <button
+              key={inst.id}
+              onClick={() => souOperador && setInstrAberto(inst)}
+              disabled={!souOperador}
+              className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+                souOperador ? "hover:bg-accent/50" : "cursor-default"
+              } ${i > 0 ? "border-t border-border" : ""}`}
+            >
+              <span className="flex size-8 items-center justify-center rounded-lg bg-accent">
+                <Wrench className="size-4 text-accent-foreground" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-foreground">
+                  {inst.nome}
+                </span>
+                <span className="font-mono text-xs text-muted-foreground">
+                  {inst.tipo}
+                </span>
+              </span>
+              {inst.acao_irreversivel && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#FDF1E3] px-2 py-0.5 text-xs text-[#A05E16]">
+                  <ShieldCheck className="size-3" /> exige aprovação
+                </span>
+              )}
+              {souOperador && (
+                <Pencil className="size-4 shrink-0 text-muted-foreground/60" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Criar/editar instrumento */}
+      {instrAberto && (
+        <DrawerInstrumento
+          key={instrAberto === "novo" ? "novo" : instrAberto.id}
+          instrumento={instrAberto === "novo" ? null : instrAberto}
+          tipos={tiposInstrumento}
+          time={time}
+          meuPapel={meuPapel}
+          onFechar={() => setInstrAberto(null)}
+        />
       )}
 
       {/* Criar agente */}
@@ -801,6 +880,96 @@ function DrawerAgente({
             )}
           </>
         )}
+      </aside>
+    </div>
+  );
+}
+
+// ───────────────────────── Drawer do instrumento ─────────────────────────
+
+function DrawerInstrumento({
+  instrumento,
+  tipos,
+  time,
+  meuPapel,
+  onFechar,
+}: {
+  instrumento: Instrumento | null;
+  tipos: TipoInstrumento[];
+  time: Time;
+  meuPapel: PapelAcesso | null;
+  onFechar: () => void;
+}) {
+  const router = useRouter();
+  const souAdmin = podeAdmin(meuPapel);
+  const criando = instrumento === null;
+  const [erro, setErro] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+
+  async function remover() {
+    if (!instrumento) return;
+    if (!confirm(`Remover o instrumento "${instrumento.nome}"?`)) return;
+    setOcupado(true);
+    setErro(null);
+    try {
+      await api.delete(`/instrumentos/${instrumento.id}`);
+      onFechar();
+      router.refresh();
+    } catch (e) {
+      setErro(
+        e instanceof ErroDaApi ? e.message : "Falha ao remover instrumento",
+      );
+      setOcupado(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <button
+        className="absolute inset-0 bg-foreground/20"
+        onClick={onFechar}
+        aria-label="Fechar"
+      />
+      <aside className="relative flex h-full w-full max-w-[460px] flex-col overflow-y-auto border-l border-border bg-card shadow-xl">
+        <header className="flex items-center gap-3 border-b border-border p-4">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-accent">
+            <Wrench className="size-4.5 text-accent-foreground" />
+          </span>
+          <h2 className="min-w-0 flex-1 truncate font-medium text-foreground">
+            {criando ? "Novo instrumento" : instrumento.nome}
+          </h2>
+          {souAdmin && !criando && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={remover}
+              disabled={ocupado}
+            >
+              <Trash2 className="size-4" /> Remover
+            </Button>
+          )}
+          <Button size="icon" variant="ghost" onClick={onFechar} aria-label="Fechar">
+            <X className="size-4" />
+          </Button>
+        </header>
+
+        <div className="p-4">
+          {erro && (
+            <div className="mb-3">
+              <Aviso>{erro}</Aviso>
+            </div>
+          )}
+          <FormularioInstrumento
+            time={time}
+            instrumento={instrumento}
+            tipos={tipos}
+            onSalvo={() => {
+              onFechar();
+              router.refresh();
+            }}
+            onCancelar={onFechar}
+          />
+        </div>
       </aside>
     </div>
   );
