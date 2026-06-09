@@ -14,6 +14,7 @@ Nesta fase só PostgreSQL (driver `psycopg`, já usado pelo cérebro); o campo
 (NullPool), sempre encerrada.
 """
 
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -30,6 +31,32 @@ TIMEOUT_S = 10
 # tipo_banco → dialeto/driver do SQLAlchemy. Só PostgreSQL por ora.
 _DRIVER = {"postgres": "postgresql+psycopg"}
 
+# Para o modo "somente leitura": o comando precisa COMEÇAR com uma palavra de
+# leitura E não conter NENHUMA palavra de escrita (pega até CTE do tipo
+# `WITH x AS (...) DELETE ...`). Uma instrução só (sem `;` no meio).
+_INICIO_LEITURA = {"SELECT", "WITH", "EXPLAIN", "SHOW", "VALUES", "TABLE"}
+_PALAVRAS_ESCRITA = {
+    "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE",
+    "GRANT", "REVOKE", "MERGE", "CALL", "COPY", "REPLACE", "UPSERT", "COMMENT",
+}
+
+
+def _sem_comentarios(sql: str) -> str:
+    sql = re.sub(r"/\*.*?\*/", " ", sql, flags=re.DOTALL)  # /* ... */
+    sql = re.sub(r"--[^\n]*", " ", sql)  # -- até o fim da linha
+    return sql
+
+
+def eh_leitura(sql: str) -> bool:
+    """True se o SQL é uma CONSULTA (não muda dados). Conservador: na dúvida, False."""
+    limpo = _sem_comentarios(sql).strip().rstrip(";").strip()
+    if not limpo or ";" in limpo:  # vazio ou múltiplas instruções
+        return False
+    tokens = re.findall(r"[A-Za-z_]+", limpo.upper())
+    if not tokens or tokens[0] not in _INICIO_LEITURA:
+        return False
+    return not (_PALAVRAS_ESCRITA & set(tokens))
+
 
 class ConfigSQL(BaseModel):
     """Dados de conexão. A `senha` é SEGREDO (cofre 7-B); o resto é público."""
@@ -44,6 +71,13 @@ class ConfigSQL(BaseModel):
     senha: str = Field(default="", description="Senha do banco (segredo).")
     ssl: Literal["require", "prefer", "disable"] = Field(
         default="prefer", description="Modo de SSL da conexão (sslmode)."
+    )
+    somente_leitura: bool = Field(
+        default=False,
+        description=(
+            "Se verdadeiro, o instrumento SÓ executa consultas (SELECT) e recusa "
+            "escrita — e, por ser seguro, não exige portão de aprovação humana."
+        ),
     )
 
 
@@ -69,9 +103,23 @@ class BancoSQL(TipoInstrumento):
     Config = ConfigSQL
     Args = ArgsSQL
     campos_secretos = ("senha",)
-    acao_irreversivel = True  # INSERT/UPDATE/DELETE mudam dados externos
+    # Baseline irreversível (INSERT/UPDATE/DELETE mudam dados). Mas em modo
+    # `somente_leitura` o instrumento só consulta — aí não exige portão.
+    acao_irreversivel = True
+
+    def irreversivel_para(self, configuracao: dict) -> bool:
+        return not bool((configuracao or {}).get("somente_leitura", False))
 
     def executar(self, config: ConfigSQL, args: ArgsSQL) -> dict:
+        # Trava do modo somente-leitura: recusa qualquer escrita (volta como dado).
+        if config.somente_leitura and not eh_leitura(args.sql):
+            return {
+                "ok": False,
+                "erro": (
+                    "Este instrumento está em modo SOMENTE LEITURA: só consultas "
+                    "(SELECT) são permitidas. Reformule como uma consulta."
+                ),
+            }
         url = URL.create(
             _DRIVER[config.tipo_banco],
             username=config.usuario,

@@ -191,7 +191,11 @@ def _snapshot_time(ctx: ContextoCriacao) -> dict:
             {
                 "id": str(i.id), "nome": i.nome, "tipo": i.tipo,
                 "configuracao": i.configuracao,
-                "acao_irreversivel": encaixe.acao_irreversivel(i.tipo),
+                # Resolvido por INSTÂNCIA (tipo+config+interruptor): diz se a IA
+                # precisa pôr portão antes deste instrumento. Consulta = False.
+                "acao_irreversivel": encaixe.exige_portao(
+                    i.tipo, i.configuracao, i.exige_aprovacao
+                ),
                 "segredos_pendentes": [
                     c for c in encaixe.campos_secretos(i.tipo)
                     if c not in guardados.get(str(i.id), set())

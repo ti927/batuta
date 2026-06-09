@@ -78,8 +78,19 @@ class TipoInstrumento(ABC):
     # para desfazer (publicar, enviar, gravar em sistema de terceiros). É a base
     # da parede de ativação: um agente com instrumento irreversível só pode ser
     # ATIVADO se a cadeia tiver portão de aprovação humana (pausa_humano) antes
-    # dele. O padrão é False (só lê / só gera artefato local).
+    # dele. Este é o BASELINE do tipo; a irreversibilidade REAL pode depender da
+    # configuração da instância (ver `irreversivel_para`). O padrão é False (só
+    # lê / só gera artefato local).
     acao_irreversivel: bool = False
+
+    def irreversivel_para(self, configuracao: dict) -> bool:
+        """Se ESTA instância (com esta configuração) faz ação irreversível.
+
+        O padrão devolve o baseline do tipo. Tipos cuja config decide leitura vs
+        escrita sobrescrevem: REST deriva do `metodo` (GET lê, POST/PUT/DELETE
+        escreve); SQL, do `somente_leitura`. É o que evita exigir portão de
+        aprovação para uma simples consulta."""
+        return self.acao_irreversivel
 
     @abstractmethod
     def executar(self, config: BaseModel, args: BaseModel) -> dict:
@@ -145,11 +156,28 @@ def campos_secretos(tipo: str) -> tuple[str, ...]:
     return tuple(getattr(t, "campos_secretos", ()) or ()) if t else ()
 
 
-def acao_irreversivel(tipo: str) -> bool:
-    """Se um tipo de instrumento faz ação irreversível (tipo desconhecido = False).
-    Base da parede de ativação (portão humano antes de agente irreversível)."""
+def acao_irreversivel(tipo: str, configuracao: dict | None = None) -> bool:
+    """Se um instrumento faz ação irreversível, JÁ considerando a configuração
+    (tipo desconhecido = False). Sem `configuracao`, cai no baseline do tipo —
+    mas o correto é sempre passar a config da instância (REST lê do método, SQL
+    do somente_leitura). Base da parede de ativação."""
     t = obter_tipo(tipo)
-    return bool(getattr(t, "acao_irreversivel", False)) if t else False
+    if t is None:
+        return False
+    return bool(t.irreversivel_para(configuracao or {}))
+
+
+def exige_portao(
+    tipo: str, configuracao: dict | None, exige_aprovacao: bool | None
+) -> bool:
+    """Resolução FINAL: este instrumento exige portão de aprovação humana antes?
+
+    O interruptor da instância manda: `True` força portão, `False` dispensa
+    (mesmo numa escrita — guard-rail é o aviso na UI + auditoria). `None` =
+    automático: deriva do tipo + config (`acao_irreversivel`)."""
+    if exige_aprovacao is not None:
+        return bool(exige_aprovacao)
+    return acao_irreversivel(tipo, configuracao)
 
 
 def preparar_config(tipo: str, configuracao: dict | None) -> tuple[dict, dict]:

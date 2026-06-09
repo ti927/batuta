@@ -30,9 +30,13 @@ rotas = APIRouter(tags=["instrumentos"])
 
 
 def _ler(sessao: Session, inst: Instrumento) -> Instrumento:
-    """Anexa o resumo mascarado dos segredos (campo → 4 últimos dígitos) ao
-    instrumento, para o `InstrumentoLer` o devolver sem nunca expor o valor."""
+    """Anexa o resumo mascarado dos segredos (campo → 4 últimos dígitos) e o
+    `acao_irreversivel` JÁ RESOLVIDO (tipo+config+interruptor), para o
+    `InstrumentoLer` os devolver — segredos nunca expostos."""
     inst.segredos = segredos.resumo(sessao, inst.id)
+    inst.acao_irreversivel = encaixe.exige_portao(
+        inst.tipo, inst.configuracao, inst.exige_aprovacao
+    )
     return inst
 
 
@@ -94,6 +98,7 @@ def criar(
         nome=dados.nome,
         tipo=dados.tipo,
         configuracao=config_limpa,
+        exige_aprovacao=dados.exige_aprovacao,
     )
     sessao.add(inst)
     sessao.flush()
@@ -133,8 +138,10 @@ def editar(
         )
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
+    aprovacao_antes = inst.exige_aprovacao
     inst.nome = dados.nome
     inst.configuracao = config_limpa
+    inst.exige_aprovacao = dados.exige_aprovacao
     alterados = segredos.salvar_segredos(sessao, inst.id, segredos_novos)
     if alterados:
         auditoria.registrar(
@@ -142,6 +149,15 @@ def editar(
             recurso_tipo="instrumento", recurso_id=inst.id,
             organizacao_id=auditoria.org_do_time(sessao, inst.time_id),
             detalhe={"segredos": alterados},
+        )
+    # Mudar o interruptor de aprovação afeta a segurança (pode liberar uma escrita
+    # sem portão) — fica auditado.
+    if dados.exige_aprovacao != aprovacao_antes:
+        auditoria.registrar(
+            sessao, usuario=usuario, acao="instrumento.aprovacao_alterada",
+            recurso_tipo="instrumento", recurso_id=inst.id,
+            organizacao_id=auditoria.org_do_time(sessao, inst.time_id),
+            detalhe={"de": aprovacao_antes, "para": dados.exige_aprovacao},
         )
     sessao.commit()
     sessao.refresh(inst)

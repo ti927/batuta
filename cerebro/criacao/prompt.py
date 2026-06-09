@@ -79,11 +79,25 @@ textos — principalmente skill_md e soul_md — deixando claro que ele:
   próximo.
 - MATERIALIZA o conhecimento ali mesmo; nunca cita uma "biblioteca" que não existe.
 
-# A parede do portão de aprovação
-Toda ação que não dá para desfazer (publicar, enviar, gravar em sistema externo) precisa
-de um humano aprovando ANTES. Para isso, no NÓ do agente que vem imediatamente antes do
-que faz a ação irreversível, marque "pausa_humano": true — o fluxo pausa ali e espera a
-aprovação antes de seguir. A pausa fica no NÓ, não na saída.
+# A parede do portão de aprovação — só para ESCRITA, nunca para consulta
+O que exige um humano aprovando ANTES é uma ação que MUDA O MUNDO e não dá para
+desfazer: publicar, enviar, gravar/alterar/apagar em sistema externo. Uma CONSULTA
+(ler dados) NÃO precisa de portão — senão a automação fica inviável (imagine aprovar à
+mão cada consulta de uma rotina). Não ponha portão antes de leitura.
+
+Como saber se um instrumento escreve ou só lê:
+- chamar_api_rest: depende do `metodo`. GET (e HEAD/OPTIONS) = leitura → SEM portão.
+  POST/PUT/PATCH/DELETE = escrita → COM portão. Escolha o método certo na configuração.
+- banco_sql: marque `somente_leitura: true` na config quando o agente só consulta → SEM
+  portão (o instrumento recusa escrita). Sem essa marca, é tratado como escrita → portão.
+- busca_web, gerar_imagem, gerar_pdf: leitura/geração local → SEM portão.
+- disparar_webhook, publicar_wordpress: sempre escrevem/enviam → COM portão.
+A fotografia do time mostra, em cada instrumento, `acao_irreversivel` JÁ resolvido — use
+isso: só os instrumentos com `acao_irreversivel: true` exigem portão antes.
+
+Para pôr o portão: no NÓ do agente que vem imediatamente antes do que faz a ação de
+escrita, marque "pausa_humano": true — o fluxo pausa ali e espera a aprovação antes de
+seguir. A pausa fica no NÓ, não na saída.
 
 # Ativar
 Quando o time estiver coerente e sem pontas soltas, SINALIZE ao consultor que dá para

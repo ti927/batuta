@@ -38,13 +38,20 @@ def coletar_agentes(
         ).all()
     }
     irreversiveis: set[str] = set()
-    for aid, tipo in sessao.execute(
-        select(AgenteInstrumento.agente_id, Instrumento.tipo)
+    for aid, tipo, configuracao, exige in sessao.execute(
+        select(
+            AgenteInstrumento.agente_id,
+            Instrumento.tipo,
+            Instrumento.configuracao,
+            Instrumento.exige_aprovacao,
+        )
         .join(Instrumento, Instrumento.id == AgenteInstrumento.instrumento_id)
         .join(Agente, Agente.id == AgenteInstrumento.agente_id)
         .where(Agente.time_id == time_id)
     ).all():
-        if encaixe.acao_irreversivel(tipo):
+        # Resolve por INSTÂNCIA: o interruptor manda; senão deriva do tipo+config
+        # (REST pelo método, SQL pelo somente_leitura). Uma consulta não exige portão.
+        if encaixe.exige_portao(tipo, configuracao, exige):
             irreversiveis.add(str(aid))
     return nomes, irreversiveis
 

@@ -57,7 +57,16 @@ class ChamarApiRest(TipoInstrumento):
     Config = ConfigRest
     Args = ArgsRest
     campos_secretos = ("token_bearer",)
-    acao_irreversivel = True  # por segurança (pode ser POST/PUT/DELETE)
+    # Baseline irreversível (default seguro), mas a irreversibilidade REAL depende
+    # do método: uma leitura (GET/HEAD/OPTIONS) não muda nada e não exige portão.
+    acao_irreversivel = True
+
+    # Métodos HTTP que só LEEM — não mudam o estado do sistema externo.
+    _METODOS_LEITURA = {"GET", "HEAD", "OPTIONS"}
+
+    def irreversivel_para(self, configuracao: dict) -> bool:
+        metodo = str((configuracao or {}).get("metodo", "GET")).upper()
+        return metodo not in self._METODOS_LEITURA
 
     def executar(self, config: ConfigRest, args: ArgsRest) -> dict:
         cabecalhos = dict(config.cabecalhos or {})

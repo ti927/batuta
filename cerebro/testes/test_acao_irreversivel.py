@@ -1,38 +1,64 @@
-"""Metadado `acao_irreversivel` dos tipos de instrumento (base da parede de ativação).
+"""Irreversibilidade dos instrumentos — agora resolvida por (tipo + config + interruptor).
 
-Irreversível = age no mundo externo sem desfazer (publicar/enviar/gravar). É o que
-a parede de ativação usa para exigir portão humano antes do agente que o usa."""
+Irreversível = age no mundo externo sem desfazer (publicar/enviar/gravar/apagar). É o
+que a parede de ativação usa para exigir portão humano. Mas uma CONSULTA (REST GET, SQL
+somente-leitura, busca) não muda nada e não exige portão. O interruptor por instância
+(`exige_aprovacao`) sobrepõe a derivação."""
 
 import instrumentos as encaixe
 from criacao.ferramentas import catalogo_de_instrumentos
 
-_IRREVERSIVEIS = {
-    "publicar_wordpress",
-    "disparar_webhook",
-    "chamar_api_rest",
-    "banco_sql",
+# Baseline por tipo (o que o catálogo expõe à IA): o tipo PODE escrever?
+_BASELINE_TRUE = {
+    "publicar_wordpress", "disparar_webhook", "chamar_api_rest", "banco_sql",
     "conectar_mcp",
 }
-_REVERSIVEIS = {"busca_web", "gerar_pdf", "gerar_imagem"}
+_BASELINE_FALSE = {"busca_web", "gerar_pdf", "gerar_imagem"}
 
 
-def test_helper_marca_irreversiveis():
-    for tipo in _IRREVERSIVEIS:
-        assert encaixe.acao_irreversivel(tipo) is True, tipo
-    for tipo in _REVERSIVEIS:
-        assert encaixe.acao_irreversivel(tipo) is False, tipo
-
-
-def test_tipo_desconhecido_e_reversivel_por_seguranca_de_leitura():
-    # tipo inexistente: o helper não explode e devolve False (não há o que ativar)
-    assert encaixe.acao_irreversivel("nao_existe") is False
-
-
-def test_catalogo_expoe_acao_irreversivel():
+def test_catalogo_expoe_baseline_do_tipo():
     por_tipo = {c["tipo"]: c for c in catalogo_de_instrumentos()}
-    # todo tipo do catálogo traz o campo
     assert all("acao_irreversivel" in c for c in por_tipo.values())
-    for tipo in _IRREVERSIVEIS:
-        assert por_tipo[tipo]["acao_irreversivel"] is True
-    for tipo in _REVERSIVEIS:
-        assert por_tipo[tipo]["acao_irreversivel"] is False
+    for tipo in _BASELINE_TRUE:
+        assert por_tipo[tipo]["acao_irreversivel"] is True, tipo
+    for tipo in _BASELINE_FALSE:
+        assert por_tipo[tipo]["acao_irreversivel"] is False, tipo
+
+
+def test_rest_deriva_do_metodo():
+    assert encaixe.acao_irreversivel("chamar_api_rest", {"metodo": "GET"}) is False
+    assert encaixe.acao_irreversivel("chamar_api_rest", {"metodo": "HEAD"}) is False
+    assert encaixe.acao_irreversivel("chamar_api_rest", {"metodo": "POST"}) is True
+    assert encaixe.acao_irreversivel("chamar_api_rest", {"metodo": "DELETE"}) is True
+    # sem config: cai no default do método (GET) → leitura
+    assert encaixe.acao_irreversivel("chamar_api_rest") is False
+
+
+def test_sql_deriva_do_somente_leitura():
+    assert encaixe.acao_irreversivel("banco_sql", {}) is True
+    assert encaixe.acao_irreversivel("banco_sql", {"somente_leitura": True}) is False
+    assert encaixe.acao_irreversivel("banco_sql", {"somente_leitura": False}) is True
+
+
+def test_tipos_que_sempre_escrevem():
+    for tipo in ("disparar_webhook", "publicar_wordpress", "conectar_mcp"):
+        assert encaixe.acao_irreversivel(tipo, {}) is True, tipo
+
+
+def test_tipos_de_leitura():
+    for tipo in _BASELINE_FALSE:
+        assert encaixe.acao_irreversivel(tipo, {}) is False, tipo
+
+
+def test_tipo_desconhecido_e_reversivel():
+    assert encaixe.acao_irreversivel("nao_existe") is False
+    assert encaixe.exige_portao("nao_existe", {}, None) is False
+
+
+def test_interruptor_sobrepoe_a_derivacao():
+    # None = automático (deriva)
+    assert encaixe.exige_portao("chamar_api_rest", {"metodo": "GET"}, None) is False
+    assert encaixe.exige_portao("chamar_api_rest", {"metodo": "POST"}, None) is True
+    # True força portão até num GET; False dispensa até numa escrita (guard-rail = UI)
+    assert encaixe.exige_portao("chamar_api_rest", {"metodo": "GET"}, True) is True
+    assert encaixe.exige_portao("disparar_webhook", {}, False) is False
