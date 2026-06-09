@@ -137,7 +137,7 @@ export function CriacaoCliente({
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] flex-1 flex-col overflow-hidden md:flex-row">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
       {/* ───────────── Esquerda: chat ───────────── */}
       <section className="flex h-1/2 w-full flex-col border-b border-border bg-card md:h-full md:w-[440px] md:shrink-0 md:border-r md:border-b-0">
         <header className="flex items-center gap-3 border-b border-border px-4 py-3">

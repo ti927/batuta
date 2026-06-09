@@ -60,14 +60,20 @@ export default async function RootLayout({
       lang="pt-BR"
       className={`${inter.variable} ${bricolage.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-background">
+      {/* Casco travado na altura da tela: o cabeçalho fica fixo no topo e a área
+          abaixo rola por dentro. Telas comuns (listas, formulários) rolam nessa
+          área; telas de altura cheia (a conversa de criação) a preenchem e rolam
+          por coluna. Assim nenhuma página estica o documento inteiro. */}
+      <body className="flex h-dvh flex-col overflow-hidden bg-background">
         {user?.email && <Cabecalho email={user.email} />}
-        {pendentes.length > 0 && (
-          <div className="mx-auto flex w-full max-w-6xl justify-center px-4 pt-4 sm:px-6">
-            <BannerConvites convites={pendentes} />
-          </div>
-        )}
-        {children}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {pendentes.length > 0 && (
+            <div className="mx-auto flex w-full max-w-6xl justify-center px-4 pt-4 sm:px-6">
+              <BannerConvites convites={pendentes} />
+            </div>
+          )}
+          {children}
+        </div>
       </body>
     </html>
   );
