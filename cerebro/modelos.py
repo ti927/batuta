@@ -121,6 +121,10 @@ class Instrumento(IdData, Base):
     nome: Mapped[str] = mapped_column(String(200), nullable=False)
     tipo: Mapped[str] = mapped_column(String(50), nullable=False)
     configuracao: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Interruptor de aprovação humana por instância (sobrepõe a derivação por
+    # tipo/config): NULL = automático; True = sempre exige portão; False = nunca.
+    # A parede de ativação resolve via instrumentos.exige_portao().
+    exige_aprovacao: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
 
 class AgenteInstrumento(Base):

@@ -119,24 +119,30 @@ class AgenteLer(BaseModel):
 
 class InstrumentoCriar(BaseModel):
     """Dados para criar um instrumento. A configuração é validada contra o
-    esquema do tipo (o encaixe), não aqui."""
+    esquema do tipo (o encaixe), não aqui. `exige_aprovacao` (interruptor de
+    portão humano): NULL = automático; True = sempre; False = nunca."""
 
     nome: str = Field(min_length=1, max_length=200)
     tipo: str = Field(min_length=1, max_length=50)
     configuracao: dict = Field(default_factory=dict)
+    exige_aprovacao: bool | None = None
 
 
 class InstrumentoEditar(BaseModel):
-    """Edita um instrumento. O tipo é fixo após a criação; muda-se nome e
-    configuração."""
+    """Edita um instrumento. O tipo é fixo após a criação; muda-se nome,
+    configuração e o interruptor de aprovação."""
 
     nome: str = Field(min_length=1, max_length=200)
     configuracao: dict = Field(default_factory=dict)
+    exige_aprovacao: bool | None = None
 
 
 class InstrumentoLer(BaseModel):
     """Instrumento como a API o devolve. `segredos` (Fase 7-B) traz, por campo
-    secreto já guardado, só os 4 últimos dígitos — o valor nunca é reexibido."""
+    secreto já guardado, só os 4 últimos dígitos — o valor nunca é reexibido.
+    `exige_aprovacao` é o interruptor (NULL/True/False); `acao_irreversivel` é o
+    valor JÁ RESOLVIDO (tipo+config+interruptor), que a UI usa para mostrar se
+    exige portão."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -146,6 +152,8 @@ class InstrumentoLer(BaseModel):
     tipo: str
     configuracao: dict | None
     segredos: dict[str, str] = Field(default_factory=dict)
+    exige_aprovacao: bool | None = None
+    acao_irreversivel: bool = False
     criado_em: datetime
     atualizado_em: datetime
 

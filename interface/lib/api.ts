@@ -128,6 +128,10 @@ export type Instrumento = {
   configuracao: Record<string, unknown> | null;
   // Segredos já guardados (cifrados): campo → 4 últimos dígitos (Fase 7-B).
   segredos: Record<string, string>;
+  // Interruptor de aprovação humana: null = automático, true = sempre, false = nunca.
+  exige_aprovacao: boolean | null;
+  // Resolvido (tipo+config+interruptor): se este instrumento exige portão.
+  acao_irreversivel: boolean;
   criado_em: string;
   atualizado_em: string;
 };
@@ -140,6 +144,9 @@ export type TipoInstrumento = {
   esquema_args: Record<string, unknown>;
   // Campos da config que são segredos (cifrados, nunca reexibidos) — Fase 7-B.
   campos_secretos: string[];
+  // Baseline do tipo: este tipo PODE escrever/agir de forma irreversível? (a
+  // irreversibilidade real da instância depende da config — método, somente_leitura).
+  acao_irreversivel: boolean;
 };
 
 // ─── Automações: a cadeia é um grafo de caminhos (bifurcação) ───

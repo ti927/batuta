@@ -125,3 +125,73 @@ def test_ativar_publicador_com_portao_passa(cliente, entrar, dados, sessao):
     )
     assert resp.status_code == 201
     assert resp.json()["ativa"] is True
+
+
+# ───── resolução POR INSTÂNCIA (config + interruptor) na rota ─────
+
+def _time_com_instrumento(sessao, time, *, tipo, configuracao, exige=None, portao=False):
+    """Líder → Operador (com o instrumento dado). Devolve a cadeia."""
+    lider = Agente(time_id=time.id, nome="Líder", papel="lider")
+    operador = Agente(time_id=time.id, nome="Operador", papel="agente")
+    sessao.add_all([lider, operador])
+    sessao.flush()
+    inst = Instrumento(
+        time_id=time.id, nome="Inst", tipo=tipo,
+        configuracao=configuracao, exige_aprovacao=exige,
+    )
+    sessao.add(inst)
+    sessao.flush()
+    sessao.add(AgenteInstrumento(agente_id=operador.id, instrumento_id=inst.id))
+    sessao.flush()
+    no_lider = {"saidas": [{"rotulo": "1", "quando": "s", "destino": str(operador.id)}]}
+    if portao:
+        no_lider["pausa_humano"] = True
+    return {
+        "inicio": str(lider.id),
+        "nos": {
+            str(lider.id): no_lider,
+            str(operador.id): {"saidas": [{"rotulo": "1", "quando": "fim", "destino": None}]},
+        },
+    }
+
+
+def _ativar(cliente, time_id, cadeia):
+    return cliente.post(f"/times/{time_id}/automacoes", json=_payload(cadeia, ativa=True))
+
+
+def test_rest_get_sem_portao_ativa(cliente, entrar, dados, sessao):
+    cadeia = _time_com_instrumento(
+        sessao, dados["timeA"], tipo="chamar_api_rest",
+        configuracao={"url": "https://x", "metodo": "GET"},
+    )
+    entrar(dados["operador"])
+    assert _ativar(cliente, dados["timeA"].id, cadeia).status_code == 201
+
+
+def test_rest_post_sem_portao_bloqueia(cliente, entrar, dados, sessao):
+    cadeia = _time_com_instrumento(
+        sessao, dados["timeA"], tipo="chamar_api_rest",
+        configuracao={"url": "https://x", "metodo": "POST"},
+    )
+    entrar(dados["operador"])
+    resp = _ativar(cliente, dados["timeA"].id, cadeia)
+    assert resp.status_code == 422 and "Operador" in str(resp.json()["detail"])
+
+
+def test_rest_get_com_override_sempre_bloqueia(cliente, entrar, dados, sessao):
+    # interruptor "sempre" (True) força portão até num GET
+    cadeia = _time_com_instrumento(
+        sessao, dados["timeA"], tipo="chamar_api_rest",
+        configuracao={"url": "https://x", "metodo": "GET"}, exige=True,
+    )
+    entrar(dados["operador"])
+    assert _ativar(cliente, dados["timeA"].id, cadeia).status_code == 422
+
+
+def test_sql_somente_leitura_sem_portao_ativa(cliente, entrar, dados, sessao):
+    cadeia = _time_com_instrumento(
+        sessao, dados["timeA"], tipo="banco_sql",
+        configuracao={"host": "h", "banco": "b", "usuario": "u", "somente_leitura": True},
+    )
+    entrar(dados["operador"])
+    assert _ativar(cliente, dados["timeA"].id, cadeia).status_code == 201
