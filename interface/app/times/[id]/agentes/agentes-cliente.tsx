@@ -147,15 +147,15 @@ export function AgentesCliente({
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
       <Link
-        href={`/organizacoes/${time.organizacao_id}`}
+        href={`/times/${time.id}`}
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ChevronLeft className="size-4" />
-        Voltar à organização
+        Voltar ao time
       </Link>
       <h1 className="mt-2 text-2xl font-medium text-foreground">{time.nome}</h1>
       <div className="mb-6 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-        <p className="text-sm text-muted-foreground">Agentes do time</p>
+        <p className="text-sm text-muted-foreground">Gerenciar agentes</p>
         <Link
           href={`/times/${time.id}/instrumentos`}
           className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
