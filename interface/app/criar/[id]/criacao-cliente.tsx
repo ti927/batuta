@@ -20,11 +20,13 @@ import {
 } from "lucide-react";
 
 import { RobotFace } from "@/components/robot-face";
+import { UrlCopiavel } from "@/components/url-copiavel";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { podeOperar } from "@/lib/permissoes";
 import {
   api,
+  URL_CEREBRO,
   ErroDaApi,
   type AgenteTime,
   type Cadeia,
@@ -494,6 +496,18 @@ function Canvas({
               {rotuloGatilho(automacao.tipo_gatilho)}
             </span>
           </div>
+          {automacao.tipo_gatilho === "webhook" && (
+            <div className="mt-2.5">
+              <UrlCopiavel
+                url={`${URL_CEREBRO}/webhooks/automacoes/${automacao.id}`}
+                aviso={
+                  ativo
+                    ? "Dispare um POST nessa URL para acionar o fluxo."
+                    : "A URL só aceita chamadas com o time ativo."
+                }
+              />
+            </div>
+          )}
         </>
       )}
 

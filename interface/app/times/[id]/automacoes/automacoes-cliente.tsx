@@ -17,6 +17,7 @@ import {
   type Time,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
+import { UrlCopiavel } from "@/components/url-copiavel";
 import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -388,9 +389,9 @@ export function AutomacoesCliente({
                   houver; senão, o corpo inteiro.
                 </p>
                 {modo !== "novo" ? (
-                  <code className="break-all rounded-sm bg-secondary px-2 py-1 text-foreground">
-                    {URL_CEREBRO}/webhooks/automacoes/{modo}
-                  </code>
+                  <UrlCopiavel
+                    url={`${URL_CEREBRO}/webhooks/automacoes/${modo}`}
+                  />
                 ) : (
                   <p className="text-warning">
                     Salve a automação para gerar a URL do webhook.
