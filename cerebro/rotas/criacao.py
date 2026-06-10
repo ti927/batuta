@@ -29,7 +29,7 @@ from esquemas import (
     MensagemTurno,
     RespostaTurno,
 )
-from modelos import Automacao, ConversaCriacao, Time, Usuario
+from modelos import Automacao, ConversaCriacao, Organizacao, Time, Usuario
 from orquestracao.modelos_ia import provedor_do_modelo
 from rotas._comum import conversa_criacao_acessivel, organizacao_acessivel
 from sessao import obter_sessao
@@ -46,9 +46,14 @@ def _rodar_turno(
     chaves, origens = resolver_chaves_por_organizacao(
         sessao, conversa.organizacao_id, tipo_ia="criadora"
     )
-    origem = origens.get(provedor_do_modelo(MODELO_CRIADORA), ORIGEM_LEGADO)
+    # O modelo da conversa é escolhido por organização (nulo = padrão Opus). A origem
+    # da medição sai do provedor DESSE modelo, não mais fixa no de Opus.
+    org = sessao.get(Organizacao, conversa.organizacao_id)
+    modelo = (org.modelo_criadora if org else None) or MODELO_CRIADORA
+    origem = origens.get(provedor_do_modelo(modelo), ORIGEM_LEGADO)
     resultado = responder_turno(
-        sessao, conversa, mensagem, usuario=usuario, chaves=chaves, origem=origem
+        sessao, conversa, mensagem, usuario=usuario, chaves=chaves, origem=origem,
+        modelo=modelo,
     )
     sessao.commit()
     # A IA pode ter ativado a automação ou mudado o gatilho: (re)agenda no relógio.

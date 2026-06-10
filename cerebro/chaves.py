@@ -12,6 +12,7 @@ em memória, na hora de executar; nunca volta ao banco nem à interface (PRODUTO
 §26). Nesta fase só a IA 'executora' é consumida pelo motor (MIGRACAO Virada 4).
 """
 
+import os
 import uuid
 
 from sqlalchemy import select
@@ -159,3 +160,23 @@ def resolver_chaves_por_time(
     return resolver_chaves_por_organizacao(
         sessao, _org_do_time(sessao, time_id), tipo_ia=tipo_ia
     )
+
+
+def provedores_disponiveis(
+    sessao: Session,
+    organizacao_id: uuid.UUID | None,
+    *,
+    tipo_ia: str = "executora",
+) -> dict[str, bool]:
+    """Quais provedores têm chave RESOLVÍVEL para esta organização e tipo de IA —
+    contando o fallback da consultoria. A Anthropic também conta como disponível
+    quando há `ANTHROPIC_API_KEY` no ambiente (o motor cai nela como legado). Só
+    booleanos: não expõe nenhum segredo. Alimenta o seletor de modelos da tela
+    (não adianta oferecer um modelo cujo provedor não tem chave)."""
+    chaves, _ = resolver_chaves_por_organizacao(
+        sessao, organizacao_id, tipo_ia=tipo_ia
+    )
+    disponiveis = {provedor: provedor in chaves for provedor in PROVEDORES}
+    if not disponiveis[PROVEDOR_ANTHROPIC] and os.environ.get("ANTHROPIC_API_KEY"):
+        disponiveis[PROVEDOR_ANTHROPIC] = True
+    return disponiveis

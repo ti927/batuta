@@ -8,14 +8,21 @@ fase, um "admin da consultoria" acima das organizações; isso chega na Fase 7).
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import auditoria
 from auth import usuario_atual
-from esquemas import OrganizacaoCriar, OrganizacaoEditar, OrganizacaoLer
+from chaves import provedores_disponiveis
+from esquemas import (
+    ModeloCriadoraEditar,
+    OrganizacaoCriar,
+    OrganizacaoEditar,
+    OrganizacaoLer,
+)
 from modelos import Membro, Organizacao, Usuario
+from orquestracao.modelos_ia import provedor_do_modelo
 from rotas._comum import organizacao_acessivel
 from sessao import obter_sessao
 
@@ -76,6 +83,45 @@ def editar(
 ):
     org = organizacao_acessivel(sessao, usuario, organizacao_id, minimo="admin")
     org.nome = dados.nome
+    sessao.commit()
+    sessao.refresh(org)
+    return org
+
+
+@rotas.put("/{organizacao_id}/modelo-criadora", response_model=OrganizacaoLer)
+def definir_modelo_criadora(
+    organizacao_id: uuid.UUID,
+    dados: ModeloCriadoraEditar,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Define o modelo da IA de conversa (criadora/companheira) da organização.
+    `modelo` nulo volta ao padrão (Opus). Recusa um modelo cujo provedor não tem
+    chave resolvível (própria ou da consultoria) — não adianta escolher um modelo
+    que vai falhar na hora de conversar."""
+    org = organizacao_acessivel(sessao, usuario, organizacao_id, minimo="admin")
+    if dados.modelo:
+        try:
+            provedor = provedor_do_modelo(dados.modelo)
+        except ValueError:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Modelo de IA '{dados.modelo}' não reconhecido.",
+            )
+        if not provedores_disponiveis(
+            sessao, organizacao_id, tipo_ia="criadora"
+        ).get(provedor):
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"O modelo '{dados.modelo}' usa {provedor}, mas não há chave de IA "
+                "desse provedor (nem própria, nem da consultoria).",
+            )
+    org.modelo_criadora = dados.modelo or None
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="organizacao.modelo_criadora",
+        recurso_tipo="organizacao", recurso_id=org.id, organizacao_id=org.id,
+        detalhe={"modelo": org.modelo_criadora},
+    )
     sessao.commit()
     sessao.refresh(org)
     return org

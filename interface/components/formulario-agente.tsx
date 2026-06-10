@@ -1,18 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   api,
   ErroDaApi,
   type Agente,
+  type ModelosDisponiveis,
   type Papel,
   type Time,
 } from "@/lib/api";
 import {
   MODELOS_POR_PROVEDOR,
-  PROVEDORES,
+  provedorDoModelo,
+  provedoresParaSeletor,
   ROTULO_PROVEDOR,
+  type ProvedoresDisponiveis,
 } from "@/lib/modelos";
 import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
@@ -79,6 +82,33 @@ export function FormularioAgente({
   const [form, setForm] = useState<Campos>(agente ? deAgente(agente) : VAZIO);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  // Disponibilidade de provedores (executora) por chave: só oferecemos modelos
+  // cujo provedor tem chave — escolher um sem chave quebraria na execução.
+  const [disponiveis, setDisponiveis] = useState<ProvedoresDisponiveis>();
+
+  useEffect(() => {
+    let vivo = true;
+    api
+      .get<ModelosDisponiveis>(
+        `/organizacoes/${time.organizacao_id}/modelos-disponiveis`,
+      )
+      .then((d) => {
+        if (vivo) setDisponiveis(d.executora);
+      })
+      .catch(() => {
+        /* sem disponibilidade: o seletor mostra todos (fallback seguro) */
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [time.organizacao_id]);
+
+  // Provedores a exibir: os com chave, mais o do modelo já escolhido (para não
+  // sumir um valor existente cujo provedor perdeu a chave).
+  const provedoresVisiveis = provedoresParaSeletor(
+    disponiveis,
+    form.modelo_ia ? provedorDoModelo(form.modelo_ia) : null,
+  );
 
   function campo<K extends keyof Campos>(chave: K, valor: Campos[K]) {
     setForm((f) => ({ ...f, [chave]: valor }));
@@ -145,7 +175,7 @@ export function FormularioAgente({
             onChange={(e) => campo("modelo_ia", e.target.value)}
           >
             <option value="">(não definido)</option>
-            {PROVEDORES.map((p) => (
+            {provedoresVisiveis.map((p) => (
               <optgroup key={p} label={ROTULO_PROVEDOR[p]}>
                 {MODELOS_POR_PROVEDOR[p].map((m) => (
                   <option key={m} value={m}>

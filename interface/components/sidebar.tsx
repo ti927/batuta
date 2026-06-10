@@ -6,6 +6,7 @@ import { useState } from "react";
 import {
   Activity,
   ChevronDown,
+  Coins,
   Gauge,
   Home,
   Key,
@@ -174,13 +175,22 @@ export function Sidebar({
           </>
         )}
         {adminConsultoria && (
-          <ItemNav
-            href="/chaves-consultoria"
-            Icone={Key}
-            ativo={ativo("/chaves-consultoria")}
-          >
-            Chaves da consultoria
-          </ItemNav>
+          <>
+            <ItemNav
+              href="/chaves-consultoria"
+              Icone={Key}
+              ativo={ativo("/chaves-consultoria")}
+            >
+              Chaves da consultoria
+            </ItemNav>
+            <ItemNav
+              href="/uso-consultoria"
+              Icone={Coins}
+              ativo={ativo("/uso-consultoria")}
+            >
+              Uso da consultoria
+            </ItemNav>
+          </>
         )}
         <ItemNav href="/configuracoes" Icone={Settings} ativo={ativo("/configuracoes")}>
           Configurações

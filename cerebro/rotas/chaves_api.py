@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 import auditoria
 import cofre
 from auth import usuario_atual
+from chaves import provedores_disponiveis
 from consultoria import exigir_admin_consultoria
 from esquemas import ChaveApiCriar, ChaveApiLer
 from modelos import ChaveApi, Usuario
@@ -102,6 +103,26 @@ def listar_chaves_org(
         .where(ChaveApi.organizacao_id == organizacao_id)
         .order_by(ChaveApi.tipo_ia, ChaveApi.provedor)
     ).all()
+
+
+@rotas.get("/organizacoes/{organizacao_id}/modelos-disponiveis")
+def modelos_disponiveis_org(
+    organizacao_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Por tipo de IA, quais provedores têm chave resolvível (própria ou da
+    consultoria). Alimenta os seletores de modelo da interface — só booleanos,
+    nenhum segredo. Visível a qualquer membro (não revela chave, só disponibilidade)."""
+    organizacao_acessivel(sessao, usuario, organizacao_id)
+    return {
+        "executora": provedores_disponiveis(
+            sessao, organizacao_id, tipo_ia="executora"
+        ),
+        "criadora": provedores_disponiveis(
+            sessao, organizacao_id, tipo_ia="criadora"
+        ),
+    }
 
 
 @rotas.put(

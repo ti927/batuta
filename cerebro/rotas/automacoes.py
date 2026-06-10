@@ -37,6 +37,7 @@ from auth import usuario_atual
 from modelos import (
     Agente,
     Automacao,
+    ConversaCriacao,
     Execucao,
     Membro,
     Organizacao,
@@ -44,7 +45,12 @@ from modelos import (
     Time,
     Usuario,
 )
-from chaves import resolver_chaves_por_time
+from chaves import (
+    ORIGEM_CONSULTORIA,
+    ORIGEM_LEGADO,
+    resolver_chaves_por_time,
+)
+from consultoria import exigir_admin_consultoria
 from orquestracao.cadeia import (
     _DESTINOS_FIM,
     _escolher_saida,
@@ -375,7 +381,79 @@ def resumo_uso(
     if time_id is not None:
         consulta = consulta.where(Automacao.time_id == time_id)
     passos = sessao.scalars(consulta).all()
-    return precos.resumir_uso(passos)
+
+    # A conversa da IA criadora é da ORGANIZAÇÃO, não de um time. No resumo de uma
+    # organização (sem time específico), some também o uso da conversa — senão o
+    # gasto do Opus da conversa fica invisível. No resumo de um time, fica só a
+    # execução (a conversa não pertence a um time).
+    conversas = []
+    if time_id is None:
+        consulta_conv = (
+            select(ConversaCriacao)
+            .join(Membro, Membro.organizacao_id == ConversaCriacao.organizacao_id)
+            .where(Membro.usuario_id == usuario.id)
+        )
+        if organizacao_id is not None:
+            consulta_conv = consulta_conv.where(
+                ConversaCriacao.organizacao_id == organizacao_id
+            )
+        conversas = sessao.scalars(consulta_conv).all()
+    return precos.resumir_uso(passos, conversas)
+
+
+@rotas.get("/uso/consultoria")
+def uso_consultoria(
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Painel da consultoria: o consumo que saiu da CHAVE-MÃE (origem 'consultoria'
+    ou 'legado' = a ANTHROPIC_API_KEY do .env, que na prática é da consultoria),
+    somado entre TODAS as organizações e quebrado por organização. Inclui tanto as
+    execuções (agentes) quanto as conversas da IA criadora. Restrito ao admin da
+    consultoria."""
+    exigir_admin_consultoria(usuario)
+    da_consultoria = {ORIGEM_CONSULTORIA, ORIGEM_LEGADO}
+
+    # nome por organização (uma busca só) + acumulador de entradas por org
+    nomes = dict(sessao.execute(select(Organizacao.id, Organizacao.nome)).all())
+    por_org: dict[uuid.UUID, list] = {}
+
+    def _coletar(org_id, entradas):
+        alvo = por_org.setdefault(org_id, [])
+        alvo.extend(e for e in entradas if e.get("origem") in da_consultoria)
+
+    linhas = sessao.execute(
+        select(PassoExecucao, Time.organizacao_id)
+        .join(Execucao, Execucao.id == PassoExecucao.execucao_id)
+        .join(Automacao, Automacao.id == Execucao.automacao_id)
+        .join(Time, Time.id == Automacao.time_id)
+    ).all()
+    for passo, org_id in linhas:
+        _coletar(org_id, precos.entradas_dos_passos([passo]))
+    for conversa in sessao.scalars(select(ConversaCriacao)).all():
+        _coletar(conversa.organizacao_id, precos.entradas_das_conversas([conversa]))
+
+    por_organizacao = []
+    todas: list = []
+    for org_id, entradas in por_org.items():
+        if not entradas:
+            continue
+        r = precos.resumir_uso_de_entradas(entradas)
+        todas.extend(entradas)
+        por_organizacao.append(
+            {
+                "organizacao_id": org_id,
+                "organizacao_nome": nomes.get(org_id, "—"),
+                "tokens_entrada": r["tokens_entrada"],
+                "tokens_saida": r["tokens_saida"],
+                "custo_usd": r["custo_usd"],
+            }
+        )
+    por_organizacao.sort(key=lambda x: x["custo_usd"], reverse=True)
+    return {
+        "total": precos.resumir_uso_de_entradas(todas),
+        "por_organizacao": por_organizacao,
+    }
 
 
 @rotas.get("/execucoes/{execucao_id}", response_model=ExecucaoComPassos)

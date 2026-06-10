@@ -27,6 +27,13 @@ class OrganizacaoEditar(BaseModel):
     nome: str = Field(min_length=1, max_length=200)
 
 
+class ModeloCriadoraEditar(BaseModel):
+    """Define o modelo de IA da conversa (criadora/companheira) de uma organização.
+    `modelo` nulo volta ao padrão do código (Opus)."""
+
+    modelo: str | None = Field(default=None, max_length=100)
+
+
 class OrganizacaoLer(BaseModel):
     """Organização como a API a devolve."""
 
@@ -35,6 +42,7 @@ class OrganizacaoLer(BaseModel):
     id: uuid.UUID
     nome: str
     dono_id: uuid.UUID
+    modelo_criadora: str | None = None
     criado_em: datetime
     atualizado_em: datetime
 

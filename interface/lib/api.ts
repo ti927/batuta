@@ -91,8 +91,16 @@ export type Organizacao = {
   id: string;
   nome: string;
   dono_id: string;
+  // Modelo da IA de conversa desta org; null = padrão (Opus).
+  modelo_criadora: string | null;
   criado_em: string;
   atualizado_em: string;
+};
+
+// Disponibilidade de provedores por tipo de IA (GET /organizacoes/{id}/modelos-disponiveis).
+export type ModelosDisponiveis = {
+  executora: Record<string, boolean>;
+  criadora: Record<string, boolean>;
 };
 
 export type Time = {
@@ -198,6 +206,19 @@ export type ResumoUso = {
   por_modelo: Record<string, UsoAgrupado>;
   // Consumo separado por origem da chave (cliente × consultoria × legado) — 7.6.
   por_origem: Record<string, UsoAgrupado>;
+};
+
+// Painel da consultoria (GET /uso/consultoria): o que saiu da chave-mãe somado
+// entre todas as organizações, com a quebra por organização.
+export type UsoConsultoria = {
+  total: ResumoUso;
+  por_organizacao: {
+    organizacao_id: string;
+    organizacao_nome: string;
+    tokens_entrada: number;
+    tokens_saida: number;
+    custo_usd: number;
+  }[];
 };
 
 export type PassoExecucao = {
