@@ -3,18 +3,26 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 
-import { type ChaveApiLer, type Organizacao, type PapelAcesso } from "@/lib/api";
+import {
+  type ChaveApiLer,
+  type ModelosDisponiveis,
+  type Organizacao,
+  type PapelAcesso,
+} from "@/lib/api";
 import { GestaoChaves } from "@/components/gestao-chaves";
+import { SeletorModeloConversa } from "@/components/seletor-modelo-conversa";
 import { Aviso } from "@/components/ui/aviso";
 
 export function ChavesCliente({
   organizacao,
   meuPapel,
   chaves,
+  disponiveis,
 }: {
   organizacao: Organizacao;
   meuPapel: PapelAcesso | null;
   chaves: ChaveApiLer[];
+  disponiveis: ModelosDisponiveis | null;
 }) {
   const souAdmin = meuPapel === "admin";
 
@@ -37,10 +45,17 @@ export function ChavesCliente({
       </p>
 
       {souAdmin ? (
-        <GestaoChaves
-          basePath={`/organizacoes/${organizacao.id}/chaves`}
-          chavesIniciais={chaves}
-        />
+        <>
+          <GestaoChaves
+            basePath={`/organizacoes/${organizacao.id}/chaves`}
+            chavesIniciais={chaves}
+          />
+          <SeletorModeloConversa
+            organizacaoId={organizacao.id}
+            modeloAtual={organizacao.modelo_criadora}
+            disponiveis={disponiveis?.criadora ?? {}}
+          />
+        </>
       ) : (
         <Aviso variant="atencao">
           Somente administradores desta organização podem ver e gerir as chaves de

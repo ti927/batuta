@@ -21,7 +21,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
-const TIPOS: TipoIA[] = ["executora", "criadora", "companheira"];
+// Dois tipos de IA consomem chave: a executora (os agentes do time) e a IA de
+// conversa (a criadora/companheira — uma só conversa desde o pivô). A antiga
+// "companheira" saiu do seletor: era a mesma conversa, então virava chave morta.
+const TIPOS: TipoIA[] = ["executora", "criadora"];
+const ROTULO_TIPO: Record<string, string> = {
+  executora: "IA executora (agentes)",
+  criadora: "IA de conversa",
+  companheira: "IA de conversa",
+};
 
 export function GestaoChaves({
   basePath,
@@ -89,7 +97,7 @@ export function GestaoChaves({
             <li key={c.id} className="flex flex-wrap items-center gap-2 p-3">
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  {c.tipo_ia}
+                  {ROTULO_TIPO[c.tipo_ia] ?? c.tipo_ia}
                   <span className="text-xs font-normal text-muted-foreground">
                     {c.provedor}
                   </span>
@@ -121,7 +129,7 @@ export function GestaoChaves({
           >
             {TIPOS.map((t) => (
               <option key={t} value={t}>
-                {t}
+                {ROTULO_TIPO[t] ?? t}
               </option>
             ))}
           </Select>
@@ -157,8 +165,10 @@ export function GestaoChaves({
           </p>
         )}
         <p className="text-xs text-muted-foreground">
-          Nesta fase só a IA <span className="font-medium">executora</span> é
-          usada pelo motor; as demais ficam reservadas para fases futuras.
+          A <span className="font-medium">IA executora</span> roda os agentes do
+          time (o modelo de cada agente é escolhido na edição do agente). A{" "}
+          <span className="font-medium">IA de conversa</span> é a que ajuda a
+          montar e ajustar o time — o modelo dela se escolhe logo abaixo.
         </p>
         <Button className="self-start" onClick={salvar}>
           Salvar chave

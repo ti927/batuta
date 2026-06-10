@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import {
   type ChaveApiLer,
+  type ModelosDisponiveis,
   type Organizacao,
   type PapelAcesso,
 } from "@/lib/api";
@@ -13,6 +14,7 @@ async function carregar(organizacaoId: string): Promise<{
   organizacao: Organizacao;
   meuPapel: PapelAcesso | null;
   chaves: ChaveApiLer[];
+  disponiveis: ModelosDisponiveis | null;
 } | null> {
   const [respOrg, eu] = await Promise.all([
     buscarCerebro(`/organizacoes/${organizacaoId}`),
@@ -26,12 +28,17 @@ async function carregar(organizacaoId: string): Promise<{
 
   // Só admin gere chaves (o cérebro devolve 403 aos demais — nem buscamos).
   let chaves: ChaveApiLer[] = [];
+  let disponiveis: ModelosDisponiveis | null = null;
   if (meuPapel === "admin") {
-    const resp = await buscarCerebro(`/organizacoes/${organizacaoId}/chaves`);
-    if (resp.ok) chaves = await resp.json();
+    const [respChaves, respDisp] = await Promise.all([
+      buscarCerebro(`/organizacoes/${organizacaoId}/chaves`),
+      buscarCerebro(`/organizacoes/${organizacaoId}/modelos-disponiveis`),
+    ]);
+    if (respChaves.ok) chaves = await respChaves.json();
+    if (respDisp.ok) disponiveis = await respDisp.json();
   }
 
-  return { organizacao, meuPapel, chaves };
+  return { organizacao, meuPapel, chaves, disponiveis };
 }
 
 export default async function ChavesOrgPage({
@@ -47,6 +54,7 @@ export default async function ChavesOrgPage({
       organizacao={dados.organizacao}
       meuPapel={dados.meuPapel}
       chaves={dados.chaves}
+      disponiveis={dados.disponiveis}
     />
   );
 }
