@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Bundle mínimo e autossuficiente para rodar em container (Railway/Docker).
+  output: "standalone",
 };
 
 export default nextConfig;
