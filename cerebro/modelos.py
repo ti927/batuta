@@ -71,6 +71,10 @@ class Organizacao(IdData, Base):
     dono_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("usuarios.id"), nullable=False
     )
+    # Modelo de IA da conversa (criadora/companheira) desta organização. Nulo =
+    # usa o padrão do código (Opus). O seletor da tela só oferece modelos cujo
+    # provedor tem chave resolvível (própria ou da consultoria).
+    modelo_criadora: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
 class Time(IdData, Base):
