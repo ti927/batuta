@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 import { ChevronLeft, Plus, Wrench } from "lucide-react";
 
 import {
@@ -65,6 +66,7 @@ export function InstrumentosCliente({
   }
 
   function aoSalvar() {
+    toast.success(modo === "novo" ? "Instrumento criado" : "Instrumento salvo");
     setModo(null);
     setErro(null);
     router.refresh();
@@ -74,6 +76,7 @@ export function InstrumentosCliente({
     if (!confirm(`Remover o instrumento "${inst.nome}"?`)) return;
     try {
       await api.delete(`/instrumentos/${inst.id}`);
+      toast.success("Instrumento removido");
       setErro(null);
       router.refresh();
     } catch (e) {

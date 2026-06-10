@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   AlertTriangle,
   Check,
@@ -33,6 +34,7 @@ import {
 } from "@/lib/api";
 import { podeOperar } from "@/lib/permissoes";
 import { rotuloOrigem } from "@/lib/uso";
+import { Rise } from "@/components/rise";
 import { RobotFace } from "@/components/robot-face";
 import { UrlCopiavel } from "@/components/url-copiavel";
 import { Aviso } from "@/components/ui/aviso";
@@ -408,7 +410,6 @@ export function AutomacaoDetalheCliente({
   const router = useRouter();
   const souOperador = podeOperar(meuPapel);
   const [erro, setErro] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
   const [entrada, setEntrada] = useState("");
   const [rodando, setRodando] = useState(false);
 
@@ -426,13 +427,6 @@ export function AutomacaoDetalheCliente({
   }
 
   useEffect(() => pararPoll, []);
-
-  // O aviso transitório (ex.: "Decisão enviada") some sozinho depois de 4s.
-  useEffect(() => {
-    if (!aviso) return;
-    const t = setTimeout(() => setAviso(null), 4000);
-    return () => clearTimeout(t);
-  }, [aviso]);
 
   function acompanhar(id: string) {
     pollRef.current = setTimeout(async () => {
@@ -507,7 +501,7 @@ export function AutomacaoDetalheCliente({
       );
       setAberta(r);
       setResposta("");
-      setAviso("Decisão enviada ✨");
+      toast.success("Decisão enviada");
       if (!ESTADOS_TERMINAIS.includes(r.estado)) {
         setRodando(true);
         acompanhar(r.id);
@@ -522,6 +516,7 @@ export function AutomacaoDetalheCliente({
 
   return (
     <main className="mx-auto w-full max-w-[820px] px-4 py-8 sm:px-6">
+      <Rise>
       <Link
         href={`/times/${automacao.time_id}`}
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -557,11 +552,6 @@ export function AutomacaoDetalheCliente({
       )}
 
       {erro && <Aviso className="mb-4">{erro}</Aviso>}
-      {aviso && (
-        <Aviso variant="sucesso" className="mb-4">
-          {aviso}
-        </Aviso>
-      )}
 
       {souOperador && (
         <div className="mb-6 flex flex-col gap-2 rounded-xl border border-border bg-card p-5">
@@ -674,6 +664,7 @@ export function AutomacaoDetalheCliente({
           ))}
         </ul>
       )}
+      </Rise>
     </main>
   );
 }

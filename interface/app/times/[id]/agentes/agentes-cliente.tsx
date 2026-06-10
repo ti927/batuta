@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Bot, ChevronLeft, Plus, Settings2, Zap } from "lucide-react";
 
 import {
@@ -42,6 +43,7 @@ export function AgentesCliente({
   }
 
   function aoSalvar() {
+    toast.success(modo === "novo" ? "Agente criado" : "Agente salvo");
     setModo(null);
     setErro(null);
     router.refresh();
@@ -51,6 +53,7 @@ export function AgentesCliente({
     if (!confirm(`Remover o agente "${a.nome}"?`)) return;
     try {
       await api.delete(`/agentes/${a.id}`);
+      toast.success("Agente removido");
       setErro(null);
       if (modo !== null && modo !== "novo" && modo.id === a.id) setModo(null);
       router.refresh();

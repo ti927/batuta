@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Geist_Mono, Inter } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 import {
@@ -113,6 +114,12 @@ export default async function RootLayout({
         ) : (
           children
         )}
+        {/* Toasts da marca (handoff §7): canto inferior direito, ~4s. */}
+        <Toaster
+          position="bottom-right"
+          richColors
+          toastOptions={{ className: "font-sans" }}
+        />
       </body>
     </html>
   );
