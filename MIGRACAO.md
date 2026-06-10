@@ -241,7 +241,7 @@ A Etapa 2 original tinha sete fases (6 a 12). Com as viradas, ela encolhe e se r
 **Fase de Mensageria (WhatsApp) — o canal do Líder** — ADICIONADA (2026-06-09)
 - **Lacuna corrigida:** o `PRODUTO.md` §10 prevê o WhatsApp como o canal do Líder (cada time com seu número), mas o core adiou isso "para a Etapa 2" e esta reorganização original (as cinco fases acima) **não o recolheu** — caiu num vão. Esta fase fecha a lacuna.
 - É um **adaptador de canal na borda** (gatilho de entrada + envio de saída), reusando o motor de execução e a espera-por-humano já validados — **não mexe no núcleo congelado**.
-- **Decisão (2026-06-09):** provedor padrão = **WhatsApp Cloud API oficial (Meta)**; Evolution API só como piloto interno (risco de ban). Detalhe e Definition of Done no `BUILD-PLAN.md`.
+- **Decisão (2026-06-09, revista):** provedor = **Evolution API** — o vínculo é por **QR code, sem fricção** (o Cloud API oficial não faz QR; exige burocracia da Meta). Trade-off: não-oficial, risco de ban → mitigar com número dedicado por time e uso humano. **Cloud API = upgrade futuro** para quem exigir oficial. Detalhe e Definition of Done no `BUILD-PLAN.md`.
 - **Depende da URL pública** da implantação → executar junto com / logo após a fase final.
 
 **Fase final — Implantação em produção**
