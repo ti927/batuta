@@ -50,7 +50,7 @@ def criar(
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
-    org = Organizacao(nome=dados.nome, dono_id=usuario.id)
+    org = Organizacao(nome=dados.nome, dono_id=usuario.id, logo_url=dados.logo_url)
     sessao.add(org)
     sessao.flush()  # garante org.id antes de criar o vínculo de membro
     sessao.add(
@@ -83,6 +83,7 @@ def editar(
 ):
     org = organizacao_acessivel(sessao, usuario, organizacao_id, minimo="admin")
     org.nome = dados.nome
+    org.logo_url = dados.logo_url
     sessao.commit()
     sessao.refresh(org)
     return org

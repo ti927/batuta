@@ -75,6 +75,9 @@ class Organizacao(IdData, Base):
     # usa o padrão do código (Opus). O seletor da tela só oferece modelos cujo
     # provedor tem chave resolvível (própria ou da consultoria).
     modelo_criadora: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Logo/foto da organização, guardado como data URI (a imagem é encolhida no
+    # navegador antes de salvar). Nulo = sem logo (a UI mostra a inicial do nome).
+    logo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Time(IdData, Base):
