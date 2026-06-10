@@ -845,6 +845,12 @@ Ordem de execução (handoff §13, reconciliada):
 5. **Telas placeholder reais:** Biblioteca, Uso e custos, Configurações (§6.7). ✅ (`area-em-breve.tsx`)
 6. **Polimento transversal:** animações `rise` (framer-motion, respeita reduzir-movimento), toasts (sonner), favicon a partir do símbolo. ✅
 
+## REFINOS 2026-06-10 (chaves/contabilização + logo da organização)
+Em `main` (merges `c67e504` e `423d291`), validados ao vivo pelo maestro. Cérebro + interface, testes verdes; **DB head agora `f6a7b8c9d0e1`**.
+
+- **Chaves de IA selecionáveis + contabilização da conversa + painel da consultoria.** (1) A IA de conversa (criadora/companheira — uma só desde o pivô) ganhou **modelo selecionável por organização** (`organizacoes.modelo_criadora`, migração `e5f6a7b8c9d0`; nulo = padrão Opus), escolhido na tela de Chaves; o tipo "companheira" saiu do cofre (era chave morta). (2) Os seletores de modelo (do agente e da conversa) só mostram modelos cujo **provedor tem chave** resolvível (própria/consultoria + fallback Anthropic do ambiente) — novo `GET /organizacoes/{id}/modelos-disponiveis`. (3) O uso da **IA de conversa** (Opus) passou a entrar nos totais de custo (antes invisível): `precos.resumir_uso` soma também as conversas e o `/uso/resumo` org-level inclui a conversa. (4) Novo **painel da consultoria** `GET /uso/consultoria` (admin da consultoria) somando o gasto na chave-mãe por organização; tela `/uso-consultoria` + link na sidebar. **Motor de orquestração intocado.**
+- **Logo da organização.** `organizacoes.logo_url` (Text, migração `f6a7b8c9d0e1`) guarda o logo como **data URI** (imagem encolhida no navegador via canvas; sem Storage/multipart — migra p/ Supabase Storage no futuro sem mudar a coluna). Form de organização virou **modal** reusável (criar/editar: nome + logo com preview e "remover"); `components/avatar-org.tsx` (logo ou inicial) na lista de organizações e no rodapé da sidebar. Validação no cérebro: só `data:image/`, com teto de tamanho.
+
 ## FASE — Implantação em produção
 Railway, domínio definitivo, teste de ponta a ponta. **Pré-requisito da Mensageria:** é aqui que nasce a **URL pública HTTPS** de que o webhook do WhatsApp precisa.
 
