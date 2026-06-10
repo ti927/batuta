@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   Activity,
   AlertTriangle,
@@ -150,6 +151,7 @@ export function CriacaoCliente({
           ? { ...t, automacao: { ...t.automacao, ativa: !ativo } }
           : t,
       );
+      toast.success(!ativo ? "Time ativado" : "Time em repouso");
     } catch (e) {
       setErro(traduzirErroParede(e));
     } finally {

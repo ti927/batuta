@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   Activity,
   Bot,
@@ -25,6 +26,7 @@ import {
 
 import { FormularioAgente } from "@/components/formulario-agente";
 import { FormularioInstrumento } from "@/components/formulario-instrumento";
+import { Rise } from "@/components/rise";
 import { RobotFace } from "@/components/robot-face";
 import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
@@ -131,6 +133,7 @@ export function DashboardCliente({
 
   return (
     <main className="mx-auto w-full max-w-[1000px] px-5 py-8 sm:px-8">
+      <Rise>
       {/* Cabeçalho */}
       <div className="flex flex-wrap items-start gap-4">
         <div className="min-w-60 flex-1">
@@ -370,6 +373,8 @@ export function DashboardCliente({
           ))}
         </div>
       )}
+
+      </Rise>
 
       {/* Criar/editar instrumento */}
       {instrAberto && (
@@ -687,6 +692,7 @@ function DrawerAgente({
     setErro(null);
     try {
       await api.delete(`/agentes/${agente.id}`);
+      toast.success("Agente removido");
       onFechar();
       router.refresh();
     } catch (e) {
@@ -738,6 +744,7 @@ function DrawerAgente({
               time={time}
               agente={agente}
               onSalvo={() => {
+                toast.success(criando ? "Agente criado" : "Agente salvo");
                 if (criando) onFechar();
                 else setEditando(false);
                 router.refresh();
@@ -913,6 +920,7 @@ function DrawerInstrumento({
     setErro(null);
     try {
       await api.delete(`/instrumentos/${instrumento.id}`);
+      toast.success("Instrumento removido");
       onFechar();
       router.refresh();
     } catch (e) {
@@ -964,6 +972,7 @@ function DrawerInstrumento({
             instrumento={instrumento}
             tipos={tipos}
             onSalvo={() => {
+              toast.success(criando ? "Instrumento criado" : "Instrumento salvo");
               onFechar();
               router.refresh();
             }}
