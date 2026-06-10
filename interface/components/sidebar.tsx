@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 
+import { AvatarOrg } from "@/components/avatar-org";
 import { SimboloBatuta } from "@/components/logo";
 import { criarClienteNavegador } from "@/lib/supabase/cliente-navegador";
 import { podeAdmin } from "@/lib/permissoes";
@@ -206,13 +207,7 @@ export function Sidebar({
               onClick={() => organizacoes.length > 1 && setSeletorAberto((v) => !v)}
               className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-white/[0.07]"
             >
-              <span
-                className="flex size-6 shrink-0 items-center justify-center rounded-md text-[11px] font-medium text-[#0B2B27]"
-                style={{ background: "linear-gradient(135deg,#3DD8C3,#6D4AFF)" }}
-              >
-                {/* primeiro code point (não quebra emoji em meio surrogate) */}
-                {([...org.nome][0] ?? "?").toUpperCase()}
-              </span>
+              <AvatarOrg nome={org.nome} logoUrl={org.logo_url} />
               <span className="min-w-0 flex-1 truncate text-[13px] text-[#C9C6DE]">
                 {org.nome}
               </span>
@@ -227,11 +222,16 @@ export function Sidebar({
                     key={o.id}
                     type="button"
                     onClick={() => trocarOrg(o.id)}
-                    className={`block w-full truncate px-3 py-1.5 text-left text-[13px] transition-colors hover:bg-white/[0.07] ${
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] transition-colors hover:bg-white/[0.07] ${
                       o.id === orgAtiva ? "text-white" : "text-[#C9C6DE]"
                     }`}
                   >
-                    {o.nome}
+                    <AvatarOrg
+                      nome={o.nome}
+                      logoUrl={o.logo_url}
+                      className="size-5 text-[10px]"
+                    />
+                    <span className="min-w-0 flex-1 truncate">{o.nome}</span>
                   </button>
                 ))}
               </div>

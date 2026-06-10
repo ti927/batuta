@@ -8,23 +8,49 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Papel = Literal["lider", "agente"]
 
 # ───────────────────────── Organizações ─────────────────────────
+
+# Logo guardado como data URI (a imagem é encolhida no navegador). Teto generoso:
+# ~750 KB em base64 — um logo de 128px cabe com folga; barra payload abusivo.
+LOGO_MAX_CHARS = 1_000_000
+
+
+def _validar_logo(valor: str | None) -> str | None:
+    if valor is None:
+        return None
+    if not valor.startswith("data:image/"):
+        raise ValueError("O logo deve ser um data URI de imagem (data:image/...).")
+    if len(valor) > LOGO_MAX_CHARS:
+        raise ValueError("Imagem grande demais; reduza o logo.")
+    return valor
 
 
 class OrganizacaoCriar(BaseModel):
     """Dados para criar uma organização."""
 
     nome: str = Field(min_length=1, max_length=200)
+    logo_url: str | None = Field(default=None)
+
+    @field_validator("logo_url")
+    @classmethod
+    def _logo(cls, v: str | None) -> str | None:
+        return _validar_logo(v)
 
 
 class OrganizacaoEditar(BaseModel):
     """Dados para editar uma organização."""
 
     nome: str = Field(min_length=1, max_length=200)
+    logo_url: str | None = Field(default=None)
+
+    @field_validator("logo_url")
+    @classmethod
+    def _logo(cls, v: str | None) -> str | None:
+        return _validar_logo(v)
 
 
 class ModeloCriadoraEditar(BaseModel):
@@ -43,6 +69,7 @@ class OrganizacaoLer(BaseModel):
     nome: str
     dono_id: uuid.UUID
     modelo_criadora: str | None = None
+    logo_url: str | None = None
     criado_em: datetime
     atualizado_em: datetime
 

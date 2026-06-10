@@ -93,6 +93,8 @@ export type Organizacao = {
   dono_id: string;
   // Modelo da IA de conversa desta org; null = padrão (Opus).
   modelo_criadora: string | null;
+  // Logo da organização como data URI; null = sem logo (mostra a inicial).
+  logo_url: string | null;
   criado_em: string;
   atualizado_em: string;
 };
