@@ -153,6 +153,8 @@ Um fluxo precisa saber **pausar, fazer uma pergunta a um humano, e retomar de on
 - **Portão de aprovação** — um humano precisa autorizar antes de um passo importante ("posso publicar este artigo?").
 - **Confirmação de baixa confiança** — o agente não tem certeza do que entendeu e confirma antes de agir ("li 'R$ 1.500' no recibo — está correto?"), em vez de errar silenciosamente.
 
+> **Estado de implementação:** o motor de pausar/perguntar/retomar está pronto e validado, hoje respondido **na tela do Batuta**. O **canal WhatsApp do Líder** (§10) — onde essa pergunta sai e a resposta volta pelo WhatsApp — é entregue na **Fase de Mensageria** (ver `BUILD-PLAN.md`); é um adaptador de canal na borda, sem mexer neste motor.
+
 ### Bifurcação por intenção
 
 Um fluxo pode ter ramos. O agente classifica o tipo da tarefa e segue um caminho ou outro — ex.: se a mensagem é sobre agenda, consulta o sistema de agendamento; se é sobre exame, envia as instruções do exame.

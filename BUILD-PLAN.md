@@ -379,7 +379,7 @@ Esta é a fase mais difícil do projeto. Vá devagar, tarefa por tarefa, verific
 > - O interruptor `ativa` liga/desliga gatilhos automáticos; o botão manual roda
 >   sempre (é a forma de testar qualquer fluxo na Etapa 1).
 >
-> **Decisão de produto registrada:** a "pausa para humano" é por **interruptor por agente** (não um agente fixo), respondida na tela no core; o canal WhatsApp (via Líder, §10) fica para a Etapa 2. O comportamento do agente vem 100% dos markdowns (sem preâmbulo escondido).
+> **Decisão de produto registrada:** a "pausa para humano" é por **interruptor por agente** (não um agente fixo), respondida na tela no core; o canal WhatsApp (via Líder, §10) fica para a Etapa 2 — **formalizado na `FASE — Mensageria (WhatsApp)` no fim deste documento** (não estava em nenhuma fase concreta até 2026-06-09). O comportamento do agente vem 100% dos markdowns (sem preâmbulo escondido).
 >
 > **Para retomar:** subir o cérebro (`uv run uvicorn main:app --port 8000` em `cerebro/`, com `uv` no PATH) e a interface (`npm run dev` em `interface/`). A `ANTHROPIC_API_KEY` já está no `cerebro/.env` (fora do git).
 
@@ -832,21 +832,38 @@ Ajustes nascidos do uso real do maestro (montar/testar times pela IA criadora). 
 - **UX da tela de conversa** (interface): o casco do app trava em `h-dvh` e a área abaixo do cabeçalho rola por dentro — a conversa não estica mais o documento; chat e canvas rolam por coluna. O campo "Responder à IA" virou textarea que cresce com as linhas (Enter envia, Shift+Enter quebra).
 - **Aprovação humana por instrumento, não fixa por tipo** (cérebro + interface, merge `3697e74`): antes todo `chamar_api_rest`/`banco_sql`/`conectar_mcp` era irreversível por tipo e exigia portão — inviável para **consultas**. Agora a irreversibilidade é **resolvida por instância** (`instrumentos.exige_portao(tipo, config, override)`): REST deriva do `metodo` (GET=leitura, sem portão; POST/PUT/DELETE=escrita, com portão); SQL ganhou `somente_leitura` (o instrumento **recusa** escrita → sem portão); webhook-saída/WordPress seguem sempre com portão. Interruptor por instância `instrumentos.exige_aprovacao` (coluna nullable, migração `d4e5f6a7b8c9`: NULL=auto/True=sempre/False=nunca) sobrepõe a derivação — pode liberar até uma escrita, com aviso na UI + auditoria `instrumento.aprovacao_alterada`. A parede de ativação e a fotografia da criadora leem por instância; o prompt da IA só põe portão em ESCRITA. **Motor de orquestração intocado.** 146 testes pytest. (Ver `PRODUTO.md` §19.) **Pegadinha:** times criados ANTES disto têm o portão preso na cadeia — pedir à IA para remover quando for só consulta.
 
-## FASE de Design hi-fi — realizar o handoff por inteiro  🚧 EM ANDAMENTO (2026-06-09)
-A Fase 8 aplicou só a MARCA (cores/fontes/tokens) e as Fases 9/10 entregaram as telas AI-first de forma funcional. Falta realizar o **handoff hi-fi** (`docs/design/`, fonte da verdade visual): o shell, os dashboards ricos e os refinos de tela. Feito **tela a tela**.
+## FASE de Design hi-fi — realizar o handoff por inteiro  ✅ CONCLUÍDA (2026-06-09)
+A Fase 8 aplicou só a MARCA (cores/fontes/tokens) e as Fases 9/10 entregaram as telas AI-first de forma funcional. Esta fase realizou o **handoff hi-fi** (`docs/design/`, fonte da verdade visual): o shell, os dashboards ricos e os refinos de tela. Feito **tela a tela**, cada passo validado ao vivo pelo maestro e mergeado em `main` (até `15b388a`).
 
 **Reconciliar com o pivô:** o handoff é anterior ao pivô (mostra "modo rascunho + Aprovar e criar time"). Onde conflitar com a conversa eterna sobre o time real, **vale o paradigma atual** — o design é referência VISUAL, não de fluxo.
 
 Ordem de execução (handoff §13, reconciliada):
-1. **Shell de sidebar** (README §5) + header de conteúdo (breadcrumb) + gating por papel — substitui o header simples atual pela sidebar escura definitiva (246px, `#1A1730`): Criar com a IA, Início, Times (expansível), Execuções, Biblioteca, Uso e custos; Acesso, Chaves, Configurações; seletor de organização + chip do usuário + Sair. **← EM ANDAMENTO (branch `design-shell-sidebar`).**
-2. **Dashboard do time** (`/times/[id]`, hoje só lista de agentes → hub rico): stat cards (próxima execução / aguardando você / custo no mês), cadeia visual, execuções recentes, grid de agentes (`app-dashboard.jsx`).
-3. **Inspeção de execução** (`app-execution.jsx`): timeline com dots de estado, painel de aprovação com card do rascunho, legenda das 3 formas de espera-por-humano, toast.
-4. **Painel da IA companheira** em 3 camadas — estado atual / últimas execuções / decisões lembradas (`app-companion.jsx` §6.6); hoje há só uma seção de memória.
-5. **Telas placeholder reais:** Biblioteca, Uso e custos, Configurações (§6.7).
-6. **Polimento transversal:** animações `rise` (framer-motion, DS §13), toasts (sonner), assets de marca (mascote/lockup/favicon).
+1. **Shell de sidebar** (README §5) + header de conteúdo (breadcrumb) + gating por papel — substitui o header simples pela sidebar escura definitiva (246px, `#1A1730`). ✅
+2. **Dashboard do time** (`/times/[id]` → hub rico): stat cards (gatilho / aguardando você / custo), cadeia visual, execuções recentes, grid de agentes. ✅ Inclui a **edição pelo dashboard** (decisão do maestro, abordagem híbrida): drawer do agente vira ver↔editar + cinto + criar/remover, e os **instrumentos editáveis num painel** — `components/formulario-agente.tsx` e `formulario-instrumento.tsx` compartilhados; cadeia continua na tela cheia; "Ajustar com a IA" em destaque.
+3. **Inspeção de execução** (`app-execution.jsx`): timeline com dots de estado, passos expansíveis, painel de aprovação creme, legenda das 3 formas de espera, toast. ✅
+4. **Painel da IA companheira** em 3 camadas — estado atual / últimas execuções / decisões lembradas (§6.6). ✅
+5. **Telas placeholder reais:** Biblioteca, Uso e custos, Configurações (§6.7). ✅ (`area-em-breve.tsx`)
+6. **Polimento transversal:** animações `rise` (framer-motion, respeita reduzir-movimento), toasts (sonner), favicon a partir do símbolo. ✅
 
-## FASE final — Implantação em produção
-Railway, domínio definitivo, teste de ponta a ponta.
+## FASE — Implantação em produção
+Railway, domínio definitivo, teste de ponta a ponta. **Pré-requisito da Mensageria:** é aqui que nasce a **URL pública HTTPS** de que o webhook do WhatsApp precisa.
+
+## FASE — Mensageria (WhatsApp): o canal do Líder (§10)
+Hoje a espera-por-humano (pergunta / portão / confirmação) é respondida **na tela do Batuta** — a decisão que destravou o core (ver a nota do §382). Mas o `PRODUTO.md` §10 prevê que o **canal do Líder é o WhatsApp** (cada time com seu número; §111 o gatilho "mensagem recebida"; §126 transcrição de áudio; §14 modo intermediação). Esse canal foi adiado do core "para a Etapa 2", mas a reorganização do `MIGRACAO.md` (§4.1) não o recolheu em nenhuma das cinco fases — **esta fase fecha essa lacuna**.
+
+**Decisão de produto (registrada 2026-06-09):** o provedor padrão é o **WhatsApp Cloud API oficial (Meta)**. Motivo: o número é do cliente da consultoria e a operação real depende dele — a Cloud API é oficial, com mensagens-modelo e confiabilidade, **sem o risco de banimento** das soluções não-oficiais. **Alternativa só para piloto interno:** Evolution API (não-oficial, sobe rápido num número comum via QR; foi o que o projeto antigo usou) — aceitável para um teste, **não para clientes em produção**. A escolha pode ser revista antes de a fase começar.
+
+**Princípio (núcleo congelado):** isto é um **adaptador de canal na borda** — um gatilho de entrada novo + um serviço de envio. **Não toca no motor de orquestração nem na lógica de espera-por-humano**, que já existem e estão validados; só liga o WhatsApp às portas que já existem (`POST /webhooks/...` de entrada e `POST /execucoes/{id}/responder` de retomada).
+
+Escopo (detalhar em investigar/implementar/verificar ao executar):
+- **Pré-requisito:** webhook com **URL pública HTTPS** (a entrada do WhatsApp não chega em `localhost`) → esta fase **anda junto com / logo após a Implantação em produção**.
+- **Número por time** (§10): cadastrar o número de cada time e mapear número → time → Líder. Token do provedor e phone-number-id no **cofre** (reusa 7-B), por organização/time.
+- **Entrada:** webhook do provedor → cérebro → vira o gatilho "mensagem de WhatsApp recebida" (§111) → entra na cadeia pelo **Líder**, reusando o motor de execução/fila já validado. Remetente identificado pelo telefone (ex.: reembolso §168).
+- **Saída:** o Líder **envia** pelo WhatsApp — confirmação de recebimento e sinal de progresso em fluxos longos (§17/§21), perguntas e **portões de aprovação**. A espera que hoje é na tela ganha o **WhatsApp** como canal: a pergunta sai no WhatsApp e a resposta do humano retoma a execução pela porta `responder` que já existe.
+- **Áudio → texto** (§126): áudio recebido é transcrito antes de entrar na cadeia.
+- **UI:** "Conectar WhatsApp" por time + status conectado (o `DESIGN-SYSTEM.md` já tem o vocabulário).
+
+**Definition of Done:** uma mensagem real chega ao número de um time → o Líder processa e responde pelo WhatsApp; um fluxo com portão **pergunta no WhatsApp** e a resposta retoma a execução; um áudio recebido vira texto. Tudo sem tocar no motor de orquestração.
 
 ---
 

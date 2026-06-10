@@ -235,8 +235,17 @@ A Etapa 2 original tinha sete fases (6 a 12). Com as viradas, ela encolhe e se r
 - Demais tipos de instrumento previstos no `PRODUTO.md` §13 que ainda não foram implementados, entrando no mesmo encaixe já validado na Etapa 1.
 - Esta fase pode ser inserida onde fizer mais sentido na ordem — sugestão: entre 7 e 8, antes da identidade visual e da camada conversacional, pois enriquece o que essas podem usar.
 
+**Fase de Design hi-fi — realizar o handoff por inteiro** — CONCLUÍDA (2026-06-09)
+- Inserida na execução (não estava na lista original): a Fase 8 aplicou só a marca; esta realizou o handoff `docs/design/` tela a tela (shell de sidebar, dashboard rico + edição pelo dashboard, inspeção, painel da companheira em 3 camadas, placeholders, polimento). Detalhe no `BUILD-PLAN.md`.
+
+**Fase de Mensageria (WhatsApp) — o canal do Líder** — ADICIONADA (2026-06-09)
+- **Lacuna corrigida:** o `PRODUTO.md` §10 prevê o WhatsApp como o canal do Líder (cada time com seu número), mas o core adiou isso "para a Etapa 2" e esta reorganização original (as cinco fases acima) **não o recolheu** — caiu num vão. Esta fase fecha a lacuna.
+- É um **adaptador de canal na borda** (gatilho de entrada + envio de saída), reusando o motor de execução e a espera-por-humano já validados — **não mexe no núcleo congelado**.
+- **Decisão (2026-06-09):** provedor padrão = **WhatsApp Cloud API oficial (Meta)**; Evolution API só como piloto interno (risco de ban). Detalhe e Definition of Done no `BUILD-PLAN.md`.
+- **Depende da URL pública** da implantação → executar junto com / logo após a fase final.
+
 **Fase final — Implantação em produção**
-- Publicação no Railway, domínio definitivo, teste de ponta a ponta.
+- Publicação no Railway, domínio definitivo, teste de ponta a ponta. Dá a URL pública HTTPS de que a Mensageria (WhatsApp) precisa.
 
 ### 4.2. O que sai da Etapa 2 original
 
