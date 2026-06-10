@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -35,9 +36,16 @@ async def ciclo_de_vida(app: FastAPI):
 
 app = FastAPI(title="Batuta — Cérebro", lifespan=ciclo_de_vida)
 
+# Origens do navegador autorizadas a chamar o cérebro (CORS). A interface fala com
+# o cérebro a partir do navegador, então a origem dela precisa estar aqui. Vem de
+# INTERFACE_ORIGINS (CSV) — em produção, a URL da interface no Railway; no dev, o
+# default localhost:3000.
+_origens = os.environ.get("INTERFACE_ORIGINS", "http://localhost:3000")
+ORIGENS_PERMITIDAS = [o.strip() for o in _origens.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=ORIGENS_PERMITIDAS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
