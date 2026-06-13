@@ -864,7 +864,7 @@ O Batuta está **no ar em produção**, no domínio próprio, com HTTPS. **Pré-
 
 **Limitação conhecida (follow-up):** `gerar_pdf`/`gerar_imagem` gravam em disco efêmero do Railway → migrar p/ Supabase Storage depois.
 
-## FASE — Canais de mensageria (Telegram primeiro; WhatsApp depois)  🚧 EM ANDAMENTO (8/10 passos, branch `canais-mensageria`)
+## FASE — Canais de mensageria (Telegram primeiro; WhatsApp depois)  🚧 EM ANDAMENTO (9/10 passos, branch `canais-mensageria`)
 Hoje a espera-por-humano (pergunta / portão / confirmação) é respondida **na tela do Batuta**. O `PRODUTO.md` §10 prevê que o **Líder conversa por mensageria** (cada time com seu canal; §111 gatilho "mensagem recebida"; §126 áudio; §14 intermediação). Esta fase fecha essa lacuna.
 
 **REORIENTAÇÃO (2026-06-13):** em vez de amarrar o Líder a um WhatsApp fixo, **canal de mensageria virou peça PLUGÁVEL** (igual aos instrumentos), começando pelo **Telegram** (grátis, bot em minutos pelo BotFather, **sem servidor próprio**, sem burocracia da Meta). A fundação nasce pronta para o WhatsApp encaixar depois como "mais um canal". **Isto SUPERA a decisão anterior** (Evolution API / WhatsApp-primeiro por QR): o WhatsApp passa a ser uma fase futura, sobre esta fundação, e o provedor dele (Evolution vs Cloud API) é decisão de lá. Documento de decisão: **`docs/CANAL-MENSAGERIA-PLANO.md`**.
@@ -882,7 +882,7 @@ Hoje a espera-por-humano (pergunta / portão / confirmação) é respondida **na
 6. ✅ **Modo A**: retomada extraída para `disparo.retomar_execucao` (reusada por tela e canal); gancho de pausa (`_notificar_pausa`/`_alvo_da_pausa`) manda a pergunta pelo canal e grava a espera; webhook casa a resposta e retoma.
 7. ✅ **Modo B**: gatilho `mensagem_recebida` (config `{canal_id}`); contato conhecido + automação ativa → `criar_execucao` carimbando a origem → fila. Identidade desconhecida = ignora+loga.
 8. ✅ **Imagem na entrada** (recibo): `storage.py` (Supabase Storage, bucket privado `mensagens`); Modo B baixa a foto do Telegram → Storage → entrada; `rodar_execucao` baixa → data URI → contextvar `usar_imagem_entrada` (consumido só pelo 1º agente); `agente.py` monta `content` multimodal. Caminho só-texto intacto.
-9. ⏳ **Acabamento + inspeção:** mostrar a conversa do canal (`mensagens_canal`) na tela de inspeção da execução; mensagens de erro amigáveis. (Bordas — desconhecido/ambíguo/idempotência — já feitas e testadas.)
+9. ✅ **Acabamento + inspeção:** a tela de inspeção mostra a conversa do canal (`mensagens_canal`) em balões recebido/enviado (`ExecucaoComPassos.mensagens_canal`). Bordas (desconhecido/ambíguo/idempotência) feitas e testadas nos Passos 5–7.
 10. ⏳ **Teste integrado AO VIVO:** Modo A e Modo B no Telegram real. **Exige deploy** (merge `canais-mensageria` → `main` → Railway reconstrói `api.batuta.team`) + registrar o webhook no bot (o Telegram só entrega a URL pública HTTPS).
 
 **Pré-requisitos já resolvidos:** bot `@TesteBatutaBot` criado (token passou pelo chat → **regenerar no BotFather** antes do uso real, e cadastrar só no cofre); bucket privado `mensagens` criado no Supabase Storage; URL pública `https://api.batuta.team` existe; `CEREBRO_PUBLIC_URL` precisa estar no ambiente do cérebro em produção. Identidade de teste do maestro: chat_id `5175352629`.
