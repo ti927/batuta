@@ -20,8 +20,8 @@ from canais.base import (
     tipos_disponiveis,
 )
 
-# Os tipos concretos (Telegram etc.) se registram aqui ao serem importados — a
-# implementação concreta entra nos próximos passos.
+# Os tipos concretos se registram ao serem importados (efeito colateral).
+from canais import telegram  # noqa: E402, F401  (efeito colateral: registro)
 
 __all__ = [
     "Anexo",

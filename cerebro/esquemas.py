@@ -504,3 +504,73 @@ class ConversaCriacaoLer(ConversaCriacaoResumo):
     mensagens: list
     time: dict | None = None
     memoria: list = []
+
+
+# ──────────────────── Canais de mensageria (Telegram) ────────────────────────
+
+
+class CanalCriar(BaseModel):
+    """Cadastra um canal de mensageria. `config` carrega os campos do tipo —
+    inclusive os SECRETOS (ex.: o token do Telegram), que são cifrados no cofre e
+    nunca reexibidos. O `tipo` é fixo após a criação."""
+
+    tipo: str = Field(min_length=1, max_length=50)
+    nome: str = Field(min_length=1, max_length=200)
+    config: dict = Field(default_factory=dict)
+
+
+class CanalEditar(BaseModel):
+    """Edita um canal: nome, config (campo secreto em branco preserva o atual) e
+    ativo. O tipo não muda."""
+
+    nome: str = Field(min_length=1, max_length=200)
+    config: dict = Field(default_factory=dict)
+    ativo: bool = True
+
+
+class CanalLer(BaseModel):
+    """Um canal como a API o devolve. `config` traz só os campos não-secretos;
+    `segredos` traz, por campo secreto guardado, só os 4 últimos dígitos — o valor
+    nunca é reexibido."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organizacao_id: uuid.UUID
+    tipo: str
+    nome: str
+    config: dict | None
+    segredos: dict[str, str] = Field(default_factory=dict)
+    ativo: bool
+    criado_em: datetime
+    atualizado_em: datetime
+
+
+class IdentidadeCanalCriar(BaseModel):
+    """Vincula uma pessoa a um identificador no canal (o chat_id do Telegram).
+    `usuario_id` liga à conta do Batuta quando a pessoa é membro (opcional)."""
+
+    identificador_externo: str = Field(min_length=1, max_length=200)
+    rotulo: str | None = Field(default=None, max_length=200)
+    usuario_id: uuid.UUID | None = None
+
+
+class IdentidadeCanalEditar(BaseModel):
+    """Edita o rótulo / o vínculo de usuário de uma identidade. O identificador
+    externo não muda (é a chave do contato no canal)."""
+
+    rotulo: str | None = Field(default=None, max_length=200)
+    usuario_id: uuid.UUID | None = None
+
+
+class IdentidadeCanalLer(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organizacao_id: uuid.UUID
+    canal_id: uuid.UUID
+    identificador_externo: str
+    rotulo: str | None
+    usuario_id: uuid.UUID | None
+    criado_em: datetime
+    atualizado_em: datetime

@@ -335,6 +335,33 @@ export type ChaveApiLer = {
   atualizado_em: string;
 };
 
+// ───────────────────── Canais de mensageria (Telegram) ─────────────────────
+// Um canal pende da organização. O segredo (token) NUNCA volta: `segredos` traz,
+// por campo guardado, só os 4 últimos dígitos. `config` traz só o não-secreto.
+
+export type Canal = {
+  id: string;
+  organizacao_id: string;
+  tipo: string; // "telegram" | (futuro) "whatsapp"
+  nome: string;
+  config: Record<string, unknown> | null;
+  segredos: Record<string, string>;
+  ativo: boolean;
+  criado_em: string;
+  atualizado_em: string;
+};
+
+export type IdentidadeCanal = {
+  id: string;
+  organizacao_id: string;
+  canal_id: string;
+  identificador_externo: string;
+  rotulo: string | null;
+  usuario_id: string | null;
+  criado_em: string;
+  atualizado_em: string;
+};
+
 // ───────────────────── IA criadora ─────────────────────
 // A IA opera sobre o TIME REAL (não há mais rascunho). Em cada turno — e na
 // conversa — vem a FOTOGRAFIA do time para o canvas desenhar. Espelha
