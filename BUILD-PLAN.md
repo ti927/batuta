@@ -889,6 +889,17 @@ Hoje a espera-por-humano (pergunta / portão / confirmação) é respondida **na
 
 **Definition of Done:** escanear/cadastrar o canal conecta o time; um fluxo com portão **pergunta no Telegram** e a resposta retoma a execução (Modo A); uma mensagem **inicia um fluxo** (Modo B); uma foto de recibo é lida pelo agente. Tudo sem tocar no motor. **WhatsApp e áudio→texto ficam para fases futuras sobre esta fundação.**
 
+## FASE — WhatsApp: mais um canal sobre a fundação (§10)  📋 PLANEJADA (depois da fundação de canais)
+O WhatsApp **está no plano** desde sempre (`docs/CANAL-MENSAGERIA-PLANO.md` §7) — só entra **depois** do Telegram, porque o Telegram prova a mecânica difícil (a resposta voltar e casar com a execução, Modos A/B) de graça e sem burocracia. Com a **abstração de Canal** já pronta e o roteamento operando sobre o formato normalizado, adicionar WhatsApp é, em essência, **escrever um novo `TipoCanal`** (`cerebro/canais/whatsapp.py`) — o `enviar`/`normalizar`/`baixar_arquivo` do provedor — sem mexer no roteamento, no motor nem nas telas (a coluna `canais.tipo` já aceita `"whatsapp"`).
+
+Escopo e decisões desta fase (quando rodar):
+- **Provedor (decisão adiada para cá):** **Cloud API oficial da Meta** (robusto, sem risco de ban, mas com burocracia: Meta Business, verificação, número, mensagens-modelo aprovadas, **janela de 24h**) **ou** **Evolution API** (não-oficial, vínculo por QR sem fricção, risco de ban → número dedicado). A escolha depende do apetite a risco do cliente; a fundação serve aos dois.
+- **Hospedagem:** Cloud API não precisa de servidor; Evolution exige um container (ex.: no Railway).
+- **Janela de 24h (Cloud API):** tratar a regra de só poder iniciar conversa com template aprovado — anotada como caso de borda específico do WhatsApp (não afeta Telegram).
+- **Áudio → texto** (§126) e **outros tipos de mídia** entram aqui ou logo depois, sobre o mesmo pipeline de anexos já criado para a imagem.
+
+**Definition of Done:** um número de WhatsApp conectado a um canal da organização; Modos A e B funcionando por WhatsApp exatamente como no Telegram, reusando todo o roteamento; sem tocar no motor.
+
 ## FASE — Biblioteca: a base de conhecimento da organização (§9)  📋 PLANEJADA — APROVADA, aguarda execução
 O `PRODUTO.md` §9 prevê a **Biblioteca** ("segundo cérebro") — mas ela **caiu num vão** e nunca foi implementada (hoje só há um placeholder em `/biblioteca`; não há tabela). O maestro **revisou o conceito**: é uma **base de conhecimento da ORGANIZAÇÃO inteira** (todos os times acessam, não é por-time) de **documentos gerais** (PDF, Word, planilhas, texto — não só markdown), que os agentes **consultam** durante a execução. Esta fase fecha essa lacuna. A decisão arquitetural está fechada em **`docs/BIBLIOTECA-DECISAO.md`** e o pano de fundo técnico em **`docs/ARQUITETURA.md`**; o **plano de implementação detalhado (10 passos) está aprovado** e aguarda o sinal do maestro para começar.
 
