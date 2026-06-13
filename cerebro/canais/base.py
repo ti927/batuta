@@ -19,6 +19,12 @@ from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field
 
 
+class FalhaCanal(Exception):
+    """O canal não conseguiu operar (provedor fora do ar, token inválido, rede
+    oscilou). Distinta de uma resposta legítima do provedor — é uma falha de
+    comunicação que a borda transforma em erro visível, sem morrer em silêncio."""
+
+
 class Anexo(BaseModel):
     """Um anexo de uma mensagem recebida, normalizado e independente do provedor.
 
