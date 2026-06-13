@@ -72,7 +72,9 @@ def test_webhook_e_idempotente(cliente, sessao, dados):
     url = f"/canais/{canal.id}/webhook"
     primeira = cliente.post(url, json=_update(777))
     segunda = cliente.post(url, json=_update(777))  # mesmo update_id
-    assert "mensagem_id" in primeira.json()
+    # A 1ª é aceita (aqui sem identidade/automação → ignorada, mas registrada);
+    # a 2ª, com o mesmo update_id, é deduplicada — independe do roteamento.
+    assert primeira.json()["ok"] is True
     assert segunda.json().get("duplicado") is True
     linhas = sessao.scalars(
         select(MensagemCanal).where(MensagemCanal.canal_id == canal.id)

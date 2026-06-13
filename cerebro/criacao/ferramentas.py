@@ -108,7 +108,7 @@ def _uuid(valor: str) -> uuid.UUID | None:
 # Tipos de gatilho e o formato EXATO da config de agendamento que o `agendador`
 # espera. A IA erra por não conhecer este formato — por isso ele é documentado
 # aqui, injetado no prompt e validado em definir_gatilho.
-TIPOS_GATILHO = ("manual", "agendamento", "webhook")
+TIPOS_GATILHO = ("manual", "agendamento", "webhook", "mensagem_recebida")
 FORMATO_GATILHO = (
     "Tipos de gatilho:\n"
     "- 'manual': sem config. Você dispara quando quiser.\n"
@@ -116,7 +116,10 @@ FORMATO_GATILHO = (
     "- 'agendamento': roda no relógio. config = {frequencia: 'diaria'|'semanal'|"
     "'mensal', hora: 0-23, minuto: 0-59, dia_semana: 0-6 (0=segunda, SÓ p/ semanal), "
     "dia_mes: 1-31 (SÓ p/ mensal), entrada?: texto que vira a entrada do fluxo}. "
-    "Ex. semanal: {frequencia:'semanal', dia_semana:0, hora:8, minuto:0}."
+    "Ex. semanal: {frequencia:'semanal', dia_semana:0, hora:8, minuto:0}.\n"
+    "- 'mensagem_recebida': uma mensagem que chega por um canal (ex.: Telegram) "
+    "inicia o fluxo. config = {canal_id: '<id do canal da organização>'}. A "
+    "mensagem vira a entrada do fluxo."
 )
 
 
@@ -131,6 +134,10 @@ def _validar_gatilho(tipo: str, config: dict) -> str | None:
     """Devolve uma mensagem de erro se o gatilho estiver malformado (None = ok)."""
     if tipo not in TIPOS_GATILHO:
         return f"Gatilho desconhecido: '{tipo}'. Use um de: {', '.join(TIPOS_GATILHO)}."
+    if tipo == "mensagem_recebida":
+        if not str(config.get("canal_id") or "").strip():
+            return "Gatilho 'mensagem_recebida' exige 'canal_id' (o canal da organização)."
+        return None
     if tipo != "agendamento":
         return None
     freq = config.get("frequencia")

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 import fila
 from canais import servico as servico_canal
-from modelos import Automacao, Canal, Execucao
+from modelos import Automacao, Canal, Execucao, IdentidadeCanal, Time
 from orquestracao.disparo import criar_execucao, retomar_execucao
 from sessao import obter_sessao
 
@@ -111,6 +111,39 @@ async def receber_canal(
         retomar_execucao(sessao, execucao, msg.texto or "")
         return {"ok": True, "modo": "A", "execucao_id": str(execucao.id)}
 
-    # Sem pausa correspondente → Modo B (iniciar fluxo novo) entra no Passo 7.
+    # Modo B: iniciar um fluxo novo. Só para CONTATO CONHECIDO (cadastrado em
+    # identidades_canal). Identidade desconhecida → ignora, mas fica logada.
+    identidade = sessao.scalars(
+        select(IdentidadeCanal).where(
+            IdentidadeCanal.canal_id == canal.id,
+            IdentidadeCanal.identificador_externo == msg.identificador_externo,
+        )
+    ).first()
+    if identidade is None:
+        sessao.commit()
+        return {"ok": True, "ignorado": "identidade desconhecida"}
+
+    # Há automação ativa da organização com gatilho 'mensagem_recebida' ligada a
+    # este canal? Se sim, a mensagem inicia o fluxo (carimba a origem para a
+    # resposta voltar a quem mandou — Modo A no futuro da mesma execução).
+    auto = sessao.scalars(
+        select(Automacao)
+        .join(Time, Automacao.time_id == Time.id)
+        .where(
+            Time.organizacao_id == canal.organizacao_id,
+            Automacao.tipo_gatilho == "mensagem_recebida",
+            Automacao.ativa.is_(True),
+            Automacao.configuracao_gatilho["canal_id"].astext == str(canal.id),
+        )
+    ).first()
+    if auto is None:
+        sessao.commit()
+        return {"ok": True, "ignorado": "sem automação para este canal"}
+
+    execucao = criar_execucao(sessao, auto, msg.texto or "")
+    execucao.origem_canal_id = canal.id
+    execucao.origem_identificador = msg.identificador_externo
+    registro.execucao_id = execucao.id
     sessao.commit()
-    return {"ok": True, "mensagem_id": str(registro.id)}
+    fila.enfileirar()
+    return {"ok": True, "modo": "B", "execucao_id": str(execucao.id)}
