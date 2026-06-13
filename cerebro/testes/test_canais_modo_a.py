@@ -119,6 +119,21 @@ def test_resposta_do_telegram_retoma_execucao_pausada(cliente, sessao, dados):
     assert entrada is not None and entrada.execucao_id == execucao.id
 
 
+def test_inspecao_traz_a_conversa_do_canal(cliente, entrar, sessao, dados):
+    canal, _auto, execucao = _cenario_pausa(sessao, dados)
+    # A resposta pelo canal gera a mensagem de entrada ligada à execução.
+    cliente.post(
+        f"/canais/{canal.id}/webhook",
+        json={"update_id": 9100, "message": {"chat": {"id": "5175"}, "text": "aprovado"}},
+    )
+    # A inspeção (GET /execucoes/{id}) deve trazer a conversa do canal.
+    entrar(dados["admin"])
+    r = cliente.get(f"/execucoes/{execucao.id}")
+    assert r.status_code == 200
+    msgs = r.json()["mensagens_canal"]
+    assert any(m["direcao"] == "entrada" and m["texto"] == "aprovado" for m in msgs)
+
+
 def test_mensagem_de_outro_contato_nao_retoma(cliente, sessao, dados):
     canal, _auto, execucao = _cenario_pausa(sessao, dados)
     # Mensagem de um chat_id diferente do esperado → não casa (sem Modo A).

@@ -25,6 +25,7 @@ from esquemas import (
     ExecucaoComPassos,
     ExecucaoLer,
     ExecucaoNaLista,
+    MensagemCanalLer,
     PassoExecucaoLer,
     ResponderHumano,
 )
@@ -40,6 +41,7 @@ from modelos import (
     ConversaCriacao,
     Execucao,
     Membro,
+    MensagemCanal,
     Organizacao,
     PassoExecucao,
     Time,
@@ -180,11 +182,18 @@ def _montar_com_passos(sessao: Session, execucao: Execucao) -> ExecucaoComPassos
         .where(PassoExecucao.execucao_id == execucao.id)
         .order_by(PassoExecucao.ordem)
     ).all()
+    # Conversa do canal ligada à execução (Telegram etc.), em ordem cronológica.
+    mensagens = sessao.scalars(
+        select(MensagemCanal)
+        .where(MensagemCanal.execucao_id == execucao.id)
+        .order_by(MensagemCanal.criado_em)
+    ).all()
     base = ExecucaoLer.model_validate(execucao).model_dump()
     return ExecucaoComPassos(
         **base,
         passos=[PassoExecucaoLer.model_validate(p) for p in passos],
         uso=precos.resumir_uso(passos),
+        mensagens_canal=[MensagemCanalLer.model_validate(m) for m in mensagens],
     )
 
 

@@ -250,9 +250,19 @@ export type Execucao = {
   criado_em: string;
 };
 
+export type MensagemCanalLer = {
+  id: string;
+  direcao: "entrada" | "saida";
+  identificador_externo: string;
+  texto: string | null;
+  anexos: unknown[] | null;
+  criado_em: string;
+};
+
 export type ExecucaoComPassos = Execucao & {
   passos: PassoExecucao[];
   uso?: ResumoUso | null;
+  mensagens_canal?: MensagemCanalLer[];
 };
 
 // Execução na visão consolidada (gestão de execuções), com o nome da automação

@@ -318,12 +318,28 @@ class ExecucaoNaLista(ExecucaoLer):
     organizacao_id: uuid.UUID
 
 
+class MensagemCanalLer(BaseModel):
+    """Uma mensagem trocada por um canal (entrada/saída), para a inspeção mostrar
+    a conversa ligada à execução."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    direcao: str  # entrada | saida
+    identificador_externo: str
+    texto: str | None
+    anexos: list | None
+    criado_em: datetime
+
+
 class ExecucaoComPassos(ExecucaoLer):
     """Uma execução com seu rastro de passos, para a tela de inspeção."""
 
     passos: list[PassoExecucaoLer] = Field(default_factory=list)
     # Resumo de uso (tokens e custo aproximado) somado dos passos — Tarefa 5.4.
     uso: dict | None = None
+    # Conversa do canal ligada a esta execução (Telegram etc.), em ordem.
+    mensagens_canal: list[MensagemCanalLer] = Field(default_factory=list)
 
 
 # ───────────────── Identidade e acesso (Etapa 2, Fase 6) ─────────────────
