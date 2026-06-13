@@ -9,11 +9,12 @@ chama o lado da entrada.
 
 import uuid
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import canais as encaixe
 import segredos_canal
-from canais.base import FalhaCanal
+from canais.base import FalhaCanal, MensagemNormalizada
 from modelos import Canal, MensagemCanal
 
 
@@ -52,3 +53,47 @@ def enviar_pelo_canal(
     )
     sessao.flush()
     return resultado
+
+
+def normalizar_entrada(canal: Canal, payload: dict) -> MensagemNormalizada | None:
+    """Traduz o payload cru do provedor para o formato interno. None se o evento
+    não é uma mensagem que tratamos."""
+    tipo = encaixe.obter_tipo(canal.tipo)
+    if tipo is None:
+        raise FalhaCanal(f"Tipo de canal desconhecido: {canal.tipo!r}")
+    return tipo.normalizar(payload)
+
+
+def registrar_entrada(
+    sessao: Session, canal: Canal, msg: MensagemNormalizada
+) -> MensagemCanal | None:
+    """Registra a mensagem recebida no log, DEDUPLICANDO por (canal, id_externo).
+    Devolve a linha criada, ou None se o update já tinha sido processado
+    (idempotência: o Telegram reenvia o mesmo update)."""
+    ja = sessao.scalars(
+        select(MensagemCanal).where(
+            MensagemCanal.canal_id == canal.id,
+            MensagemCanal.id_externo == msg.id_externo,
+        )
+    ).first()
+    if ja is not None:
+        return None
+    registro = MensagemCanal(
+        organizacao_id=canal.organizacao_id,
+        canal_id=canal.id,
+        direcao="entrada",
+        identificador_externo=msg.identificador_externo,
+        texto=msg.texto,
+        anexos=[a.model_dump() for a in msg.anexos] or None,
+        id_externo=msg.id_externo,
+    )
+    sessao.add(registro)
+    sessao.flush()
+    return registro
+
+
+def registrar_webhook(sessao: Session, canal: Canal, url: str) -> None:
+    """Registra `url` como o webhook do canal no provedor (ex.: setWebhook do
+    Telegram), resolvendo o token do cofre."""
+    tipo, config = _config_com_segredos(sessao, canal)
+    tipo.configurar_webhook(config, url)

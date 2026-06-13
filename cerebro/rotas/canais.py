@@ -10,6 +10,7 @@ O token (e futuros segredos) é cifrado no cofre (`segredos_canal`), separado da
 últimos dígitos.
 """
 
+import os
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -20,6 +21,8 @@ import auditoria
 import canais as encaixe
 import segredos_canal
 from auth import usuario_atual
+from canais import servico as servico_canal
+from canais.base import FalhaCanal
 from esquemas import (
     CanalCriar,
     CanalEditar,
@@ -168,6 +171,39 @@ def remover_canal(
     )
     sessao.delete(canal)
     sessao.commit()
+
+
+@rotas.post("/organizacoes/{organizacao_id}/canais/{canal_id}/registrar-webhook")
+def registrar_webhook_canal(
+    organizacao_id: uuid.UUID,
+    canal_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Registra no provedor (ex.: setWebhook do Telegram) a URL pública por onde o
+    cérebro recebe as mensagens deste canal. Só admin. Exige `CEREBRO_PUBLIC_URL`
+    no ambiente (em produção, https://api.batuta.team). O Telegram só entrega a
+    uma URL HTTPS pública — não funciona apontando para localhost."""
+    organizacao_acessivel(sessao, usuario, organizacao_id, minimo="admin")
+    canal = _canal_da_org(sessao, organizacao_id, canal_id)
+    base = (os.environ.get("CEREBRO_PUBLIC_URL") or "").rstrip("/")
+    if not base:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "CEREBRO_PUBLIC_URL não está configurada no cérebro.",
+        )
+    url = f"{base}/canais/{canal.id}/webhook"
+    try:
+        servico_canal.registrar_webhook(sessao, canal, url)
+    except FalhaCanal as e:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="canal.webhook_registrado",
+        recurso_tipo="canal", recurso_id=canal.id, organizacao_id=organizacao_id,
+        detalhe={"url": url},
+    )
+    sessao.commit()
+    return {"ok": True, "url": url}
 
 
 # ───────────────────────────── Identidades ───────────────────────────────────

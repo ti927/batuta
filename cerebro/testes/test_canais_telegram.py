@@ -106,3 +106,53 @@ def test_servico_resolve_token_do_cofre_e_registra_saida(monkeypatch, sessao, da
     assert msg.direcao == "saida"
     assert msg.identificador_externo == "chat-123"
     assert msg.texto == "do cofre"
+
+
+# ───────────────────────── normalização da entrada ───────────────────────────
+
+
+def test_normalizar_mensagem_de_texto():
+    m = CanalTelegram().normalizar(
+        {"update_id": 100, "message": {"chat": {"id": 5175352629}, "text": "alou"}}
+    )
+    assert m is not None
+    assert m.identificador_externo == "5175352629"
+    assert m.texto == "alou"
+    assert m.id_externo == "100"
+    assert m.anexos == []
+
+
+def test_normalizar_foto_vira_anexo_imagem():
+    m = CanalTelegram().normalizar(
+        {
+            "update_id": 101,
+            "message": {
+                "chat": {"id": 9},
+                "caption": "meu recibo",
+                "photo": [
+                    {"file_id": "pequena", "width": 90},
+                    {"file_id": "grande", "width": 1280},
+                ],
+            },
+        }
+    )
+    assert m is not None
+    assert m.texto == "meu recibo"
+    assert len(m.anexos) == 1
+    assert m.anexos[0].tipo == "imagem"
+    assert m.anexos[0].ref == "grande"  # a maior resolução
+
+
+def test_normalizar_ignora_evento_sem_mensagem():
+    assert CanalTelegram().normalizar({"update_id": 1, "callback_query": {}}) is None
+    assert CanalTelegram().normalizar({"foo": "bar"}) is None
+
+
+def test_configurar_webhook_chama_setwebhook(monkeypatch):
+    monkeypatch.setattr(tg.httpx, "Client", _ClienteCaptura)
+    CanalTelegram().configurar_webhook(
+        ConfigTelegram(token="123:ABC"), "https://api.batuta.team/canais/x/webhook"
+    )
+    url, corpo = _ClienteCaptura.chamadas[-1]
+    assert url == "https://api.telegram.org/bot123:ABC/setWebhook"
+    assert corpo == {"url": "https://api.batuta.team/canais/x/webhook"}

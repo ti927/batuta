@@ -14,7 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 import fila
-from modelos import Automacao
+from canais import servico as servico_canal
+from modelos import Automacao, Canal
 from orquestracao.disparo import criar_execucao
 from sessao import obter_sessao
 
@@ -58,3 +59,36 @@ async def receber(
     execucao = criar_execucao(sessao, auto, entrada)
     fila.enfileirar()
     return {"execucao_id": str(execucao.id), "estado": execucao.estado}
+
+
+@rotas.post("/canais/{canal_id}/webhook")
+async def receber_canal(
+    canal_id: uuid.UUID,
+    request: Request,
+    sessao: Session = Depends(obter_sessao),
+):
+    """Entrada de um canal de mensageria (o Telegram chama isto a cada mensagem).
+
+    Público, idempotente e tolerante: o provedor espera 200 — qualquer coisa que
+    não tratamos (canal inativo, evento sem mensagem, update repetido) é ignorada
+    com 200 para não gerar reentrega. Aqui só NORMALIZA e REGISTRA; o roteamento
+    Modo A (resposta a execução pausada) e Modo B (inicia fluxo) entra nos Passos
+    6 e 7.
+    """
+    canal = sessao.get(Canal, canal_id)
+    if canal is None or not canal.ativo:
+        return {"ok": True, "ignorado": "canal desconhecido ou inativo"}
+    try:
+        payload = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return {"ok": True, "ignorado": "corpo não-JSON"}
+
+    msg = servico_canal.normalizar_entrada(canal, payload)
+    if msg is None:
+        return {"ok": True, "ignorado": "evento sem mensagem"}
+
+    registro = servico_canal.registrar_entrada(sessao, canal, msg)
+    if registro is None:
+        return {"ok": True, "duplicado": True}  # idempotência: update já processado
+    sessao.commit()
+    return {"ok": True, "mensagem_id": str(registro.id)}
