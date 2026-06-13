@@ -864,24 +864,41 @@ O Batuta está **no ar em produção**, no domínio próprio, com HTTPS. **Pré-
 
 **Limitação conhecida (follow-up):** `gerar_pdf`/`gerar_imagem` gravam em disco efêmero do Railway → migrar p/ Supabase Storage depois.
 
-## FASE — Mensageria (WhatsApp): o canal do Líder (§10)
-Hoje a espera-por-humano (pergunta / portão / confirmação) é respondida **na tela do Batuta** — a decisão que destravou o core (ver a nota do §382). Mas o `PRODUTO.md` §10 prevê que o **canal do Líder é o WhatsApp** (cada time com seu número; §111 o gatilho "mensagem recebida"; §126 transcrição de áudio; §14 modo intermediação). Esse canal foi adiado do core "para a Etapa 2", mas a reorganização do `MIGRACAO.md` (§4.1) não o recolheu em nenhuma das cinco fases — **esta fase fecha essa lacuna**.
+## FASE — Canais de mensageria (Telegram primeiro; WhatsApp depois)  🚧 EM ANDAMENTO (9/10 passos, branch `canais-mensageria`)
+Hoje a espera-por-humano (pergunta / portão / confirmação) é respondida **na tela do Batuta**. O `PRODUTO.md` §10 prevê que o **Líder conversa por mensageria** (cada time com seu canal; §111 gatilho "mensagem recebida"; §126 áudio; §14 intermediação). Esta fase fecha essa lacuna.
 
-**Decisão de produto (registrada 2026-06-09, revista no mesmo dia):** o provedor é o **Evolution API** (open-source, sobre o protocolo do WhatsApp Web/multi-dispositivo). **Motivo:** o vínculo é por **QR code, sem fricção** — o usuário abre "Aparelhos conectados" no WhatsApp e escaneia; usa **qualquer número**, sem burocracia da Meta. (O **Cloud API oficial NÃO faz QR** — exige conta Meta Business, registro de número, verificação e mensagens-modelo aprovadas; alta fricção. Por isso "QR sem fricção" ⇒ Evolution.) **Trade-off consciente:** Evolution é **não-oficial** → contra os termos do WhatsApp → **risco de banir o número**. Mitigações: número **dedicado por time**, uso humano (sem disparo em massa/spam), aquecer o número. Aceitável para ferramenta interna com conversas reais e volume modesto. **Cloud API fica como upgrade futuro** para clientes que exijam robustez oficial.
+**REORIENTAÇÃO (2026-06-13):** em vez de amarrar o Líder a um WhatsApp fixo, **canal de mensageria virou peça PLUGÁVEL** (igual aos instrumentos), começando pelo **Telegram** (grátis, bot em minutos pelo BotFather, **sem servidor próprio**, sem burocracia da Meta). A fundação nasce pronta para o WhatsApp encaixar depois como "mais um canal". **Isto SUPERA a decisão anterior** (Evolution API / WhatsApp-primeiro por QR): o WhatsApp passa a ser uma fase futura, sobre esta fundação, e o provedor dele (Evolution vs Cloud API) é decisão de lá. Documento de decisão: **`docs/CANAL-MENSAGERIA-PLANO.md`**.
 
-**Princípio (núcleo congelado):** isto é um **adaptador de canal na borda** — um gatilho de entrada novo + um serviço de envio. **Não toca no motor de orquestração nem na lógica de espera-por-humano**, que já existem e estão validados; só liga o WhatsApp às portas que já existem (`POST /webhooks/...` de entrada e `POST /execucoes/{id}/responder` de retomada).
+**Princípio (núcleo congelado):** tudo é **adaptador na BORDA**. O motor de orquestração (`cerebro/orquestracao/cadeia.py`) **não é tocado** — ele já pausa, retoma e é disparado por gatilho. A única extensão fora da borda é contida e aditiva (entrada multimodal no `agente.py`).
 
-Escopo (detalhar em investigar/implementar/verificar ao executar):
-- **Pré-requisito:** **URL pública HTTPS** (o webhook da Evolution → cérebro não chega em `localhost`; e a própria Evolution precisa ser hospedada) → esta fase **anda junto com / logo após a Implantação em produção**.
-- **Onboarding por QR (o coração do pedido):** na tela do time, **"Conectar WhatsApp"** → o cérebro cria/abre uma **instância Evolution** do time e pede o QR → a UI **mostra o QR** → o usuário escaneia → conectado. Status de conexão por polling/webhook da Evolution. **Um número por time = uma instância Evolution por time** (§10).
-- **Hospedagem da Evolution (sub-decisão para quando a fase rodar):** self-host (container Docker, ex.: no Railway, junto do cérebro) **ou** Evolution Cloud gerenciada.
-- **Segredos no cofre** (reusa 7-B): API key da Evolution + nome/token da instância, por organização/time.
-- **Entrada:** a Evolution chama um **webhook do cérebro** com a mensagem recebida → mapeia instância/número → time → automação do **Líder** → reusa `criar_execucao` + `fila.enfileirar()` (`cerebro/orquestracao/disparo.py`, padrão de `cerebro/rotas/webhooks.py`). Remetente identificado pelo telefone (ex.: reembolso §168).
-- **Saída:** serviço que chama a **API de envio da Evolution** — usado pelo **Líder** para confirmação de recebimento e sinal de progresso em fluxos longos (§17/§21), perguntas e **portões de aprovação**. A espera que hoje é na tela ganha o **WhatsApp** como canal: a pergunta sai pela Evolution e a resposta do humano retoma a execução pela porta `responder` que já existe.
-- **Áudio → texto** (§126): áudio recebido é transcrito antes de entrar na cadeia.
-- **UI:** "Conectar WhatsApp" por time (QR + status conectado); o `DESIGN-SYSTEM.md` já tem o vocabulário.
+**Dois modos de entrada:** **Modo A** — a resposta a uma execução pausada (reusa a espera-por-humano); **Modo B** — uma mensagem que inicia um fluxo novo (gatilho `mensagem_recebida`).
 
-**Definition of Done:** escanear o QR conecta o número do time; uma mensagem real chega ao Líder e ele responde pelo WhatsApp; um fluxo com portão **pergunta no WhatsApp** e a resposta retoma a execução; um áudio recebido vira texto. Tudo sem tocar no motor de orquestração.
+**Status dos 10 passos** (cada um com testes; suíte em **210 verdes**):
+1. ✅ Abstração de Canal (`cerebro/canais/base.py`: `TipoCanal` enviar/normalizar/configurar_webhook/baixar_arquivo + `MensagemNormalizada`/`Anexo` + registro auto-carregável, espelha o encaixe de instrumentos).
+2. ✅ Schema (migração `a7b8c9d0e1f2`, aplicada): `canais`, `identidades_canal`, `mensagens_canal` (log + idempotência por `(canal_id, id_externo)`), `segredos_canal` (cofre do token) + colunas aditivas em `execucoes` (`origem_canal_id`/`origem_identificador`; `aguardando_canal_id`/`aguardando_identificador`).
+3. ✅ Gestão: rotas CRUD de canais (admin) e identidades (operador+) com token no cofre (nunca reexibido) + tela `/organizacoes/[id]/canais` (link "Canais" na org).
+4. ✅ Saída pelo Telegram (`sendMessage`) + `canais/servico.enviar_pelo_canal` (resolve token, registra a saída).
+5. ✅ Webhook de entrada `POST /canais/{id}/webhook` (público, idempotente) + `normalizar` (texto, foto→anexo) + `setWebhook` (endpoint admin `registrar-webhook`, usa `CEREBRO_PUBLIC_URL`).
+6. ✅ **Modo A**: retomada extraída para `disparo.retomar_execucao` (reusada por tela e canal); gancho de pausa (`_notificar_pausa`/`_alvo_da_pausa`) manda a pergunta pelo canal e grava a espera; webhook casa a resposta e retoma.
+7. ✅ **Modo B**: gatilho `mensagem_recebida` (config `{canal_id}`); contato conhecido + automação ativa → `criar_execucao` carimbando a origem → fila. Identidade desconhecida = ignora+loga.
+8. ✅ **Imagem na entrada** (recibo): `storage.py` (Supabase Storage, bucket privado `mensagens`); Modo B baixa a foto do Telegram → Storage → entrada; `rodar_execucao` baixa → data URI → contextvar `usar_imagem_entrada` (consumido só pelo 1º agente); `agente.py` monta `content` multimodal. Caminho só-texto intacto.
+9. ✅ **Acabamento + inspeção:** a tela de inspeção mostra a conversa do canal (`mensagens_canal`) em balões recebido/enviado (`ExecucaoComPassos.mensagens_canal`). Bordas (desconhecido/ambíguo/idempotência) feitas e testadas nos Passos 5–7.
+10. ⏳ **Teste integrado AO VIVO:** Modo A e Modo B no Telegram real. **Exige deploy** (merge `canais-mensageria` → `main` → Railway reconstrói `api.batuta.team`) + registrar o webhook no bot (o Telegram só entrega a URL pública HTTPS).
+
+**Pré-requisitos já resolvidos:** bot `@TesteBatutaBot` criado (token passou pelo chat → **regenerar no BotFather** antes do uso real, e cadastrar só no cofre); bucket privado `mensagens` criado no Supabase Storage; URL pública `https://api.batuta.team` existe; `CEREBRO_PUBLIC_URL` precisa estar no ambiente do cérebro em produção. Identidade de teste do maestro: chat_id `5175352629`.
+
+**Definition of Done:** escanear/cadastrar o canal conecta o time; um fluxo com portão **pergunta no Telegram** e a resposta retoma a execução (Modo A); uma mensagem **inicia um fluxo** (Modo B); uma foto de recibo é lida pelo agente. Tudo sem tocar no motor. **WhatsApp e áudio→texto ficam para fases futuras sobre esta fundação.**
+
+## FASE — WhatsApp: mais um canal sobre a fundação (§10)  📋 PLANEJADA (depois da fundação de canais)
+O WhatsApp **está no plano** desde sempre (`docs/CANAL-MENSAGERIA-PLANO.md` §7) — só entra **depois** do Telegram, porque o Telegram prova a mecânica difícil (a resposta voltar e casar com a execução, Modos A/B) de graça e sem burocracia. Com a **abstração de Canal** já pronta e o roteamento operando sobre o formato normalizado, adicionar WhatsApp é, em essência, **escrever um novo `TipoCanal`** (`cerebro/canais/whatsapp.py`) — o `enviar`/`normalizar`/`baixar_arquivo` do provedor — sem mexer no roteamento, no motor nem nas telas (a coluna `canais.tipo` já aceita `"whatsapp"`).
+
+Escopo e decisões desta fase (quando rodar):
+- **Provedor (decisão adiada para cá):** **Cloud API oficial da Meta** (robusto, sem risco de ban, mas com burocracia: Meta Business, verificação, número, mensagens-modelo aprovadas, **janela de 24h**) **ou** **Evolution API** (não-oficial, vínculo por QR sem fricção, risco de ban → número dedicado). A escolha depende do apetite a risco do cliente; a fundação serve aos dois.
+- **Hospedagem:** Cloud API não precisa de servidor; Evolution exige um container (ex.: no Railway).
+- **Janela de 24h (Cloud API):** tratar a regra de só poder iniciar conversa com template aprovado — anotada como caso de borda específico do WhatsApp (não afeta Telegram).
+- **Áudio → texto** (§126) e **outros tipos de mídia** entram aqui ou logo depois, sobre o mesmo pipeline de anexos já criado para a imagem.
+
+**Definition of Done:** um número de WhatsApp conectado a um canal da organização; Modos A e B funcionando por WhatsApp exatamente como no Telegram, reusando todo o roteamento; sem tocar no motor.
 
 ## FASE — Biblioteca: a base de conhecimento da organização (§9)  📋 PLANEJADA — APROVADA, aguarda execução
 O `PRODUTO.md` §9 prevê a **Biblioteca** ("segundo cérebro") — mas ela **caiu num vão** e nunca foi implementada (hoje só há um placeholder em `/biblioteca`; não há tabela). O maestro **revisou o conceito**: é uma **base de conhecimento da ORGANIZAÇÃO inteira** (todos os times acessam, não é por-time) de **documentos gerais** (PDF, Word, planilhas, texto — não só markdown), que os agentes **consultam** durante a execução. Esta fase fecha essa lacuna. A decisão arquitetural está fechada em **`docs/BIBLIOTECA-DECISAO.md`** e o pano de fundo técnico em **`docs/ARQUITETURA.md`**; o **plano de implementação detalhado (10 passos) está aprovado** e aguarda o sinal do maestro para começar.

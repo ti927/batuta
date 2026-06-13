@@ -250,9 +250,19 @@ export type Execucao = {
   criado_em: string;
 };
 
+export type MensagemCanalLer = {
+  id: string;
+  direcao: "entrada" | "saida";
+  identificador_externo: string;
+  texto: string | null;
+  anexos: unknown[] | null;
+  criado_em: string;
+};
+
 export type ExecucaoComPassos = Execucao & {
   passos: PassoExecucao[];
   uso?: ResumoUso | null;
+  mensagens_canal?: MensagemCanalLer[];
 };
 
 // Execução na visão consolidada (gestão de execuções), com o nome da automação
@@ -331,6 +341,33 @@ export type ChaveApiLer = {
   ultimos4: string | null;
   apelido: string | null;
   ativa: boolean;
+  criado_em: string;
+  atualizado_em: string;
+};
+
+// ───────────────────── Canais de mensageria (Telegram) ─────────────────────
+// Um canal pende da organização. O segredo (token) NUNCA volta: `segredos` traz,
+// por campo guardado, só os 4 últimos dígitos. `config` traz só o não-secreto.
+
+export type Canal = {
+  id: string;
+  organizacao_id: string;
+  tipo: string; // "telegram" | (futuro) "whatsapp"
+  nome: string;
+  config: Record<string, unknown> | null;
+  segredos: Record<string, string>;
+  ativo: boolean;
+  criado_em: string;
+  atualizado_em: string;
+};
+
+export type IdentidadeCanal = {
+  id: string;
+  organizacao_id: string;
+  canal_id: string;
+  identificador_externo: string;
+  rotulo: string | null;
+  usuario_id: string | null;
   criado_em: string;
   atualizado_em: string;
 };

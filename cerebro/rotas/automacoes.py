@@ -25,6 +25,7 @@ from esquemas import (
     ExecucaoComPassos,
     ExecucaoLer,
     ExecucaoNaLista,
+    MensagemCanalLer,
     PassoExecucaoLer,
     ResponderHumano,
 )
@@ -40,6 +41,7 @@ from modelos import (
     ConversaCriacao,
     Execucao,
     Membro,
+    MensagemCanal,
     Organizacao,
     PassoExecucao,
     Time,
@@ -48,20 +50,12 @@ from modelos import (
 from chaves import (
     ORIGEM_CONSULTORIA,
     ORIGEM_LEGADO,
-    resolver_chaves_por_time,
 )
 from consultoria import exigir_admin_consultoria
-from orquestracao.cadeia import (
-    _DESTINOS_FIM,
-    _escolher_saida,
-    executar_cadeia,
-    validar_cadeia,
-)
-from orquestracao.llm import usar_chaves
+from orquestracao.cadeia import validar_cadeia
 from orquestracao.disparo import (
-    _aplicar_resultado,
-    _fazer_registrador,
     criar_execucao,
+    retomar_execucao,
 )
 from rotas._comum import automacao_acessivel, execucao_acessivel, time_acessivel
 from sessao import obter_sessao
@@ -70,12 +64,6 @@ from sessao import obter_sessao
 ESTADOS_ENCERRADOS = {"concluida", "falhou", "cancelada"}
 
 rotas = APIRouter(tags=["automacoes"])
-
-
-def _entrada_retomada(saida_pausada: str, resposta: str) -> str:
-    """A entrada do próximo nó ao retomar uma pausa: o trabalho que o agente
-    produziu + a decisão/feedback do humano, separados e rotulados."""
-    return f"{saida_pausada}\n\n---\n[Resposta do humano]\n{resposta}"
 
 
 def _ids_dos_agentes(sessao: Session, time_id: uuid.UUID) -> set[str]:
@@ -194,11 +182,18 @@ def _montar_com_passos(sessao: Session, execucao: Execucao) -> ExecucaoComPassos
         .where(PassoExecucao.execucao_id == execucao.id)
         .order_by(PassoExecucao.ordem)
     ).all()
+    # Conversa do canal ligada à execução (Telegram etc.), em ordem cronológica.
+    mensagens = sessao.scalars(
+        select(MensagemCanal)
+        .where(MensagemCanal.execucao_id == execucao.id)
+        .order_by(MensagemCanal.criado_em)
+    ).all()
     base = ExecucaoLer.model_validate(execucao).model_dump()
     return ExecucaoComPassos(
         **base,
         passos=[PassoExecucaoLer.model_validate(p) for p in passos],
         uso=precos.resumir_uso(passos),
+        mensagens_canal=[MensagemCanalLer.model_validate(m) for m in mensagens],
     )
 
 
@@ -236,11 +231,6 @@ def responder(
             status.HTTP_409_CONFLICT, "Esta execução não está aguardando resposta."
         )
 
-    # Fases 7.3/7.6/7-A: as mesmas chaves (por provedor) da organização valem para
-    # o roteamento da retomada e para o restante da cadeia (fallback consultoria →
-    # .env legado p/ Anthropic), com as origens para carimbar a medição.
-    chaves, origens = resolver_chaves_por_time(sessao, auto.time_id)
-
     # Auditoria (§3.7): a aprovação humana de um portão é ação sensível.
     auditoria.registrar(
         sessao, usuario=usuario, acao="portao.aprovado", recurso_tipo="execucao",
@@ -249,65 +239,12 @@ def responder(
         detalhe={"resposta": dados.resposta[:200]},
     )
 
-    # O ponto de retomada é derivado do último passo (onde pausou) + a cadeia.
-    ultimo = sessao.scalars(
-        select(PassoExecucao)
-        .where(PassoExecucao.execucao_id == execucao.id)
-        .order_by(PassoExecucao.ordem.desc())
-    ).first()
-    if ultimo is None or ultimo.agente_id is None:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "Não foi possível retomar: passo de pausa ausente.",
-        )
-
-    cadeia = auto.cadeia or {}
-    no = (cadeia.get("nos") or {}).get(str(ultimo.agente_id)) or {}
-    saidas = no.get("saidas") or []
-
-    # Portão de aprovação (PRODUTO §14): a RESPOSTA DO HUMANO escolhe o caminho.
-    if len(saidas) == 0:
-        escolhida = None
-    elif len(saidas) == 1:
-        escolhida = saidas[0]
-    else:
-        with usar_chaves(chaves):
-            escolhida, _ = _escolher_saida(dados.resposta, saidas)
-    destino = escolhida.get("destino") if escolhida else None
-    proximo = None if destino in _DESTINOS_FIM else destino
-
-    entrada_proxima = _entrada_retomada(
-        (ultimo.saida or {}).get("texto", ""), dados.resposta
-    )
-
-    # Sem próximo agente (destino fim): encerra com o trabalho + a decisão.
-    if proximo is None:
-        execucao.estado = "concluida"
-        execucao.resultado = {"texto": entrada_proxima}
-        execucao.finalizada_em = datetime.now(timezone.utc)
-        sessao.commit()
-        sessao.refresh(execucao)
-        return _montar_com_passos(sessao, execucao)
-
-    execucao.estado = "em_andamento"
-    sessao.commit()
+    # A retomada (escolher a saída pela resposta + seguir a cadeia) vive em
+    # disparo.retomar_execucao — reusada também pelo canal (Modo A).
     try:
-        with usar_chaves(chaves):
-            r = executar_cadeia(
-                sessao,
-                cadeia,
-                entrada_proxima,
-                no_inicial=proximo,
-                ordem_inicial=ultimo.ordem,
-                registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
-            )
-        _aplicar_resultado(execucao, r)
-    except Exception as e:
-        execucao.estado = "falhou"
-        execucao.resultado = {"erro": str(e)}
-        execucao.finalizada_em = datetime.now(timezone.utc)
-    sessao.commit()
-    sessao.refresh(execucao)
+        retomar_execucao(sessao, execucao, dados.resposta)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
     return _montar_com_passos(sessao, execucao)
 
 
