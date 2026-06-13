@@ -883,6 +883,29 @@ Escopo (detalhar em investigar/implementar/verificar ao executar):
 
 **Definition of Done:** escanear o QR conecta o número do time; uma mensagem real chega ao Líder e ele responde pelo WhatsApp; um fluxo com portão **pergunta no WhatsApp** e a resposta retoma a execução; um áudio recebido vira texto. Tudo sem tocar no motor de orquestração.
 
+## FASE — Biblioteca: a base de conhecimento da organização (§9)  📋 PLANEJADA — APROVADA, aguarda execução
+O `PRODUTO.md` §9 prevê a **Biblioteca** ("segundo cérebro") — mas ela **caiu num vão** e nunca foi implementada (hoje só há um placeholder em `/biblioteca`; não há tabela). O maestro **revisou o conceito**: é uma **base de conhecimento da ORGANIZAÇÃO inteira** (todos os times acessam, não é por-time) de **documentos gerais** (PDF, Word, planilhas, texto — não só markdown), que os agentes **consultam** durante a execução. Esta fase fecha essa lacuna. A decisão arquitetural está fechada em **`docs/BIBLIOTECA-DECISAO.md`** e o pano de fundo técnico em **`docs/ARQUITETURA.md`**; o **plano de implementação detalhado (10 passos) está aprovado** e aguarda o sinal do maestro para começar.
+
+**Decisão arquitetural (fechada):**
+- **Busca = RAG** (pgvector + embeddings OpenAI `text-embedding-3-small`, 1536 dims). Full-text foi descartado (qualidade insuficiente no domínio financeiro/contábil em português; possível complemento híbrido no futuro, não na v1). Não contradiz a "memória destilada sem vetor" da Fase 10: lá são poucas memórias curtas que cabem no contexto; aqui são milhares de pedaços de documento que não cabem — vetor é o jeito de selecionar o que cabe.
+- **Escopo:** organização inteira + **tags livres** para filtrar (não cria "biblioteca por time").
+- **Ingestão assíncrona** (extrai texto → fatia → gera embeddings → salva), com a UI mostrando o estado de cada documento (pendente/processando/pronto/falhou).
+- **Consulta pelo agente:** novo **instrumento `consultar_biblioteca`** — encaixa no sistema de instrumentos **sem tocar no motor** (padrão já validado). Só lê (`acao_irreversivel=False`).
+- **Fora da v1 (deliberado):** OCR (PDF escaneado); escrita pelo agente na Biblioteca (só humano cura); versionamento; permissões por documento; citação inline automática.
+
+**Refinos vindos da leitura do código (o doc de decisão externo não os via):**
+- O contrato de instrumento só recebe `(config, args)` — sem `Session`/`organizacao_id`. → O `consultar_biblioteca` recebe o **`organizacao_id` carimbado na sua `config` no momento da criação**, e **resolve a chave OpenAI sozinho em runtime** (cofre por org → consultoria → `OPENAI_API_KEY` do ambiente). Motor e carregador de cinto intocados.
+- A fila atual (`fila.py`) é acoplada a `Execucao`/`rodar_execucao`. → A ingestão usa um **trabalhador próprio `fila_biblioteca.py`**, no mesmo padrão (`FOR UPDATE SKIP LOCKED` sobre `biblioteca_documentos` em `pendente`), iniciado no lifespan do `main.py` ao lado de `fila`/`agendador`.
+- **Storage via httpx** (espelha `supabase_admin.py`, sem SDK) contra a REST de Storage do Supabase. **Upload é multipart** (`UploadFile`/`FormData`) — a API hoje é só JSON.
+
+**Pré-requisitos de painel (o maestro faz, eu guio na hora):** (1) bucket privado **`biblioteca`** no Supabase Storage; (2) extensão **`vector`** habilitada no Postgres do Supabase; (3) **chave OpenAI** disponível para os embeddings (chave-mãe da consultoria no cofre com `provedor=openai`, ou `OPENAI_API_KEY` no Railway) — necessária mesmo que os agentes usem Anthropic.
+
+**Plano de implementação (10 passos, cada um investigar/implementar/verificar + DoD, um por vez com aprovação):** 1) schema (2 tabelas + pgvector + bucket); 2) endpoints de gestão (upload/listar/editar tags/excluir, sem ingestão); 3) tela `/biblioteca`; 4) extração de texto (pdf/docx/xlsx/csv/txt/md); 5) fatiamento; 6) embeddings (com contabilização de custo); 7) trabalhador de ingestão; 8) instrumento `consultar_biblioteca`; 9) teste ponta a ponta com o motor real; 10) refino e auditoria.
+
+**Tabelas previstas:** `biblioteca_documentos` (`organizacao_id`, `nome`, `tipo_arquivo`, `tamanho_bytes`, `storage_path`, `tags[]`, `estado_ingestao`, `mensagem_erro`, `criado_por_id`) e `biblioteca_pedacos` (`documento_id`, `organizacao_id`, `ordem`, `texto`, `embedding vector(1536)`, `tokens`, `metadados`). Isolamento por organização em toda query e no path do Storage. **Núcleo de orquestração congelado** — estende, não altera.
+
+**Definition of Done:** documentos reais subidos pela tela são ingeridos automaticamente (viram `pronto` com pedaços e embeddings); um agente com `consultar_biblioteca` no cinto responde citando os documentos da organização; isolamento por org provado; custo de embedding contabilizado no painel; tudo sem tocar no motor.
+
 ---
 
 # Encerramento
