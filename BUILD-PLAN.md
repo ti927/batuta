@@ -851,8 +851,18 @@ Em `main` (merges `c67e504` e `423d291`), validados ao vivo pelo maestro. Céreb
 - **Chaves de IA selecionáveis + contabilização da conversa + painel da consultoria.** (1) A IA de conversa (criadora/companheira — uma só desde o pivô) ganhou **modelo selecionável por organização** (`organizacoes.modelo_criadora`, migração `e5f6a7b8c9d0`; nulo = padrão Opus), escolhido na tela de Chaves; o tipo "companheira" saiu do cofre (era chave morta). (2) Os seletores de modelo (do agente e da conversa) só mostram modelos cujo **provedor tem chave** resolvível (própria/consultoria + fallback Anthropic do ambiente) — novo `GET /organizacoes/{id}/modelos-disponiveis`. (3) O uso da **IA de conversa** (Opus) passou a entrar nos totais de custo (antes invisível): `precos.resumir_uso` soma também as conversas e o `/uso/resumo` org-level inclui a conversa. (4) Novo **painel da consultoria** `GET /uso/consultoria` (admin da consultoria) somando o gasto na chave-mãe por organização; tela `/uso-consultoria` + link na sidebar. **Motor de orquestração intocado.**
 - **Logo da organização.** `organizacoes.logo_url` (Text, migração `f6a7b8c9d0e1`) guarda o logo como **data URI** (imagem encolhida no navegador via canvas; sem Storage/multipart — migra p/ Supabase Storage no futuro sem mudar a coluna). Form de organização virou **modal** reusável (criar/editar: nome + logo com preview e "remover"); `components/avatar-org.tsx` (logo ou inicial) na lista de organizações e no rodapé da sidebar. Validação no cérebro: só `data:image/`, com teto de tamanho.
 
-## FASE — Implantação em produção
-Railway, domínio definitivo, teste de ponta a ponta. **Pré-requisito da Mensageria:** é aqui que nasce a **URL pública HTTPS** de que o webhook do WhatsApp precisa.
+## FASE — Implantação em produção  ✅ CONCLUÍDA (2026-06-13)
+O Batuta está **no ar em produção**, no domínio próprio, com HTTPS. **Pré-requisito da Mensageria CUMPRIDO:** já existe a URL pública HTTPS que o webhook do WhatsApp precisa.
+
+**Arquitetura de produção:**
+- **Railway** (projeto "batuta"), 2 serviços do repo `ti927/batuta`, cada um com Root Directory (`cerebro/` e `interface/`) e **Dockerfile** próprio (cérebro: python:3.13-slim + uv; interface: Node 22, Next standalone, `NEXT_PUBLIC_*` como build args). Região **US East** (mais perto do banco em São Paulo — Railway não tem região no Brasil). 1 réplica (agendador/fila em processo).
+- **Banco:** o **Supabase atual** (sa-east-1 São Paulo) — reusado, sem migração; mesmas chaves (inclusive `COFRE_CHAVE_MESTRA`).
+- **Domínio:** `batuta.team` (interface) e `api.batuta.team` (cérebro), via **Cloudflare** (DNS, CNAME flatten na raiz) com registros em **DNS only (cinza)**; HTTPS automático do Railway.
+- **CORS** por ambiente (`INTERFACE_ORIGINS`); a interface fala com o cérebro em `https://api.batuta.team`.
+
+**Gotchas resolvidos (importam p/ futuras mudanças):** (1) Supabase é IPv6 → ligar **"Enable Outbound IPv6"** no serviço Railway (senão `Network is unreachable`). (2) `NEXT_PUBLIC_*` são **congeladas no build** → mudar a URL do cérebro exige rebuild da interface. (3) Cloudflare: registros que apontam pro Railway têm que ser **DNS only (nuvem cinza)**, nunca proxied. (4) Latência: manter Railway em **US East** (perto do banco SP). Detalhe operacional completo na memória [[reference-producao-railway]].
+
+**Limitação conhecida (follow-up):** `gerar_pdf`/`gerar_imagem` gravam em disco efêmero do Railway → migrar p/ Supabase Storage depois.
 
 ## FASE — Mensageria (WhatsApp): o canal do Líder (§10)
 Hoje a espera-por-humano (pergunta / portão / confirmação) é respondida **na tela do Batuta** — a decisão que destravou o core (ver a nota do §382). Mas o `PRODUTO.md` §10 prevê que o **canal do Líder é o WhatsApp** (cada time com seu número; §111 o gatilho "mensagem recebida"; §126 transcrição de áudio; §14 modo intermediação). Esse canal foi adiado do core "para a Etapa 2", mas a reorganização do `MIGRACAO.md` (§4.1) não o recolheu em nenhuma das cinco fases — **esta fase fecha essa lacuna**.
