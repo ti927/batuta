@@ -182,6 +182,21 @@ class Execucao(IdData, Base):
     finalizada_em: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Canais de mensageria (borda): de ONDE a execução nasceu (Modo B — uma
+    # mensagem iniciou o fluxo) e, quando pausa, por qual canal/para quem a
+    # resposta é esperada (Modo A — casar a mensagem que voltar com esta
+    # execução). Todos nullable: execuções comuns (manual/cron/webhook, resposta
+    # pela tela) não os usam. SET NULL preserva o histórico se o canal sumir.
+    origem_canal_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("canais.id", ondelete="SET NULL"), nullable=True
+    )
+    origem_identificador: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    aguardando_canal_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("canais.id", ondelete="SET NULL"), nullable=True
+    )
+    aguardando_identificador: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )
 
 
 class PassoExecucao(IdData, Base):
@@ -417,3 +432,112 @@ class MemoriaProjeto(IdData, Base):
     conteudo: Mapped[str] = mapped_column(Text, nullable=False)
 
     __table_args__ = (Index("ix_memoria_projeto_conversa", "conversa_id"),)
+
+
+# ───────────────── Canais de mensageria (borda; Telegram primeiro) ────────────
+
+
+class Canal(IdData, Base):
+    """Um canal de mensageria plugável, configurado por uma ORGANIZAÇÃO (PRODUTO
+    §10). Telegram na v1; WhatsApp no futuro como outro `tipo`. Pende da
+    organização (não do time): todos os times da organização podem usá-lo. O
+    segredo (token do bot) não vive aqui — vai no cofre (`SegredoCanal`); a
+    `config` guarda só o não-secreto."""
+
+    __tablename__ = "canais"
+    organizacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    tipo: Mapped[str] = mapped_column(String(50), nullable=False)  # telegram|whatsapp|...
+    nome: Mapped[str] = mapped_column(String(200), nullable=False)
+    config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    ativo: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+
+    __table_args__ = (Index("ix_canal_org", "organizacao_id"),)
+
+
+class IdentidadeCanal(IdData, Base):
+    """O vínculo entre uma pessoa real e seu identificador num canal (o chat_id do
+    Telegram, o número no WhatsApp). É o que permite identificar quem fala e rotear
+    a entrada. `usuario_id` liga à conta do Batuta quando a pessoa é membro (equipe
+    interna); fica nulo para um contato externo (cliente). `organizacao_id` é
+    desnormalizado para isolamento e índice. Um identificador por canal."""
+
+    __tablename__ = "identidades_canal"
+    organizacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    canal_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("canais.id", ondelete="CASCADE"), nullable=False
+    )
+    identificador_externo: Mapped[str] = mapped_column(String(200), nullable=False)
+    rotulo: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    usuario_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (
+        Index(
+            "uq_identidade_canal_identificador",
+            "canal_id",
+            "identificador_externo",
+            unique=True,
+        ),
+    )
+
+
+class MensagemCanal(IdData, Base):
+    """Log das mensagens que entraram e saíram por um canal, ligado à execução
+    quando houver. Serve à auditoria, à inspeção (mostrar a conversa) e à
+    IDEMPOTÊNCIA: o índice único `(canal_id, id_externo)` impede processar duas
+    vezes o mesmo update reenviado pelo provedor. `id_externo` só existe na
+    entrada (o update_id do Telegram); na saída é nulo (e nulos não colidem)."""
+
+    __tablename__ = "mensagens_canal"
+    organizacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    canal_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("canais.id", ondelete="CASCADE"), nullable=False
+    )
+    execucao_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("execucoes.id", ondelete="SET NULL"), nullable=True
+    )
+    direcao: Mapped[str] = mapped_column(String(10), nullable=False)  # entrada|saida
+    identificador_externo: Mapped[str] = mapped_column(String(200), nullable=False)
+    texto: Mapped[str | None] = mapped_column(Text, nullable=True)
+    anexos: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    id_externo: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    __table_args__ = (
+        Index("ix_mensagem_canal_execucao", "execucao_id"),
+        Index(
+            "uq_mensagem_canal_id_externo",
+            "canal_id",
+            "id_externo",
+            unique=True,
+        ),
+    )
+
+
+class SegredoCanal(IdData, Base):
+    """Cofre criptografado das credenciais de um canal (espelha SegredoInstrumento).
+
+    Cada linha é UM campo secreto de UM canal (ex.: o token do bot Telegram). O
+    valor fica sempre cifrado em `valor_cifrado` e NUNCA é reexibido — a interface
+    mostra só `ultimos4`. Vive separado da `canais.config` (JSONB em claro). Há no
+    máximo um segredo por (canal, campo)."""
+
+    __tablename__ = "segredos_canal"
+    canal_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("canais.id", ondelete="CASCADE"), nullable=False
+    )
+    campo: Mapped[str] = mapped_column(String(80), nullable=False)
+    valor_cifrado: Mapped[str] = mapped_column(Text, nullable=False)
+    ultimos4: Mapped[str | None] = mapped_column(String(8), nullable=True)
+
+    __table_args__ = (
+        Index("uq_segredo_canal_campo", "canal_id", "campo", unique=True),
+    )
