@@ -11,12 +11,13 @@ import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import fila
 from canais import servico as servico_canal
-from modelos import Automacao, Canal
-from orquestracao.disparo import criar_execucao
+from modelos import Automacao, Canal, Execucao
+from orquestracao.disparo import criar_execucao, retomar_execucao
 from sessao import obter_sessao
 
 rotas = APIRouter(tags=["webhooks"])
@@ -90,5 +91,26 @@ async def receber_canal(
     registro = servico_canal.registrar_entrada(sessao, canal, msg)
     if registro is None:
         return {"ok": True, "duplicado": True}  # idempotência: update já processado
+
+    # Modo A: a mensagem é resposta a uma execução pausada esperando este contato
+    # neste canal? (ambíguo → a mais recente). Reusa a espera-por-humano.
+    execucao = sessao.scalars(
+        select(Execucao)
+        .where(
+            Execucao.aguardando_canal_id == canal.id,
+            Execucao.aguardando_identificador == msg.identificador_externo,
+            Execucao.estado == "aguardando_humano",
+        )
+        .order_by(Execucao.criado_em.desc())
+    ).first()
+    if execucao is not None:
+        registro.execucao_id = execucao.id
+        # Commit ANTES do trabalho (possivelmente lento): grava a idempotência, de
+        # modo que uma reentrega do Telegram durante a retomada caia no dedupe.
+        sessao.commit()
+        retomar_execucao(sessao, execucao, msg.texto or "")
+        return {"ok": True, "modo": "A", "execucao_id": str(execucao.id)}
+
+    # Sem pausa correspondente → Modo B (iniciar fluxo novo) entra no Passo 7.
     sessao.commit()
     return {"ok": True, "mensagem_id": str(registro.id)}
