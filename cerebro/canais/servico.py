@@ -55,6 +55,13 @@ def enviar_pelo_canal(
     return resultado
 
 
+def baixar_anexo(sessao: Session, canal: Canal, ref: str) -> tuple[bytes, str]:
+    """Baixa um anexo do provedor (ex.: a foto pelo file_id do Telegram),
+    resolvendo o token do cofre. Devolve (bytes, content_type)."""
+    tipo, config = _config_com_segredos(sessao, canal)
+    return tipo.baixar_arquivo(config, ref)
+
+
 def normalizar_entrada(canal: Canal, payload: dict) -> MensagemNormalizada | None:
     """Traduz o payload cru do provedor para o formato interno. None se o evento
     não é uma mensagem que tratamos."""

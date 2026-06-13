@@ -99,6 +99,11 @@ class TipoCanal(ABC):
         precisa de registro explícito."""
         return None
 
+    def baixar_arquivo(self, config: BaseModel, ref: str) -> tuple[bytes, str]:
+        """Baixa um anexo do provedor pelo seu `ref` (ex.: o file_id do Telegram).
+        Devolve (bytes, content_type). Provedor sem suporte levanta FalhaCanal."""
+        raise FalhaCanal(f"{self.tipo} não sabe baixar anexos.")
+
 
 _REGISTRO: dict[str, TipoCanal] = {}
 

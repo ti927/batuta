@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import fila
+import storage
 from canais import servico as servico_canal
 from modelos import Automacao, Canal, Execucao, IdentidadeCanal, Time
 from orquestracao.disparo import criar_execucao, retomar_execucao
@@ -143,6 +144,22 @@ async def receber_canal(
     execucao = criar_execucao(sessao, auto, msg.texto or "")
     execucao.origem_canal_id = canal.id
     execucao.origem_identificador = msg.identificador_externo
+    # Imagem na entrada (ex.: foto do recibo): baixa do provedor e guarda no
+    # Storage; o agente a lê em runtime. Best-effort: sem imagem, segue só o texto.
+    imagem = next((a for a in msg.anexos if a.tipo == "imagem"), None)
+    if imagem is not None:
+        try:
+            conteudo, content_type = servico_canal.baixar_anexo(
+                sessao, canal, imagem.ref
+            )
+            caminho = f"{canal.organizacao_id}/{execucao.id}/{imagem.ref}"
+            storage.enviar(caminho, conteudo, content_type)
+            execucao.entrada = {
+                **(execucao.entrada or {}),
+                "imagem": {"storage_path": caminho, "media_type": content_type},
+            }
+        except Exception:
+            pass
     registro.execucao_id = execucao.id
     sessao.commit()
     fila.enfileirar()

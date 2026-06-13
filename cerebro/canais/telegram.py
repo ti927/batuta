@@ -16,6 +16,16 @@ from canais.base import Anexo, FalhaCanal, MensagemNormalizada, TipoCanal, regis
 API_TELEGRAM = "https://api.telegram.org"
 TIMEOUT_S = 15.0
 
+_CONTENT_TYPES = {
+    "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+    "gif": "image/gif", "webp": "image/webp", "pdf": "application/pdf",
+}
+
+
+def _content_type_por_caminho(caminho: str) -> str:
+    ext = caminho.rsplit(".", 1)[-1].lower() if "." in caminho else ""
+    return _CONTENT_TYPES.get(ext, "application/octet-stream")
+
 
 class ConfigTelegram(BaseModel):
     """Configuração do canal Telegram. `token` é SEGREDO (cofre)."""
@@ -81,6 +91,27 @@ class CanalTelegram(TipoCanal):
             anexos=anexos,
             id_externo=str(update_id),
         )
+
+    def baixar_arquivo(self, config: ConfigTelegram, ref: str) -> tuple[bytes, str]:
+        """Baixa um anexo pelo `file_id` (ref). Dois passos da Bot API: getFile
+        (descobre o caminho) e o download em /file/bot<token>/<caminho>. O
+        content_type é inferido da extensão (o Telegram não o informa)."""
+        if not config.token:
+            raise FalhaCanal("Canal Telegram sem token configurado.")
+        try:
+            with httpx.Client(timeout=TIMEOUT_S) as cliente:
+                info = cliente.get(
+                    f"{API_TELEGRAM}/bot{config.token}/getFile",
+                    params={"file_id": ref},
+                )
+                caminho = (info.json().get("result") or {}).get("file_path")
+                if not caminho:
+                    raise FalhaCanal("Telegram não devolveu o caminho do arquivo.")
+                arq = cliente.get(f"{API_TELEGRAM}/file/bot{config.token}/{caminho}")
+                arq.raise_for_status()
+        except httpx.HTTPError as e:
+            raise FalhaCanal(f"não foi possível baixar o arquivo do Telegram: {e}")
+        return arq.content, _content_type_por_caminho(caminho)
 
     def configurar_webhook(self, config: ConfigTelegram, url: str) -> None:
         """Registra `url` como o webhook do bot no Telegram (`setWebhook`). É como

@@ -7,17 +7,35 @@ fato roda a cadeia é o pool de trabalhadores da fila (`fila.py`), que chama
 (PRODUTO §18, Tarefa 5.3).
 """
 
+import base64
 import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import storage
 from chaves import resolver_chaves_por_time
 from modelos import Automacao, Canal, Execucao, PassoExecucao
+from orquestracao.agente import usar_imagem_entrada
 from orquestracao.cadeia import _DESTINOS_FIM, _escolher_saida, executar_cadeia
 from orquestracao.llm import usar_chaves
 from orquestracao.modelos_ia import provedor_do_modelo_seguro
+
+
+def _imagem_da_entrada(execucao: Execucao) -> str | None:
+    """Se a execução tem uma imagem anexada (ex.: recibo que chegou pelo canal),
+    baixa do Storage e devolve como data URI para o agente ler. None se não há,
+    ou se o download falhar (a execução segue só com o texto)."""
+    img = (execucao.entrada or {}).get("imagem")
+    if not img or not img.get("storage_path"):
+        return None
+    try:
+        conteudo = storage.baixar(img["storage_path"])
+    except Exception:
+        return None
+    media = img.get("media_type", "image/jpeg")
+    return f"data:{media};base64,{base64.b64encode(conteudo).decode()}"
 
 
 def _entrada_retomada(saida_pausada: str, resposta: str) -> str:
@@ -172,8 +190,9 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
     chaves, origens = resolver_chaves_por_time(
         sessao, automacao.time_id if automacao else None
     )
+    imagem = _imagem_da_entrada(execucao)
     try:
-        with usar_chaves(chaves):
+        with usar_chaves(chaves), usar_imagem_entrada(imagem):
             r = executar_cadeia(
                 sessao,
                 (automacao.cadeia if automacao else None) or {},
