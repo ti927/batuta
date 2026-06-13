@@ -3,13 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import {
-  ChevronLeft,
-  KeyRound,
-  MessagesSquare,
-  Users,
-  UsersRound,
-} from "lucide-react";
+import { ChevronLeft, KeyRound, Users, UsersRound } from "lucide-react";
 
 import {
   api,
@@ -121,15 +115,6 @@ export function TimesCliente({
               Chaves de IA
             </Link>
           </>
-        )}
-        {souOperador && (
-          <Link
-            href={`/organizacoes/${organizacao.id}/canais`}
-            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-          >
-            <MessagesSquare className="size-3.5" />
-            Canais
-          </Link>
         )}
       </div>
 

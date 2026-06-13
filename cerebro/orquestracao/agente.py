@@ -6,12 +6,9 @@ tool-calling é o `create_react_agent` do LangGraph; cada instrumento do cinto
 vira uma ferramenta da IA pelo encaixe (instrumentos/base.py).
 """
 
-import contextvars
 import json
 import re
 import unicodedata
-from collections.abc import Iterator
-from contextlib import contextmanager
 
 from langchain_core.messages import AIMessage
 from langchain_core.tools import StructuredTool
@@ -21,37 +18,6 @@ import instrumentos as encaixe
 from instrumentos.base import FalhaInstrumento, acionar_com_retentativa
 from modelos import Agente, Instrumento
 from orquestracao.llm import MODELO_PADRAO, construir_modelo, texto_da_resposta
-
-# Imagem da entrada (ex.: a foto que chegou pelo canal), como data URI. É um
-# contextvar para chegar ao agente sem mudar a assinatura do grafo (mesmo padrão
-# de `usar_chaves`). É CONSUMIDA pelo primeiro agente: depois de usada vira None,
-# para a imagem não ser reenviada a cada agente seguinte da cadeia.
-_imagem_entrada: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "imagem_entrada", default=None
-)
-
-
-@contextmanager
-def usar_imagem_entrada(data_uri: str | None) -> Iterator[None]:
-    """Fixa a imagem da entrada durante o bloco (sai sempre limpando o contexto,
-    para um trabalhador reutilizado não vazar a imagem de uma execução à outra)."""
-    token = _imagem_entrada.set(data_uri or None)
-    try:
-        yield
-    finally:
-        _imagem_entrada.reset(token)
-
-
-def _conteudo_da_mensagem(entrada: str, imagem_data_uri: str | None):
-    """O `content` da mensagem do usuário para a IA: texto puro, ou — quando há
-    imagem — texto + bloco de imagem (multimodal). O formato `image_url` com data
-    URI é entendido pelos provedores via langchain (Anthropic/OpenAI)."""
-    if not imagem_data_uri:
-        return entrada
-    return [
-        {"type": "text", "text": entrada or "(veja a imagem em anexo)"},
-        {"type": "image_url", "image_url": {"url": imagem_data_uri}},
-    ]
 
 
 def montar_instrucoes(agente: Agente) -> str:
@@ -137,13 +103,7 @@ def executar_agente(
     falhas: list[str] = []
     ferramentas = [f for i in cinto for f in _ferramentas_de_instrumento(i, falhas)]
     app = create_react_agent(modelo, ferramentas, prompt=montar_instrucoes(agente))
-    # Multimodal: se há imagem na entrada (ex.: foto que chegou pelo canal), ela
-    # vai junto do texto — e é consumida aqui, para não repassar aos próximos.
-    imagem = _imagem_entrada.get()
-    if imagem:
-        _imagem_entrada.set(None)
-    conteudo = _conteudo_da_mensagem(entrada, imagem)
-    resultado = app.invoke({"messages": [{"role": "user", "content": conteudo}]})
+    resultado = app.invoke({"messages": [{"role": "user", "content": entrada}]})
 
     # Não confiamos na narração do agente: se um instrumento falhou de vez,
     # a execução falha de forma determinística e visível.

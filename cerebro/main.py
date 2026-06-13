@@ -11,7 +11,6 @@ from arquivos import DIRETORIO_ARQUIVOS
 from rotas import (
     agentes,
     automacoes,
-    canais,
     chaves_api,
     cinto,
     criacao,
@@ -67,7 +66,6 @@ app.include_router(execucao.rotas)
 app.include_router(automacoes.rotas)
 app.include_router(chaves_api.rotas)
 app.include_router(criacao.rotas)
-app.include_router(canais.rotas)
 app.include_router(webhooks.rotas)
 
 # Arquivos gerados (ex.: PDFs do instrumento gerar_pdf), servidos localmente.

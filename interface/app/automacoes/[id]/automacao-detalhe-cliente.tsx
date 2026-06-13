@@ -29,7 +29,6 @@ import {
   type Automacao,
   type Execucao,
   type ExecucaoComPassos,
-  type MensagemCanalLer,
   type PapelAcesso,
   type PassoExecucao,
 } from "@/lib/api";
@@ -62,7 +61,6 @@ const ROTULO_GATILHO: Record<string, string> = {
   manual: "Manual",
   agendamento: "Por horário",
   webhook: "Por webhook",
-  mensagem_recebida: "Por mensagem (canal)",
 };
 
 function formatarData(iso: string | null): string {
@@ -202,50 +200,6 @@ function Bloco({ rotulo, children }: { rotulo: string; children: React.ReactNode
       <p className="whitespace-pre-wrap rounded-md bg-card p-2.5 text-sm text-foreground">
         {children}
       </p>
-    </div>
-  );
-}
-
-// ─────────────────── Conversa do canal (Telegram etc.) ───────────────────
-
-function ConversaCanal({ mensagens }: { mensagens: MensagemCanalLer[] }) {
-  if (mensagens.length === 0) return null;
-  return (
-    <div className="mt-4">
-      <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
-        <MessageSquare className="size-4 text-primary" />
-        Conversa do canal
-      </p>
-      <ul className="flex flex-col gap-1.5">
-        {mensagens.map((m) => {
-          const entrada = m.direcao === "entrada";
-          const temImagem = (m.anexos ?? []).length > 0;
-          return (
-            <li
-              key={m.id}
-              className={`flex ${entrada ? "justify-start" : "justify-end"}`}
-            >
-              <div
-                className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-                  entrada
-                    ? "rounded-bl-sm bg-accent text-accent-foreground"
-                    : "rounded-br-sm bg-primary/10 text-foreground"
-                }`}
-              >
-                <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {entrada ? "recebido" : "enviado"}
-                </span>
-                {m.texto && <span className="whitespace-pre-wrap">{m.texto}</span>}
-                {temImagem && (
-                  <span className="mt-0.5 block text-xs italic text-muted-foreground">
-                    {m.texto ? "" : "(sem texto) "}📎 imagem anexada
-                  </span>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
     </div>
   );
 }
@@ -656,9 +610,6 @@ export function AutomacaoDetalheCliente({
           <div className="mt-4">
             <Timeline execucao={aberta} agentes={agentes} />
           </div>
-
-          {/* Conversa do canal (quando a execução trocou mensagens por um canal) */}
-          <ConversaCanal mensagens={aberta.mensagens_canal ?? []} />
 
           {/* Uso */}
           {aberta.uso && aberta.uso.tokens_entrada + aberta.uso.tokens_saida > 0 && (
