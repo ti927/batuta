@@ -875,18 +875,36 @@ Fases I** (debounce de rajada + teto de gasto/máx. turnos → passa para humano
 encerra, vigia no agendador), **G** (guarda-corpo anti prompt-injection) e **H** (áudio→texto via Whisper).
 
 **FILA DE IMPLANTAÇÕES — aprovadas (a ordem é do maestro):**
-1. ✅ **Contabilização de uso de IA por CATEGORIA** (APROVADA 2026-06-14 · IMPLEMENTADA 2026-06-14, commit
-   `e9c6138`, 187 testes verdes, migração `msg00uso0001` aplicada). Toda chamada de IA paga carrega `origem`
-   **e** `categoria` (`execucao` / `conversa` / `mensageria` / `transcricao`); `/uso/resumo` e
-   `/uso/consultoria` somam a mensageria e expõem `por_categoria` (no painel da consultoria, dentro de cada
-   organização). Fechou os furos: mensageria (turno do agente) e Whisper agora aparecem nos painéis —
-   coluna `uso` (JSONB) em `mensagens_conversa`; Whisper contabilizado por minuto. Carimbo na BORDA (núcleo
-   congelado intocado). **Fora de escopo (mantido):** `gerar_imagem` (chave própria do instrumento, não a da
-   consultoria; contabilizá-lo tocaria o núcleo). **Falta só:** push + redeploy (aguarda aval do maestro).
-2. **Fase K — polimento de atendimento** (saudação/transparência automática, horário comercial, painel de
-   métricas de atendimento). Menor valor-por-esforço; precisa de UI/config próprias. ← **próxima**
-3. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
-4. **Biblioteca** (RAG da organização; plano de 10 passos aprovado, `docs/BIBLIOTECA-DECISAO.md`).
+1. ✅ **Contabilização de uso de IA por CATEGORIA** (APROVADA · IMPLEMENTADA · NO AR 2026-06-14, commits
+   `e9c6138`+`d8571ce`, 187 testes verdes, migração `msg00uso0001` aplicada, deploy Railway saudável). Toda
+   chamada de IA paga carrega `origem` **e** `categoria` (`execucao` / `conversa` / `mensageria` /
+   `transcricao`); `/uso/resumo` e `/uso/consultoria` somam a mensageria e expõem `por_categoria` (no painel
+   da consultoria, dentro de cada organização). Fechou os furos: mensageria (turno do agente) e Whisper agora
+   aparecem nos painéis — coluna `uso` (JSONB) em `mensagens_conversa`; Whisper contabilizado por minuto.
+   Carimbo na BORDA (núcleo congelado intocado). Categoria `instrumento` (gerar_imagem) ficou de fora →
+   virou o item 2 desta fila.
+2. **Contabilização da categoria `instrumento` — gerar_imagem** (APROVADA 2026-06-14, NÃO iniciada). Fechar o
+   ÚLTIMO furo: o instrumento `gerar_imagem` consome IA paga (OpenAI, cobrada **por imagem**, não por token —
+   por tamanho/qualidade) mas hoje **não é contabilizado em lugar nenhum**.
+   - **Desafio (por que ficou para depois):** o custo de um instrumento é gerado **dentro do
+     `executar_agente`** (núcleo congelado, `agente.py`), e o contrato `executar(config, args) -> dict` não
+     reporta uso. Capturá-lo pelo motor exigiria tocar o núcleo — proibido.
+   - **Caminho aprovado (na BORDA, sem tocar o núcleo):** o próprio instrumento **registra o seu custo num
+     livro-razão** (`uso_instrumento`, tabela nova): `executar()` grava uma linha
+     `{organizacao_id, instrumento_id, modelo, qtd, custo_usd, origem, categoria='instrumento'}`. O
+     `organizacao_id` é carimbado na **config do instrumento na criação** (mesmo padrão já decidido para o
+     `consultar_biblioteca`); a `origem` segue a chave que o instrumento usa (cofre do instrumento 7-B → org;
+     ou consultoria/legado se houver fallback). `precos` ganha `custo_por_imagem(modelo, tamanho, qualidade)`
+     e `entradas_do_razao(...)`; `/uso/resumo` e `/uso/consultoria` passam a somar esse livro-razão e a
+     categoria `instrumento` aparece na quebra "por função". UI: rótulo `instrumento` = "Instrumentos com IA
+     (imagens)" em `lib/uso.ts`.
+   - **Verificação:** acionar `gerar_imagem` grava a linha no razão com o custo certo; os painéis mostram a
+     categoria `instrumento`; núcleo `agente.py`/`cadeia.py` sem diff; suíte verde. Plano detalhado a
+     escrever em `docs/` quando for executar.
+3. **Fase K — polimento de atendimento** (saudação/transparência automática, horário comercial, painel de
+   métricas de atendimento). Menor valor-por-esforço; precisa de UI/config próprias.
+4. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
+5. **Biblioteca** (RAG da organização; plano de 10 passos aprovado, `docs/BIBLIOTECA-DECISAO.md`).
 
 O `PRODUTO.md` prevê que os agentes conversem com pessoas por mensageria (§10/§111/§126/§14). Hoje a
 espera-por-humano é respondida **na tela do Batuta**, e o Batuta só sabe *enviar* (instrumentos de mão
