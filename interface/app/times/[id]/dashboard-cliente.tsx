@@ -11,6 +11,7 @@ import {
   Clock,
   Gauge,
   GitBranch,
+  Inbox,
   MessageSquare,
   Pencil,
   Plus,
@@ -179,6 +180,12 @@ export function DashboardCliente({
           className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
         >
           <Zap className="size-3.5" /> Automações
+        </Link>
+        <Link
+          href={`/times/${time.id}/conversas`}
+          className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+        >
+          <Inbox className="size-3.5" /> Conversas
         </Link>
       </div>
 

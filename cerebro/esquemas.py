@@ -504,3 +504,51 @@ class ConversaCriacaoLer(ConversaCriacaoResumo):
     mensagens: list
     time: dict | None = None
     memoria: list = []
+
+
+# ─────────────────── Mensageria / Conversas (Fase 1) ─────────────────────────
+
+
+class MensagemConversaLer(BaseModel):
+    """Uma mensagem da thread de uma conversa, como a API a devolve."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    papel: str  # contato | agente | operador | sistema
+    conteudo: str | None
+    midia: dict | None
+    entregue: bool
+    criado_em: datetime
+
+
+class ConversaLer(BaseModel):
+    """Uma conversa (sessão) na listagem da inbox."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    instrumento_id: uuid.UUID
+    canal: str
+    contato_chave: str
+    contato_nome: str | None
+    estado: str
+    destino_tipo: str | None
+    destino_id: uuid.UUID | None
+    atribuida_a: uuid.UUID | None
+    turnos: int
+    aguardando_ate: datetime | None
+    criado_em: datetime
+    atualizado_em: datetime
+
+
+class ConversaComMensagens(ConversaLer):
+    """Uma conversa com sua thread completa, para a tela da conversa."""
+
+    mensagens: list[MensagemConversaLer] = Field(default_factory=list)
+
+
+class ResponderOperador(BaseModel):
+    """Texto que o operador (humano) envia ao contato numa conversa assumida."""
+
+    texto: str = Field(min_length=1)

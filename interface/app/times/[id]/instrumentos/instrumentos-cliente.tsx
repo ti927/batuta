@@ -91,6 +91,17 @@ export function InstrumentosCliente({
     setErro(null);
   }
 
+  async function conectarCanal(inst: Instrumento) {
+    try {
+      await api.post(`/mensageria/${inst.id}/ativar-canal`, {});
+      toast.success("Canal conectado ao Telegram");
+      setErro(null);
+      router.refresh();
+    } catch (e) {
+      tratar(e, "Falha ao conectar o canal");
+    }
+  }
+
   async function acionar(inst: Instrumento) {
     const [args, erroJson] = lerJson(argsTexto);
     if (erroJson) {
@@ -167,6 +178,15 @@ export function InstrumentosCliente({
                     {inst.tipo}
                   </span>
                 </span>
+                {souOperador && inst.tipo === "enviar_telegram" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => conectarCanal(inst)}
+                  >
+                    Conectar canal
+                  </Button>
+                )}
                 {souOperador && (
                   <Button
                     size="sm"
