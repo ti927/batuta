@@ -235,9 +235,16 @@ Horário/entrega/métricas=K · Rótulo de contato=B/D (nome vem no webhook).
 
 ---
 
-# PRÓXIMA FASE (APROVADA 2026-06-14, aguardando execução): Contabilização de uso de IA por CATEGORIA
+# Contabilização de uso de IA por CATEGORIA
 
-> **Status: PLANEJADA e APROVADA. NÃO iniciada.** É a próxima da fila no `BUILD-PLAN.md`.
+> **Status: ✅ IMPLEMENTADA (2026-06-14, commit `e9c6138`).** 187 testes verdes; migração `msg00uso0001`
+> aplicada ao banco; núcleo congelado intocado. Carimbo na BORDA: `disparo.py` (`execucao`), `criacao/loop.py`
+> (`conversa`), `mensageria/servico.py` (`mensageria` + `transcricao`, com a origem da chave). Nova coluna
+> `uso` (JSONB) em `mensagens_conversa` fecha o furo da mensageria/Whisper (Whisper contabilizado por minuto).
+> `precos.py` ganhou `por_categoria` + `custo_whisper` + `custo_de_entrada` (honra `custo_usd` pré-calc.).
+> `/uso/resumo` e `/uso/consultoria` somam a mensageria e expõem `por_categoria`; telas `uso-consultoria` e
+> `execucoes` mostram a quebra por função. **Fora de escopo (mantido):** `gerar_imagem`. **Falta só:** push +
+> redeploy (aguarda aval do maestro). O texto abaixo é o plano original, preservado como referência.
 
 ## Contexto
 A Fase 1 está no ar. Ao testar o áudio, o maestro pediu: (1) confirmar que a chave OpenAI da **consultoria**

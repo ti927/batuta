@@ -874,17 +874,19 @@ webhook + roteamento conversacional, conectar canal, inbox + transferência para
 Fases I** (debounce de rajada + teto de gasto/máx. turnos → passa para humano), **J** (timeout: cutuca 1x e
 encerra, vigia no agendador), **G** (guarda-corpo anti prompt-injection) e **H** (áudio→texto via Whisper).
 
-**FILA DE IMPLANTAÇÕES — aprovadas, aguardando execução (a ordem é do maestro):**
-1. **Contabilização de uso de IA por CATEGORIA** (APROVADA 2026-06-14) — toda chamada de IA paga passa a
-   carregar `origem` **e** `categoria` (execução de agentes / IA de conversa / atendimento-mensageria /
-   transcrição); os painéis `/uso/resumo` e `/uso/consultoria` ganham a quebra **por categoria** (no painel
-   da consultoria, dentro de cada organização), para ficar claro em que função a chave-mãe foi gasta. Fecha
-   os furos atuais: hoje a **mensageria** (turno do agente) e o **Whisper** NÃO entram nos painéis. Plano
-   detalhado em `docs/MENSAGERIA-PLANO.md` (seção "Contabilização de uso por categoria"). **Fora de escopo:**
-   `gerar_imagem` (usa chave própria do instrumento, não a da consultoria; contabilizá-lo tocaria o núcleo).
+**FILA DE IMPLANTAÇÕES — aprovadas (a ordem é do maestro):**
+1. ✅ **Contabilização de uso de IA por CATEGORIA** (APROVADA 2026-06-14 · IMPLEMENTADA 2026-06-14, commit
+   `e9c6138`, 187 testes verdes, migração `msg00uso0001` aplicada). Toda chamada de IA paga carrega `origem`
+   **e** `categoria` (`execucao` / `conversa` / `mensageria` / `transcricao`); `/uso/resumo` e
+   `/uso/consultoria` somam a mensageria e expõem `por_categoria` (no painel da consultoria, dentro de cada
+   organização). Fechou os furos: mensageria (turno do agente) e Whisper agora aparecem nos painéis —
+   coluna `uso` (JSONB) em `mensagens_conversa`; Whisper contabilizado por minuto. Carimbo na BORDA (núcleo
+   congelado intocado). **Fora de escopo (mantido):** `gerar_imagem` (chave própria do instrumento, não a da
+   consultoria; contabilizá-lo tocaria o núcleo). **Falta só:** push + redeploy (aguarda aval do maestro).
 2. **Fase K — polimento de atendimento** (saudação/transparência automática, horário comercial, painel de
-   métricas de atendimento). Menor valor-por-esforço; precisa de UI/config próprias.
+   métricas de atendimento). Menor valor-por-esforço; precisa de UI/config próprias. ← **próxima**
 3. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
+4. **Biblioteca** (RAG da organização; plano de 10 passos aprovado, `docs/BIBLIOTECA-DECISAO.md`).
 
 O `PRODUTO.md` prevê que os agentes conversem com pessoas por mensageria (§10/§111/§126/§14). Hoje a
 espera-por-humano é respondida **na tela do Batuta**, e o Batuta só sabe *enviar* (instrumentos de mão
