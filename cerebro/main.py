@@ -17,6 +17,7 @@ from rotas import (
     execucao,
     instrumentos,
     membros,
+    mensageria,
     organizacoes,
     times,
     webhooks,
@@ -67,6 +68,7 @@ app.include_router(automacoes.rotas)
 app.include_router(chaves_api.rotas)
 app.include_router(criacao.rotas)
 app.include_router(webhooks.rotas)
+app.include_router(mensageria.rotas)
 
 # Arquivos gerados (ex.: PDFs do instrumento gerar_pdf), servidos localmente.
 app.mount("/arquivos", StaticFiles(directory=DIRETORIO_ARQUIVOS), name="arquivos")
