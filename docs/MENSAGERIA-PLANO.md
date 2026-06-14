@@ -232,3 +232,53 @@ Horário/entrega/métricas=K · Rótulo de contato=B/D (nome vem no webhook).
 7. Estourar o teto de gasto → conversa passa para humano automaticamente.
 8. Suíte do cérebro verde (`uv run --directory cerebro pytest`), incluindo testes novos de mensageria.
 9. Núcleo `cadeia.py`/`agente.py` sem diff (`git diff` vazio nesses arquivos).
+
+---
+
+# PRÓXIMA FASE (APROVADA 2026-06-14, aguardando execução): Contabilização de uso de IA por CATEGORIA
+
+> **Status: PLANEJADA e APROVADA. NÃO iniciada.** É a próxima da fila no `BUILD-PLAN.md`.
+
+## Contexto
+A Fase 1 está no ar. Ao testar o áudio, o maestro pediu: (1) confirmar que a chave OpenAI da **consultoria**
+(chave-mãe) é usada quando a organização não tem chave própria — **já funciona** (`chaves.resolver_chaves_por_time`
+cai `org → consultoria` para qualquer provedor; só falta confirmar com teste); (2) que **todo consumo seja
+contabilizado SEPARADO POR CATEGORIA de uso** (IA de conversa, execução de agentes, atendimento/mensageria,
+transcrição…), para ficar claro em que função a chave-mãe foi gasta.
+
+**Furos atuais (mapeados no código):** o uso já é carimbado com **origem** (organizacao/consultoria/legado)
+na execução, no roteamento e na IA de conversa; mas **não existe a dimensão "categoria"** em lugar nenhum, e
+a **mensageria** (turno do agente) + o **Whisper** não entram nos painéis de uso.
+
+## Categorias (rótulos ao usuário)
+`execucao` (Execução de agentes — inclui o roteamento) · `conversa` (IA de criação/companheira) ·
+`mensageria` (Atendimento) · `transcricao` (Transcrição de áudio). Futuro: `instrumento`.
+
+## Desenho (tudo na borda; núcleo congelado)
+- **Carimbar `categoria` na BORDA** (carimbar na fonte tocaria `agente.py`/`cadeia.py`):
+  - `disparo._fazer_registrador(..., categoria="execucao")` grava a categoria em cada entrada de uso (funde
+    o roteamento dentro de "execução" — granularidade fina exigiria tocar o núcleo).
+  - `criacao/loop.py::responder_turno` → `uso["categoria"]="conversa"`.
+  - `mensageria/servico.py` → entradas do turno: agente `categoria="mensageria"`, Whisper `categoria="transcricao"`.
+- **Fechar os furos da mensageria:** nova coluna `uso` (JSONB) em `mensagens_conversa` (migration aditiva,
+  `down_revision`=`f7b8c9d0e1f2`); `processar_turno` para de descartar `origens` e carimba `origem`
+  (agente: `origens[provedor_do_modelo_seguro(modelo)]`; Whisper: `origens["openai"]`).
+- **Whisper é por MINUTO** (whisper-1 = US$0,006/min): capturar `voice.duration` (segundos) em
+  `extrair_update`; entrada `{modelo:"whisper-1", segundos:N, custo_usd:<precalc>, origem, categoria}`.
+- **`precos`:** honrar `custo_usd` pré-calculado quando presente; `entradas_das_mensagens`; **`por_categoria`**
+  em `resumir_uso_de_entradas`; `resumir_uso(passos, conversas, mensagens)`.
+- **Endpoints:** `/uso/resumo` inclui a mensageria (join `Conversa→Instrumento.time_id→Time.org→Membro`) e
+  expõe `por_categoria`; `/uso/consultoria` soma a mensageria e mostra `por_categoria` por organização.
+- **Interface:** `lib/uso.ts` (`ROTULO_CATEGORIA`/`rotuloCategoria`), `lib/api.ts` (`por_categoria` nos
+  tipos), `app/uso-consultoria/page.tsx` (quebra por categoria), opcional em `app/execucoes`.
+- **Teto da conversa** passa a incluir o custo da transcrição.
+
+## Fora de escopo (honesto)
+`gerar_imagem` (único instrumento com IA paga) usa **chave própria do instrumento** (não a da consultoria) e
+contabilizá-lo exigiria **tocar o núcleo congelado** (`agente.py`). Fica para uma fase à parte, por um
+caminho que não toque o núcleo (ex.: o instrumento registra o próprio custo num ledger).
+
+## Verificação
+Testes: fallback consultoria (origem `consultoria` para openai); carimbo origem+categoria na mensageria +
+Whisper no teto; categoria na execução e na conversa; `resumir_uso` com `por_categoria` (incl. Whisper);
+`/uso/resumo` e `/uso/consultoria` incluindo a mensageria. Suíte verde; núcleo sem diff; tsc/eslint limpos.

@@ -864,9 +864,27 @@ O Batuta está **no ar em produção**, no domínio próprio, com HTTPS. **Pré-
 
 **Limitação conhecida (follow-up):** `gerar_pdf`/`gerar_imagem` gravam em disco efêmero do Railway → migrar p/ Supabase Storage depois.
 
-## FASE — Mensageria de mão dupla (Telegram, depois WhatsApp)  📋 PLANEJADA — APROVADA, aguarda execução
+## FASE — Mensageria de mão dupla (Telegram, depois WhatsApp)  🟢 FASE 1 NO AR — pendências enfileiradas
 > **Plano detalhado e durável em `docs/MENSAGERIA-PLANO.md`** (esta seção é o resumo). Lição que originou
 > o desenho: a memória `feedback_canais-sao-instrumentos`.
+
+**STATUS (2026-06-14): Fase 1 NO AR e validada ao vivo** (merge em `main`, deploy Railway, 181 testes,
+núcleo intocado). Entregues e em produção: **Milestone 1** (instrumento `enviar_telegram`, Conversa/sessão,
+webhook + roteamento conversacional, conectar canal, inbox + transferência para humano) e **Milestone 2 —
+Fases I** (debounce de rajada + teto de gasto/máx. turnos → passa para humano), **J** (timeout: cutuca 1x e
+encerra, vigia no agendador), **G** (guarda-corpo anti prompt-injection) e **H** (áudio→texto via Whisper).
+
+**FILA DE IMPLANTAÇÕES — aprovadas, aguardando execução (a ordem é do maestro):**
+1. **Contabilização de uso de IA por CATEGORIA** (APROVADA 2026-06-14) — toda chamada de IA paga passa a
+   carregar `origem` **e** `categoria` (execução de agentes / IA de conversa / atendimento-mensageria /
+   transcrição); os painéis `/uso/resumo` e `/uso/consultoria` ganham a quebra **por categoria** (no painel
+   da consultoria, dentro de cada organização), para ficar claro em que função a chave-mãe foi gasta. Fecha
+   os furos atuais: hoje a **mensageria** (turno do agente) e o **Whisper** NÃO entram nos painéis. Plano
+   detalhado em `docs/MENSAGERIA-PLANO.md` (seção "Contabilização de uso por categoria"). **Fora de escopo:**
+   `gerar_imagem` (usa chave própria do instrumento, não a da consultoria; contabilizá-lo tocaria o núcleo).
+2. **Fase K — polimento de atendimento** (saudação/transparência automática, horário comercial, painel de
+   métricas de atendimento). Menor valor-por-esforço; precisa de UI/config próprias.
+3. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
 
 O `PRODUTO.md` prevê que os agentes conversem com pessoas por mensageria (§10/§111/§126/§14). Hoje a
 espera-por-humano é respondida **na tela do Batuta**, e o Batuta só sabe *enviar* (instrumentos de mão
