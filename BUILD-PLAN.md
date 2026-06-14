@@ -902,10 +902,21 @@ encerra, vigia no agendador), **G** (guarda-corpo anti prompt-injection) e **H**
      `/uso/resumo` (visível ao usuário) e corretamente NÃO em `/uso/consultoria`.
    - **Verificado:** testes de `custo_por_imagem` + do helper de borda; suíte verde; núcleo
      `agente.py`/`cadeia.py` sem diff.
-3. **Fase K — polimento de atendimento** (saudação/transparência automática, horário comercial, painel de
+3. ✅ **Unificação de chaves e credenciais** (pedido do maestro · IMPLEMENTADA 2026-06-14, commit `7111106`,
+   206 testes, sem migração; push/redeploy pendentes de aval). Dois cofres separados confundiam, e o
+   `gerar_imagem` exigia a chave OpenAI num 2º lugar. Decisões do maestro: *unificação + tela única* (migrar
+   os fallbacks `.env` do Railway p/ o cofre fica para depois) e *reusar a chave da org* (com override por
+   instrumento). Parte 1 (borda): instrumentos declaram `chave_compartilhada=(campo,servico)`
+   (gerar_imagem→openai, busca_web→tavily); a injeção é em `segredos_instrumento.anexar_aos_instrumentos`
+   (ponto único chamado pelo frozen `cadeia._carregar_cinto` e pela mensageria) lendo `llm.chaves_atuais()`;
+   `chaves.py` resolve `tavily` no pool; a origem da imagem segue a chave real. Parte 2: tela única
+   **"Chaves e credenciais"** (seção A chaves de serviço c/ Tavily; seção B inventário de credenciais de
+   instrumento com rotação inline — `cerebro/rotas/credenciais.py`). Núcleo intocado. Detalhe em
+   `~/.claude/.../memory/reference_chaves-unificadas.md`.
+4. **Fase K — polimento de atendimento** (saudação/transparência automática, horário comercial, painel de
    métricas de atendimento). Menor valor-por-esforço; precisa de UI/config próprias.
-4. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
-5. **Biblioteca** (RAG da organização; plano de 10 passos aprovado, `docs/BIBLIOTECA-DECISAO.md`).
+5. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
+6. **Biblioteca** (RAG da organização; plano de 10 passos aprovado, `docs/BIBLIOTECA-DECISAO.md`).
 
 O `PRODUTO.md` prevê que os agentes conversem com pessoas por mensageria (§10/§111/§126/§14). Hoje a
 espera-por-humano é respondida **na tela do Batuta**, e o Batuta só sabe *enviar* (instrumentos de mão
