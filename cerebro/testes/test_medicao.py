@@ -78,6 +78,37 @@ def test_resumir_uso_separa_por_categoria_e_inclui_mensageria():
     assert r["por_origem"]["consultoria"]["tokens_entrada"] == 300
 
 
+def test_custo_por_imagem():
+    assert precos.custo_por_imagem("dall-e-3", "1024x1024") == 0.040
+    assert precos.custo_por_imagem("dall-e-3", "1792x1024") == 0.080
+    assert precos.custo_por_imagem("dall-e-2", "256x256") == 0.016
+    assert precos.custo_por_imagem("gpt-image-1", "1024x1536") == 0.063
+    # tamanho desconhecido → padrão do modelo; modelo desconhecido → padrão global.
+    assert precos.custo_por_imagem("dall-e-3", "9x9") == 0.040
+    assert precos.custo_por_imagem("zzz", "1024x1024") == precos.PRECO_IMAGEM_PADRAO
+
+
+def test_resumir_uso_agrega_categoria_instrumento():
+    from types import SimpleNamespace as NS
+
+    passos = [
+        NS(
+            saida={
+                "uso": [
+                    {"modelo": "haiku", "tokens_entrada": 100, "tokens_saida": 50},
+                    {"modelo": "dall-e-3", "imagens": 1, "custo_usd": 0.04,
+                     "origem": "organizacao", "categoria": "instrumento"},
+                ]
+            }
+        )
+    ]
+    r = precos.resumir_uso(passos)
+    # a imagem entra na categoria 'instrumento' com o custo pré-calculado;
+    # a chamada de LLM do mesmo passo cai em 'execucao' (padrão da fonte).
+    assert r["por_categoria"]["instrumento"]["custo_usd"] == 0.04
+    assert r["por_categoria"]["execucao"]["tokens_entrada"] == 100
+
+
 def _semear_passo(sessao, time_id, origem, te, ts):
     auto = Automacao(time_id=time_id, nome="Auto", tipo_gatilho="manual")
     sessao.add(auto)

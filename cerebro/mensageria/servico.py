@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import medicao_instrumentos
 import precos
 import segredos_instrumento
 from chaves import resolver_chaves_por_time
@@ -375,10 +376,16 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
             )
 
         # Uso de IA do turno: chamadas do agente (categoria 'mensageria') +
-        # transcrições de áudio (categoria 'transcricao'), cada uma com a origem da
-        # chave. Vai na mensagem do agente para a mensageria entrar nos painéis.
+        # transcrições de áudio (categoria 'transcricao') + instrumentos com IA paga
+        # acionados, ex.: gerar_imagem (categoria 'instrumento'), contabilizados na
+        # borda. Cada um com a origem da chave. Vai na mensagem do agente para a
+        # mensageria entrar nos painéis.
         uso_turno = (
-            _carimbar_uso_agente(resultado.get("uso"), origens) + uso_transcricao
+            _carimbar_uso_agente(resultado.get("uso"), origens)
+            + uso_transcricao
+            + medicao_instrumentos.uso_de_instrumentos_pagos(
+                sessao, agente.id, resultado.get("instrumentos_acionados")
+            )
         )
         sessao.add(
             MensagemConversa(

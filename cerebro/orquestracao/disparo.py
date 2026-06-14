@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import medicao_instrumentos
 from chaves import resolver_chaves_por_time
 from modelos import Automacao, Execucao, PassoExecucao
 from orquestracao.cadeia import executar_cadeia
@@ -44,6 +45,12 @@ def _fazer_registrador(
                 origem = origens.get(provedor) if provedor else None
                 if origem:
                     e.setdefault("origem", origem)
+        # Instrumentos com IA paga (ex.: gerar_imagem) acionados neste passo: o
+        # custo é contabilizado na borda (categoria 'instrumento'), sem tocar o
+        # núcleo nem o contrato do instrumento.
+        uso = uso + medicao_instrumentos.uso_de_instrumentos_pagos(
+            sessao, passo.get("agente_id"), passo.get("instrumentos_acionados")
+        )
         sessao.add(
             PassoExecucao(
                 execucao_id=execucao_id,

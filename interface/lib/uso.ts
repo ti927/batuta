@@ -20,6 +20,7 @@ export const ROTULO_CATEGORIA: Record<string, string> = {
   conversa: "IA de criação/companheira",
   mensageria: "Atendimento (mensageria)",
   transcricao: "Transcrição de áudio",
+  instrumento: "Instrumentos com IA (imagens)",
   desconhecida: "Sem categoria registrada",
 };
 

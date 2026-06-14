@@ -18,10 +18,22 @@ PRECO_PADRAO = (1.0, 5.0)
 # US$0,006/min). A entrada de uso traz `segundos` e um `custo_usd` pré-calculado.
 PRECO_WHISPER_MIN = 0.006
 
+# Geração de imagem é cobrada por IMAGEM (não por token), variando por modelo e
+# tamanho — aproximado, como todo este módulo (informativo, não cobrança). A
+# entrada de uso traz `imagens` e um `custo_usd` pré-calculado. Sem o campo de
+# qualidade na config do instrumento, assume-se o padrão de cada modelo.
+PRECOS_IMAGEM_USD = {
+    "dall-e-3": {"1024x1024": 0.040, "1024x1792": 0.080, "1792x1024": 0.080, "_padrao": 0.040},
+    "dall-e-2": {"1024x1024": 0.020, "512x512": 0.018, "256x256": 0.016, "_padrao": 0.020},
+    "gpt-image-1": {"1024x1024": 0.042, "1024x1536": 0.063, "1536x1024": 0.063, "_padrao": 0.042},
+}
+PRECO_IMAGEM_PADRAO = 0.040
+
 # Rótulos internos das categorias de uso (em que FUNÇÃO a IA paga foi gasta). A
 # interface dá o nome amigável (`interface/lib/uso.ts`). Carimbadas na borda:
-# execucao (disparo), conversa (IA criadora), mensageria/transcricao (atendimento).
-CATEGORIAS = ("execucao", "conversa", "mensageria", "transcricao")
+# execucao (disparo), conversa (IA criadora), mensageria/transcricao (atendimento),
+# instrumento (instrumentos com IA paga, ex.: gerar_imagem).
+CATEGORIAS = ("execucao", "conversa", "mensageria", "transcricao", "instrumento")
 
 
 def _preco(modelo: str) -> tuple[float, float]:
@@ -41,6 +53,16 @@ def custo_usd(modelo: str, tokens_entrada: int, tokens_saida: int) -> float:
 def custo_whisper(segundos: float) -> float:
     """Custo aproximado de uma transcrição (Whisper), em USD, por minuto de áudio."""
     return (max(0.0, segundos or 0) / 60.0) * PRECO_WHISPER_MIN
+
+
+def custo_por_imagem(modelo: str, tamanho: str = "") -> float:
+    """Custo aproximado de UMA imagem gerada, em USD, por modelo e tamanho. Modelo
+    desconhecido cai no padrão; tamanho desconhecido cai no padrão do modelo."""
+    m = (modelo or "").lower()
+    for familia, tabela in PRECOS_IMAGEM_USD.items():
+        if familia in m:
+            return tabela.get(tamanho, tabela["_padrao"])
+    return PRECO_IMAGEM_PADRAO
 
 
 def custo_de_entrada(e: dict) -> float:

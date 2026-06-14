@@ -883,24 +883,25 @@ encerra, vigia no agendador), **G** (guarda-corpo anti prompt-injection) e **H**
    aparecem nos painéis — coluna `uso` (JSONB) em `mensagens_conversa`; Whisper contabilizado por minuto.
    Carimbo na BORDA (núcleo congelado intocado). Categoria `instrumento` (gerar_imagem) ficou de fora →
    virou o item 2 desta fila.
-2. **Contabilização da categoria `instrumento` — gerar_imagem** (APROVADA 2026-06-14, NÃO iniciada). Fechar o
-   ÚLTIMO furo: o instrumento `gerar_imagem` consome IA paga (OpenAI, cobrada **por imagem**, não por token —
-   por tamanho/qualidade) mas hoje **não é contabilizado em lugar nenhum**.
-   - **Desafio (por que ficou para depois):** o custo de um instrumento é gerado **dentro do
-     `executar_agente`** (núcleo congelado, `agente.py`), e o contrato `executar(config, args) -> dict` não
-     reporta uso. Capturá-lo pelo motor exigiria tocar o núcleo — proibido.
-   - **Caminho aprovado (na BORDA, sem tocar o núcleo):** o próprio instrumento **registra o seu custo num
-     livro-razão** (`uso_instrumento`, tabela nova): `executar()` grava uma linha
-     `{organizacao_id, instrumento_id, modelo, qtd, custo_usd, origem, categoria='instrumento'}`. O
-     `organizacao_id` é carimbado na **config do instrumento na criação** (mesmo padrão já decidido para o
-     `consultar_biblioteca`); a `origem` segue a chave que o instrumento usa (cofre do instrumento 7-B → org;
-     ou consultoria/legado se houver fallback). `precos` ganha `custo_por_imagem(modelo, tamanho, qualidade)`
-     e `entradas_do_razao(...)`; `/uso/resumo` e `/uso/consultoria` passam a somar esse livro-razão e a
-     categoria `instrumento` aparece na quebra "por função". UI: rótulo `instrumento` = "Instrumentos com IA
-     (imagens)" em `lib/uso.ts`.
-   - **Verificação:** acionar `gerar_imagem` grava a linha no razão com o custo certo; os painéis mostram a
-     categoria `instrumento`; núcleo `agente.py`/`cadeia.py` sem diff; suíte verde. Plano detalhado a
-     escrever em `docs/` quando for executar.
+2. ✅ **Contabilização da categoria `instrumento` — gerar_imagem** (APROVADA · IMPLEMENTADA 2026-06-14).
+   Fechou o ÚLTIMO furo: o `gerar_imagem` consome IA paga (OpenAI, cobrada **por imagem**) e não era
+   contabilizado.
+   - **Desafio:** o custo de um instrumento nasce **dentro do `executar_agente`** (núcleo congelado,
+     `agente.py`), e o contrato `executar(config, args) -> dict` não reporta uso. Capturá-lo pelo motor
+     exigiria tocar o núcleo — proibido.
+   - **Caminho REAL (melhor que o livro-razão que eu havia planejado; descoberto lendo `agente.py`):** o
+     motor já devolve `instrumentos_acionados` — a lista de NOMES de ferramenta acionadas, e cada nome
+     embute o id do instrumento (`{nome}_{id8}`, ver `_nome_de_ferramenta`). Então a contabilização é
+     **100% na borda, sem tabela nova, sem migração, sem carimbar config**: o novo módulo
+     `cerebro/medicao_instrumentos.py` casa esses nomes com o cinto do agente e gera entradas de `uso`
+     (categoria `instrumento`, custo por imagem) que entram no MESMO `uso` do passo (`disparo.py`) e do
+     turno da mensageria (`servico.py`) — logo nos mesmos painéis (`precos.resumir_uso`). `precos` ganhou
+     `custo_por_imagem(modelo, tamanho)` + tabela de preços; categoria `instrumento` no agregador; rótulo
+     "Instrumentos com IA (imagens)" em `lib/uso.ts`. **Origem = `organizacao`** (o `gerar_imagem` usa a
+     chave do PRÓPRIO instrumento, no cofre 7-B — não a chave-mãe da consultoria), então aparece em
+     `/uso/resumo` (visível ao usuário) e corretamente NÃO em `/uso/consultoria`.
+   - **Verificado:** testes de `custo_por_imagem` + do helper de borda; suíte verde; núcleo
+     `agente.py`/`cadeia.py` sem diff.
 3. **Fase K — polimento de atendimento** (saudação/transparência automática, horário comercial, painel de
    métricas de atendimento). Menor valor-por-esforço; precisa de UI/config próprias.
 4. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
