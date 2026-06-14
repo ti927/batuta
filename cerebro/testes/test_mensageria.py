@@ -183,6 +183,7 @@ def test_processar_turno_envia_resposta_e_grava(sessao, dados, monkeypatch):
     assert conversa.estado == "aguardando_resposta"
     assert conversa.turnos == 1
     assert float(conversa.custo_acumulado_usd) > 0  # custo do turno acumulado
+    assert conversa.aguardando_ate is not None  # relógio da inatividade armado
     # (não ordeno por criado_em: no teste tudo roda numa transação, então now() é
     # constante e os timestamps empatam; em produção cada commit tem o seu.)
     do_agente = sessao.scalars(
@@ -255,6 +256,44 @@ def test_teto_estourado_passa_para_humano(sessao, dados, monkeypatch):
     sessao.refresh(conversa)
     assert conversa.estado == "humano_assumiu"
     assert enviados == [servico.MSG_LIMITE]  # cortesia enviada ao contato
+
+
+# ───────────────────── inatividade: cutucar e encerrar (Fase J) ──────────────
+
+
+def test_sweeper_cutuca_e_depois_encerra(sessao, dados, monkeypatch):
+    from mensageria import sweeper
+
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "T"})
+    _agente_com(sessao, dados, inst)
+    conversa, _ = servico.registrar_entrada(sessao, inst, _msg("oi"))
+    # Simula: o bot já respondeu e o prazo de resposta venceu.
+    conversa.estado = "aguardando_resposta"
+    conversa.nudge_enviado = False
+    conversa.aguardando_ate = datetime.now(timezone.utc) - timedelta(minutes=1)
+    sessao.commit()
+
+    enviados = []
+    monkeypatch.setattr(
+        "mensageria.telegram.enviar",
+        lambda t, c, x: enviados.append(x) or {"ok": True},
+    )
+
+    # 1ª varredura → cutuca (e rearma o prazo), sem encerrar.
+    assert sweeper.varrer(sessao) == 1
+    sessao.refresh(conversa)
+    assert conversa.nudge_enviado is True
+    assert conversa.estado == "aguardando_resposta"
+    assert enviados[-1] == sweeper.NUDGE_MSG
+
+    # Vence o prazo do nudge → 2ª varredura encerra.
+    conversa.aguardando_ate = datetime.now(timezone.utc) - timedelta(minutes=1)
+    sessao.commit()
+    assert sweeper.varrer(sessao) == 1
+    sessao.refresh(conversa)
+    assert conversa.estado == "fechada"
+    assert enviados[-1] == sweeper.DESPEDIDA_MSG
 
 
 # ─────────────────────── endpoint de entrada (HTTP) ──────────────────────────

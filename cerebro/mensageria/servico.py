@@ -14,7 +14,7 @@ envio em dobro. O modo fluxo (cadeia com pausa/retoma) entra depois.
 
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -47,6 +47,12 @@ DEBOUNCE_S = 6
 MAX_TURNOS_PADRAO = 40
 TETO_USD_PADRAO = 1.0
 MSG_LIMITE = "Vou te encaminhar para um atendente humano. Um instante."
+
+# Inatividade: minutos sem resposta do contato até o vigia (sweeper) cutucar.
+# Sobreponível na config do instrumento via `timeout_min`. O prazo do nudge até
+# encerrar vive no sweeper (`nudge_timeout_min`). Decisão do maestro: cutuca 1x
+# e depois encerra.
+TIMEOUT_RESPOSTA_MIN_PADRAO = 60
 
 _ROTULOS = {
     "contato": "Cliente",
@@ -153,8 +159,9 @@ def registrar_entrada(
         )
     )
     # Marca do debounce: o turno espera um instante e só roda se nenhuma mensagem
-    # mais nova chegar depois desta marca.
+    # mais nova chegar depois desta marca. O contato voltou → zera o nudge.
     conversa.ultima_entrada_em = datetime.now(timezone.utc)
+    conversa.nudge_enviado = False
 
     deve_processar = (
         conversa.estado not in ("humano_assumiu", "fechada")
@@ -302,6 +309,12 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
             _custo_do_turno(resultado.get("uso"))
         )
         conversa.estado = "aguardando_resposta"
+        # Relógio da inatividade: o vigia cutuca/encerra se o contato sumir.
+        timeout_min = int(
+            (instrumento.configuracao or {}).get("timeout_min")
+            or TIMEOUT_RESPOSTA_MIN_PADRAO
+        )
+        conversa.aguardando_ate = datetime.now(timezone.utc) + timedelta(minutes=timeout_min)
         sessao.commit()
     finally:
         sessao.close()

@@ -14,6 +14,7 @@ import uuid
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 
 import fila
@@ -112,9 +113,18 @@ def iniciar() -> None:
             sincronizar(auto)
     finally:
         sessao.close()
+    # Vigia de inatividade das conversas (mensageria, Fase J): roda a cada minuto.
+    from mensageria import sweeper
+
+    _scheduler.add_job(
+        sweeper.varrer_job,
+        trigger=IntervalTrigger(seconds=60),
+        id="mensageria_sweeper",
+        replace_existing=True,
+    )
     if not _scheduler.running:
         _scheduler.start()
-    logger.info("Agendador no ar com %d automação(ões).", len(_scheduler.get_jobs()))
+    logger.info("Agendador no ar com %d job(s).", len(_scheduler.get_jobs()))
 
 
 def desligar() -> None:
