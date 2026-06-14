@@ -6,6 +6,8 @@ agente, e um turno completo com `executar_agente` e o envio mockados (sem bot
 real). NÃO tocam o núcleo de orquestração.
 """
 
+from datetime import datetime, timedelta, timezone
+
 import segredos_instrumento as si
 from sqlalchemy import select
 
@@ -158,9 +160,15 @@ def test_processar_turno_envia_resposta_e_grava(sessao, dados, monkeypatch):
     conversa, _ = servico.registrar_entrada(sessao, inst, _msg("quanto custa?"))
 
     enviados = []
+    monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
     monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
     monkeypatch.setattr(
-        servico, "executar_agente", lambda ag, cinto, entrada: {"saida": "Custa R$10."}
+        servico,
+        "executar_agente",
+        lambda ag, cinto, entrada: {
+            "saida": "Custa R$10.",
+            "uso": [{"modelo": "haiku", "tokens_entrada": 1000, "tokens_saida": 500}],
+        },
     )
     monkeypatch.setattr(
         servico.telegram,
@@ -174,6 +182,7 @@ def test_processar_turno_envia_resposta_e_grava(sessao, dados, monkeypatch):
     sessao.refresh(conversa)
     assert conversa.estado == "aguardando_resposta"
     assert conversa.turnos == 1
+    assert float(conversa.custo_acumulado_usd) > 0  # custo do turno acumulado
     # (não ordeno por criado_em: no teste tudo roda numa transação, então now() é
     # constante e os timestamps empatam; em produção cada commit tem o seu.)
     do_agente = sessao.scalars(
@@ -184,6 +193,68 @@ def test_processar_turno_envia_resposta_e_grava(sessao, dados, monkeypatch):
     ).all()
     assert len(do_agente) == 1
     assert do_agente[0].conteudo == "Custa R$10." and do_agente[0].entregue
+
+
+def test_debounce_aborta_quando_chega_msg_mais_nova(sessao, dados, monkeypatch):
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "T"})
+    _agente_com(sessao, dados, inst)
+    conversa, _ = servico.registrar_entrada(sessao, inst, _msg("oi"))
+
+    rodou = {"agente": False}
+    monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
+    monkeypatch.setattr(
+        servico,
+        "executar_agente",
+        lambda *a: rodou.__setitem__("agente", True) or {"saida": "x"},
+    )
+    monkeypatch.setattr(servico.telegram, "enviar", lambda *a: {"ok": True})
+
+    # Durante a "espera" do debounce, simula a chegada de uma mensagem mais nova.
+    def sleep_simula_msg_nova(_):
+        c = sessao.get(Conversa, conversa.id)
+        c.ultima_entrada_em = datetime.now(timezone.utc) + timedelta(seconds=30)
+        sessao.commit()
+
+    monkeypatch.setattr(servico.time, "sleep", sleep_simula_msg_nova)
+
+    servico.processar_turno(conversa.id)
+
+    assert rodou["agente"] is False  # abortou: não rodou o agente
+    do_agente = sessao.scalars(
+        select(MensagemConversa).where(
+            MensagemConversa.conversa_id == conversa.id,
+            MensagemConversa.papel == "agente",
+        )
+    ).all()
+    assert do_agente == []
+
+
+def test_teto_estourado_passa_para_humano(sessao, dados, monkeypatch):
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "T"})
+    _agente_com(sessao, dados, inst)
+    conversa, _ = servico.registrar_entrada(sessao, inst, _msg("oi"))
+    conversa.custo_acumulado_usd = 999  # já estourou o teto
+    sessao.commit()
+
+    rodou = {"agente": False}
+    enviados = []
+    monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
+    monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
+    monkeypatch.setattr(
+        servico, "executar_agente", lambda *a: rodou.__setitem__("agente", True) or {"saida": "x"}
+    )
+    monkeypatch.setattr(
+        servico.telegram, "enviar", lambda token, chat_id, texto: enviados.append(texto) or {"ok": True}
+    )
+
+    servico.processar_turno(conversa.id)
+
+    assert rodou["agente"] is False  # não rodou a IA
+    sessao.refresh(conversa)
+    assert conversa.estado == "humano_assumiu"
+    assert enviados == [servico.MSG_LIMITE]  # cortesia enviada ao contato
 
 
 # ─────────────────────── endpoint de entrada (HTTP) ──────────────────────────

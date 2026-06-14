@@ -12,11 +12,14 @@ instrumento de canal é filtrado das ferramentas daquele turno para não haver
 envio em dobro. O modo fluxo (cadeia com pausa/retoma) entra depois.
 """
 
+import time
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import precos
 import segredos_instrumento
 from chaves import resolver_chaves_por_time
 from mensageria import telegram
@@ -31,6 +34,19 @@ CANAIS_TIPOS = {"enviar_telegram", "enviar_whatsapp"}
 
 # Quantas mensagens da thread injetar como histórico no turno do agente.
 LIMITE_HISTORICO = 20
+
+# Debounce: ao receber, espera um instante para JUNTAR uma rajada de mensagens
+# num só turno (o cliente que escreve em 3 partes recebe 1 resposta). Cada
+# mensagem agenda um turno; só o último da rajada (sem mensagem mais nova depois
+# da espera) realmente roda — os outros abortam.
+DEBOUNCE_S = 6
+
+# Limites por conversa (defaults; sobreponíveis na config do instrumento via
+# `max_turnos` / `teto_usd`). Ao estourar, a conversa PASSA PARA UM HUMANO
+# (decisão do maestro): o bot cala e ela cai na inbox.
+MAX_TURNOS_PADRAO = 40
+TETO_USD_PADRAO = 1.0
+MSG_LIMITE = "Vou te encaminhar para um atendente humano. Um instante."
 
 _ROTULOS = {
     "contato": "Cliente",
@@ -136,6 +152,9 @@ def registrar_entrada(
             conversa_id=conversa.id, papel="contato", conteudo=conteudo, midia=msg.midia
         )
     )
+    # Marca do debounce: o turno espera um instante e só roda se nenhuma mensagem
+    # mais nova chegar depois desta marca.
+    conversa.ultima_entrada_em = datetime.now(timezone.utc)
 
     deve_processar = (
         conversa.estado not in ("humano_assumiu", "fechada")
@@ -148,10 +167,55 @@ def registrar_entrada(
     return conversa, deve_processar
 
 
+def _limites(instrumento: Instrumento) -> tuple[int, float]:
+    """Máx. de turnos e teto de gasto (USD) por conversa — da config do
+    instrumento, com fallback nos defaults."""
+    cfg = instrumento.configuracao or {}
+    return (
+        int(cfg.get("max_turnos") or MAX_TURNOS_PADRAO),
+        float(cfg.get("teto_usd") or TETO_USD_PADRAO),
+    )
+
+
+def _custo_do_turno(uso: list | None) -> float:
+    """Custo aproximado (USD) das chamadas de LLM de um turno do agente."""
+    return sum(
+        precos.custo_usd(
+            u.get("modelo", ""),
+            u.get("tokens_entrada", 0) or 0,
+            u.get("tokens_saida", 0) or 0,
+        )
+        for u in (uso or [])
+    )
+
+
+def _passar_para_humano(sessao: Session, conversa: Conversa, nota: str) -> None:
+    """Tira o bot do comando: a conversa cai na inbox para um operador assumir."""
+    conversa.estado = "humano_assumiu"
+    sessao.add(
+        MensagemConversa(conversa_id=conversa.id, papel="sistema", conteudo=nota)
+    )
+
+
 def processar_turno(conversa_id: uuid.UUID) -> None:
     """Roda UM turno do agente para a conversa e entrega a resposta ao contato.
     Pensado para rodar em segundo plano (a resposta ao Telegram já foi dada).
-    Abre a própria sessão de banco (a do request já fechou)."""
+    Abre a própria sessão de banco (a do request já fechou).
+
+    Debounce: espera `DEBOUNCE_S` e, se uma mensagem mais nova chegou nesse meio,
+    ABORTA — a tarefa daquela mensagem assume (junta a rajada num só turno)."""
+    # Marca do debounce: o instante da última entrada conhecido ANTES da espera.
+    s0 = CriadorDeSessao()
+    try:
+        c0 = s0.get(Conversa, conversa_id)
+        if c0 is None:
+            return
+        marca = c0.ultima_entrada_em
+    finally:
+        s0.close()
+
+    time.sleep(DEBOUNCE_S)
+
     sessao = CriadorDeSessao()
     try:
         conversa = sessao.get(Conversa, conversa_id)
@@ -159,12 +223,33 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
             return
         if conversa.destino_tipo != "agente" or conversa.destino_id is None:
             return
+        # Chegou mensagem mais nova durante a espera? A tarefa dela responde.
+        if marca and conversa.ultima_entrada_em and conversa.ultima_entrada_em > marca:
+            return
+
         agente = sessao.get(Agente, conversa.destino_id)
         instrumento = sessao.get(Instrumento, conversa.instrumento_id)
         if agente is None or instrumento is None:
             return
 
         token = segredos_instrumento.decifrar(sessao, instrumento.id).get("token_bot", "")
+
+        # Teto de gasto / máx. de turnos → passa para um humano (não roda a IA).
+        max_turnos, teto = _limites(instrumento)
+        if (conversa.turnos or 0) >= max_turnos or float(
+            conversa.custo_acumulado_usd or 0
+        ) >= teto:
+            try:
+                if token:
+                    telegram.enviar(token, conversa.contato_chave, MSG_LIMITE)
+            except Exception:
+                pass
+            _passar_para_humano(
+                sessao, conversa, "Limite da conversa atingido — transferida para um humano."
+            )
+            sessao.commit()
+            return
+
         cinto = _cinto_sem_canais(sessao, agente.id)
         entrada = _montar_entrada(sessao, conversa)
         chaves, _ = resolver_chaves_por_time(sessao, agente.time_id)
@@ -213,6 +298,9 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
             )
         )
         conversa.turnos = (conversa.turnos or 0) + 1
+        conversa.custo_acumulado_usd = float(conversa.custo_acumulado_usd or 0) + (
+            _custo_do_turno(resultado.get("uso"))
+        )
         conversa.estado = "aguardando_resposta"
         sessao.commit()
     finally:
