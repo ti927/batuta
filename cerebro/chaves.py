@@ -22,6 +22,21 @@ from cofre import decifrar
 from modelos import ChaveApi, Time
 from orquestracao.modelos_ia import PROVEDOR_ANTHROPIC, PROVEDORES
 
+# Serviço de busca (Tavily): não é provedor de MODELO, mas é uma chave de serviço
+# COMPARTILHADA que a organização cadastra uma vez e o instrumento `busca_web`
+# reusa do pool (mesma lógica de queda org→consultoria→legado). Não entra em
+# PROVEDORES (que é só de modelos), mas entra no pool resolvido abaixo.
+SERVICO_TAVILY = "tavily"
+
+# Todos os serviços resolvidos pelo pool da organização: provedores de IA +
+# serviços compartilháveis de instrumento.
+SERVICOS = (*PROVEDORES, SERVICO_TAVILY)
+
+# Serviços com queda de legado no `.env` do cérebro (na prática, da consultoria):
+# Anthropic (ANTHROPIC_API_KEY) e Tavily (TAVILY_API_KEY). Os demais exigem chave
+# do cofre.
+SERVICOS_COM_LEGADO = frozenset({PROVEDOR_ANTHROPIC, SERVICO_TAVILY})
+
 
 def _buscar(
     sessao: Session,
@@ -139,13 +154,13 @@ def resolver_chaves_por_organizacao(
     organização (o time ainda não existe), com `tipo_ia='criadora'`."""
     chaves: dict[str, str] = {}
     origens: dict[str, str] = {}
-    for provedor in PROVEDORES:
-        chave, origem = _resolver(sessao, organizacao_id, tipo_ia, provedor)
+    for servico in SERVICOS:
+        chave, origem = _resolver(sessao, organizacao_id, tipo_ia, servico)
         if chave:
-            chaves[provedor] = chave
-            origens[provedor] = origem
-        elif provedor == PROVEDOR_ANTHROPIC:
-            origens[provedor] = ORIGEM_LEGADO
+            chaves[servico] = chave
+            origens[servico] = origem
+        elif servico in SERVICOS_COM_LEGADO:
+            origens[servico] = ORIGEM_LEGADO
     return chaves, origens
 
 

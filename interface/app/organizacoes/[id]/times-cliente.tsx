@@ -112,7 +112,7 @@ export function TimesCliente({
               className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
             >
               <KeyRound className="size-3.5" />
-              Chaves de IA
+              Chaves e credenciais
             </Link>
           </>
         )}

@@ -13,6 +13,7 @@ from rotas import (
     automacoes,
     chaves_api,
     cinto,
+    credenciais,
     criacao,
     execucao,
     instrumentos,
@@ -66,6 +67,7 @@ app.include_router(cinto.rotas)
 app.include_router(execucao.rotas)
 app.include_router(automacoes.rotas)
 app.include_router(chaves_api.rotas)
+app.include_router(credenciais.rotas)
 app.include_router(criacao.rotas)
 app.include_router(webhooks.rotas)
 app.include_router(mensageria.rotas)

@@ -171,7 +171,7 @@ export function Sidebar({
               Icone={Key}
               ativo={ativo(`/organizacoes/${org.id}/chaves`)}
             >
-              Chaves de IA
+              Chaves e credenciais
             </ItemNav>
           </>
         )}

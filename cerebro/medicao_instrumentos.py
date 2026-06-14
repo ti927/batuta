@@ -20,7 +20,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import precos
-from modelos import AgenteInstrumento, Instrumento
+from chaves import ORIGEM_ORGANIZACAO
+from instrumentos.base import obter_tipo
+from modelos import AgenteInstrumento, Instrumento, SegredoInstrumento
 
 # Tipos de instrumento que consomem IA paga (cobrança própria, fora do LLM do
 # agente). Por ora só geração de imagem.
@@ -44,25 +46,35 @@ def _custo_imagem(cfg: dict) -> dict:
     }
 
 
+def _servico_do_tipo(tipo_str: str) -> str | None:
+    """O serviço da chave compartilhada do tipo (ex.: gerar_imagem→'openai'), ou
+    None se o tipo não reusa chave do pool."""
+    compart = getattr(obter_tipo(tipo_str), "chave_compartilhada", None)
+    return compart[1] if compart else None
+
+
 def uso_de_instrumentos_pagos(
     sessao: Session,
     agente_id,
     instrumentos_acionados,
     *,
-    origem: str = "organizacao",
+    origens: dict | None = None,
 ) -> list:
     """Entradas de uso (categoria `instrumento`) dos instrumentos pagos que o
     agente acionou neste passo/turno. Lê o cinto do agente para casar cada nome de
     ferramenta acionada (`{base}_{id8}`) ao instrumento e precificar.
 
-    `origem` é da chave que o instrumento usa — por padrão `organizacao` (a chave
-    do próprio instrumento, no cofre 7-B, é da organização; o `gerar_imagem` não
-    cai na chave-mãe da consultoria). Devolve [] quando não há instrumento pago
-    acionado."""
+    `origens` é o mapa {serviço: origem} já resolvido pela borda. A origem de cada
+    imagem segue a chave que de fato foi usada: se o instrumento tem chave PRÓPRIA
+    (segredo no cofre), origem = `organizacao`; se reusa o pool da organização,
+    origem = `origens[serviço]` (organizacao/consultoria/legado). Assim a imagem
+    paga pela chave-mãe aparece também no painel da consultoria. Devolve [] quando
+    não há instrumento pago acionado."""
     if not instrumentos_acionados or not agente_id:
         return []
     if isinstance(agente_id, str):
         agente_id = uuid.UUID(agente_id)
+    origens = origens or {}
 
     pagos = sessao.scalars(
         select(Instrumento)
@@ -74,6 +86,17 @@ def uso_de_instrumentos_pagos(
         return []
     por_id8 = {inst.id.hex[:8]: inst for inst in pagos}
 
+    # Quais instrumentos pagos têm chave PRÓPRIA (segredo no cofre) — para decidir a
+    # origem. Os pagos têm um único campo secreto (a própria chave compartilhada),
+    # então a presença de qualquer segredo já indica chave própria.
+    com_chave_propria = set(
+        sessao.scalars(
+            select(SegredoInstrumento.instrumento_id).where(
+                SegredoInstrumento.instrumento_id.in_([i.id for i in pagos])
+            )
+        ).all()
+    )
+
     entradas: list = []
     for nome in instrumentos_acionados:
         if not nome:
@@ -81,9 +104,12 @@ def uso_de_instrumentos_pagos(
         inst = por_id8.get(_id8(nome))
         if inst is None:
             continue
-        # Hoje só gerar_imagem é pago; o roteamento por tipo já vive em TIPOS_PAGOS.
         entrada = _custo_imagem(inst.configuracao or {})
-        entrada["origem"] = origem
+        if inst.id in com_chave_propria:
+            entrada["origem"] = ORIGEM_ORGANIZACAO
+        else:
+            servico = _servico_do_tipo(inst.tipo)
+            entrada["origem"] = origens.get(servico) or ORIGEM_ORGANIZACAO
         entrada["categoria"] = "instrumento"
         entradas.append(entrada)
     return entradas

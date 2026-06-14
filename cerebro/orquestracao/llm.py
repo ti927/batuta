@@ -63,6 +63,14 @@ def usar_chaves(mapa: dict[str, str] | None) -> Iterator[None]:
         _chaves_ia.reset(token)
 
 
+def chaves_atuais() -> dict[str, str]:
+    """O mapa {serviço: chave} fixado para a execução em curso (via `usar_chaves`).
+    Usado na borda para injetar uma chave de serviço compartilhada na config de um
+    instrumento que a reusa (ex.: gerar_imagem→openai), sem mudar a assinatura de
+    nada do motor. Vazio fora de um bloco `usar_chaves`."""
+    return _chaves_ia.get()
+
+
 def construir_modelo(
     modelo_ia: str | None = None, temperatura: float = 0.0
 ) -> BaseChatModel:

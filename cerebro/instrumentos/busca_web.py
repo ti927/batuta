@@ -53,9 +53,12 @@ class BuscaWeb(TipoInstrumento):
     Config = ConfigBuscaWeb
     Args = ArgsBuscaWeb
     campos_secretos = ("chave_api",)
+    # Reusa a chave Tavily da organização ("Chaves de IA") quando o instrumento não
+    # tem uma chave própria — a borda a injeta; o .env segue como queda de legado.
+    chave_compartilhada = ("chave_api", "tavily")
 
     def executar(self, config: ConfigBuscaWeb, args: ArgsBuscaWeb) -> dict:
-        # Fase 7-B: prioriza o cofre (config), com o .env como fallback legado.
+        # Prioriza a chave própria/pool (config); .env TAVILY_API_KEY como legado.
         chave = config.chave_api or os.environ.get("TAVILY_API_KEY")
         if not chave:
             raise FalhaInstrumento(

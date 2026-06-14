@@ -82,6 +82,13 @@ class TipoInstrumento(ABC):
     # configuração da instância (ver `irreversivel_para`). O padrão é False (só
     # lê / só gera artefato local).
     acao_irreversivel: bool = False
+    # CHAVE DE SERVIÇO COMPARTILHADA: alguns instrumentos consomem um serviço cuja
+    # chave a organização já cadastra em "Chaves de IA" (ex.: gerar_imagem usa a
+    # chave OpenAI; busca_web, a Tavily). Em vez de pedir a chave de novo no cofre
+    # do instrumento, ela é REUSADA do pool da organização (queda org→consultoria).
+    # Declara `(campo_secreto, servico)`: se o campo próprio estiver vazio, a borda
+    # injeta a chave do pool. None = o instrumento não reusa chave compartilhada.
+    chave_compartilhada: tuple[str, str] | None = None
 
     def irreversivel_para(self, configuracao: dict) -> bool:
         """Se ESTA instância (com esta configuração) faz ação irreversível.

@@ -56,3 +56,26 @@ def test_respeita_tamanho_da_config(sessao, dados):
     assert entradas[0]["custo_usd"] == round(
         precos.custo_por_imagem("dall-e-3", "1792x1024"), 6
     )
+
+
+def test_origem_segue_o_pool_quando_sem_chave_propria(sessao, dados):
+    # Sem segredo próprio → reusa o pool; a origem é a do pool (ex.: consultoria).
+    ag, inst = _agente_com_imagem(sessao, dados)
+    nome = f"capa_{inst.id.hex[:8]}"
+    entradas = mi.uso_de_instrumentos_pagos(
+        sessao, ag.id, [nome], origens={"openai": "consultoria"}
+    )
+    assert entradas[0]["origem"] == "consultoria"
+
+
+def test_origem_organizacao_quando_tem_chave_propria(sessao, dados):
+    # Com segredo próprio → a chave é da organização, mesmo que o pool seja outro.
+    import segredos_instrumento as si
+
+    ag, inst = _agente_com_imagem(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"chave_api": "OWN"})
+    nome = f"capa_{inst.id.hex[:8]}"
+    entradas = mi.uso_de_instrumentos_pagos(
+        sessao, ag.id, [nome], origens={"openai": "consultoria"}
+    )
+    assert entradas[0]["origem"] == "organizacao"

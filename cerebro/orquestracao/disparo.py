@@ -49,7 +49,10 @@ def _fazer_registrador(
         # custo é contabilizado na borda (categoria 'instrumento'), sem tocar o
         # núcleo nem o contrato do instrumento.
         uso = uso + medicao_instrumentos.uso_de_instrumentos_pagos(
-            sessao, passo.get("agente_id"), passo.get("instrumentos_acionados")
+            sessao,
+            passo.get("agente_id"),
+            passo.get("instrumentos_acionados"),
+            origens=origens,
         )
         sessao.add(
             PassoExecucao(

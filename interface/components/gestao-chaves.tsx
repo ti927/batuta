@@ -1,19 +1,22 @@
 "use client";
 
-// Componente compartilhado de gestão do cofre de chaves (Fase 7.5).
-// Usado por duas telas: chaves da organização e chave-mãe da consultoria — a
-// diferença é só o `basePath`. Mostra as chaves MASCARADAS (só os 4 últimos
-// dígitos; o valor nunca volta do cérebro) e permite cadastrar/trocar/remover.
-// Salvar um tipo de IA que já existe SUBSTITUI a chave (upsert no cérebro).
+// Componente compartilhado de gestão do cofre de chaves de SERVIÇO (Fase 7.5;
+// unificação de chaves). Usado em duas telas: chaves da organização e chave-mãe
+// da consultoria — a diferença é só o `basePath`. Mostra as chaves MASCARADAS (só
+// os 4 últimos dígitos; o valor nunca volta do cérebro) e permite cadastrar/
+// trocar/remover. Salvar um serviço (e tipo de IA) que já existe SUBSTITUI a chave.
+// Inclui serviços não-modelo compartilháveis (Tavily/busca), que os instrumentos
+// reusam — por isso "serviço", não só "provedor de IA".
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { api, ErroDaApi, type ChaveApiLer, type TipoIA } from "@/lib/api";
 import {
-  PROVEDORES,
-  ROTULO_PROVEDOR,
-  type Provedor,
+  ROTULO_SERVICO,
+  SERVICOS,
+  USADA_POR,
+  type Servico,
 } from "@/lib/modelos";
 import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
@@ -22,14 +25,19 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
 // Dois tipos de IA consomem chave: a executora (os agentes do time) e a IA de
-// conversa (a criadora/companheira — uma só conversa desde o pivô). A antiga
-// "companheira" saiu do seletor: era a mesma conversa, então virava chave morta.
+// conversa (a criadora/companheira). Serviços não-IA (Tavily) não têm essa
+// distinção — usam sempre o bucket "executora".
 const TIPOS: TipoIA[] = ["executora", "criadora"];
 const ROTULO_TIPO: Record<string, string> = {
   executora: "IA executora (agentes)",
   criadora: "IA de conversa",
   companheira: "IA de conversa",
 };
+
+// Serviços que distinguem papel (executora × conversa). Tavily não distingue.
+function temPapel(servico: string): boolean {
+  return servico !== "tavily";
+}
 
 export function GestaoChaves({
   basePath,
@@ -41,12 +49,14 @@ export function GestaoChaves({
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
   const [tipo, setTipo] = useState<TipoIA>("executora");
-  const [provedor, setProvedor] = useState<Provedor>("anthropic");
+  const [servico, setServico] = useState<Servico>("anthropic");
   const [valor, setValor] = useState("");
   const [apelido, setApelido] = useState("");
 
+  // Tavily não tem papel: força executora.
+  const tipoEfetivo: TipoIA = temPapel(servico) ? tipo : "executora";
   const jaTem = chavesIniciais.some(
-    (c) => c.tipo_ia === tipo && c.provedor === provedor,
+    (c) => c.tipo_ia === tipoEfetivo && c.provedor === servico,
   );
 
   function tratar(e: unknown, padrao: string) {
@@ -57,8 +67,8 @@ export function GestaoChaves({
     if (!valor.trim()) return;
     try {
       await api.put(basePath, {
-        tipo_ia: tipo,
-        provedor,
+        tipo_ia: tipoEfetivo,
+        provedor: servico,
         valor: valor.trim(),
         apelido: apelido.trim() || null,
       });
@@ -72,7 +82,8 @@ export function GestaoChaves({
   }
 
   async function remover(chave: ChaveApiLer) {
-    if (!confirm(`Remover a chave ${chave.tipo_ia} (••••${chave.ultimos4})?`)) return;
+    const rotulo = ROTULO_SERVICO[chave.provedor as Servico] ?? chave.provedor;
+    if (!confirm(`Remover a chave ${rotulo} (••••${chave.ultimos4})?`)) return;
     try {
       await api.delete(`${basePath}/${chave.id}`);
       setErro(null);
@@ -97,10 +108,12 @@ export function GestaoChaves({
             <li key={c.id} className="flex flex-wrap items-center gap-2 p-3">
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  {ROTULO_TIPO[c.tipo_ia] ?? c.tipo_ia}
-                  <span className="text-xs font-normal text-muted-foreground">
-                    {c.provedor}
-                  </span>
+                  {ROTULO_SERVICO[c.provedor as Servico] ?? c.provedor}
+                  {temPapel(c.provedor) && (
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {ROTULO_TIPO[c.tipo_ia] ?? c.tipo_ia}
+                    </span>
+                  )}
                   {!c.ativa && <Badge>inativa</Badge>}
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -124,26 +137,28 @@ export function GestaoChaves({
         <div className="flex flex-wrap gap-2">
           <Select
             className="w-auto"
-            value={tipo}
-            onChange={(e) => setTipo(e.target.value as TipoIA)}
+            value={servico}
+            onChange={(e) => setServico(e.target.value as Servico)}
           >
-            {TIPOS.map((t) => (
-              <option key={t} value={t}>
-                {ROTULO_TIPO[t] ?? t}
+            {SERVICOS.map((s) => (
+              <option key={s} value={s}>
+                {ROTULO_SERVICO[s]}
               </option>
             ))}
           </Select>
-          <Select
-            className="w-auto"
-            value={provedor}
-            onChange={(e) => setProvedor(e.target.value as Provedor)}
-          >
-            {PROVEDORES.map((p) => (
-              <option key={p} value={p}>
-                {ROTULO_PROVEDOR[p]}
-              </option>
-            ))}
-          </Select>
+          {temPapel(servico) && (
+            <Select
+              className="w-auto"
+              value={tipo}
+              onChange={(e) => setTipo(e.target.value as TipoIA)}
+            >
+              {TIPOS.map((t) => (
+                <option key={t} value={t}>
+                  {ROTULO_TIPO[t] ?? t}
+                </option>
+              ))}
+            </Select>
+          )}
         </div>
         <Input
           type="password"
@@ -160,15 +175,13 @@ export function GestaoChaves({
         />
         {jaTem && (
           <p className="text-xs text-warning">
-            Já existe uma chave “{tipo}” em {ROTULO_PROVEDOR[provedor]}. Salvar vai
+            Já existe uma chave de {ROTULO_SERVICO[servico]}
+            {temPapel(servico) ? ` (${ROTULO_TIPO[tipoEfetivo]})` : ""}. Salvar vai
             substituí-la.
           </p>
         )}
         <p className="text-xs text-muted-foreground">
-          A <span className="font-medium">IA executora</span> roda os agentes do
-          time (o modelo de cada agente é escolhido na edição do agente). A{" "}
-          <span className="font-medium">IA de conversa</span> é a que ajuda a
-          montar e ajustar o time — o modelo dela se escolhe logo abaixo.
+          Usada por: <span className="font-medium">{USADA_POR[servico]}</span>.
         </p>
         <Button className="self-start" onClick={salvar}>
           Salvar chave

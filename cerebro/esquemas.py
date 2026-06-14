@@ -204,6 +204,10 @@ class TipoInstrumentoLer(BaseModel):
     esquema_config: dict
     esquema_args: dict
     campos_secretos: list[str] = Field(default_factory=list)
+    # Se o tipo reusa uma chave de serviço compartilhada da organização: o par
+    # (campo_secreto, serviço), ex.: ["chave_api", "openai"]. O front mostra esse
+    # campo como OPCIONAL ("usa a chave de IA da organização por padrão").
+    chave_compartilhada: list[str] | None = None
     # Ação irreversível (publicar/enviar/gravar externo): o front mostra um aviso
     # e a parede de ativação exige portão humano antes de um agente que a use.
     acao_irreversivel: bool = False
@@ -447,6 +451,44 @@ class ChaveApiLer(BaseModel):
     ativa: bool
     criado_em: datetime
     atualizado_em: datetime
+
+
+# ─────────────── Inventário de credenciais de instrumento ───────────────
+# A tela única de "Chaves e credenciais": além das chaves de IA (acima), lista
+# TODAS as credenciais por-instância dos instrumentos da organização, para
+# rotacionar num lugar só.
+
+
+class CredencialCampo(BaseModel):
+    """Um campo secreto de um instrumento, mascarado (nunca o valor)."""
+
+    campo: str
+    definido: bool  # já tem um valor próprio no cofre?
+    ultimos4: str | None
+    # Se este campo reusa uma chave de serviço compartilhada da organização (ex.:
+    # gerar_imagem→openai): aí não precisa de valor próprio.
+    compartilhada: bool = False
+    servico: str | None = None
+
+
+class CredencialInstrumento(BaseModel):
+    """As credenciais de um instrumento, com o time a que pertence (para o
+    inventário da organização)."""
+
+    instrumento_id: uuid.UUID
+    instrumento_nome: str
+    time_id: uuid.UUID
+    time_nome: str
+    tipo: str
+    tipo_nome: str
+    campos: list[CredencialCampo]
+
+
+class RotacionarSegredos(BaseModel):
+    """Troca um ou mais segredos de um instrumento (rotação pela tela única). Um
+    campo ausente preserva o valor atual; vazio é ignorado."""
+
+    segredos: dict[str, str]
 
 
 # ──────────────────── IA criadora (Fase 9) ───────────────────────

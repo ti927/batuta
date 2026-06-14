@@ -79,7 +79,18 @@ def anexar_aos_instrumentos(sessao: Session, instrumentos: list) -> None:
     """Decifra os segredos de cada instrumento e os anexa num atributo
     transitório `segredos_decifrados` (não-mapeado: o SQLAlchemy não o grava).
     A orquestração mescla esses valores na config antes de acionar o instrumento.
-    Faz uma consulta única para todos os instrumentos."""
+    Faz uma consulta única para todos os instrumentos.
+
+    Chave de serviço COMPARTILHADA: para um instrumento que reusa uma chave do pool
+    da organização (declara `chave_compartilhada` no tipo, ex.: gerar_imagem→openai)
+    e NÃO tem a chave própria, injeta a chave resolvida do contexto da execução
+    (`usar_chaves`). Tudo em memória; nunca grava. Como esta função é chamada pelos
+    DOIS caminhos (execução `cadeia._carregar_cinto` e atendimento
+    `mensageria._cinto_sem_canais`), a injeção cobre ambos sem tocar o núcleo."""
+    # Imports locais para evitar qualquer ciclo de importação no carregamento.
+    from instrumentos.base import obter_tipo
+    from orquestracao.llm import chaves_atuais
+
     ids = [inst.id for inst in instrumentos]
     por_instrumento: dict[uuid.UUID, dict[str, str]] = {}
     if ids:
@@ -91,5 +102,14 @@ def anexar_aos_instrumentos(sessao: Session, instrumentos: list) -> None:
             por_instrumento.setdefault(s.instrumento_id, {})[s.campo] = cofre.decifrar(
                 s.valor_cifrado
             )
+    pool = chaves_atuais()
     for inst in instrumentos:
-        inst.segredos_decifrados = por_instrumento.get(inst.id, {})
+        proprios = por_instrumento.get(inst.id, {})
+        tipo = obter_tipo(inst.tipo)
+        compart = getattr(tipo, "chave_compartilhada", None) if tipo else None
+        if compart:
+            campo, servico = compart
+            # Sem chave própria (vazia/ausente) → reusa a do pool, se houver.
+            if not (proprios.get(campo) or "").strip() and pool.get(servico):
+                proprios = {**proprios, campo: pool[servico]}
+        inst.segredos_decifrados = proprios

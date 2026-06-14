@@ -334,7 +334,11 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
         uso_transcricao = _transcrever_pendentes(
             sessao, conversa, token, chaves.get("openai"), origens.get("openai")
         )
-        cinto = _cinto_sem_canais(sessao, agente.id)
+        # Carrega o cinto DENTRO do contexto de chaves para que a injeção de chave
+        # de serviço compartilhada (ex.: gerar_imagem→openai) enxergue o pool. Os
+        # segredos decifrados ficam anexados aos objetos e persistem após o bloco.
+        with usar_chaves(chaves):
+            cinto = _cinto_sem_canais(sessao, agente.id)
         entrada = _montar_entrada(sessao, conversa)
 
         try:
@@ -384,7 +388,10 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
             _carimbar_uso_agente(resultado.get("uso"), origens)
             + uso_transcricao
             + medicao_instrumentos.uso_de_instrumentos_pagos(
-                sessao, agente.id, resultado.get("instrumentos_acionados")
+                sessao,
+                agente.id,
+                resultado.get("instrumentos_acionados"),
+                origens=origens,
             )
         )
         sessao.add(

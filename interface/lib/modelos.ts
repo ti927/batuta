@@ -12,6 +12,28 @@ export const ROTULO_PROVEDOR: Record<Provedor, string> = {
   google: "Google (Gemini)",
 };
 
+// Serviços cuja chave a organização cadastra no pool ("Chaves de serviço"): os
+// provedores de modelo + serviços compartilháveis de instrumento (Tavily/busca).
+// Separado de PROVEDORES de propósito — Tavily NÃO é provedor de modelo (não entra
+// no seletor de modelo do agente). Espelha cerebro/chaves.py SERVICOS.
+export const SERVICOS = ["anthropic", "openai", "google", "tavily"] as const;
+export type Servico = (typeof SERVICOS)[number];
+
+export const ROTULO_SERVICO: Record<Servico, string> = {
+  anthropic: "Anthropic (Claude)",
+  openai: "OpenAI (GPT / imagens)",
+  google: "Google (Gemini)",
+  tavily: "Tavily (busca na web)",
+};
+
+// Em que funções cada serviço é usado — texto de ajuda na tela de chaves.
+export const USADA_POR: Record<Servico, string> = {
+  anthropic: "modelos dos agentes e IA de conversa",
+  openai: "modelos, IA de conversa, transcrição de áudio e geração de imagem",
+  google: "modelos dos agentes e IA de conversa",
+  tavily: "busca na web dos agentes",
+};
+
 export const MODELOS_POR_PROVEDOR: Record<Provedor, string[]> = {
   anthropic: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"],
   openai: ["gpt-4.1", "gpt-4o", "gpt-4o-mini"],

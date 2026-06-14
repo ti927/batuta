@@ -24,25 +24,25 @@ from sqlalchemy.orm import Session
 import auditoria
 import cofre
 from auth import usuario_atual
-from chaves import provedores_disponiveis
+from chaves import SERVICOS, provedores_disponiveis
 from consultoria import exigir_admin_consultoria
 from esquemas import ChaveApiCriar, ChaveApiLer
 from modelos import ChaveApi, Usuario
-from orquestracao.modelos_ia import PROVEDORES
 from rotas._comum import organizacao_acessivel
 from sessao import obter_sessao
 
 rotas = APIRouter(tags=["chaves"])
 
-# Provedores que o motor sabe consumir (Fase 7-A): Anthropic, OpenAI, Google.
-PROVEDORES_SUPORTADOS = set(PROVEDORES)
+# Serviços cuja chave o cofre aceita: provedores de IA (Anthropic/OpenAI/Google)
+# + serviços compartilháveis de instrumento (Tavily/busca web). Ver chaves.py.
+PROVEDORES_SUPORTADOS = set(SERVICOS)
 
 
 def _validar_provedor(provedor: str) -> None:
     if provedor not in PROVEDORES_SUPORTADOS:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
-            f"Provedor '{provedor}' ainda não é suportado. Disponível nesta fase: "
+            f"Serviço '{provedor}' não é suportado. Disponíveis: "
             f"{', '.join(sorted(PROVEDORES_SUPORTADOS))}.",
         )
 

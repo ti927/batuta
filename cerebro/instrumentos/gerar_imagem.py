@@ -75,11 +75,15 @@ class GerarImagem(TipoInstrumento):
     Config = ConfigImagem
     Args = ArgsImagem
     campos_secretos = ("chave_api",)
+    # Reusa a chave OpenAI da organização ("Chaves de IA") quando o instrumento não
+    # tem uma chave própria — a borda a injeta. Ver instrumentos/base.py.
+    chave_compartilhada = ("chave_api", "openai")
 
     def executar(self, config: ConfigImagem, args: ArgsImagem) -> dict:
         if not config.chave_api:
             raise FalhaInstrumento(
-                "falta a chave de API de imagem — configure-a no cofre.",
+                "falta a chave de API de imagem — configure-a no instrumento ou "
+                "cadastre a chave OpenAI da organização em Chaves de IA.",
                 retentavel=False,
             )
         corpo = {

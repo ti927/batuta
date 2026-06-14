@@ -53,6 +53,9 @@ def listar_tipos(usuario: Usuario = Depends(usuario_atual)):
             esquema_config=t.Config.model_json_schema(),
             esquema_args=t.Args.model_json_schema(),
             campos_secretos=list(t.campos_secretos),
+            chave_compartilhada=(
+                list(t.chave_compartilhada) if t.chave_compartilhada else None
+            ),
             acao_irreversivel=t.acao_irreversivel,
         )
         for t in encaixe.tipos_disponiveis()

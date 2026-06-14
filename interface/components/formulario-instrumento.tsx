@@ -29,6 +29,10 @@ type CampoConfig = {
   obrigatorio: boolean;
   secreto: boolean;
   opcoes?: string[]; // enum/Literal → vira Select
+  // Se este campo reusa uma chave de serviço da organização (ex.: gerar_imagem→
+  // openai): aí é opcional — em branco usa a chave da org.
+  compartilhada?: boolean;
+  servico?: string;
 };
 
 // Lê o tipo de um campo do JSON Schema, lidando com Optional (anyOf [tipo, null]).
@@ -56,6 +60,7 @@ export function camposDoTipo(tipo: TipoInstrumento | undefined): CampoConfig[] {
     (esquema.properties as Record<string, Record<string, unknown>>) ?? {};
   const obrigatorios = new Set((esquema.required as string[]) ?? []);
   const secretos = new Set(tipo.campos_secretos ?? []);
+  const [campoCompart, servicoCompart] = tipo.chave_compartilhada ?? [null, null];
   return Object.entries(props).map(([nome, prop]) => ({
     nome,
     tipo: tipoDoCampo(prop),
@@ -63,6 +68,8 @@ export function camposDoTipo(tipo: TipoInstrumento | undefined): CampoConfig[] {
     obrigatorio: obrigatorios.has(nome),
     secreto: secretos.has(nome),
     opcoes: opcoesDoCampo(prop),
+    compartilhada: nome === campoCompart,
+    servico: nome === campoCompart ? (servicoCompart ?? undefined) : undefined,
   }));
 }
 
@@ -124,9 +131,11 @@ function CampoConfigInput({
         placeholder={
           campo.secreto && jaGuardado
             ? `•••• ${jaGuardado} — em branco para manter`
-            : campo.secreto
-              ? "deixe em branco se não tiver"
-              : undefined
+            : campo.secreto && campo.compartilhada
+              ? "em branco para usar a chave da organização"
+              : campo.secreto
+                ? "deixe em branco se não tiver"
+                : undefined
         }
       />
     );
@@ -139,7 +148,14 @@ function CampoConfigInput({
         {campo.obrigatorio && <span className="text-destructive">*</span>}
       </span>
       {entrada}
-      {campo.descricao && (
+      {campo.compartilhada && (
+        <span className="text-xs font-normal text-muted-foreground">
+          Opcional: em branco, usa a chave de {campo.servico} cadastrada em Chaves
+          e credenciais da organização. Preencha só para uma chave exclusiva deste
+          instrumento.
+        </span>
+      )}
+      {campo.descricao && !campo.compartilhada && (
         <span className="text-xs font-normal text-muted-foreground">
           {campo.descricao}
         </span>

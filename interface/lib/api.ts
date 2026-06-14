@@ -154,9 +154,31 @@ export type TipoInstrumento = {
   esquema_args: Record<string, unknown>;
   // Campos da config que são segredos (cifrados, nunca reexibidos) — Fase 7-B.
   campos_secretos: string[];
+  // Se o tipo reusa uma chave de serviço compartilhada da org: [campo, serviço]
+  // (ex.: ["chave_api","openai"]). Esse campo é OPCIONAL no formulário.
+  chave_compartilhada: [string, string] | null;
   // Baseline do tipo: este tipo PODE escrever/agir de forma irreversível? (a
   // irreversibilidade real da instância depende da config — método, somente_leitura).
   acao_irreversivel: boolean;
+};
+
+// Inventário unificado de credenciais de instrumento (tela "Chaves e credenciais").
+export type CredencialCampo = {
+  campo: string;
+  definido: boolean;
+  ultimos4: string | null;
+  compartilhada: boolean; // reusa uma chave de serviço da org → não precisa própria
+  servico: string | null;
+};
+
+export type CredencialInstrumento = {
+  instrumento_id: string;
+  instrumento_nome: string;
+  time_id: string;
+  time_nome: string;
+  tipo: string;
+  tipo_nome: string;
+  campos: CredencialCampo[];
 };
 
 // ─── Mensageria / Conversas (Fase 1) ───
