@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     func,
@@ -417,3 +418,96 @@ class MemoriaProjeto(IdData, Base):
     conteudo: Mapped[str] = mapped_column(Text, nullable=False)
 
     __table_args__ = (Index("ix_memoria_projeto_conversa", "conversa_id"),)
+
+
+# ───────────────────── Mensageria de mão dupla (Fase 1) ──────────────────────
+
+
+class Conversa(IdData, Base):
+    """Uma conversa (sessão) entre um contato externo e o time, por um canal.
+
+    É o objeto de 1ª classe que coordena a mão dupla: agrupa as mensagens de um
+    contato, o estado da conversa e o vínculo com a execução do motor. NÃO é um
+    "ambiente de canais" da organização (essa abstração foi rejeitada e revertida)
+    — a IDENTIDADE do canal é o `instrumento` (`enviar_telegram`/`enviar_whatsapp`):
+    cada instância de instrumento (com seu próprio bot/número) recebe e envia.
+
+    Nasce quando o contato manda a 1ª mensagem (inbound-first). `destino_tipo` +
+    `destino_id` dizem quem atende: um agente (modo conversacional) ou uma
+    automação (modo fluxo); não é FK porque aponta para tabelas diferentes.
+    `execucao_id` é a execução viva que esta conversa conduz (modo fluxo).
+
+    Camada de borda — o núcleo de orquestração não conhece esta tabela. Ver
+    `docs/MENSAGERIA-PLANO.md`."""
+
+    __tablename__ = "conversas"
+    instrumento_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("instrumentos.id", ondelete="CASCADE"), nullable=False
+    )
+    canal: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'telegram'")
+    )
+    # Identificador do contato no canal (chat_id do Telegram; depois, telefone do
+    # WhatsApp). É a chave de roteamento — o id cru, não um conceito de identidade.
+    contato_chave: Mapped[str] = mapped_column(String(120), nullable=False)
+    # Nome de exibição do contato (vem no webhook). Conveniência para o operador.
+    contato_nome: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    estado: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default=text("'aberta'")
+    )  # aberta | bot_respondendo | aguardando_resposta | humano_assumiu | fechada
+    destino_tipo: Mapped[str | None] = mapped_column(String(20), nullable=True)  # agente|automacao
+    destino_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    execucao_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("execucoes.id", ondelete="SET NULL"), nullable=True
+    )
+    # Prazo de inatividade: quando vence, o vigia (sweeper) cutuca e depois encerra.
+    aguardando_ate: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    nudge_enviado: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    # Operador que assumiu a conversa (takeover). Nulo = bot no comando.
+    atribuida_a: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
+    )
+    custo_acumulado_usd: Mapped[float] = mapped_column(
+        Numeric(12, 6), nullable=False, server_default=text("0")
+    )
+    turnos: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
+    ultima_entrada_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        # No máximo UMA conversa viva por (canal/bot, contato); fechadas acumulam.
+        Index(
+            "uq_conversa_viva",
+            "instrumento_id",
+            "contato_chave",
+            unique=True,
+            postgresql_where=text("estado <> 'fechada'"),
+        ),
+        Index("ix_conversa_instrumento", "instrumento_id"),
+    )
+
+
+class MensagemConversa(IdData, Base):
+    """Uma mensagem na thread de uma conversa (contato, agente, operador ou
+    sistema). Guarda o texto e, opcionalmente, metadados de mídia (ex.: áudio
+    transcrito). `entregue` registra o status de entrega ao contato."""
+
+    __tablename__ = "mensagens_conversa"
+    conversa_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("conversas.id", ondelete="CASCADE"), nullable=False
+    )
+    papel: Mapped[str] = mapped_column(String(20), nullable=False)  # contato|agente|operador|sistema
+    conteudo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    midia: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    entregue: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+
+    __table_args__ = (Index("ix_mensagem_conversa", "conversa_id", "criado_em"),)
