@@ -97,3 +97,17 @@ def info_webhook(token: str) -> dict:
     with httpx.Client(timeout=TIMEOUT_S) as cliente:
         resposta = cliente.post(f"{API_BASE}/bot{token}/getWebhookInfo")
     return resposta.json() if resposta.content else {"ok": resposta.is_success}
+
+
+def baixar_arquivo(token: str, file_id: str) -> bytes:
+    """Baixa o conteúdo de um arquivo do Telegram (ex.: o áudio de uma mensagem
+    de voz): getFile devolve o caminho, depois baixa de /file/bot<token>/<caminho>."""
+    with httpx.Client(timeout=30.0) as cliente:
+        info = cliente.post(f"{API_BASE}/bot{token}/getFile", json={"file_id": file_id})
+        info.raise_for_status()
+        caminho = (info.json().get("result") or {}).get("file_path")
+        if not caminho:
+            raise RuntimeError("Telegram não devolveu o caminho do arquivo.")
+        conteudo = cliente.get(f"{API_BASE}/file/bot{token}/{caminho}")
+        conteudo.raise_for_status()
+        return conteudo.content

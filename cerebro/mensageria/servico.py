@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 import precos
 import segredos_instrumento
 from chaves import resolver_chaves_por_time
-from mensageria import telegram
+from mensageria import telegram, transcricao
 from modelos import Agente, AgenteInstrumento, Conversa, Instrumento, MensagemConversa
 from orquestracao.agente import executar_agente
 from orquestracao.llm import usar_chaves
@@ -152,12 +152,11 @@ def registrar_entrada(
     elif msg.contato_nome and conversa.contato_nome != msg.contato_nome:
         conversa.contato_nome = msg.contato_nome
 
-    # Conteúdo do contato (texto; mídia/voz vira aviso até a Fase H tratar).
+    # Conteúdo do contato. Voz fica SEM texto (conteudo=None): é transcrita no
+    # turno (Fase H), em segundo plano. Outras mídias viram um aviso gentil.
     conteudo = msg.texto
-    if conteudo is None:
-        conteudo = "[mensagem de voz — ainda não consigo ouvir áudio]" if (
-            msg.midia or {}
-        ).get("tipo") == "voz" else "[conteúdo não textual — ainda não consigo ler]"
+    if conteudo is None and (msg.midia or {}).get("tipo") != "voz":
+        conteudo = "[conteúdo não textual — ainda não consigo ler]"
     sessao.add(
         MensagemConversa(
             conversa_id=conversa.id, papel="contato", conteudo=conteudo, midia=msg.midia
@@ -207,6 +206,42 @@ def _passar_para_humano(sessao: Session, conversa: Conversa, nota: str) -> None:
     sessao.add(
         MensagemConversa(conversa_id=conversa.id, papel="sistema", conteudo=nota)
     )
+
+
+def _transcrever_pendentes(
+    sessao: Session, conversa: Conversa, token: str, chave_openai: str | None
+) -> None:
+    """Transcreve (Fase H) as mensagens de voz ainda sem texto da conversa, para
+    o agente recebê-las como texto. Sem chave OpenAI ou em falha, deixa um aviso
+    gentil no lugar — nunca trava o atendimento."""
+    pendentes = sessao.scalars(
+        select(MensagemConversa)
+        .where(
+            MensagemConversa.conversa_id == conversa.id,
+            MensagemConversa.papel == "contato",
+            MensagemConversa.conteudo.is_(None),
+        )
+        .order_by(MensagemConversa.criado_em.desc())
+        .limit(5)
+    ).all()
+    mexeu = False
+    for m in pendentes:
+        midia = m.midia or {}
+        if midia.get("tipo") != "voz":
+            continue
+        texto = None
+        file_id = midia.get("file_id")
+        if token and chave_openai and file_id:
+            try:
+                audio = telegram.baixar_arquivo(token, file_id)
+                texto = transcricao.transcrever(audio, chave_openai)
+            except Exception:
+                texto = None
+        m.conteudo = texto or "[áudio recebido — não consegui transcrever agora]"
+        m.midia = {**midia, "transcrito": bool(texto)}
+        mexeu = True
+    if mexeu:
+        sessao.commit()
 
 
 def processar_turno(conversa_id: uuid.UUID) -> None:
@@ -262,9 +297,11 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
             sessao.commit()
             return
 
+        chaves, _ = resolver_chaves_por_time(sessao, agente.time_id)
+        # Áudio → texto (Fase H): transcreve vozes pendentes antes de montar o turno.
+        _transcrever_pendentes(sessao, conversa, token, chaves.get("openai"))
         cinto = _cinto_sem_canais(sessao, agente.id)
         entrada = _montar_entrada(sessao, conversa)
-        chaves, _ = resolver_chaves_por_time(sessao, agente.time_id)
 
         try:
             with usar_chaves(chaves):

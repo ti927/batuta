@@ -258,6 +258,57 @@ def test_teto_estourado_passa_para_humano(sessao, dados, monkeypatch):
     assert enviados == [servico.MSG_LIMITE]  # cortesia enviada ao contato
 
 
+# ───────────────────────── áudio → texto (Fase H) ────────────────────────────
+
+
+def test_voz_fica_sem_texto_ate_o_turno(sessao, dados):
+    inst = _bot(sessao, dados)
+    _agente_com(sessao, dados, inst)
+    voz = telegram.MensagemEntrante("555", "João", None, {"tipo": "voz", "file_id": "F"})
+    conversa, _ = servico.registrar_entrada(sessao, inst, voz)
+    m = sessao.scalars(
+        select(MensagemConversa).where(MensagemConversa.conversa_id == conversa.id)
+    ).first()
+    assert m.conteudo is None and (m.midia or {}).get("tipo") == "voz"
+
+
+def test_audio_transcrito_entra_no_turno(sessao, dados, monkeypatch):
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "T"})
+    _agente_com(sessao, dados, inst)
+    voz = telegram.MensagemEntrante("555", "João", None, {"tipo": "voz", "file_id": "F"})
+    conversa, _ = servico.registrar_entrada(sessao, inst, voz)
+
+    entradas = []
+    monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
+    monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
+    monkeypatch.setattr(
+        servico, "resolver_chaves_por_time", lambda s, t: ({"openai": "K"}, {})
+    )
+    monkeypatch.setattr("mensageria.telegram.baixar_arquivo", lambda token, fid: b"audio")
+    monkeypatch.setattr(
+        "mensageria.transcricao.transcrever", lambda audio, chave, **kw: "Quero saber o preço"
+    )
+    monkeypatch.setattr(
+        servico,
+        "executar_agente",
+        lambda ag, cinto, entrada: entradas.append(entrada) or {"saida": "São R$10."},
+    )
+    monkeypatch.setattr(servico.telegram, "enviar", lambda *a: {"ok": True})
+
+    servico.processar_turno(conversa.id)
+
+    # a voz virou texto e entrou no enquadramento do turno
+    assert entradas and "Quero saber o preço" in entradas[0]
+    m = sessao.scalars(
+        select(MensagemConversa).where(
+            MensagemConversa.conversa_id == conversa.id,
+            MensagemConversa.papel == "contato",
+        )
+    ).first()
+    assert m.conteudo == "Quero saber o preço" and (m.midia or {}).get("transcrito") is True
+
+
 # ───────────────────── inatividade: cutucar e encerrar (Fase J) ──────────────
 
 
