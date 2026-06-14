@@ -261,3 +261,68 @@ def test_entrada_valida_secret_token(cliente, dados, sessao, monkeypatch):
         headers={"X-Telegram-Bot-Api-Secret-Token": "s3cr3t"},
     )
     assert r.status_code == 200
+
+
+# ─────────────────────── inbox e takeover (Fase F) ───────────────────────────
+
+
+def test_listar_conversas_da_inbox(cliente, entrar, dados, sessao):
+    entrar(dados["admin"])
+    inst = _bot(sessao, dados)
+    _agente_com(sessao, dados, inst)
+    servico.registrar_entrada(sessao, inst, _msg("oi"))
+    r = cliente.get(f"/times/{dados['timeA'].id}/conversas")
+    assert r.status_code == 200
+    corpo = r.json()
+    assert len(corpo) == 1 and corpo[0]["contato_chave"] == "555"
+
+
+def test_obter_conversa_traz_a_thread(cliente, entrar, dados, sessao):
+    entrar(dados["admin"])
+    inst = _bot(sessao, dados)
+    _agente_com(sessao, dados, inst)
+    conversa, _ = servico.registrar_entrada(sessao, inst, _msg("oi"))
+    r = cliente.get(f"/conversas/{conversa.id}")
+    assert r.status_code == 200
+    assert [m["papel"] for m in r.json()["mensagens"]] == ["contato"]
+
+
+def test_assumir_silencia_o_bot(cliente, entrar, dados, sessao):
+    entrar(dados["admin"])
+    inst = _bot(sessao, dados)
+    _agente_com(sessao, dados, inst)
+    conversa, _ = servico.registrar_entrada(sessao, inst, _msg("oi"))
+    r = cliente.post(f"/conversas/{conversa.id}/assumir")
+    assert r.status_code == 200 and r.json()["estado"] == "humano_assumiu"
+    # uma nova mensagem do contato NÃO dispara o bot
+    _, deve = servico.registrar_entrada(sessao, inst, _msg("ainda aí?"))
+    assert deve is False
+
+
+def test_responder_operador_envia_e_grava(cliente, entrar, dados, sessao, monkeypatch):
+    entrar(dados["admin"])
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "TK"})
+    _agente_com(sessao, dados, inst)
+    conversa, _ = servico.registrar_entrada(sessao, inst, _msg("oi"))
+    enviados = []
+    monkeypatch.setattr(
+        "mensageria.telegram.enviar",
+        lambda t, c, x: enviados.append((t, c, x)) or {"ok": True},
+    )
+    r = cliente.post(
+        f"/conversas/{conversa.id}/responder-operador",
+        json={"texto": "Aqui é o operador."},
+    )
+    assert r.status_code == 200 and r.json()["papel"] == "operador"
+    assert enviados == [("TK", "555", "Aqui é o operador.")]
+
+
+def test_devolver_e_fechar(cliente, entrar, dados, sessao):
+    entrar(dados["admin"])
+    inst = _bot(sessao, dados)
+    _agente_com(sessao, dados, inst)
+    conversa, _ = servico.registrar_entrada(sessao, inst, _msg("oi"))
+    cliente.post(f"/conversas/{conversa.id}/assumir")
+    assert cliente.post(f"/conversas/{conversa.id}/devolver").json()["estado"] == "aberta"
+    assert cliente.post(f"/conversas/{conversa.id}/fechar").json()["estado"] == "fechada"

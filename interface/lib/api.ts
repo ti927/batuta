@@ -159,6 +159,50 @@ export type TipoInstrumento = {
   acao_irreversivel: boolean;
 };
 
+// ─── Mensageria / Conversas (Fase 1) ───
+// (Nota: `MensagemConversa`, mais abaixo, é da IA criadora — outro conceito.)
+
+export type MensagemDaConversa = {
+  id: string;
+  papel: "contato" | "agente" | "operador" | "sistema";
+  conteudo: string | null;
+  midia: Record<string, unknown> | null;
+  entregue: boolean;
+  criado_em: string;
+};
+
+export type Conversa = {
+  id: string;
+  instrumento_id: string;
+  canal: string;
+  contato_chave: string;
+  contato_nome: string | null;
+  estado:
+    | "aberta"
+    | "bot_respondendo"
+    | "aguardando_resposta"
+    | "humano_assumiu"
+    | "fechada";
+  destino_tipo: string | null;
+  destino_id: string | null;
+  atribuida_a: string | null;
+  turnos: number;
+  aguardando_ate: string | null;
+  criado_em: string;
+  atualizado_em: string;
+};
+
+export type ConversaComMensagens = Conversa & {
+  mensagens: MensagemDaConversa[];
+};
+
+// Estado do canal (GET /mensageria/{id}/canal).
+export type StatusCanal = {
+  conectado: boolean;
+  tem_token: boolean;
+  webhook: Record<string, unknown> | null;
+};
+
 // ─── Automações: a cadeia é um grafo de caminhos (bifurcação) ───
 
 export type SaidaCadeia = {

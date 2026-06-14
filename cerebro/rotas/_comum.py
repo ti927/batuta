@@ -19,6 +19,7 @@ from auth import exigir_papel
 from modelos import (
     Agente,
     Automacao,
+    Conversa,
     ConversaCriacao,
     Execucao,
     Instrumento,
@@ -102,4 +103,17 @@ def conversa_criacao_acessivel(
             status.HTTP_404_NOT_FOUND, "Conversa de criação não encontrada"
         )
     exigir_papel(sessao, usuario, conversa.organizacao_id, minimo)
+    return conversa
+
+
+def conversa_acessivel(
+    sessao: Session, usuario: Usuario, conversa_id: uuid.UUID, minimo: str = "observador"
+) -> Conversa:
+    """Uma conversa de mensageria, pela cadeia conversa → instrumento → time → org."""
+    conversa = sessao.get(Conversa, conversa_id)
+    if conversa is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversa não encontrada")
+    inst = sessao.get(Instrumento, conversa.instrumento_id)
+    time = sessao.get(Time, inst.time_id)
+    exigir_papel(sessao, usuario, time.organizacao_id, minimo)
     return conversa
