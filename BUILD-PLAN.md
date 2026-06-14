@@ -864,24 +864,54 @@ O Batuta está **no ar em produção**, no domínio próprio, com HTTPS. **Pré-
 
 **Limitação conhecida (follow-up):** `gerar_pdf`/`gerar_imagem` gravam em disco efêmero do Railway → migrar p/ Supabase Storage depois.
 
-## FASE — Mensageria (WhatsApp): o canal do Líder (§10)
-Hoje a espera-por-humano (pergunta / portão / confirmação) é respondida **na tela do Batuta** — a decisão que destravou o core (ver a nota do §382). Mas o `PRODUTO.md` §10 prevê que o **canal do Líder é o WhatsApp** (cada time com seu número; §111 o gatilho "mensagem recebida"; §126 transcrição de áudio; §14 modo intermediação). Esse canal foi adiado do core "para a Etapa 2", mas a reorganização do `MIGRACAO.md` (§4.1) não o recolheu em nenhuma das cinco fases — **esta fase fecha essa lacuna**.
+## FASE — Mensageria de mão dupla (Telegram, depois WhatsApp)  📋 PLANEJADA — APROVADA, aguarda execução
+> **Plano detalhado e durável em `docs/MENSAGERIA-PLANO.md`** (esta seção é o resumo). Lição que originou
+> o desenho: a memória `feedback_canais-sao-instrumentos`.
 
-**Decisão de produto (registrada 2026-06-09, revista no mesmo dia):** o provedor é o **Evolution API** (open-source, sobre o protocolo do WhatsApp Web/multi-dispositivo). **Motivo:** o vínculo é por **QR code, sem fricção** — o usuário abre "Aparelhos conectados" no WhatsApp e escaneia; usa **qualquer número**, sem burocracia da Meta. (O **Cloud API oficial NÃO faz QR** — exige conta Meta Business, registro de número, verificação e mensagens-modelo aprovadas; alta fricção. Por isso "QR sem fricção" ⇒ Evolution.) **Trade-off consciente:** Evolution é **não-oficial** → contra os termos do WhatsApp → **risco de banir o número**. Mitigações: número **dedicado por time**, uso humano (sem disparo em massa/spam), aquecer o número. Aceitável para ferramenta interna com conversas reais e volume modesto. **Cloud API fica como upgrade futuro** para clientes que exijam robustez oficial.
+O `PRODUTO.md` prevê que os agentes conversem com pessoas por mensageria (§10/§111/§126/§14). Hoje a
+espera-por-humano é respondida **na tela do Batuta**, e o Batuta só sabe *enviar* (instrumentos de mão
+única). Falta a **mão dupla**: a pessoa manda mensagem, o agente responde, a pessoa replica, o agente
+reage — em laço. Esta fase fecha a lacuna.
 
-**Princípio (núcleo congelado):** isto é um **adaptador de canal na borda** — um gatilho de entrada novo + um serviço de envio. **Não toca no motor de orquestração nem na lógica de espera-por-humano**, que já existem e estão validados; só liga o WhatsApp às portas que já existem (`POST /webhooks/...` de entrada e `POST /execucoes/{id}/responder` de retomada).
+**Correção de rota (2026-06-13):** uma 1ª tentativa criou um **"ambiente de Canais" no nível da
+organização** (tabelas `canais`/`identidades_canal` + página própria) seguindo o antigo
+`docs/CANAL-MENSAGERIA-PLANO.md`. O maestro **rejeitou e mandou reverter** — a intenção real é
+**canal = INSTRUMENTO** no cinto do agente. O trabalho ficou preservado na branch `canais-mensageria`.
+A seção anterior deste arquivo (provedor **Evolution**, "canal do Líder", onboarding por QR) está
+**superada** por este novo desenho.
 
-Escopo (detalhar em investigar/implementar/verificar ao executar):
-- **Pré-requisito:** **URL pública HTTPS** (o webhook da Evolution → cérebro não chega em `localhost`; e a própria Evolution precisa ser hospedada) → esta fase **anda junto com / logo após a Implantação em produção**.
-- **Onboarding por QR (o coração do pedido):** na tela do time, **"Conectar WhatsApp"** → o cérebro cria/abre uma **instância Evolution** do time e pede o QR → a UI **mostra o QR** → o usuário escaneia → conectado. Status de conexão por polling/webhook da Evolution. **Um número por time = uma instância Evolution por time** (§10).
-- **Hospedagem da Evolution (sub-decisão para quando a fase rodar):** self-host (container Docker, ex.: no Railway, junto do cérebro) **ou** Evolution Cloud gerenciada.
-- **Segredos no cofre** (reusa 7-B): API key da Evolution + nome/token da instância, por organização/time.
-- **Entrada:** a Evolution chama um **webhook do cérebro** com a mensagem recebida → mapeia instância/número → time → automação do **Líder** → reusa `criar_execucao` + `fila.enfileirar()` (`cerebro/orquestracao/disparo.py`, padrão de `cerebro/rotas/webhooks.py`). Remetente identificado pelo telefone (ex.: reembolso §168).
-- **Saída:** serviço que chama a **API de envio da Evolution** — usado pelo **Líder** para confirmação de recebimento e sinal de progresso em fluxos longos (§17/§21), perguntas e **portões de aprovação**. A espera que hoje é na tela ganha o **WhatsApp** como canal: a pergunta sai pela Evolution e a resposta do humano retoma a execução pela porta `responder` que já existe.
-- **Áudio → texto** (§126): áudio recebido é transcrito antes de entrar na cadeia.
-- **UI:** "Conectar WhatsApp" por time (QR + status conectado); o `DESIGN-SYSTEM.md` já tem o vocabulário.
+**Faseamento (decisão do maestro):** **Fase 1 = Telegram com TODAS as soluções de atendente de IA**
+(profissional); **Fase 2 = incorporar WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
 
-**Definition of Done:** escanear o QR conecta o número do time; uma mensagem real chega ao Líder e ele responde pelo WhatsApp; um fluxo com portão **pergunta no WhatsApp** e a resposta retoma a execução; um áudio recebido vira texto. Tudo sem tocar no motor de orquestração.
+**Princípio (núcleo congelado):** o canal é um **instrumento** (`enviar_telegram`/`enviar_whatsapp`,
+molde `cerebro/instrumentos/webhook_saida.py`, token = campo secreto do cofre 7-B), e em cima dele uma
+**camada fina de conversação na borda** coordena os turnos. **Não toca** `cerebro/orquestracao/cadeia.py`
+nem `agente.py`; reusa a espera-por-humano (`responder`), a fila (`criar_execucao`/`fila.enfileirar`), o
+agendador (sweeper de timeout) e a infra de chaves (Whisper via OpenAI).
+
+**O novo conceito de 1ª classe:** uma **Conversa (sessão)** — tabelas novas `conversas` +
+`mensagens_conversa` (aditivas; o motor não muda de esquema) — com estado
+(aberta→bot_respondendo→aguardando_resposta→humano_assumiu→fechada). Inbox, transferência para humano,
+debounce, timeout, tetos e métricas penduram nessa sessão.
+
+**Decisões batidas:** suportar **os dois** formatos (conversacional = 1 agente em papo natural com
+histórico por turno; e fluxo com etapas = cadeia com pausa/retoma), começando pelo conversacional;
+inatividade = **cutucar uma vez e depois encerrar**; teto de gasto estourado = **passar para um humano**.
+
+**Escopo da Fase 1 (todas as soluções de atendente):** instrumento de envio; webhook de entrada por
+instrumento + roteamento; Conversa/sessão; mão dupla (conversacional e fluxo); transferência para humano +
+inbox; áudio→texto (Whisper); debounce/rate-limit/teto de gasto/máx. turnos; anti prompt-injection +
+transparência + sandbox; timeout + nudge (job no agendador); horário comercial, status de entrega,
+métricas. **Detalhe passo a passo (Milestones A–K) em `docs/MENSAGERIA-PLANO.md`.**
+
+**Pré-requisitos do maestro:** bot de teste no BotFather + token (regenerar os tokens que vazaram no chat
+antes de uso real); chave OpenAI no cofre (para a transcrição de áudio). Pré-requisito de infra **já
+cumprido**: URL pública HTTPS (`api.batuta.team`).
+
+**Definition of Done (Fase 1):** mandar mensagem (texto ou áudio) ao bot → o agente responde; rajada vira
+um turno; a conversa aparece na inbox e um operador pode assumir/devolver; inatividade gera nudge e depois
+encerra; estourar o teto passa a conversa para humano; suíte verde; núcleo `cadeia.py`/`agente.py` sem
+diff.
 
 ## FASE — Biblioteca: a base de conhecimento da organização (§9)  📋 PLANEJADA — APROVADA, aguarda execução
 O `PRODUTO.md` §9 prevê a **Biblioteca** ("segundo cérebro") — mas ela **caiu num vão** e nunca foi implementada (hoje só há um placeholder em `/biblioteca`; não há tabela). O maestro **revisou o conceito**: é uma **base de conhecimento da ORGANIZAÇÃO inteira** (todos os times acessam, não é por-time) de **documentos gerais** (PDF, Word, planilhas, texto — não só markdown), que os agentes **consultam** durante a execução. Esta fase fecha essa lacuna. A decisão arquitetural está fechada em **`docs/BIBLIOTECA-DECISAO.md`** e o pano de fundo técnico em **`docs/ARQUITETURA.md`**; o **plano de implementação detalhado (10 passos) está aprovado** e aguarda o sinal do maestro para começar.
