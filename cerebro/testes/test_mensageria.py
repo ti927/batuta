@@ -184,3 +184,80 @@ def test_processar_turno_envia_resposta_e_grava(sessao, dados, monkeypatch):
     ).all()
     assert len(do_agente) == 1
     assert do_agente[0].conteudo == "Custa R$10." and do_agente[0].entregue
+
+
+# ─────────────────────── endpoint de entrada (HTTP) ──────────────────────────
+
+
+def test_endpoint_entrada_agenda_turno(cliente, dados, sessao, monkeypatch):
+    inst = _bot(sessao, dados)
+    _agente_com(sessao, dados, inst)
+    agendados = []
+    monkeypatch.setattr(servico, "processar_turno", lambda cid: agendados.append(cid))
+
+    r = cliente.post(
+        f"/mensageria/{inst.id}/entrada",
+        json={"message": {"chat": {"id": 777}, "from": {"first_name": "Zé"}, "text": "oi"}},
+    )
+    assert r.status_code == 200 and r.json() == {"ok": True}
+    assert len(agendados) == 1
+    conv = sessao.scalars(
+        select(Conversa).where(Conversa.instrumento_id == inst.id)
+    ).first()
+    assert conv is not None and conv.contato_chave == "777"
+
+
+def test_endpoint_entrada_404_para_instrumento_que_nao_e_canal(cliente, dados, sessao):
+    inst = Instrumento(
+        time_id=dados["timeA"].id, nome="busca", tipo="busca_web", configuracao={}
+    )
+    sessao.add(inst)
+    sessao.flush()
+    r = cliente.post(f"/mensageria/{inst.id}/entrada", json={"message": {}})
+    assert r.status_code == 404
+
+
+# ────────────────────────── conectar canal (Fase E) ──────────────────────────
+
+
+def test_ativar_canal_seta_webhook_e_guarda_secret(cliente, entrar, dados, sessao, monkeypatch):
+    entrar(dados["admin"])
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "TOK"})
+    chamada = {}
+    monkeypatch.setattr(
+        "mensageria.telegram.configurar_webhook",
+        lambda token, url, secret: chamada.update(token=token, url=url, secret=secret)
+        or {"ok": True},
+    )
+    r = cliente.post(f"/mensageria/{inst.id}/ativar-canal")
+    assert r.status_code == 200
+    assert chamada["token"] == "TOK"
+    assert chamada["url"].endswith(f"/mensageria/{inst.id}/entrada")
+    sessao.refresh(inst)
+    assert inst.configuracao["webhook_secret"] == chamada["secret"]
+
+
+def test_ativar_canal_sem_token_recusa(cliente, entrar, dados, sessao):
+    entrar(dados["admin"])
+    inst = _bot(sessao, dados)  # sem token_bot
+    r = cliente.post(f"/mensageria/{inst.id}/ativar-canal")
+    assert r.status_code == 422
+
+
+def test_entrada_valida_secret_token(cliente, dados, sessao, monkeypatch):
+    inst = _bot(sessao, dados)
+    _agente_com(sessao, dados, inst)
+    inst.configuracao = {"webhook_secret": "s3cr3t"}
+    sessao.commit()
+    monkeypatch.setattr(servico, "processar_turno", lambda cid: None)
+    corpo = {"message": {"chat": {"id": 1}, "text": "oi"}}
+    # sem o cabeçalho correto → 403
+    assert cliente.post(f"/mensageria/{inst.id}/entrada", json=corpo).status_code == 403
+    # com o cabeçalho correto → 200
+    r = cliente.post(
+        f"/mensageria/{inst.id}/entrada",
+        json=corpo,
+        headers={"X-Telegram-Bot-Api-Secret-Token": "s3cr3t"},
+    )
+    assert r.status_code == 200
