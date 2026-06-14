@@ -28,6 +28,56 @@ def test_resumir_uso_separa_por_origem():
     assert r["por_origem"]["desconhecida"]["tokens_entrada"] == 10
 
 
+# ───────────── por_categoria + Whisper (custo por minuto, pré-calc.) ──────────
+
+
+def _msg_uso(uso):
+    """Mensagem de conversa (mensageria) que guarda a LISTA de uso do turno."""
+    from types import SimpleNamespace as NS
+
+    return NS(uso=uso)
+
+
+def test_entradas_dos_passos_carimba_categoria_execucao():
+    # Passo antigo, sem categoria, é colhido como 'execucao' (a fonte) sem mutar.
+    e_original = {"modelo": "haiku", "tokens_entrada": 10, "tokens_saida": 5}
+    entradas = list(precos.entradas_dos_passos([_passo([e_original])]))
+    assert entradas[0]["categoria"] == "execucao"
+    assert "categoria" not in e_original  # não mutou o dict guardado
+
+
+def test_custo_whisper_por_minuto():
+    assert precos.custo_whisper(60) == precos.PRECO_WHISPER_MIN  # 1 min
+    assert precos.custo_whisper(0) == 0.0
+
+
+def test_custo_de_entrada_honra_precalc():
+    # Itens não-token (Whisper) trazem custo_usd pronto — é o que vale.
+    assert precos.custo_de_entrada({"modelo": "whisper-1", "custo_usd": 0.012}) == 0.012
+    # Sem custo_usd, estima por token (haiku entrada = 1.0/Mtok).
+    por_token = {"modelo": "haiku", "tokens_entrada": 1_000_000, "tokens_saida": 0}
+    assert precos.custo_de_entrada(por_token) == 1.0
+
+
+def test_resumir_uso_separa_por_categoria_e_inclui_mensageria():
+    mensagens = [
+        _msg_uso(
+            [
+                {"modelo": "haiku", "tokens_entrada": 300, "tokens_saida": 100,
+                 "origem": "consultoria", "categoria": "mensageria"},
+                {"modelo": "whisper-1", "segundos": 120, "custo_usd": 0.012,
+                 "origem": "consultoria", "categoria": "transcricao"},
+            ]
+        )
+    ]
+    r = precos.resumir_uso(mensagens=mensagens)
+    assert r["por_categoria"]["mensageria"]["tokens_entrada"] == 300
+    # custo pré-calculado do Whisper é honrado na agregação por categoria.
+    assert r["por_categoria"]["transcricao"]["custo_usd"] == 0.012
+    # e a origem (chave-mãe) soma as duas categorias.
+    assert r["por_origem"]["consultoria"]["tokens_entrada"] == 300
+
+
 def _semear_passo(sessao, time_id, origem, te, ts):
     auto = Automacao(time_id=time_id, nome="Auto", tipo_gatilho="manual")
     sessao.add(auto)

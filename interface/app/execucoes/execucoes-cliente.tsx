@@ -13,7 +13,7 @@ import {
   type ResumoUso,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
-import { rotuloOrigem } from "@/lib/uso";
+import { rotuloCategoria, rotuloOrigem } from "@/lib/uso";
 import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -135,6 +135,31 @@ export function ExecucoesCliente({
               </li>
             ))}
           </ul>
+
+          {Object.keys(uso.por_categoria ?? {}).length > 0 && (
+            <>
+              <p className="mb-1 mt-3 font-medium text-foreground">Uso por função</p>
+              <ul className="divide-y divide-border rounded-md border border-border bg-background">
+                {Object.entries(uso.por_categoria).map(([categoria, u]) => (
+                  <li
+                    key={categoria}
+                    className="flex items-center gap-2 p-2 text-xs"
+                  >
+                    <span className="flex-1 text-foreground">
+                      {rotuloCategoria(categoria)}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {u.tokens_entrada.toLocaleString("pt-BR")}+
+                      {u.tokens_saida.toLocaleString("pt-BR")} tok
+                    </span>
+                    <span className="font-medium text-foreground">
+                      ~US${u.custo_usd.toFixed(4)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       )}
 

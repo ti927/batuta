@@ -136,6 +136,7 @@ def responder_turno(
         "tokens_entrada": tokens_entrada,
         "tokens_saida": tokens_saida,
         "origem": origem,
+        "categoria": "conversa",
     }
 
     conversa.mensagens = (conversa.mensagens or []) + [

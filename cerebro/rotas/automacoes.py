@@ -37,9 +37,12 @@ from auth import usuario_atual
 from modelos import (
     Agente,
     Automacao,
+    Conversa,
     ConversaCriacao,
     Execucao,
+    Instrumento,
     Membro,
+    MensagemConversa,
     Organizacao,
     PassoExecucao,
     Time,
@@ -335,7 +338,27 @@ def resumo_uso(
                 ConversaCriacao.organizacao_id == organizacao_id
             )
         conversas = sessao.scalars(consulta_conv).all()
-    return precos.resumir_uso(passos, conversas)
+
+    # Mensageria (atendimento): o uso de IA dos turnos vive em `mensagens_conversa.uso`
+    # (mensagem do agente). O instrumento de canal pertence a um TIME, então o
+    # atendimento entra TANTO no resumo do time quanto no da organização — fechando
+    # o furo de a mensageria (e a transcrição de áudio) não aparecerem nos painéis.
+    consulta_msg = (
+        select(MensagemConversa)
+        .join(Conversa, Conversa.id == MensagemConversa.conversa_id)
+        .join(Instrumento, Instrumento.id == Conversa.instrumento_id)
+        .join(Time, Time.id == Instrumento.time_id)
+        .join(Membro, Membro.organizacao_id == Time.organizacao_id)
+        .where(Membro.usuario_id == usuario.id)
+        .where(MensagemConversa.uso.isnot(None))
+    )
+    if organizacao_id is not None:
+        consulta_msg = consulta_msg.where(Time.organizacao_id == organizacao_id)
+    if time_id is not None:
+        consulta_msg = consulta_msg.where(Instrumento.time_id == time_id)
+    mensagens = sessao.scalars(consulta_msg).all()
+
+    return precos.resumir_uso(passos, conversas, mensagens)
 
 
 @rotas.get("/uso/consultoria")
@@ -369,6 +392,17 @@ def uso_consultoria(
         _coletar(org_id, precos.entradas_dos_passos([passo]))
     for conversa in sessao.scalars(select(ConversaCriacao)).all():
         _coletar(conversa.organizacao_id, precos.entradas_das_conversas([conversa]))
+    # Mensageria (atendimento + transcrição): o instrumento de canal liga a conversa
+    # ao time → organização. Some o que saiu da chave-mãe também no atendimento.
+    linhas_msg = sessao.execute(
+        select(MensagemConversa, Time.organizacao_id)
+        .join(Conversa, Conversa.id == MensagemConversa.conversa_id)
+        .join(Instrumento, Instrumento.id == Conversa.instrumento_id)
+        .join(Time, Time.id == Instrumento.time_id)
+        .where(MensagemConversa.uso.isnot(None))
+    ).all()
+    for msg, org_id in linhas_msg:
+        _coletar(org_id, precos.entradas_das_mensagens([msg]))
 
     por_organizacao = []
     todas: list = []
@@ -384,6 +418,9 @@ def uso_consultoria(
                 "tokens_entrada": r["tokens_entrada"],
                 "tokens_saida": r["tokens_saida"],
                 "custo_usd": r["custo_usd"],
+                # A quebra por FUNÇÃO (execução × conversa × atendimento × transcrição)
+                # da chave-mãe nesta organização — onde o maestro quer enxergar.
+                "por_categoria": r["por_categoria"],
             }
         )
     por_organizacao.sort(key=lambda x: x["custo_usd"], reverse=True)

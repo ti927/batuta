@@ -26,6 +26,7 @@ from mensageria import telegram, transcricao
 from modelos import Agente, AgenteInstrumento, Conversa, Instrumento, MensagemConversa
 from orquestracao.agente import executar_agente
 from orquestracao.llm import usar_chaves
+from orquestracao.modelos_ia import provedor_do_modelo_seguro
 from sessao import CriadorDeSessao
 
 # Tipos de instrumento que são canais de mensageria (a borda os opera; o agente
@@ -188,16 +189,26 @@ def _limites(instrumento: Instrumento) -> tuple[int, float]:
     )
 
 
+def _carimbar_uso_agente(uso: list | None, origens: dict[str, str]) -> list:
+    """Carimba cada entrada de uso do turno do agente com a ORIGEM da chave (por
+    provedor do modelo) e a CATEGORIA 'mensageria', para a contabilização separar
+    em que função a IA foi gasta. Não muta o dict devolvido pelo motor (copia)."""
+    saida = []
+    for e in uso or []:
+        e = dict(e)
+        e.setdefault("categoria", "mensageria")
+        provedor = provedor_do_modelo_seguro(e.get("modelo") or "")
+        origem = origens.get(provedor) if (origens and provedor) else None
+        if origem:
+            e.setdefault("origem", origem)
+        saida.append(e)
+    return saida
+
+
 def _custo_do_turno(uso: list | None) -> float:
-    """Custo aproximado (USD) das chamadas de LLM de um turno do agente."""
-    return sum(
-        precos.custo_usd(
-            u.get("modelo", ""),
-            u.get("tokens_entrada", 0) or 0,
-            u.get("tokens_saida", 0) or 0,
-        )
-        for u in (uso or [])
-    )
+    """Custo aproximado (USD) das chamadas de IA pagas de um turno (chamadas do
+    agente por token + transcrições por minuto, via `custo_usd` pré-calculado)."""
+    return sum(precos.custo_de_entrada(e) for e in (uso or []))
 
 
 def _passar_para_humano(sessao: Session, conversa: Conversa, nota: str) -> None:
@@ -209,11 +220,17 @@ def _passar_para_humano(sessao: Session, conversa: Conversa, nota: str) -> None:
 
 
 def _transcrever_pendentes(
-    sessao: Session, conversa: Conversa, token: str, chave_openai: str | None
-) -> None:
+    sessao: Session,
+    conversa: Conversa,
+    token: str,
+    chave_openai: str | None,
+    origem_openai: str | None = None,
+) -> list:
     """Transcreve (Fase H) as mensagens de voz ainda sem texto da conversa, para
     o agente recebê-las como texto. Sem chave OpenAI ou em falha, deixa um aviso
-    gentil no lugar — nunca trava o atendimento."""
+    gentil no lugar — nunca trava o atendimento. Devolve a LISTA de entradas de
+    uso (categoria 'transcricao'; custo por minuto) das transcrições que de fato
+    rodaram, para a contabilização."""
     pendentes = sessao.scalars(
         select(MensagemConversa)
         .where(
@@ -225,6 +242,7 @@ def _transcrever_pendentes(
         .limit(5)
     ).all()
     mexeu = False
+    usos: list = []
     for m in pendentes:
         midia = m.midia or {}
         if midia.get("tipo") != "voz":
@@ -240,8 +258,20 @@ def _transcrever_pendentes(
         m.conteudo = texto or "[áudio recebido — não consegui transcrever agora]"
         m.midia = {**midia, "transcrito": bool(texto)}
         mexeu = True
+        if texto:  # só contabiliza o áudio que foi de fato transcrito
+            segundos = midia.get("duracao_s") or 0
+            usos.append(
+                {
+                    "modelo": transcricao.MODELO,
+                    "segundos": segundos,
+                    "custo_usd": round(precos.custo_whisper(segundos), 6),
+                    "origem": origem_openai or "desconhecida",
+                    "categoria": "transcricao",
+                }
+            )
     if mexeu:
         sessao.commit()
+    return usos
 
 
 def processar_turno(conversa_id: uuid.UUID) -> None:
@@ -297,9 +327,12 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
             sessao.commit()
             return
 
-        chaves, _ = resolver_chaves_por_time(sessao, agente.time_id)
+        chaves, origens = resolver_chaves_por_time(sessao, agente.time_id)
         # Áudio → texto (Fase H): transcreve vozes pendentes antes de montar o turno.
-        _transcrever_pendentes(sessao, conversa, token, chaves.get("openai"))
+        # As entradas de uso da transcrição (categoria 'transcricao') entram na conta.
+        uso_transcricao = _transcrever_pendentes(
+            sessao, conversa, token, chaves.get("openai"), origens.get("openai")
+        )
         cinto = _cinto_sem_canais(sessao, agente.id)
         entrada = _montar_entrada(sessao, conversa)
 
@@ -341,14 +374,24 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
                 )
             )
 
+        # Uso de IA do turno: chamadas do agente (categoria 'mensageria') +
+        # transcrições de áudio (categoria 'transcricao'), cada uma com a origem da
+        # chave. Vai na mensagem do agente para a mensageria entrar nos painéis.
+        uso_turno = (
+            _carimbar_uso_agente(resultado.get("uso"), origens) + uso_transcricao
+        )
         sessao.add(
             MensagemConversa(
-                conversa_id=conversa.id, papel="agente", conteudo=saida, entregue=entregue
+                conversa_id=conversa.id,
+                papel="agente",
+                conteudo=saida,
+                entregue=entregue,
+                uso=uso_turno or None,
             )
         )
         conversa.turnos = (conversa.turnos or 0) + 1
         conversa.custo_acumulado_usd = float(conversa.custo_acumulado_usd or 0) + (
-            _custo_do_turno(resultado.get("uso"))
+            _custo_do_turno(uso_turno)
         )
         conversa.estado = "aguardando_resposta"
         # Relógio da inatividade: o vigia cutuca/encerra se o contato sumir.

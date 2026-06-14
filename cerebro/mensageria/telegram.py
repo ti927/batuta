@@ -54,12 +54,20 @@ def extrair_update(corpo: dict) -> MensagemEntrante | None:
     if texto:
         return MensagemEntrante(str(chat_id), nome, texto, None)
 
-    # Voz/áudio: marca a mídia (a transcrição entra na Fase H). Outros tipos
+    # Voz/áudio: marca a mídia (a transcrição entra na Fase H). Guarda a duração
+    # (segundos) — o custo do Whisper é por minuto, não por token. Outros tipos
     # caem como mídia genérica para um tratamento gentil mais adiante.
     voz = msg.get("voice") or msg.get("audio")
     if voz:
         return MensagemEntrante(
-            str(chat_id), nome, None, {"tipo": "voz", "file_id": voz.get("file_id")}
+            str(chat_id),
+            nome,
+            None,
+            {
+                "tipo": "voz",
+                "file_id": voz.get("file_id"),
+                "duracao_s": voz.get("duration") or 0,
+            },
         )
     if any(k in msg for k in ("photo", "document", "sticker", "video", "location")):
         return MensagemEntrante(str(chat_id), nome, None, {"tipo": "outro"})

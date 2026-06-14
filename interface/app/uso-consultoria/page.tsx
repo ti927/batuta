@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 
-import { type UsoConsultoria } from "@/lib/api";
+import { type UsoAgrupado, type UsoConsultoria } from "@/lib/api";
 import { buscarCerebro, buscarMeuAcesso } from "@/lib/cerebro-servidor";
+import { rotuloCategoria } from "@/lib/uso";
 import { Aviso } from "@/components/ui/aviso";
 
 async function carregar(): Promise<{
@@ -27,6 +28,30 @@ function tokens(v: number): string {
   return v.toLocaleString("pt-BR");
 }
 
+// Quebra por função (categoria): onde a chave-mãe foi gasta. Ordena da maior para
+// a menor; oculta as categorias zeradas.
+function PorCategoria({ dados }: { dados: Record<string, UsoAgrupado> }) {
+  const linhas = Object.entries(dados ?? {})
+    .filter(([, u]) => u.custo_usd > 0)
+    .sort((a, b) => b[1].custo_usd - a[1].custo_usd);
+  if (linhas.length === 0) return null;
+  return (
+    <ul className="mt-2 space-y-1">
+      {linhas.map(([categoria, u]) => (
+        <li
+          key={categoria}
+          className="flex items-center justify-between gap-2 text-xs"
+        >
+          <span className="text-muted-foreground">
+            {rotuloCategoria(categoria)}
+          </span>
+          <span className="text-foreground">{dolar(u.custo_usd)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default async function UsoConsultoriaPage() {
   const { adminConsultoria, uso } = await carregar();
   return (
@@ -44,7 +69,9 @@ export default async function UsoConsultoriaPage() {
       <p className="mb-6 text-sm text-muted-foreground">
         O consumo que saiu da <span className="font-medium">chave-mãe</span> da
         consultoria — ou seja, o que a consultoria pagou por organizações sem chave
-        própria. Inclui os agentes e a IA de conversa. Valores estimados.
+        própria. Separado por <span className="font-medium">função</span>: execução
+        de agentes, IA de conversa, atendimento (mensageria) e transcrição de áudio.
+        Valores estimados.
       </p>
 
       {!adminConsultoria ? (
@@ -67,32 +94,36 @@ export default async function UsoConsultoriaPage() {
               {tokens(uso.total.tokens_entrada)} tokens de entrada ·{" "}
               {tokens(uso.total.tokens_saida)} de saída
             </p>
+            <div className="mt-3 border-t border-border pt-3">
+              <p className="mb-1 text-xs font-medium text-muted-foreground">
+                Por função
+              </p>
+              <PorCategoria dados={uso.total.por_categoria} />
+            </div>
           </div>
 
-          {/* Por organização */}
-          <div className="overflow-hidden rounded-lg border border-border bg-card">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                  <th className="p-3 font-medium">Organização</th>
-                  <th className="p-3 text-right font-medium">Tokens</th>
-                  <th className="p-3 text-right font-medium">Custo</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {uso.por_organizacao.map((o) => (
-                  <tr key={o.organizacao_id}>
-                    <td className="p-3 text-foreground">{o.organizacao_nome}</td>
-                    <td className="p-3 text-right text-muted-foreground">
-                      {tokens(o.tokens_entrada + o.tokens_saida)}
-                    </td>
-                    <td className="p-3 text-right text-foreground">
-                      {dolar(o.custo_usd)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* Por organização — cada uma com a quebra por função */}
+          <p className="mb-2 text-sm font-medium text-foreground">
+            Por organização
+          </p>
+          <div className="space-y-3">
+            {uso.por_organizacao.map((o) => (
+              <div
+                key={o.organizacao_id}
+                className="rounded-lg border border-border bg-card p-4"
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-medium text-foreground">
+                    {o.organizacao_nome}
+                  </span>
+                  <span className="text-foreground">{dolar(o.custo_usd)}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {tokens(o.tokens_entrada + o.tokens_saida)} tokens
+                </p>
+                <PorCategoria dados={o.por_categoria} />
+              </div>
+            ))}
           </div>
         </>
       )}

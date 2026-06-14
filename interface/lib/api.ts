@@ -252,6 +252,9 @@ export type ResumoUso = {
   por_modelo: Record<string, UsoAgrupado>;
   // Consumo separado por origem da chave (cliente × consultoria × legado) — 7.6.
   por_origem: Record<string, UsoAgrupado>;
+  // Consumo separado por FUNÇÃO em que a IA foi gasta (execução de agentes ×
+  // IA de conversa × atendimento/mensageria × transcrição de áudio).
+  por_categoria: Record<string, UsoAgrupado>;
 };
 
 // Painel da consultoria (GET /uso/consultoria): o que saiu da chave-mãe somado
@@ -264,6 +267,8 @@ export type UsoConsultoria = {
     tokens_entrada: number;
     tokens_saida: number;
     custo_usd: number;
+    // A quebra por função nesta organização (onde a chave-mãe foi gasta).
+    por_categoria: Record<string, UsoAgrupado>;
   }[];
 };
 

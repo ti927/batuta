@@ -506,6 +506,12 @@ class MensagemConversa(IdData, Base):
     papel: Mapped[str] = mapped_column(String(20), nullable=False)  # contato|agente|operador|sistema
     conteudo: Mapped[str | None] = mapped_column(Text, nullable=True)
     midia: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Medição de uso de IA do turno (só na mensagem do AGENTE): a LISTA de entradas
+    # {modelo, tokens_entrada, tokens_saida, origem, categoria, custo_usd?} das
+    # chamadas pagas do turno — o turno do agente (categoria 'mensageria') e as
+    # transcrições de áudio (categoria 'transcricao'). Espelha PassoExecucao.saida.uso
+    # para a mensageria entrar nos painéis de uso. Ver `docs/MENSAGERIA-PLANO.md`.
+    uso: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     entregue: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
     )

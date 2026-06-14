@@ -21,18 +21,25 @@ from orquestracao.modelos_ia import provedor_do_modelo_seguro
 
 
 def _fazer_registrador(
-    sessao: Session, execucao_id: uuid.UUID, origens: dict[str, str] | None = None
+    sessao: Session,
+    execucao_id: uuid.UUID,
+    origens: dict[str, str] | None = None,
+    categoria: str = "execucao",
 ):
     """Callback que grava cada passo da cadeia em `passos_execucao`. `origens`
     (Fases 7.6/7-A) mapeia provedor → origem da chave; cada entrada de `uso` é
     carimbada com a origem do PROVEDOR do seu modelo, registrando de qual chave
     (cliente/consultoria/legado) saiu o consumo — por provedor, já que agentes
-    da mesma cadeia podem usar provedores diferentes."""
+    da mesma cadeia podem usar provedores diferentes. `categoria` carimba em que
+    FUNÇÃO a IA foi gasta (execução de agentes); o roteamento de bifurcação entra
+    no mesmo passo, então fica contabilizado como execução. Carimbar aqui, na
+    borda, não toca o núcleo congelado de orquestração."""
 
     def registrar(passo: dict, ordem: int) -> None:
         uso = passo.get("uso") or []
-        if origens:
-            for e in uso:
+        for e in uso:
+            e.setdefault("categoria", categoria)
+            if origens:
                 provedor = provedor_do_modelo_seguro(e.get("modelo") or "")
                 origem = origens.get(provedor) if provedor else None
                 if origem:

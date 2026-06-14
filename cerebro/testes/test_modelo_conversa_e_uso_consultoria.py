@@ -10,7 +10,15 @@
 from types import SimpleNamespace
 
 import precos
-from modelos import Automacao, ConversaCriacao, Execucao, PassoExecucao
+from modelos import (
+    Automacao,
+    Conversa,
+    ConversaCriacao,
+    Execucao,
+    Instrumento,
+    MensagemConversa,
+    PassoExecucao,
+)
 
 
 # ───────────────────── precos: a conversa entra no resumo ─────────────────────
@@ -50,8 +58,10 @@ def test_entradas_das_conversas_ignora_turnos_sem_uso():
             ]
         )
     ]
+    # A entrada herda a categoria da fonte ('conversa') na colheita, sem mutar o
+    # dict guardado.
     assert list(precos.entradas_das_conversas(conversas)) == [
-        {"modelo": "haiku", "tokens_entrada": 5, "tokens_saida": 2}
+        {"modelo": "haiku", "tokens_entrada": 5, "tokens_saida": 2, "categoria": "conversa"}
     ]
 
 
@@ -90,6 +100,27 @@ def _semear_conversa(sessao, org_id, origem, te, ts, modelo="claude-opus-4-8"):
     return c
 
 
+def _semear_mensageria(sessao, time_id, origem, te, ts):
+    """Uma conversa de atendimento (mensageria) com um turno do agente que gastou
+    IA — o uso vive na mensagem do agente (`mensagens_conversa.uso`)."""
+    inst = Instrumento(time_id=time_id, nome="bot", tipo="enviar_telegram", configuracao={})
+    sessao.add(inst)
+    sessao.flush()
+    conv = Conversa(instrumento_id=inst.id, contato_chave="555", estado="aguardando_resposta")
+    sessao.add(conv)
+    sessao.flush()
+    sessao.add(
+        MensagemConversa(
+            conversa_id=conv.id,
+            papel="agente",
+            conteudo="oi",
+            uso=[{"modelo": "claude-haiku-4-5", "tokens_entrada": te, "tokens_saida": ts, "origem": origem, "categoria": "mensageria"}],
+        )
+    )
+    sessao.flush()
+    return conv
+
+
 # ─────────────── /uso/resumo: org inclui conversa, time não ───────────────
 
 
@@ -110,9 +141,10 @@ def test_resumo_org_inclui_conversa_mas_time_nao(cliente, entrar, dados, sessao)
 def test_uso_consultoria_soma_chave_mae_por_org_e_exige_admin(
     cliente, entrar, dados, sessao, monkeypatch
 ):
-    # Consumo da consultoria na orgA: uma execução + uma conversa.
+    # Consumo da consultoria na orgA: uma execução + uma conversa + atendimento.
     _semear_passo(sessao, dados["timeA"].id, "consultoria", 100, 40)
     _semear_conversa(sessao, dados["orgA"].id, "consultoria", 1000, 200)
+    _semear_mensageria(sessao, dados["timeA"].id, "consultoria", 50, 20)
     # Consumo com chave PRÓPRIA não deve entrar no painel da consultoria.
     _semear_conversa(sessao, dados["orgA"].id, "organizacao", 9999, 9999)
 
@@ -127,8 +159,12 @@ def test_uso_consultoria_soma_chave_mae_por_org_e_exige_admin(
     linha = next(
         o for o in corpo["por_organizacao"] if o["organizacao_id"] == str(dados["orgA"].id)
     )
-    # 100 (execução) + 1000 (conversa) na chave-mãe; o consumo próprio ficou de fora.
-    assert linha["tokens_entrada"] == 1100 and linha["tokens_saida"] == 240
+    # 100 (execução) + 1000 (conversa) + 50 (atendimento) na chave-mãe; próprio fora.
+    assert linha["tokens_entrada"] == 1150 and linha["tokens_saida"] == 260
+    # A quebra por função deixa claro ONDE a chave-mãe foi gasta.
+    assert linha["por_categoria"]["execucao"]["tokens_entrada"] == 100
+    assert linha["por_categoria"]["conversa"]["tokens_entrada"] == 1000
+    assert linha["por_categoria"]["mensageria"]["tokens_entrada"] == 50
 
 
 # ───────────────────── modelos disponíveis + modelo da conversa ─────────────

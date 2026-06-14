@@ -75,7 +75,8 @@ def test_extrair_update_voz_marca_midia():
     m = telegram.extrair_update(
         {"message": {"chat": {"id": 9}, "voice": {"file_id": "abc"}}}
     )
-    assert m and m.texto is None and m.midia == {"tipo": "voz", "file_id": "abc"}
+    assert m and m.texto is None
+    assert m.midia == {"tipo": "voz", "file_id": "abc", "duracao_s": 0}
 
 
 def test_extrair_update_ignora_nao_mensagem():
@@ -307,6 +308,88 @@ def test_audio_transcrito_entra_no_turno(sessao, dados, monkeypatch):
         )
     ).first()
     assert m.conteudo == "Quero saber o preço" and (m.midia or {}).get("transcrito") is True
+
+
+# ───────────── contabilização: uso do turno carimbado por categoria ──────────
+
+
+def test_processar_turno_grava_uso_com_origem_e_categoria(sessao, dados, monkeypatch):
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "TOKEN"})
+    _agente_com(sessao, dados, inst)
+    conversa, _ = servico.registrar_entrada(sessao, inst, _msg("quanto custa?"))
+
+    monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
+    monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
+    # origens determinístico: a chamada do agente saiu da chave-mãe (consultoria).
+    monkeypatch.setattr(
+        servico,
+        "resolver_chaves_por_time",
+        lambda s, t: ({"anthropic": "K"}, {"anthropic": "consultoria"}),
+    )
+    monkeypatch.setattr(
+        servico,
+        "executar_agente",
+        lambda ag, cinto, entrada: {
+            "saida": "Custa R$10.",
+            "uso": [{"modelo": "claude-haiku-4-5", "tokens_entrada": 1000, "tokens_saida": 500}],
+        },
+    )
+    monkeypatch.setattr(servico.telegram, "enviar", lambda *a: {"ok": True})
+
+    servico.processar_turno(conversa.id)
+
+    sessao.refresh(conversa)
+    do_agente = sessao.scalars(
+        select(MensagemConversa).where(
+            MensagemConversa.conversa_id == conversa.id,
+            MensagemConversa.papel == "agente",
+        )
+    ).all()
+    assert len(do_agente) == 1
+    uso = do_agente[0].uso
+    assert uso and uso[0]["categoria"] == "mensageria"
+    assert uso[0]["origem"] == "consultoria"  # carimbo da chave-mãe
+    assert float(conversa.custo_acumulado_usd) > 0
+
+
+def test_processar_turno_contabiliza_transcricao(sessao, dados, monkeypatch):
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "T"})
+    _agente_com(sessao, dados, inst)
+    voz = telegram.MensagemEntrante(
+        "555", "João", None, {"tipo": "voz", "file_id": "F", "duracao_s": 120}
+    )
+    conversa, _ = servico.registrar_entrada(sessao, inst, voz)
+
+    monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
+    monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
+    monkeypatch.setattr(
+        servico,
+        "resolver_chaves_por_time",
+        lambda s, t: ({"openai": "K"}, {"openai": "consultoria"}),
+    )
+    monkeypatch.setattr("mensageria.telegram.baixar_arquivo", lambda token, fid: b"audio")
+    monkeypatch.setattr(
+        "mensageria.transcricao.transcrever", lambda audio, chave, **kw: "Quero o preço"
+    )
+    monkeypatch.setattr(servico, "executar_agente", lambda *a: {"saida": "R$10.", "uso": []})
+    monkeypatch.setattr(servico.telegram, "enviar", lambda *a: {"ok": True})
+
+    servico.processar_turno(conversa.id)
+
+    do_agente = sessao.scalars(
+        select(MensagemConversa).where(
+            MensagemConversa.conversa_id == conversa.id,
+            MensagemConversa.papel == "agente",
+        )
+    ).first()
+    # 2 min de áudio → uma entrada de transcrição (categoria 'transcricao'), com
+    # custo por minuto pré-calculado e origem da chave-mãe.
+    transc = [e for e in (do_agente.uso or []) if e.get("categoria") == "transcricao"]
+    assert len(transc) == 1
+    assert transc[0]["origem"] == "consultoria"
+    assert transc[0]["custo_usd"] == round(servico.precos.custo_whisper(120), 6)
 
 
 # ───────────────────── inatividade: cutucar e encerrar (Fase J) ──────────────
