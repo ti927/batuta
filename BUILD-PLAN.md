@@ -913,18 +913,58 @@ encerra, vigia no agendador), **G** (guarda-corpo anti prompt-injection) e **H**
    **"Chaves e credenciais"** (seção A chaves de serviço c/ Tavily; seção B inventário de credenciais de
    instrumento com rotação inline — `cerebro/rotas/credenciais.py`). Núcleo intocado. Detalhe em
    `~/.claude/.../memory/reference_chaves-unificadas.md`.
-   - ⚠️ **CORREÇÃO PENDENTE (decisão do maestro 2026-06-14):** a **seção B confundiu** — não faz sentido gerir
-     credencial por-instrumento-por-time numa tela de org. Modelo final escolhido: a tela da org guarda **só
-     serviços institucionais** (OpenAI/Anthropic/Google/Tavily; o pool, que fica); instrumentos de destino
-     específico (WordPress/Telegram/SQL/REST/webhook/MCP) **mantêm a credencial dentro do próprio instrumento**
-     (repetindo se preciso — trade-off aceito: rotação em vários lugares). **A FAZER:** remover a seção B
-     (inventário) + a rota `credenciais.py`, renomear a tela p/ **"Chaves de serviço"**, MANTER o reuso
-     `chave_compartilhada` (gerar_imagem/busca_web). Obra pequena, sem migração. Plano detalhado no arquivo de
-     plano da sessão e na memória [[reference-chaves-unificadas]]. **NÃO iniciado.**
-4. **Fase K — polimento de atendimento** (saudação/transparência automática, horário comercial, painel de
+   - ⚠️ **A seção B será SUBSTITUÍDA** (não só removida): ao validar, o maestro achou o "inventário de
+     credenciais por-instrumento-por-time" confuso. A conversa evoluiu (2026-06-15) para um modelo melhor e
+     definitivo — a **Caixa-forte de Credenciais** (item logo abaixo). Até lá, a seção B
+     (`inventario-credenciais.tsx` + `cerebro/rotas/credenciais.py`) segue no ar como está; a fase abaixo a
+     remove e põe a caixa-forte no lugar.
+4. 📋 **FASE — Caixa-forte de Credenciais** (desenho APROVADO pelo maestro 2026-06-15; NÃO iniciada).
+   Substitui a "seção B" (inventário) por um cofre de **credenciais nomeadas, tipadas e referenciadas** —
+   resolve a confusão da seção B E o desenho à prova de futuro (MCP, Google Drive/OAuth, Nano Banana).
+
+   **Os três baldes de autenticação** (toda auth que um instrumento pode precisar cabe aqui):
+   - **Balde 1 — Chave de provedor (pool institucional, JÁ EXISTE):** uma por serviço, compartilhada, com
+     queda org→consultoria→legado. OpenAI/Anthropic/Google/Tavily. Implícita (o motor usa) ou reusada por
+     instrumento via `chave_compartilhada`. *Predição:* **Nano Banana** (imagem do Google) cai aqui inteiro —
+     reusa a chave `google` do pool; instrumento novo só declara `chave_compartilhada=(campo,"google")`. Zero
+     infra nova. Provedor novo = mais um nome na lista de serviços.
+   - **Balde 2 — Credencial nomeada estática (A CAIXA-FORTE NOVA):** o usuário cria entradas nomeadas
+     ("WordPress Blog", "Banco Produção", "Bot de Vendas"); troca/rotaciona num lugar só; instrumentos
+     **apontam** para a credencial. Cobre WordPress (usuário+senha-app), SQL (usuário+senha), token de bot do
+     Telegram, REST com token, **MCP com token/header**.
+   - **Balde 3 — Conta conectada por OAuth (MESMA tabela da caixa-forte, `tipo` diferente):** autoriza uma
+     vez por consentimento, o sistema renova o token sozinho. Google Drive, Gmail, Microsoft, **MCP com OAuth**.
+     NÃO será construído agora — mas o desenho não pode travá-lo.
+
+   **Princípio à prova de futuro (a decisão central):** uma credencial é um **saco nomeado, tipado e cifrado
+   de campos** — `{nome, tipo, organizacao_id, dados_cifrados (JSON), expira_em?}` — e o instrumento **aponta**
+   para uma credencial do tipo certo, somando só a sua config **não-secreta** (URL, método, nome do banco).
+   Nada de colunas fixas tipo "senha" ou "usuário+senha": o `tipo` (declarado no código, como `TipoInstrumento`)
+   define quais campos e qual UX (formulário de colar × botão "Conectar" do OAuth). Instrumento futuro com
+   formato de segredo inédito = novo `tipo` + campos no JSON, **sem mudar o banco**. OAuth cabe porque a
+   credencial pode ser preenchida por fluxo (não só colada) e atualizada pelo sistema (refresh).
+
+   **Tela final "Chaves e credenciais"** (renome cancelado — o nome volta a fazer sentido): **Seção A** =
+   chaves de serviço (pool do balde 1, como hoje). **Seção B (reescrita)** = a caixa-forte: lista de
+   credenciais nomeadas que o usuário cria, com "usado por N instrumentos" e trava ao apagar credencial em uso.
+   No formulário do instrumento, o campo de segredo vira "usar uma credencial da central" (seletor, filtrado
+   pelo tipo) **OU** valor próprio inline (**híbrido** — retrocompatível: instrumentos já no ar não quebram).
+   **Dois níveis + toggle "compartilhável" (decisão do maestro 2026-06-15):** segredo pode ser da organização
+   ou da consultoria (`organizacao_id` nulo); chave/credencial de consultoria só serve às organizações se
+   marcada `compartilhavel` (balde 1 = entra na reserva automática; balde 2 = aparece no seletor — escolha
+   explícita). Chaves de consultoria existentes nascem compartilháveis (retrocompatível). Detalhe e passo a
+   passo em `docs/CAIXA-FORTE-PLANO.md`.
+
+   **Gargalos endereçados:** (1) referência, não cópia → "usado por" + trava no delete; (2) o par
+   usuário+senha anda junto (credencial guarda o conjunto da conexão, não senha solta); (3) custo honesto =
+   **tem migração** (tabela `credenciais`, cifrada com a mesma chave-mestra do cofre 7-B) + resolução por
+   referência **na borda** (núcleo congelado). **Fora de escopo:** credencial por **usuário-final** (cada
+   cliente conectar o próprio Drive dentro de um atendimento — é da conversa, não da org). Detalhe vivo em
+   [[reference-chaves-unificadas]].
+5. **Fase K — polimento de atendimento** (saudação/transparência automática, horário comercial, painel de
    métricas de atendimento). Menor valor-por-esforço; precisa de UI/config próprias.
-5. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
-6. **Biblioteca** (RAG da organização; plano de 10 passos aprovado, `docs/BIBLIOTECA-DECISAO.md`).
+6. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
+7. **Biblioteca** (RAG da organização; plano de 10 passos aprovado, `docs/BIBLIOTECA-DECISAO.md`).
 
 O `PRODUTO.md` prevê que os agentes conversem com pessoas por mensageria (§10/§111/§126/§14). Hoje a
 espera-por-humano é respondida **na tela do Batuta**, e o Batuta só sabe *enviar* (instrumentos de mão
