@@ -101,12 +101,49 @@ limpa e um backup lógico das 5 linhas antes.
    `test_modelo_conversa_e_uso_consultoria` afirmam o isolamento por papel; serão
    reescritos para o novo contrato (não é regressão, é mudança de contrato).
 
-## 7. Veredito e plano proposto
+## 7. Veredito
 **Viável e de baixo risco** — a dimensão `tipo_ia` é mecânica (um parâmetro
 threaded), o núcleo não é tocado, e o dado real não tem conflito. Some o cadastro
-em dobro e a pegadinha da imagem. Plano (fase focada, menor que a Caixa-forte):
-1. Migração (consolidar + reindexar) — passo isolado, com backup das 5 linhas.
-2. `chaves.py` sem papel + `rotas/chaves_api.py` (CRUD + `modelos-disponiveis`).
-3. `rotas/criacao.py` + `rotas/organizacoes.py` (resolução por provedor).
-4. Interface (tira o seletor de papel; selectors usam o mapa único).
-5. Limpeza + testes reescritos + e2e (conversa, agente, imagem) + merge.
+em dobro e a pegadinha da imagem.
+
+## 8. Plano formal — 5 passos (um por vez, com aprovação e verificação concreta)
+
+> Desenho APROVADO pelo maestro (2026-06-15). Fase focada, menor que a Caixa-forte.
+> Registrada no `BUILD-PLAN.md` (FILA, item "Chave de IA por provedor").
+
+### Passo 1 — Migração (consolidar + reindexar)
+Antes: anotar/backup lógico das linhas atuais de `chaves_api`. Migração: consolida
+para uma linha por `(organizacao_id, provedor)` (regra de dedup: mantém a
+`executora` se existir, senão a `criadora`; entre ativas, a mais recente; loga o
+descartado), troca o índice único `(organizacao_id, tipo_ia, provedor)` →
+`(organizacao_id, provedor)` e **dropa a coluna `tipo_ia`**. **Verificar:** SQL
+offline (`--sql`) revisado; `upgrade`/estado conferido no banco; as ~5 linhas de
+prod viram o esperado (sem perda); `alembic current` no novo head.
+
+### Passo 2 — Resolução sem papel (`chaves.py` + `rotas/chaves_api.py`)
+`chaves.py`: remove o parâmetro `tipo_ia` de toda a cadeia de resolução (resolve
+só por provedor; legado `.env` e `compartilhavel` intactos). `rotas/chaves_api.py`:
+CRUD sem `tipo_ia`; `GET /modelos-disponiveis` passa a devolver **um mapa único**
+`{provedor: bool}`. **Verificar:** testes de resolução por provedor (org →
+consultoria → legado) + `modelos-disponiveis` mapa único; suíte verde.
+
+### Passo 3 — Conversa e validação de modelo (`rotas/criacao.py` + `rotas/organizacoes.py`)
+`criacao.py`: a conversa resolve a chave por provedor (sem `tipo_ia="criadora"`).
+`organizacoes.py` (`PUT /modelo-criadora`): a validação "o provedor do modelo tem
+chave?" usa a disponibilidade por provedor. **Verificar:** teste de que escolher
+um modelo cujo provedor tem chave passa, e sem chave recusa (422); conversa roda.
+
+### Passo 4 — Interface (tira o seletor de papel)
+`gestao-chaves.tsx`: remove o seletor executora/conversa; uma chave por serviço
+(mantém o toggle `compartilhavel` da consultoria). `lib/api.ts`: remove `TipoIA`/
+`tipo_ia`; `ModelosDisponiveis` vira mapa único. `seletor-modelo-conversa.tsx` e
+`formulario-agente.tsx`: consomem o mapa único. Telas de chaves ajustam o que
+passam. **Verificar:** `tsc`/`eslint` limpos.
+
+### Passo 5 — Limpeza + testes + e2e
+Reescrever os testes de "isolamento por papel" para o novo contrato; remover
+referências mortas; suíte completa verde; núcleo sem diff. **Verificar (e2e ao
+vivo):** com uma chave OpenAI cadastrada uma vez, (a) a conversa num modelo do
+provedor funciona, (b) um agente nesse provedor funciona, (c) o gerar_imagem
+funciona — provando que uma chave por provedor cobre tudo. Depois: merge + push +
+redeploy (com aval do maestro).

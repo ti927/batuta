@@ -963,10 +963,23 @@ encerra, vigia no agendador), **G** (guarda-corpo anti prompt-injection) e **H**
    referência **na borda** (núcleo congelado). **Fora de escopo:** credencial por **usuário-final** (cada
    cliente conectar o próprio Drive dentro de um atendimento — é da conversa, não da org). Detalhe vivo em
    [[reference-chaves-unificadas]].
-5. **Fase K — polimento de atendimento** (saudação/transparência automática, horário comercial, painel de
+5. 📋 **FASE — Chave de IA por provedor (unificação)** (estudo APROVADO 2026-06-15; plano em
+   `docs/CHAVE-POR-PROVEDOR-ESTUDO.md`; NÃO iniciada). Remove a dimensão de papel `executora`/`conversa` da
+   chave: a chave passa a ser **uma por provedor** ("este provedor tem credencial?"); a escolha de IA continua
+   só no **modelo** da conversa (`Organizacao.modelo_criadora`) e de cada **agente** (`Agente.modelo_ia`).
+   Acaba o cadastro em dobro e a "pegadinha da imagem" (gerar_imagem/Whisper/busca passam a achar a chave do
+   provedor em qualquer lugar). Estudo de impacto confirmou: baixo risco, **núcleo intocado** (só a fronteira
+   de resolução em `chaves.py`), e dado real de produção **sem conflito de merge** (5 linhas; Anthropic da
+   consultoria nos 2 papéis com a mesma chave). **5 passos:** (1) migração consolida `(org,provedor)` +
+   reindexa (backup das linhas antes); (2) `chaves.py` + `rotas/chaves_api.py` sem papel (`modelos-disponiveis`
+   vira mapa único); (3) `rotas/criacao.py` + `rotas/organizacoes.py` resolvem por provedor; (4) interface
+   (tira o seletor de papel; selectors usam o mapa único); (5) limpeza + testes reescritos + e2e (conversa,
+   agente, imagem) + merge. Cuidado: a migração roda no banco de produção (com aval); testes de "isolamento por
+   papel" serão reescritos (mudança de contrato, não regressão).
+6. **Fase K — polimento de atendimento** (saudação/transparência automática, horário comercial, painel de
    métricas de atendimento). Menor valor-por-esforço; precisa de UI/config próprias.
-6. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
-7. **Biblioteca** (RAG da organização; plano de 10 passos aprovado, `docs/BIBLIOTECA-DECISAO.md`).
+7. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
+8. **Biblioteca** (RAG da organização; plano de 10 passos aprovado, `docs/BIBLIOTECA-DECISAO.md`).
 
 O `PRODUTO.md` prevê que os agentes conversem com pessoas por mensageria (§10/§111/§126/§14). Hoje a
 espera-por-humano é respondida **na tela do Batuta**, e o Batuta só sabe *enviar* (instrumentos de mão
