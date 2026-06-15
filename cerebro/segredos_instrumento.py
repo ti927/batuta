@@ -91,6 +91,9 @@ def anexar_aos_instrumentos(sessao: Session, instrumentos: list) -> None:
     from instrumentos.base import obter_tipo
     from orquestracao.llm import chaves_atuais
 
+    import credenciais_cofre
+    from modelos import Credencial
+
     ids = [inst.id for inst in instrumentos]
     por_instrumento: dict[uuid.UUID, dict[str, str]] = {}
     if ids:
@@ -102,14 +105,31 @@ def anexar_aos_instrumentos(sessao: Session, instrumentos: list) -> None:
             por_instrumento.setdefault(s.instrumento_id, {})[s.campo] = cofre.decifrar(
                 s.valor_cifrado
             )
+
+    # Caixa-forte: decifra (em memória) as credenciais nomeadas referenciadas.
+    cred_ids = {
+        inst.credencial_id
+        for inst in instrumentos
+        if getattr(inst, "credencial_id", None)
+    }
+    por_credencial: dict[uuid.UUID, dict[str, str]] = {}
+    if cred_ids:
+        for c in sessao.scalars(
+            select(Credencial).where(Credencial.id.in_(cred_ids))
+        ):
+            por_credencial[c.id] = credenciais_cofre.decifrar(c)
+
     pool = chaves_atuais()
     for inst in instrumentos:
         proprios = por_instrumento.get(inst.id, {})
+        credencial = por_credencial.get(getattr(inst, "credencial_id", None), {})
+        # Prioridade: inline próprio > credencial central > pool de serviço.
+        valores = {**credencial, **proprios}
         tipo = obter_tipo(inst.tipo)
         compart = getattr(tipo, "chave_compartilhada", None) if tipo else None
         if compart:
             campo, servico = compart
-            # Sem chave própria (vazia/ausente) → reusa a do pool, se houver.
-            if not (proprios.get(campo) or "").strip() and pool.get(servico):
-                proprios = {**proprios, campo: pool[servico]}
-        inst.segredos_decifrados = proprios
+            # Campo ainda vazio (nem inline nem credencial) → reusa a do pool.
+            if not (valores.get(campo) or "").strip() and pool.get(servico):
+                valores = {**valores, campo: pool[servico]}
+        inst.segredos_decifrados = valores

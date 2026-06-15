@@ -53,14 +53,18 @@ def _buscar(
         if mae
         else ChaveApi.organizacao_id == organizacao_id
     )
-    chave = sessao.scalars(
-        select(ChaveApi).where(
-            condicao_org,
-            ChaveApi.tipo_ia == tipo_ia,
-            ChaveApi.provedor == provedor,
-            ChaveApi.ativa.is_(True),
-        )
-    ).first()
+    condicoes = [
+        condicao_org,
+        ChaveApi.tipo_ia == tipo_ia,
+        ChaveApi.provedor == provedor,
+        ChaveApi.ativa.is_(True),
+    ]
+    # A chave-mãe da consultoria só serve de reserva às organizações se estiver
+    # marcada como compartilhável (toggle). A chave PRÓPRIA da organização não
+    # passa por esse filtro (é dela). Ver docs/CAIXA-FORTE-PLANO.md.
+    if mae:
+        condicoes.append(ChaveApi.compartilhavel.is_(True))
+    chave = sessao.scalars(select(ChaveApi).where(*condicoes)).first()
     return decifrar(chave.valor_cifrado) if chave else None
 
 
