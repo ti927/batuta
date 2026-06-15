@@ -913,6 +913,14 @@ encerra, vigia no agendador), **G** (guarda-corpo anti prompt-injection) e **H**
    **"Chaves e credenciais"** (seção A chaves de serviço c/ Tavily; seção B inventário de credenciais de
    instrumento com rotação inline — `cerebro/rotas/credenciais.py`). Núcleo intocado. Detalhe em
    `~/.claude/.../memory/reference_chaves-unificadas.md`.
+   - ⚠️ **CORREÇÃO PENDENTE (decisão do maestro 2026-06-14):** a **seção B confundiu** — não faz sentido gerir
+     credencial por-instrumento-por-time numa tela de org. Modelo final escolhido: a tela da org guarda **só
+     serviços institucionais** (OpenAI/Anthropic/Google/Tavily; o pool, que fica); instrumentos de destino
+     específico (WordPress/Telegram/SQL/REST/webhook/MCP) **mantêm a credencial dentro do próprio instrumento**
+     (repetindo se preciso — trade-off aceito: rotação em vários lugares). **A FAZER:** remover a seção B
+     (inventário) + a rota `credenciais.py`, renomear a tela p/ **"Chaves de serviço"**, MANTER o reuso
+     `chave_compartilhada` (gerar_imagem/busca_web). Obra pequena, sem migração. Plano detalhado no arquivo de
+     plano da sessão e na memória [[reference-chaves-unificadas]]. **NÃO iniciado.**
 4. **Fase K — polimento de atendimento** (saudação/transparência automática, horário comercial, painel de
    métricas de atendimento). Menor valor-por-esforço; precisa de UI/config próprias.
 5. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
