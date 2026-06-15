@@ -15,6 +15,7 @@ import auditoria
 import instrumentos as encaixe
 import segredos_instrumento as segredos
 from auth import usuario_atual
+from instrumentos.base import FalhaInstrumento
 from esquemas import (
     AcionarInstrumento,
     InstrumentoCriar,
@@ -259,4 +260,9 @@ def acionar(
         args = tipo.Args.model_validate(dados.argumentos or {})
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
-    return tipo.executar(config, args)
+    try:
+        return tipo.executar(config, args)
+    except FalhaInstrumento as e:
+        # O instrumento não conseguiu operar (sistema externo recusou, config
+        # incompleta…). Devolve a mensagem REAL para a tela, em vez de um 500 cru.
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
