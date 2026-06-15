@@ -5,13 +5,14 @@ import { ChevronLeft } from "lucide-react";
 
 import {
   type ChaveApiLer,
-  type CredencialInstrumento,
+  type Credencial,
   type ModelosDisponiveis,
   type Organizacao,
   type PapelAcesso,
+  type TipoCredencial,
 } from "@/lib/api";
 import { GestaoChaves } from "@/components/gestao-chaves";
-import { InventarioCredenciais } from "@/components/inventario-credenciais";
+import { CofreCredenciais } from "@/components/cofre-credenciais";
 import { SeletorModeloConversa } from "@/components/seletor-modelo-conversa";
 import { Aviso } from "@/components/ui/aviso";
 
@@ -21,12 +22,14 @@ export function ChavesCliente({
   chaves,
   disponiveis,
   credenciais,
+  tiposCredencial,
 }: {
   organizacao: Organizacao;
   meuPapel: PapelAcesso | null;
   chaves: ChaveApiLer[];
   disponiveis: ModelosDisponiveis | null;
-  credenciais: CredencialInstrumento[];
+  credenciais: Credencial[];
+  tiposCredencial: TipoCredencial[];
 }) {
   const souAdmin = meuPapel === "admin";
 
@@ -77,17 +80,22 @@ export function ChavesCliente({
             />
           </section>
 
-          {/* Seção B — credenciais por-instância dos instrumentos */}
+          {/* Seção B — caixa-forte de credenciais nomeadas */}
           <section>
             <h2 className="mb-1 text-lg font-medium text-foreground">
-              Credenciais de instrumentos
+              Credenciais
             </h2>
             <p className="mb-4 text-sm text-muted-foreground">
-              As senhas e tokens presos a um instrumento específico (WordPress,
-              bot do Telegram, banco de dados…). Rotacione qualquer uma aqui se
-              vazar — sem precisar abrir o instrumento.
+              Senhas e tokens nomeados (WordPress, banco de dados, bot do
+              Telegram…) que os instrumentos usam. Crie aqui e aponte o
+              instrumento para a credencial — para trocar, muda num lugar só. O
+              valor secreto nunca é reexibido.
             </p>
-            <InventarioCredenciais credenciais={credenciais} />
+            <CofreCredenciais
+              credenciais={credenciais}
+              tipos={tiposCredencial}
+              organizacaoId={organizacao.id}
+            />
           </section>
         </div>
       )}

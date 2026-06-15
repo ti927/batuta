@@ -142,6 +142,8 @@ export type Instrumento = {
   exige_aprovacao: boolean | null;
   // Resolvido (tipo+config+interruptor): se este instrumento exige portão.
   acao_irreversivel: boolean;
+  // Caixa-forte: credencial nomeada da central que este instrumento usa (ou null).
+  credencial_id: string | null;
   criado_em: string;
   atualizado_em: string;
 };
@@ -157,28 +159,44 @@ export type TipoInstrumento = {
   // Se o tipo reusa uma chave de serviço compartilhada da org: [campo, serviço]
   // (ex.: ["chave_api","openai"]). Esse campo é OPCIONAL no formulário.
   chave_compartilhada: [string, string] | null;
+  // Caixa-forte: tipos de credencial nomeada que este instrumento aceita.
+  tipos_credencial_aceitos: string[];
   // Baseline do tipo: este tipo PODE escrever/agir de forma irreversível? (a
   // irreversibilidade real da instância depende da config — método, somente_leitura).
   acao_irreversivel: boolean;
 };
 
-// Inventário unificado de credenciais de instrumento (tela "Chaves e credenciais").
-export type CredencialCampo = {
-  campo: string;
-  definido: boolean;
-  ultimos4: string | null;
-  compartilhada: boolean; // reusa uma chave de serviço da org → não precisa própria
-  servico: string | null;
+// Caixa-forte de credenciais nomeadas (docs/CAIXA-FORTE-PLANO.md).
+export type CampoCredencial = {
+  nome: string;
+  rotulo: string;
+  secreto: boolean; // segredo → mascarado; identidade → visível
 };
 
-export type CredencialInstrumento = {
-  instrumento_id: string;
-  instrumento_nome: string;
-  time_id: string;
-  time_nome: string;
+export type TipoCredencial = {
   tipo: string;
-  tipo_nome: string;
-  campos: CredencialCampo[];
+  nome_exibicao: string;
+  campos: CampoCredencial[];
+};
+
+// Resumo mascarado por campo: identidade → {secreto:false, valor}; segredo →
+// {secreto:true, ultimos4}. O valor pleno de um segredo nunca volta.
+export type CredencialCampoResumo = {
+  secreto: boolean;
+  valor?: string;
+  ultimos4?: string;
+};
+
+export type Credencial = {
+  id: string;
+  organizacao_id: string | null; // nulo = da consultoria
+  nome: string;
+  tipo: string;
+  resumo: Record<string, CredencialCampoResumo> | null;
+  compartilhavel: boolean;
+  usado_por: number;
+  criado_em: string;
+  atualizado_em: string;
 };
 
 // ─── Mensageria / Conversas (Fase 1) ───
@@ -402,6 +420,8 @@ export type ChaveApiLer = {
   ultimos4: string | null;
   apelido: string | null;
   ativa: boolean;
+  // Só faz efeito na chave-mãe da consultoria: serve de reserva às orgs?
+  compartilhavel: boolean;
   criado_em: string;
   atualizado_em: string;
 };
