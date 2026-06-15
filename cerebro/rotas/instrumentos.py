@@ -22,11 +22,43 @@ from esquemas import (
     InstrumentoLer,
     TipoInstrumentoLer,
 )
-from modelos import Instrumento, Usuario
+from modelos import Credencial, Instrumento, Usuario
 from rotas._comum import instrumento_acessivel, time_acessivel
 from sessao import obter_sessao
 
 rotas = APIRouter(tags=["instrumentos"])
+
+
+def _validar_credencial(
+    sessao: Session,
+    tipo_instrumento: str,
+    organizacao_id: uuid.UUID,
+    credencial_id: uuid.UUID | None,
+) -> None:
+    """Se o instrumento aponta para uma credencial da caixa-forte, valida que ela
+    existe, é acessível (da própria org, ou da consultoria E compartilhável) e é
+    de um tipo que este instrumento aceita. Levanta 422 caso contrário."""
+    if credencial_id is None:
+        return
+    cred = sessao.get(Credencial, credencial_id)
+    if cred is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Credencial não encontrada.")
+    if cred.organizacao_id is not None and cred.organizacao_id != organizacao_id:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "Credencial de outra organização."
+        )
+    if cred.organizacao_id is None and not cred.compartilhavel:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Esta credencial da consultoria não está compartilhada.",
+        )
+    tipo = encaixe.obter_tipo(tipo_instrumento)
+    aceitos = getattr(tipo, "tipos_credencial_aceitos", ()) if tipo else ()
+    if cred.tipo not in aceitos:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Este instrumento não aceita credencial do tipo '{cred.tipo}'.",
+        )
 
 
 def _ler(sessao: Session, inst: Instrumento) -> Instrumento:
@@ -56,6 +88,7 @@ def listar_tipos(usuario: Usuario = Depends(usuario_atual)):
             chave_compartilhada=(
                 list(t.chave_compartilhada) if t.chave_compartilhada else None
             ),
+            tipos_credencial_aceitos=list(t.tipos_credencial_aceitos),
             acao_irreversivel=t.acao_irreversivel,
         )
         for t in encaixe.tipos_disponiveis()
@@ -96,12 +129,14 @@ def criar(
         )
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
+    _validar_credencial(sessao, dados.tipo, time.organizacao_id, dados.credencial_id)
     inst = Instrumento(
         time_id=time_id,
         nome=dados.nome,
         tipo=dados.tipo,
         configuracao=config_limpa,
         exige_aprovacao=dados.exige_aprovacao,
+        credencial_id=dados.credencial_id,
     )
     sessao.add(inst)
     sessao.flush()
@@ -141,10 +176,15 @@ def editar(
         )
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
+    _validar_credencial(
+        sessao, inst.tipo,
+        auditoria.org_do_time(sessao, inst.time_id), dados.credencial_id,
+    )
     aprovacao_antes = inst.exige_aprovacao
     inst.nome = dados.nome
     inst.configuracao = config_limpa
     inst.exige_aprovacao = dados.exige_aprovacao
+    inst.credencial_id = dados.credencial_id
     alterados = segredos.salvar_segredos(sessao, inst.id, segredos_novos)
     if alterados:
         auditoria.registrar(

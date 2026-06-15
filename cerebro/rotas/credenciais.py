@@ -1,110 +1,325 @@
-"""Inventário unificado de credenciais de instrumento (tela "Chaves e credenciais").
+"""Endpoints da caixa-forte de credenciais nomeadas (FASE Caixa-forte, Passo 5).
 
-As chaves de IA (provedores) vivem em `chaves_api.py` (pool da organização). Aqui
-fica o OUTRO lado: as credenciais POR-INSTÂNCIA dos instrumentos (senha do
-WordPress, token do bot Telegram, senha do banco SQL, etc.). Esta rota agrega
-todas as credenciais dos instrumentos da organização num só lugar — para ver onde
-cada uma está e ROTACIONÁ-LA sem caçar o formulário de cada instrumento.
+Substitui o antigo "inventário de credenciais por-instrumento". Aqui o usuário
+cria CREDENCIAIS NOMEADAS (ex.: "WordPress Blog" = usuario+senha_app) que os
+instrumentos referenciam (`instrumentos.credencial_id`) em vez de guardar o
+segredo inline — trocar num lugar só vale para todos os instrumentos que a usam.
 
-Os valores nunca são reexibidos: a leitura mostra só os 4 últimos dígitos
-(`segredos_instrumento.resumo`). A rotação reusa `salvar_segredos` (cofre 7-B).
-"""
+Dois níveis (ver docs/CAIXA-FORTE-PLANO.md):
+- **da organização** (`organizacao_id` preenchido): geridas pelos operadores+ da org;
+- **da consultoria** (`organizacao_id` nulo): geridas só por admin da consultoria;
+  ficam disponíveis às organizações apenas quando `compartilhavel`.
+
+Os valores secretos são cifrados (`credenciais_cofre`) e NUNCA reexibidos: a
+leitura traz só o `resumo` mascarado e o `usado_por`."""
 
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 import auditoria
-import instrumentos as encaixe
-import segredos_instrumento as segredos
+import credenciais_cofre as cofre_cred
+import tipos_credencial as tc
 from auth import usuario_atual
-from esquemas import CredencialCampo, CredencialInstrumento, RotacionarSegredos
-from modelos import Instrumento, Time, Usuario
-from rotas._comum import instrumento_acessivel, organizacao_acessivel
+from consultoria import exigir_admin_consultoria
+from esquemas import (
+    CampoCredencialLer,
+    CredencialCriar,
+    CredencialEditar,
+    CredencialLer,
+    TipoCredencialLer,
+)
+from modelos import Credencial, Usuario
+from rotas._comum import organizacao_acessivel
 from sessao import obter_sessao
 
 rotas = APIRouter(tags=["credenciais"])
 
 
+def _ler(sessao: Session, cred: Credencial) -> Credencial:
+    """Anexa o `usado_por` (atributo transitório) para o `CredencialLer` devolver."""
+    cred.usado_por = cofre_cred.usado_por(sessao, cred.id)
+    return cred
+
+
+def _exigir_tipo_valido(tipo: str) -> None:
+    if tc.obter_tipo(tipo) is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Tipo de credencial desconhecido: {tipo!r}.",
+        )
+
+
+def _exigir_nome_livre(
+    sessao: Session,
+    organizacao_id: uuid.UUID | None,
+    nome: str,
+    exceto: uuid.UUID | None = None,
+) -> None:
+    cond = (
+        Credencial.organizacao_id.is_(None)
+        if organizacao_id is None
+        else Credencial.organizacao_id == organizacao_id
+    )
+    consulta = select(Credencial.id).where(cond, Credencial.nome == nome)
+    if exceto is not None:
+        consulta = consulta.where(Credencial.id != exceto)
+    if sessao.scalar(consulta) is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, f"Já existe uma credencial chamada '{nome}'."
+        )
+
+
+def _bloquear_se_em_uso(sessao: Session, cred: Credencial) -> None:
+    n = cofre_cred.usado_por(sessao, cred.id)
+    if n > 0:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Credencial em uso por {n} instrumento(s). Troque-os antes de apagá-la.",
+        )
+
+
+# ─────────────────────────── Catálogo de tipos ──────────────────────────
+# Declarado antes de qualquer /credenciais/{id} para "tipos" não virar UUID.
+
+
+@rotas.get("/credenciais/tipos", response_model=list[TipoCredencialLer])
+def listar_tipos(usuario: Usuario = Depends(usuario_atual)):
+    """Os tipos de credencial e seus campos — a interface monta o formulário."""
+    return [
+        TipoCredencialLer(
+            tipo=t.tipo,
+            nome_exibicao=t.nome_exibicao,
+            campos=[
+                CampoCredencialLer(nome=c.nome, rotulo=c.rotulo, secreto=c.secreto)
+                for c in t.campos
+            ],
+        )
+        for t in tc.tipos_disponiveis()
+    ]
+
+
+# ─────────────────────── Credenciais da organização ─────────────────────
+
+
 @rotas.get(
     "/organizacoes/{organizacao_id}/credenciais",
-    response_model=list[CredencialInstrumento],
+    response_model=list[CredencialLer],
 )
-def inventario(
+def listar_org(
     organizacao_id: uuid.UUID,
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
-    """Todas as credenciais de instrumento da organização, mascaradas, com o time
-    de cada uma. Só admin da organização (é uma visão de segurança)."""
-    organizacao_acessivel(sessao, usuario, organizacao_id, minimo="admin")
-    linhas = sessao.execute(
-        select(Instrumento, Time.nome)
-        .join(Time, Time.id == Instrumento.time_id)
-        .where(Time.organizacao_id == organizacao_id)
-        .order_by(Time.nome, Instrumento.nome)
-    ).all()
-
-    inventario: list[CredencialInstrumento] = []
-    for inst, time_nome in linhas:
-        tipo = encaixe.obter_tipo(inst.tipo)
-        if tipo is None or not tipo.campos_secretos:
-            continue  # instrumento sem segredo não entra no inventário
-        resumo = segredos.resumo(sessao, inst.id)
-        compart = getattr(tipo, "chave_compartilhada", None)
-        campo_compart = compart[0] if compart else None
-        campos = [
-            CredencialCampo(
-                campo=campo,
-                definido=campo in resumo,
-                ultimos4=resumo.get(campo),
-                compartilhada=(campo == campo_compart),
-                servico=(compart[1] if campo == campo_compart else None),
-            )
-            for campo in tipo.campos_secretos
-        ]
-        inventario.append(
-            CredencialInstrumento(
-                instrumento_id=inst.id,
-                instrumento_nome=inst.nome,
-                time_id=inst.time_id,
-                time_nome=time_nome,
-                tipo=inst.tipo,
-                tipo_nome=tipo.nome_exibicao,
-                campos=campos,
+    """As credenciais da organização MAIS as da consultoria marcadas como
+    compartilháveis (estas o instrumento pode escolher). Operador+."""
+    organizacao_acessivel(sessao, usuario, organizacao_id, minimo="operador")
+    linhas = sessao.scalars(
+        select(Credencial)
+        .where(
+            or_(
+                Credencial.organizacao_id == organizacao_id,
+                and_(
+                    Credencial.organizacao_id.is_(None),
+                    Credencial.compartilhavel.is_(True),
+                ),
             )
         )
-    return inventario
+        .order_by(Credencial.nome)
+    ).all()
+    return [_ler(sessao, c) for c in linhas]
 
 
-@rotas.put("/instrumentos/{instrumento_id}/segredos", response_model=dict)
-def rotacionar(
-    instrumento_id: uuid.UUID,
-    dados: RotacionarSegredos,
+@rotas.post(
+    "/organizacoes/{organizacao_id}/credenciais",
+    response_model=CredencialLer,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_org(
+    organizacao_id: uuid.UUID,
+    dados: CredencialCriar,
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
-    """Rotaciona (troca) um ou mais segredos de um instrumento, sem mexer no resto
-    da config. Operador+. Devolve o resumo mascarado atualizado."""
-    inst = instrumento_acessivel(sessao, usuario, instrumento_id, minimo="operador")
-    # Aceita só os campos secretos declarados pelo tipo; ignora vazios/desconhecidos.
-    tipo = encaixe.obter_tipo(inst.tipo)
-    if tipo is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Tipo desconhecido.")
-    validos = {
-        campo: valor
-        for campo, valor in (dados.segredos or {}).items()
-        if campo in tipo.campos_secretos and str(valor).strip()
-    }
-    alterados = segredos.salvar_segredos(sessao, inst.id, validos)
-    if alterados:
-        auditoria.registrar(
-            sessao, usuario=usuario, acao="instrumento.segredo_alterado",
-            recurso_tipo="instrumento", recurso_id=inst.id,
-            organizacao_id=auditoria.org_do_time(sessao, inst.time_id),
-            detalhe={"segredos": alterados},
-        )
+    """Cria uma credencial nomeada da organização (operador+)."""
+    organizacao_acessivel(sessao, usuario, organizacao_id, minimo="operador")
+    _exigir_tipo_valido(dados.tipo)
+    _exigir_nome_livre(sessao, organizacao_id, dados.nome)
+    # `compartilhavel` é irrelevante numa credencial da organização: fica False.
+    cred = Credencial(
+        organizacao_id=organizacao_id, nome=dados.nome, tipo=dados.tipo,
+        compartilhavel=False,
+    )
+    cofre_cred.gravar(cred, dados.dados)
+    sessao.add(cred)
+    sessao.flush()
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="credencial.criada",
+        recurso_tipo="credencial", recurso_id=cred.id, organizacao_id=organizacao_id,
+        detalhe={"tipo": cred.tipo, "nome": cred.nome},
+    )
     sessao.commit()
-    return segredos.resumo(sessao, inst.id)
+    sessao.refresh(cred)
+    return _ler(sessao, cred)
+
+
+def _credencial_da_org(
+    sessao: Session, usuario: Usuario, credencial_id: uuid.UUID, minimo: str
+) -> Credencial:
+    """Uma credencial DA ORGANIZAÇÃO acessível ao usuário (as da consultoria são
+    geridas só pelos endpoints /credenciais-consultoria)."""
+    cred = sessao.get(Credencial, credencial_id)
+    if cred is None or cred.organizacao_id is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Credencial não encontrada.")
+    organizacao_acessivel(sessao, usuario, cred.organizacao_id, minimo=minimo)
+    return cred
+
+
+@rotas.put("/credenciais/{credencial_id}", response_model=CredencialLer)
+def editar_org(
+    credencial_id: uuid.UUID,
+    dados: CredencialEditar,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Edita/rotaciona uma credencial da organização (operador+). Campo secreto em
+    branco preserva o atual."""
+    cred = _credencial_da_org(sessao, usuario, credencial_id, minimo="operador")
+    if dados.nome != cred.nome:
+        _exigir_nome_livre(sessao, cred.organizacao_id, dados.nome, exceto=cred.id)
+    cred.nome = dados.nome
+    cofre_cred.gravar(cred, dados.dados)  # `compartilhavel` não vale p/ org
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="credencial.editada",
+        recurso_tipo="credencial", recurso_id=cred.id,
+        organizacao_id=cred.organizacao_id, detalhe={"nome": cred.nome},
+    )
+    sessao.commit()
+    sessao.refresh(cred)
+    return _ler(sessao, cred)
+
+
+@rotas.delete(
+    "/credenciais/{credencial_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+def remover_org(
+    credencial_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Apaga uma credencial da organização (operador+). Bloqueada se estiver em uso."""
+    cred = _credencial_da_org(sessao, usuario, credencial_id, minimo="operador")
+    _bloquear_se_em_uso(sessao, cred)
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="credencial.removida",
+        recurso_tipo="credencial", recurso_id=cred.id,
+        organizacao_id=cred.organizacao_id, detalhe={"nome": cred.nome},
+    )
+    sessao.delete(cred)
+    sessao.commit()
+
+
+# ─────────────────────── Credenciais da consultoria ─────────────────────
+
+
+@rotas.get("/credenciais-consultoria", response_model=list[CredencialLer])
+def listar_consultoria(
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """As credenciais da consultoria (compartilháveis ou não). Só admin da consultoria."""
+    exigir_admin_consultoria(usuario)
+    linhas = sessao.scalars(
+        select(Credencial)
+        .where(Credencial.organizacao_id.is_(None))
+        .order_by(Credencial.nome)
+    ).all()
+    return [_ler(sessao, c) for c in linhas]
+
+
+@rotas.post(
+    "/credenciais-consultoria",
+    response_model=CredencialLer,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_consultoria(
+    dados: CredencialCriar,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Cria uma credencial da consultoria (só admin da consultoria). O toggle
+    `compartilhavel` decide se as organizações podem escolhê-la."""
+    exigir_admin_consultoria(usuario)
+    _exigir_tipo_valido(dados.tipo)
+    _exigir_nome_livre(sessao, None, dados.nome)
+    cred = Credencial(
+        organizacao_id=None, nome=dados.nome, tipo=dados.tipo,
+        compartilhavel=dados.compartilhavel,
+    )
+    cofre_cred.gravar(cred, dados.dados)
+    sessao.add(cred)
+    sessao.flush()
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="credencial_consultoria.criada",
+        recurso_tipo="credencial", recurso_id=cred.id, organizacao_id=None,
+        detalhe={"tipo": cred.tipo, "nome": cred.nome, "compartilhavel": cred.compartilhavel},
+    )
+    sessao.commit()
+    sessao.refresh(cred)
+    return _ler(sessao, cred)
+
+
+def _credencial_consultoria(sessao: Session, credencial_id: uuid.UUID) -> Credencial:
+    cred = sessao.get(Credencial, credencial_id)
+    if cred is None or cred.organizacao_id is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Credencial não encontrada.")
+    return cred
+
+
+@rotas.put("/credenciais-consultoria/{credencial_id}", response_model=CredencialLer)
+def editar_consultoria(
+    credencial_id: uuid.UUID,
+    dados: CredencialEditar,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Edita/rotaciona uma credencial da consultoria e seu toggle (admin consultoria)."""
+    exigir_admin_consultoria(usuario)
+    cred = _credencial_consultoria(sessao, credencial_id)
+    if dados.nome != cred.nome:
+        _exigir_nome_livre(sessao, None, dados.nome, exceto=cred.id)
+    cred.nome = dados.nome
+    cred.compartilhavel = dados.compartilhavel
+    cofre_cred.gravar(cred, dados.dados)
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="credencial_consultoria.editada",
+        recurso_tipo="credencial", recurso_id=cred.id, organizacao_id=None,
+        detalhe={"nome": cred.nome, "compartilhavel": cred.compartilhavel},
+    )
+    sessao.commit()
+    sessao.refresh(cred)
+    return _ler(sessao, cred)
+
+
+@rotas.delete(
+    "/credenciais-consultoria/{credencial_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remover_consultoria(
+    credencial_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Apaga uma credencial da consultoria (admin consultoria). Bloqueada se em uso."""
+    exigir_admin_consultoria(usuario)
+    cred = _credencial_consultoria(sessao, credencial_id)
+    _bloquear_se_em_uso(sessao, cred)
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="credencial_consultoria.removida",
+        recurso_tipo="credencial", recurso_id=cred.id, organizacao_id=None,
+        detalhe={"nome": cred.nome},
+    )
+    sessao.delete(cred)
+    sessao.commit()
