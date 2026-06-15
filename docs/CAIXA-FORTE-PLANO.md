@@ -54,12 +54,14 @@ Instrumento futuro com formato inédito = **novo `tipo` de credencial + campos n
 - **Fora de escopo:** OAuth (balde 3) e credencial por **usuário-final** (cada cliente conectar o próprio
   Drive num atendimento — é da conversa, não da org).
 
-## Progresso (2026-06-15)
-Passos 1–7 ✅ concluídos e commitados no branch `caixa-forte-credenciais` (não
-mergeado). Passo 8 em curso (limpeza + suítes verdes; **falta o e2e ao vivo** e o
-merge/push com aval do maestro). Ajuste extra no Passo 8: o "Testar" isolado de
-instrumento (`/instrumentos/{id}/acionar`) passou a resolver segredos pela borda
-(inline + credencial + pool), para refletir a execução real.
+## Progresso (2026-06-15) — ✅ CONCLUÍDA E EM PRODUÇÃO
+Os 8 passos foram entregues, mergeados na `main` (merge `9dd93e4`), com push e
+redeploy OK. Migração `crd00cofre001` aplicada; ~228 testes verdes; núcleo
+intocado; validada ao vivo (publicação WordPress via credencial central).
+Ajuste extra no Passo 8: o "Testar" isolado (`/instrumentos/{id}/acionar`) passou
+a resolver segredos pela borda (inline + credencial + pool) e a mapear
+`FalhaInstrumento` → 502 com a mensagem real (antes dava 500 cru). Branch
+`caixa-forte-credenciais` preservado (não apagado).
 
 ## Os passos (um por vez, cada um com aprovação e verificação concreta)
 

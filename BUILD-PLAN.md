@@ -913,14 +913,16 @@ encerra, vigia no agendador), **G** (guarda-corpo anti prompt-injection) e **H**
    **"Chaves e credenciais"** (seção A chaves de serviço c/ Tavily; seção B inventário de credenciais de
    instrumento com rotação inline — `cerebro/rotas/credenciais.py`). Núcleo intocado. Detalhe em
    `~/.claude/.../memory/reference_chaves-unificadas.md`.
-   - ⚠️ **A seção B será SUBSTITUÍDA** (não só removida): ao validar, o maestro achou o "inventário de
-     credenciais por-instrumento-por-time" confuso. A conversa evoluiu (2026-06-15) para um modelo melhor e
-     definitivo — a **Caixa-forte de Credenciais** (item logo abaixo). Até lá, a seção B
-     (`inventario-credenciais.tsx` + `cerebro/rotas/credenciais.py`) segue no ar como está; a fase abaixo a
-     remove e põe a caixa-forte no lugar.
-4. 📋 **FASE — Caixa-forte de Credenciais** (desenho APROVADO pelo maestro 2026-06-15; NÃO iniciada).
-   Substitui a "seção B" (inventário) por um cofre de **credenciais nomeadas, tipadas e referenciadas** —
-   resolve a confusão da seção B E o desenho à prova de futuro (MCP, Google Drive/OAuth, Nano Banana).
+   - ✅ **A seção B FOI SUBSTITUÍDA (2026-06-15):** ao validar, o maestro achou o "inventário de credenciais
+     por-instrumento-por-time" confuso. A conversa evoluiu para a **Caixa-forte de Credenciais** (item logo
+     abaixo), JÁ ENTREGUE E EM PRODUÇÃO — `inventario-credenciais.tsx` removido e `cerebro/rotas/credenciais.py`
+     reescrito como o CRUD do cofre.
+4. ✅ **FASE — Caixa-forte de Credenciais** (CONCLUÍDA, VALIDADA AO VIVO E EM PRODUÇÃO — 2026-06-15, merge
+   `9dd93e4`; migração `crd00cofre001`; ~228 testes; núcleo intocado). Substituiu a "seção B" (inventário) por
+   um cofre de **credenciais nomeadas, tipadas e referenciadas** — resolveu a confusão da seção B E o desenho
+   à prova de futuro (MCP, Google Drive/OAuth, Nano Banana). E2E ao vivo: credencial WordPress na caixa-forte →
+   apontada num instrumento → publicou rascunho real usando o segredo central. Plano dos 8 passos e progresso
+   em `docs/CAIXA-FORTE-PLANO.md`. Desenho abaixo, mantido como registro:
 
    **Os três baldes de autenticação** (toda auth que um instrumento pode precisar cabe aqui):
    - **Balde 1 — Chave de provedor (pool institucional, JÁ EXISTE):** uma por serviço, compartilhada, com
