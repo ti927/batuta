@@ -103,6 +103,7 @@ class BancoSQL(TipoInstrumento):
     Config = ConfigSQL
     Args = ArgsSQL
     campos_secretos = ("senha",)
+    tipos_credencial_aceitos = ("sql",)
     # Baseline irreversível (INSERT/UPDATE/DELETE mudam dados). Mas em modo
     # `somente_leitura` o instrumento só consulta — aí não exige portão.
     acao_irreversivel = True

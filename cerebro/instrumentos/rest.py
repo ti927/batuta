@@ -57,6 +57,7 @@ class ChamarApiRest(TipoInstrumento):
     Config = ConfigRest
     Args = ArgsRest
     campos_secretos = ("token_bearer",)
+    tipos_credencial_aceitos = ("token_bearer",)
     # Baseline irreversível (default seguro), mas a irreversibilidade REAL depende
     # do método: uma leitura (GET/HEAD/OPTIONS) não muda nada e não exige portão.
     acao_irreversivel = True

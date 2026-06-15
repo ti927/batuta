@@ -161,6 +161,9 @@ class InstrumentoCriar(BaseModel):
     tipo: str = Field(min_length=1, max_length=50)
     configuracao: dict = Field(default_factory=dict)
     exige_aprovacao: bool | None = None
+    # Caixa-forte: se preenchido, o instrumento usa uma credencial nomeada da
+    # central em vez de segredo inline. NULL = inline/pool, como antes.
+    credencial_id: uuid.UUID | None = None
 
 
 class InstrumentoEditar(BaseModel):
@@ -170,6 +173,7 @@ class InstrumentoEditar(BaseModel):
     nome: str = Field(min_length=1, max_length=200)
     configuracao: dict = Field(default_factory=dict)
     exige_aprovacao: bool | None = None
+    credencial_id: uuid.UUID | None = None
 
 
 class InstrumentoLer(BaseModel):
@@ -189,6 +193,7 @@ class InstrumentoLer(BaseModel):
     segredos: dict[str, str] = Field(default_factory=dict)
     exige_aprovacao: bool | None = None
     acao_irreversivel: bool = False
+    credencial_id: uuid.UUID | None = None
     criado_em: datetime
     atualizado_em: datetime
 
@@ -208,6 +213,10 @@ class TipoInstrumentoLer(BaseModel):
     # (campo_secreto, serviço), ex.: ["chave_api", "openai"]. O front mostra esse
     # campo como OPCIONAL ("usa a chave de IA da organização por padrão").
     chave_compartilhada: list[str] | None = None
+    # Caixa-forte: tipos de credencial nomeada que este instrumento aceita
+    # referenciar (filtra o seletor "usar uma credencial da central"). Vazio = não
+    # aceita credencial da central.
+    tipos_credencial_aceitos: list[str] = Field(default_factory=list)
     # Ação irreversível (publicar/enviar/gravar externo): o front mostra um aviso
     # e a parede de ativação exige portão humano antes de um agente que a use.
     acao_irreversivel: bool = False
@@ -434,6 +443,10 @@ class ChaveApiCriar(BaseModel):
     provedor: str = Field(default="anthropic", min_length=1, max_length=40)
     valor: str = Field(min_length=1)
     apelido: str | None = Field(default=None, max_length=200)
+    # Só faz efeito na chave-mãe da consultoria: se True, serve de reserva
+    # automática às organizações; se False, é privada. Default True (nas chaves
+    # próprias da organização é irrelevante).
+    compartilhavel: bool = True
 
 
 class ChaveApiLer(BaseModel):
@@ -449,46 +462,67 @@ class ChaveApiLer(BaseModel):
     ultimos4: str | None
     apelido: str | None
     ativa: bool
+    compartilhavel: bool
     criado_em: datetime
     atualizado_em: datetime
 
 
-# ─────────────── Inventário de credenciais de instrumento ───────────────
-# A tela única de "Chaves e credenciais": além das chaves de IA (acima), lista
-# TODAS as credenciais por-instância dos instrumentos da organização, para
-# rotacionar num lugar só.
+# ─────────────────── Caixa-forte de credenciais nomeadas ───────────────────
+# Credenciais nomeadas, tipadas e referenciadas pelos instrumentos (ver
+# docs/CAIXA-FORTE-PLANO.md). Substitui o antigo "inventário por-instrumento".
 
 
-class CredencialCampo(BaseModel):
-    """Um campo secreto de um instrumento, mascarado (nunca o valor)."""
+class CampoCredencialLer(BaseModel):
+    """Um campo de um tipo de credencial — para a interface montar o formulário."""
 
-    campo: str
-    definido: bool  # já tem um valor próprio no cofre?
-    ultimos4: str | None
-    # Se este campo reusa uma chave de serviço compartilhada da organização (ex.:
-    # gerar_imagem→openai): aí não precisa de valor próprio.
-    compartilhada: bool = False
-    servico: str | None = None
+    nome: str
+    rotulo: str
+    secreto: bool
 
 
-class CredencialInstrumento(BaseModel):
-    """As credenciais de um instrumento, com o time a que pertence (para o
-    inventário da organização)."""
+class TipoCredencialLer(BaseModel):
+    """Um tipo de credencial disponível na caixa-forte (formato de uma conexão)."""
 
-    instrumento_id: uuid.UUID
-    instrumento_nome: str
-    time_id: uuid.UUID
-    time_nome: str
     tipo: str
-    tipo_nome: str
-    campos: list[CredencialCampo]
+    nome_exibicao: str
+    campos: list[CampoCredencialLer]
 
 
-class RotacionarSegredos(BaseModel):
-    """Troca um ou mais segredos de um instrumento (rotação pela tela única). Um
-    campo ausente preserva o valor atual; vazio é ignorado."""
+class CredencialCriar(BaseModel):
+    """Cria uma credencial nomeada. `dados` traz os campos do tipo (ex.:
+    {usuario, senha_app}); os secretos entram cifrados e nunca voltam."""
 
-    segredos: dict[str, str]
+    nome: str = Field(min_length=1, max_length=200)
+    tipo: str = Field(min_length=1, max_length=50)
+    dados: dict[str, str] = Field(default_factory=dict)
+    compartilhavel: bool = False  # só faz efeito numa credencial da consultoria
+
+
+class CredencialEditar(BaseModel):
+    """Edita uma credencial. O tipo é fixo após a criação. Um campo secreto em
+    branco preserva o valor atual; um campo de identidade em branco também."""
+
+    nome: str = Field(min_length=1, max_length=200)
+    dados: dict[str, str] = Field(default_factory=dict)
+    compartilhavel: bool = False
+
+
+class CredencialLer(BaseModel):
+    """Uma credencial como a API a devolve: metadados + `resumo` mascarado
+    (identidade visível, segredo só os últimos 4) + `usado_por`. O valor pleno de
+    um segredo nunca é reexibido (PRODUTO §26). `organizacao_id` nulo = consultoria."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organizacao_id: uuid.UUID | None
+    nome: str
+    tipo: str
+    resumo: dict | None
+    compartilhavel: bool
+    usado_por: int = 0
+    criado_em: datetime
+    atualizado_em: datetime
 
 
 # ──────────────────── IA criadora (Fase 9) ───────────────────────

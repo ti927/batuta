@@ -2,10 +2,11 @@ import { notFound } from "next/navigation";
 
 import {
   type ChaveApiLer,
-  type CredencialInstrumento,
+  type Credencial,
   type ModelosDisponiveis,
   type Organizacao,
   type PapelAcesso,
+  type TipoCredencial,
 } from "@/lib/api";
 import { buscarCerebro, buscarMeuAcesso } from "@/lib/cerebro-servidor";
 
@@ -16,7 +17,8 @@ async function carregar(organizacaoId: string): Promise<{
   meuPapel: PapelAcesso | null;
   chaves: ChaveApiLer[];
   disponiveis: ModelosDisponiveis | null;
-  credenciais: CredencialInstrumento[];
+  credenciais: Credencial[];
+  tiposCredencial: TipoCredencial[];
 } | null> {
   const [respOrg, eu] = await Promise.all([
     buscarCerebro(`/organizacoes/${organizacaoId}`),
@@ -31,19 +33,22 @@ async function carregar(organizacaoId: string): Promise<{
   // Só admin gere chaves e credenciais (o cérebro devolve 403 aos demais).
   let chaves: ChaveApiLer[] = [];
   let disponiveis: ModelosDisponiveis | null = null;
-  let credenciais: CredencialInstrumento[] = [];
+  let credenciais: Credencial[] = [];
+  let tiposCredencial: TipoCredencial[] = [];
   if (meuPapel === "admin") {
-    const [respChaves, respDisp, respCred] = await Promise.all([
+    const [respChaves, respDisp, respCred, respTipos] = await Promise.all([
       buscarCerebro(`/organizacoes/${organizacaoId}/chaves`),
       buscarCerebro(`/organizacoes/${organizacaoId}/modelos-disponiveis`),
       buscarCerebro(`/organizacoes/${organizacaoId}/credenciais`),
+      buscarCerebro(`/credenciais/tipos`),
     ]);
     if (respChaves.ok) chaves = await respChaves.json();
     if (respDisp.ok) disponiveis = await respDisp.json();
     if (respCred.ok) credenciais = await respCred.json();
+    if (respTipos.ok) tiposCredencial = await respTipos.json();
   }
 
-  return { organizacao, meuPapel, chaves, disponiveis, credenciais };
+  return { organizacao, meuPapel, chaves, disponiveis, credenciais, tiposCredencial };
 }
 
 export default async function ChavesOrgPage({
@@ -61,6 +66,7 @@ export default async function ChavesOrgPage({
       chaves={dados.chaves}
       disponiveis={dados.disponiveis}
       credenciais={dados.credenciais}
+      tiposCredencial={dados.tiposCredencial}
     />
   );
 }

@@ -58,6 +58,7 @@ class EnviarTelegram(TipoInstrumento):
     Config = ConfigTelegram
     Args = ArgsTelegram
     campos_secretos = ("token_bot",)
+    tipos_credencial_aceitos = ("telegram_bot",)
     acao_irreversivel = True  # manda mensagem para fora
 
     def executar(self, config: ConfigTelegram, args: ArgsTelegram) -> dict:

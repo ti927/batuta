@@ -42,9 +42,13 @@ function temPapel(servico: string): boolean {
 export function GestaoChaves({
   basePath,
   chavesIniciais,
+  ehConsultoria = false,
 }: {
   basePath: string;
   chavesIniciais: ChaveApiLer[];
+  // Na consultoria, a chave pode ser marcada como compartilhável (serve de
+  // reserva às organizações). Nas chaves da organização isso é irrelevante.
+  ehConsultoria?: boolean;
 }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
@@ -52,6 +56,7 @@ export function GestaoChaves({
   const [servico, setServico] = useState<Servico>("anthropic");
   const [valor, setValor] = useState("");
   const [apelido, setApelido] = useState("");
+  const [compartilhavel, setCompartilhavel] = useState(true);
 
   // Tavily não tem papel: força executora.
   const tipoEfetivo: TipoIA = temPapel(servico) ? tipo : "executora";
@@ -71,6 +76,7 @@ export function GestaoChaves({
         provedor: servico,
         valor: valor.trim(),
         apelido: apelido.trim() || null,
+        compartilhavel: ehConsultoria ? compartilhavel : true,
       });
       setValor("");
       setApelido("");
@@ -115,6 +121,11 @@ export function GestaoChaves({
                     </span>
                   )}
                   {!c.ativa && <Badge>inativa</Badge>}
+                  {ehConsultoria && (
+                    <Badge variant={c.compartilhavel ? "success" : "neutral"}>
+                      {c.compartilhavel ? "compartilhável" : "privada"}
+                    </Badge>
+                  )}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   termina em ••••{c.ultimos4}
@@ -173,6 +184,17 @@ export function GestaoChaves({
           onChange={(e) => setApelido(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && salvar()}
         />
+        {ehConsultoria && (
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              className="size-4 rounded border-border"
+              checked={compartilhavel}
+              onChange={(e) => setCompartilhavel(e.target.checked)}
+            />
+            Pode servir de reserva às organizações (compartilhável)
+          </label>
+        )}
         {jaTem && (
           <p className="text-xs text-warning">
             Já existe uma chave de {ROTULO_SERVICO[servico]}

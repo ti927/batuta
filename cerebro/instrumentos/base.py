@@ -89,6 +89,12 @@ class TipoInstrumento(ABC):
     # Declara `(campo_secreto, servico)`: se o campo próprio estiver vazio, a borda
     # injeta a chave do pool. None = o instrumento não reusa chave compartilhada.
     chave_compartilhada: tuple[str, str] | None = None
+    # CAIXA-FORTE DE CREDENCIAIS: tipos de credencial nomeada (ver
+    # `tipos_credencial.py`) que esta instância pode REFERENCIAR via
+    # `instrumentos.credencial_id`, em vez de guardar o segredo inline. Filtra o
+    # seletor "usar uma credencial da central" na UI. Vazio = o instrumento não
+    # aceita credencial da central (usa segredo inline próprio / pool, como antes).
+    tipos_credencial_aceitos: tuple[str, ...] = ()
 
     def irreversivel_para(self, configuracao: dict) -> bool:
         """Se ESTA instância (com esta configuração) faz ação irreversível.

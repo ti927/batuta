@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Lock, ShieldCheck } from "lucide-react";
 
 import {
   api,
   ErroDaApi,
+  type Credencial,
   type Instrumento,
+  type TipoCredencial,
   type TipoInstrumento,
   type Time,
 } from "@/lib/api";
@@ -212,7 +214,52 @@ export function FormularioInstrumento({
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
+  // Caixa-forte: credencial nomeada da central que este instrumento usa (ou null
+  // = segredo próprio inline). As credenciais disponíveis e seus tipos são
+  // buscados sob demanda (a tela é uma ilha cliente; evita threading pelos
+  // servidores). A GET é operador+ — quem edita instrumento já tem o papel.
+  const [credencialId, setCredencialId] = useState<string | null>(
+    instrumento?.credencial_id ?? null,
+  );
+  const [credenciais, setCredenciais] = useState<Credencial[]>([]);
+  const [tiposCredencial, setTiposCredencial] = useState<TipoCredencial[]>([]);
+
+  useEffect(() => {
+    let ativo = true;
+    (async () => {
+      try {
+        const [creds, tiposC] = await Promise.all([
+          api.get<Credencial[]>(
+            `/organizacoes/${time.organizacao_id}/credenciais`,
+          ),
+          api.get<TipoCredencial[]>(`/credenciais/tipos`),
+        ]);
+        if (ativo) {
+          setCredenciais(creds);
+          setTiposCredencial(tiposC);
+        }
+      } catch {
+        // Sem credenciais disponíveis: o seletor simplesmente não aparece.
+      }
+    })();
+    return () => {
+      ativo = false;
+    };
+  }, [time.organizacao_id]);
+
   const tipoAtual = tipos.find((t) => t.tipo === tipoSel);
+  const aceitos = tipoAtual?.tipos_credencial_aceitos ?? [];
+  const aceitaCredencial = aceitos.length > 0;
+  const credenciaisCompat = credenciais.filter((c) => aceitos.includes(c.tipo));
+  // Campos que a credencial selecionada fornece — ocultados do formulário e
+  // omitidos da config (o valor vem da credencial na borda).
+  const credSelecionada = credenciais.find((c) => c.id === credencialId) ?? null;
+  const camposCobertos = new Set<string>(
+    credSelecionada
+      ? (tiposCredencial.find((t) => t.tipo === credSelecionada.tipo)?.campos ?? [])
+          .map((c) => c.nome)
+      : [],
+  );
 
   async function salvar() {
     if (!nome.trim()) {
@@ -223,6 +270,9 @@ export function FormularioInstrumento({
     // Segredo preenchido vai cifrado; segredo em branco é OMITIDO (mantém).
     const config: Record<string, unknown> = {};
     for (const campo of camposDoTipo(tipoAtual)) {
+      // Campo fornecido pela credencial da central: não vai na config (a borda
+      // injeta o valor da credencial na execução).
+      if (camposCobertos.has(campo.nome)) continue;
       const bruto = (valores[campo.nome] ?? "").trim();
       if (campo.secreto) {
         if (bruto) config[campo.nome] = bruto;
@@ -262,17 +312,20 @@ export function FormularioInstrumento({
     const exige_aprovacao = aprovacao === "auto" ? null : aprovacao === "sim";
     setSalvando(true);
     try {
+      const credencial_id = aceitaCredencial ? credencialId : null;
       const salvo = criando
         ? await api.post<Instrumento>(`/times/${time.id}/instrumentos`, {
             nome: nome.trim(),
             tipo: tipoSel,
             configuracao: config,
             exige_aprovacao,
+            credencial_id,
           })
         : await api.put<Instrumento>(`/instrumentos/${instrumento.id}`, {
             nome: nome.trim(),
             configuracao: config,
             exige_aprovacao,
+            credencial_id,
           });
       setErro(null);
       onSalvo(salvo);
@@ -295,7 +348,10 @@ export function FormularioInstrumento({
         Tipo
         <Select
           value={tipoSel}
-          onChange={(e) => setTipoSel(e.target.value)}
+          onChange={(e) => {
+            setTipoSel(e.target.value);
+            setCredencialId(null); // credencial pode não servir ao novo tipo
+          }}
           disabled={!criando}
         >
           {tipos.map((t) => (
@@ -309,24 +365,52 @@ export function FormularioInstrumento({
         <p className="text-xs text-muted-foreground">{tipoAtual.descricao}</p>
       )}
 
-      {(tipoAtual?.campos_secretos?.length ?? 0) > 0 && (
+      {aceitaCredencial && (
+        <Label className="flex-col items-start gap-1">
+          <span className="flex items-center gap-1.5">
+            <Lock className="size-3 text-muted-foreground" />
+            Credencial da central
+          </span>
+          <Select
+            value={credencialId ?? ""}
+            onChange={(e) => setCredencialId(e.target.value || null)}
+          >
+            <option value="">Usar segredo próprio (preencher abaixo)</option>
+            {credenciaisCompat.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+                {c.organizacao_id === null ? " (consultoria)" : ""}
+              </option>
+            ))}
+          </Select>
+          <span className="text-xs font-normal text-muted-foreground">
+            {credencialId
+              ? "Os campos fornecidos por esta credencial ficam ocultos — para trocá-los, edite a credencial em Chaves e credenciais."
+              : "Aponte para uma credencial nomeada da central (troca num lugar só) ou preencha um segredo próprio abaixo."}
+          </span>
+        </Label>
+      )}
+
+      {(tipoAtual?.campos_secretos?.length ?? 0) > 0 && !credencialId && (
         <Aviso variant="atencao" className="text-xs">
           Os campos com cadeado são secretos: vão guardados cifrados e nunca são
           reexibidos. Ao editar, deixe um secreto em branco para manter o atual.
         </Aviso>
       )}
 
-      {camposDoTipo(tipoAtual).map((campo) => (
-        <CampoConfigInput
-          key={campo.nome}
-          campo={campo}
-          valor={valores[campo.nome] ?? ""}
-          jaGuardado={instrumento?.segredos?.[campo.nome]}
-          onChange={(v) =>
-            setValores((atual) => ({ ...atual, [campo.nome]: v }))
-          }
-        />
-      ))}
+      {camposDoTipo(tipoAtual)
+        .filter((campo) => !camposCobertos.has(campo.nome))
+        .map((campo) => (
+          <CampoConfigInput
+            key={campo.nome}
+            campo={campo}
+            valor={valores[campo.nome] ?? ""}
+            jaGuardado={instrumento?.segredos?.[campo.nome]}
+            onChange={(v) =>
+              setValores((atual) => ({ ...atual, [campo.nome]: v }))
+            }
+          />
+        ))}
 
       {camposDoTipo(tipoAtual).length === 0 && (
         <p className="text-xs text-muted-foreground">
