@@ -54,6 +54,13 @@ Instrumento futuro com formato inédito = **novo `tipo` de credencial + campos n
 - **Fora de escopo:** OAuth (balde 3) e credencial por **usuário-final** (cada cliente conectar o próprio
   Drive num atendimento — é da conversa, não da org).
 
+## Progresso (2026-06-15)
+Passos 1–7 ✅ concluídos e commitados no branch `caixa-forte-credenciais` (não
+mergeado). Passo 8 em curso (limpeza + suítes verdes; **falta o e2e ao vivo** e o
+merge/push com aval do maestro). Ajuste extra no Passo 8: o "Testar" isolado de
+instrumento (`/instrumentos/{id}/acionar`) passou a resolver segredos pela borda
+(inline + credencial + pool), para refletir a execução real.
+
 ## Os passos (um por vez, cada um com aprovação e verificação concreta)
 
 ### Passo 1 — Schema (migração)

@@ -242,10 +242,18 @@ def acionar(
             f"Tipo de instrumento desconhecido: {inst.tipo!r}",
         )
     try:
-        # Fase 7-B: mescla os segredos decifrados na config só agora, em memória.
+        # Resolve os segredos como na execução real (borda): inline próprio +
+        # credencial da central + pool de serviço (gerar_imagem/busca_web reusam
+        # a chave da org). Sem isso, "Testar" não enxergaria credencial nem pool.
+        import chaves
+        from orquestracao.llm import usar_chaves
+
+        chaves_map, _ = chaves.resolver_chaves_por_time(sessao, inst.time_id)
+        with usar_chaves(chaves_map):
+            segredos.anexar_aos_instrumentos(sessao, [inst])
         config_efetiva = {
             **(inst.configuracao or {}),
-            **segredos.decifrar(sessao, inst.id),
+            **getattr(inst, "segredos_decifrados", {}),
         }
         config = tipo.Config.model_validate(config_efetiva)
         args = tipo.Args.model_validate(dados.argumentos or {})
