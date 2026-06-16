@@ -963,19 +963,26 @@ encerra, vigia no agendador), **G** (guarda-corpo anti prompt-injection) e **H**
    referência **na borda** (núcleo congelado). **Fora de escopo:** credencial por **usuário-final** (cada
    cliente conectar o próprio Drive dentro de um atendimento — é da conversa, não da org). Detalhe vivo em
    [[reference-chaves-unificadas]].
-5. 📋 **FASE — Chave de IA por provedor (unificação)** (estudo APROVADO 2026-06-15; plano em
-   `docs/CHAVE-POR-PROVEDOR-ESTUDO.md`; NÃO iniciada). Remove a dimensão de papel `executora`/`conversa` da
-   chave: a chave passa a ser **uma por provedor** ("este provedor tem credencial?"); a escolha de IA continua
+5. ✅ **FASE — Chave de IA por provedor (unificação)** (CONCLUÍDA · NO AR 2026-06-15, migração
+   `una00prov001`, merge `d674bb5`; 228 testes verdes). Removeu a dimensão de papel `executora`/`conversa` da
+   chave: a chave passou a ser **uma por provedor** ("este provedor tem credencial?"); a escolha de IA fica
    só no **modelo** da conversa (`Organizacao.modelo_criadora`) e de cada **agente** (`Agente.modelo_ia`).
-   Acaba o cadastro em dobro e a "pegadinha da imagem" (gerar_imagem/Whisper/busca passam a achar a chave do
-   provedor em qualquer lugar). Estudo de impacto confirmou: baixo risco, **núcleo intocado** (só a fronteira
-   de resolução em `chaves.py`), e dado real de produção **sem conflito de merge** (5 linhas; Anthropic da
-   consultoria nos 2 papéis com a mesma chave). **5 passos:** (1) migração consolida `(org,provedor)` +
-   reindexa (backup das linhas antes); (2) `chaves.py` + `rotas/chaves_api.py` sem papel (`modelos-disponiveis`
-   vira mapa único); (3) `rotas/criacao.py` + `rotas/organizacoes.py` resolvem por provedor; (4) interface
-   (tira o seletor de papel; selectors usam o mapa único); (5) limpeza + testes reescritos + e2e (conversa,
-   agente, imagem) + merge. Cuidado: a migração roda no banco de produção (com aval); testes de "isolamento por
-   papel" serão reescritos (mudança de contrato, não regressão).
+   Acabou o cadastro em dobro e a "pegadinha da imagem". **Núcleo intocado** (só a fronteira de resolução em
+   `chaves.py`). Migração consolidou em produção (5→4 linhas, zero conflito) e dropou `tipo_ia`. Os 5 passos
+   (migração+reindexa / `chaves.py`+`rotas/chaves_api.py` sem papel / `criacao.py`+`organizacoes.py` por
+   provedor / interface sem seletor de papel / testes reescritos + e2e) foram entregues. **Validado ao vivo:**
+   a IA de conversa via OpenAI respondeu e editou um instrumento. Plano e lições em
+   `docs/CHAVE-POR-PROVEDOR-ESTUDO.md`. **Lição:** a migração (drop de coluna) rodou ANTES do deploy → o prod
+   ficou momentaneamente com schema novo + código velho (resolução de chave falhava) até o redeploy reconciliar;
+   para drops futuros, subir o código que não usa a coluna ANTES de dropá-la. Correção de teste: o `conftest`
+   passou a esvaziar `chaves_api` por teste (banco real tem chaves de consultoria).
+   - ✅ **Sub-melhoria — `gerar_imagem` com campos guiados** (NO AR 2026-06-15, merge `f551952`, 232 testes).
+     No e2e da imagem, os campos `modelo`/`tamanho` eram **texto livre** → usuário digitava valores inválidos
+     (`1024x102`, modelos inexistentes), e o default `dall-e-3` falha em contas que só têm `gpt-image-1`.
+     Correção: `modelo`/`tamanho` viraram `Literal` (a UI já os renderiza como **dropdown**), default passou a
+     `gpt-image-1`, `model_validator` valida o par modelo×tamanho com mensagem clara já ao salvar, e os campos
+     ganharam `title` (rótulo amigável; o frontend lê o `title` do schema). Princípio geral: **campo de
+     conjunto fechado = `Literal`/enum, nunca texto livre.** Detalhe na memória.
 6. **Fase K — polimento de atendimento** (saudação/transparência automática, horário comercial, painel de
    métricas de atendimento). Menor valor-por-esforço; precisa de UI/config próprias.
 7. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
