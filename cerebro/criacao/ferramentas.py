@@ -25,6 +25,8 @@ from sqlalchemy.orm import Session
 
 import instrumentos as encaixe
 import precos
+import segredos_instrumento as segredos
+import tipos_credencial
 from criacao import memoria, servicos
 from criacao.servicos import ConflitoDominio
 from modelos import (
@@ -32,6 +34,7 @@ from modelos import (
     AgenteInstrumento,
     Automacao,
     ConversaCriacao,
+    Credencial,
     Instrumento,
     SegredoInstrumento,
     Time,
@@ -174,6 +177,25 @@ def _snapshot_time(ctx: ContextoCriacao) -> dict:
         .where(Instrumento.time_id == time.id)
     ).all():
         guardados.setdefault(str(iid), set()).add(campo)
+    # Cobertura de segredos pelas OUTRAS fontes além do inline: credenciais nomeadas
+    # apontadas pelos instrumentos (campos do tipo da credencial) e chaves de serviço
+    # compartilhadas resolvíveis pelo pool. Tudo para o cálculo honesto de pendentes.
+    cred_ids = {i.credencial_id for i in instrumentos if i.credencial_id}
+    tipo_por_credencial: dict[uuid.UUID, str] = (
+        {
+            c.id: c.tipo
+            for c in sess.scalars(select(Credencial).where(Credencial.id.in_(cred_ids)))
+        }
+        if cred_ids
+        else {}
+    )
+    servicos_resolviveis = segredos.servicos_resolviveis(sess, time.organizacao_id)
+
+    def _cobertos_por_credencial(i: Instrumento) -> set[str]:
+        tipo = tipo_por_credencial.get(i.credencial_id) if i.credencial_id else None
+        tc = tipos_credencial.obter_tipo(tipo) if tipo else None
+        return set(tc.nomes_campos) if tc else set()
+
     auto = sess.scalars(
         select(Automacao).where(Automacao.time_id == time.id).order_by(Automacao.criado_em)
     ).first()
@@ -196,10 +218,12 @@ def _snapshot_time(ctx: ContextoCriacao) -> dict:
                 "acao_irreversivel": encaixe.exige_portao(
                     i.tipo, i.configuracao, i.exige_aprovacao
                 ),
-                "segredos_pendentes": [
-                    c for c in encaixe.campos_secretos(i.tipo)
-                    if c not in guardados.get(str(i.id), set())
-                ],
+                "segredos_pendentes": segredos.pendentes(
+                    i.tipo,
+                    guardados=guardados.get(str(i.id), set()),
+                    cobertos_por_credencial=_cobertos_por_credencial(i),
+                    servicos_resolviveis=servicos_resolviveis,
+                ),
             }
             for i in instrumentos
         ],

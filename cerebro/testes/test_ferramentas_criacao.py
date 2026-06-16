@@ -83,7 +83,10 @@ def test_remover_agente_limpa_cadeia(sessao, dados):
     assert all(s["destino"] != a2 for s in nos[a1]["saidas"])
 
 
-def test_configurar_instrumento_marca_segredos_pendentes(sessao, dados):
+def test_configurar_instrumento_marca_segredos_pendentes(sessao, dados, monkeypatch):
+    # Sem chave Tavily em lugar nenhum (cofre vazio pelo conftest + .env sem a
+    # variável): aí sim a chave da busca conta como pendente.
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     _ctx, f = _setup(sessao, dados)
     _chamar(f, "definir_time", nome="T")
     r = _chamar(f, "configurar_instrumento", nome="Busca", tipo="busca_web")
