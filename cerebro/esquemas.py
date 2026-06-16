@@ -255,15 +255,6 @@ class VincularInstrumento(BaseModel):
     instrumento_id: uuid.UUID
 
 
-# ─────────────────────────── Execução ────────────────────────────
-
-
-class ExecutarAgente(BaseModel):
-    """Entrada para acionar um agente isoladamente (Tarefa 4.2)."""
-
-    entrada: str = Field(min_length=1)
-
-
 # ───────────────────────── Automações ────────────────────────────
 
 

@@ -15,7 +15,6 @@ from rotas import (
     cinto,
     credenciais,
     criacao,
-    execucao,
     instrumentos,
     membros,
     mensageria,
@@ -64,7 +63,6 @@ app.include_router(times.rotas)
 app.include_router(agentes.rotas)
 app.include_router(instrumentos.rotas)
 app.include_router(cinto.rotas)
-app.include_router(execucao.rotas)
 app.include_router(automacoes.rotas)
 app.include_router(chaves_api.rotas)
 app.include_router(credenciais.rotas)
