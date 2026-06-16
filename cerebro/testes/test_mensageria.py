@@ -36,9 +36,15 @@ class _SessaoFake:
         pass
 
 
-def _bot(sessao, dados, nome="bot"):
+def _bot(sessao, dados, nome="bot", configuracao=None):
+    # Saudação de abertura DESLIGADA por padrão nos testes de turno (foco na
+    # resposta da IA, sem a mensagem de boas-vindas no meio); os testes da Fase K
+    # passam a config explícita para exercitar saudação/horário.
     inst = Instrumento(
-        time_id=dados["timeA"].id, nome=nome, tipo="enviar_telegram", configuracao={}
+        time_id=dados["timeA"].id,
+        nome=nome,
+        tipo="enviar_telegram",
+        configuracao={"saudacao_abertura": ""} if configuracao is None else configuracao,
     )
     sessao.add(inst)
     sessao.flush()
@@ -570,3 +576,125 @@ def test_devolver_e_fechar(cliente, entrar, dados, sessao):
     cliente.post(f"/conversas/{conversa.id}/assumir")
     assert cliente.post(f"/conversas/{conversa.id}/devolver").json()["estado"] == "aberta"
     assert cliente.post(f"/conversas/{conversa.id}/fechar").json()["estado"] == "fechada"
+
+
+# ───────────────────── horário comercial + saudação (Fase K) ─────────────────
+
+
+def _quarta(hora_sp: int):
+    """Um datetime UTC que, no fuso de SP (UTC−3), cai na quarta 2026-06-17 às
+    `hora_sp` horas. (2026-06-17 é quarta-feira; 2026-06-20, sábado.)"""
+    return datetime(2026, 6, 17, hora_sp + 3, 0, tzinfo=timezone.utc)
+
+
+def test_fora_do_horario_desligado_e_sempre_dentro():
+    assert servico._fora_do_horario({}) is False
+    assert servico._fora_do_horario({"horario_comercial_ativo": False}) is False
+
+
+def test_fora_do_horario_dia_util_dentro_e_fora():
+    cfg = {"horario_comercial_ativo": True, "horario_inicio": "09:00", "horario_fim": "18:00"}
+    assert servico._fora_do_horario(cfg, _quarta(12)) is False  # meio do expediente
+    assert servico._fora_do_horario(cfg, _quarta(20)) is True   # depois de fechar
+    assert servico._fora_do_horario(cfg, _quarta(7)) is True    # antes de abrir
+
+
+def test_fora_do_horario_fim_de_semana():
+    sabado = datetime(2026, 6, 20, 15, 0, tzinfo=timezone.utc)  # SP sáb 12h
+    assert servico._fora_do_horario({"horario_comercial_ativo": True}, sabado) is True
+    # Atendendo todo dia, sábado ao meio-dia está dentro.
+    cfg = {
+        "horario_comercial_ativo": True,
+        "dias_uteis_apenas": False,
+        "horario_inicio": "09:00",
+        "horario_fim": "18:00",
+    }
+    assert servico._fora_do_horario(cfg, sabado) is False
+
+
+def test_fora_do_horario_config_invalida_fail_open():
+    cfg = {"horario_comercial_ativo": True, "horario_inicio": "xx", "horario_fim": "18:00"}
+    assert servico._fora_do_horario(cfg, _quarta(12)) is False  # HH:MM inválido → dentro
+
+
+def test_fora_do_horario_responde_sem_acionar_ia(sessao, dados, monkeypatch):
+    inst = _bot(
+        sessao, dados,
+        configuracao={"saudacao_abertura": "", "mensagem_fora_horario": "Estamos fechados."},
+    )
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "TOKEN"})
+    _agente_com(sessao, dados, inst)
+    conversa, _ = servico.registrar_entrada(sessao, inst, _msg("oi"))
+
+    rodou = {"ia": False}
+    enviados = []
+    monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
+    monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
+    monkeypatch.setattr(servico, "_fora_do_horario", lambda cfg: True)
+    monkeypatch.setattr(
+        servico, "executar_agente", lambda *a: rodou.__setitem__("ia", True) or {"saida": "x"}
+    )
+    monkeypatch.setattr(
+        servico.telegram, "enviar", lambda t, c, x: enviados.append(x) or {"ok": True}
+    )
+
+    servico.processar_turno(conversa.id)
+
+    assert rodou["ia"] is False               # não acionou a IA
+    assert enviados == ["Estamos fechados."]  # auto-resposta de fora-de-horário
+    sessao.refresh(conversa)
+    assert conversa.estado == "aberta" and conversa.turnos == 0  # não contou turno
+
+
+def test_saudacao_no_primeiro_contato_uma_unica_vez(sessao, dados, monkeypatch):
+    inst = _bot(sessao, dados, configuracao={"saudacao_abertura": "Oi! Sou virtual."})
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "TOKEN"})
+    _agente_com(sessao, dados, inst)
+    conversa, _ = servico.registrar_entrada(sessao, inst, _msg("quanto custa?"))
+
+    enviados = []
+    monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
+    monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
+    monkeypatch.setattr(servico, "executar_agente", lambda *a: {"saida": "Custa R$10.", "uso": []})
+    monkeypatch.setattr(
+        servico.telegram, "enviar", lambda t, c, x: enviados.append(x) or {"ok": True}
+    )
+
+    servico.processar_turno(conversa.id)
+    # 1º turno: saudação ANTES da resposta da IA.
+    assert enviados == ["Oi! Sou virtual.", "Custa R$10."]
+
+    # 2ª mensagem do contato (mesma conversa viva) → a saudação NÃO se repete.
+    enviados.clear()
+    conversa2, _ = servico.registrar_entrada(sessao, inst, _msg("e o prazo?"))
+    servico.processar_turno(conversa2.id)
+    assert enviados == ["Custa R$10."]
+
+
+# ─────────────────────────── métricas (Fase K) ───────────────────────────────
+
+
+def test_metricas_de_atendimento(cliente, entrar, dados, sessao):
+    entrar(dados["admin"])
+    inst = _bot(sessao, dados)
+    _agente_com(sessao, dados, inst)
+    # Conversa 1: o bot respondeu (1 turno, custo) e foi transferida p/ humano.
+    c1, _ = servico.registrar_entrada(sessao, inst, _msg("oi", chave="111"))
+    sessao.add(MensagemConversa(conversa_id=c1.id, papel="agente", conteudo="resp"))
+    c1.turnos = 1
+    c1.custo_acumulado_usd = 0.05
+    c1.estado = "humano_assumiu"
+    # Conversa 2: aberta, ainda sem resposta.
+    servico.registrar_entrada(sessao, inst, _msg("ola", chave="222"))
+    sessao.commit()
+
+    r = cliente.get(f"/times/{dados['timeA'].id}/conversas/metricas")
+    assert r.status_code == 200
+    m = r.json()
+    assert m["total"] == 2
+    assert m["com_humano"] == 1 and m["percent_humano"] == 50.0
+    assert m["fechadas"] == 0 and m["abertas"] == 2
+    assert m["turnos_total"] == 1
+    assert round(m["custo_total_usd"], 2) == 0.05
+    assert m["por_estado"]["humano_assumiu"] == 1
+    assert m["tempo_resposta_medio_s"] is not None  # c1 teve resposta do bot

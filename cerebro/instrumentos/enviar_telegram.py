@@ -24,16 +24,57 @@ class ConfigTelegram(BaseModel):
     """Configuração fixa, preenchida por quem monta o agente. `token_bot` é
     SEGREDO (cofre, Fase 7-B). `destinatario_padrao` é opcional: se preenchido,
     o agente sempre manda para esse chat quando não informar um destinatário
-    (útil para um canal/grupo fixo da equipe)."""
+    (útil para um canal/grupo fixo da equipe).
+
+    Os campos de atendimento (saudação e horário comercial) só fazem efeito no
+    modo conversacional da mensageria — a borda os lê (`mensageria/servico.py`);
+    o `executar` (envio avulso) os ignora."""
 
     token_bot: str = Field(
         default="",
+        title="Token do bot",
         description="Token do bot do Telegram (segredo), obtido no BotFather.",
     )
     destinatario_padrao: str = Field(
         default="",
+        title="Destinatário padrão (opcional)",
         description="chat_id fixo de destino (opcional). Usado quando o agente "
         "não informa um destinatário.",
+    )
+
+    # ─── Atendimento (mensageria conversacional) ───
+    saudacao_abertura: str = Field(
+        default="Olá! Você está falando com um assistente virtual. Como posso ajudar?",
+        title="Saudação de abertura",
+        description="Mensagem enviada automaticamente no primeiro contato de cada "
+        "conversa (transparência). Deixe em branco para não enviar nenhuma.",
+    )
+    horario_comercial_ativo: bool = Field(
+        default=False,
+        title="Ativar horário comercial",
+        description="Se ligado, fora do horário o bot responde uma mensagem "
+        "automática e NÃO aciona a IA (fuso de São Paulo, UTC−3).",
+    )
+    horario_inicio: str = Field(
+        default="09:00",
+        title="Início do atendimento (HH:MM)",
+        description="Hora de abertura, formato 24h HH:MM (ex.: 09:00).",
+    )
+    horario_fim: str = Field(
+        default="18:00",
+        title="Fim do atendimento (HH:MM)",
+        description="Hora de fechamento, formato 24h HH:MM (ex.: 18:00).",
+    )
+    dias_uteis_apenas: bool = Field(
+        default=True,
+        title="Só em dias úteis",
+        description="Se sim, sábado e domingo ficam fora do horário de atendimento.",
+    )
+    mensagem_fora_horario: str = Field(
+        default="Olá! No momento estamos fora do horário de atendimento. "
+        "Assim que possível retornaremos sua mensagem.",
+        title="Mensagem fora do horário",
+        description="Resposta automática enviada fora do horário comercial.",
     )
 
 
