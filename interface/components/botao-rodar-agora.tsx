@@ -12,18 +12,26 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 type AutomacaoOpcao = { id: string; nome: string };
+type VarianteBotao = "default" | "outline" | "ghost" | "secondary";
+type TamanhoBotao = "default" | "sm";
 
 /**
- * "Rodar agora" do cabeçalho do time: dispara uma automação manualmente. Se o
- * time tem uma só, vai direto; se tem várias, deixa escolher. Pede a entrada e,
- * ao disparar, leva para o detalhe da execução na aba Execuções. Só operador.
+ * Dispara uma automação manualmente. Se receber uma só, vai direto; se receber
+ * várias, deixa escolher. Pede a entrada e, ao disparar, leva ao detalhe da
+ * execução na aba Execuções. Usado por automação na aba Automações. Só operador.
  */
 export function BotaoRodarAgora({
   timeId,
   automacoes,
+  rotulo = "Rodar agora",
+  variant = "default",
+  size = "default",
 }: {
   timeId: string;
   automacoes: AutomacaoOpcao[];
+  rotulo?: string;
+  variant?: VarianteBotao;
+  size?: TamanhoBotao;
 }) {
   const router = useRouter();
   const [aberto, setAberto] = useState(false);
@@ -56,8 +64,8 @@ export function BotaoRodarAgora({
 
   return (
     <>
-      <Button onClick={() => setAberto(true)}>
-        <Play className="size-4" /> Rodar agora
+      <Button variant={variant} size={size} onClick={() => setAberto(true)}>
+        <Play className="size-4" /> {rotulo}
       </Button>
 
       {aberto && (

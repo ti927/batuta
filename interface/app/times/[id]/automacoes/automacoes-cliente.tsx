@@ -17,6 +17,7 @@ import {
   type Time,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
+import { BotaoRodarAgora } from "@/components/botao-rodar-agora";
 import { UrlCopiavel } from "@/components/url-copiavel";
 import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
@@ -533,6 +534,15 @@ export function AutomacoesCliente({
                   {nomeAgente(a.cadeia?.inicio ?? null)}
                 </span>
               </Link>
+              {souOperador && (
+                <BotaoRodarAgora
+                  timeId={time.id}
+                  automacoes={[{ id: a.id, nome: a.nome }]}
+                  rotulo="Rodar"
+                  variant="outline"
+                  size="sm"
+                />
+              )}
               {souOperador && (
                 <Button size="sm" variant="outline" onClick={() => abrirEdicao(a)}>
                   Editar
