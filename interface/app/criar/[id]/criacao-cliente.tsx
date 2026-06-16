@@ -324,7 +324,8 @@ export function CriacaoCliente({
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <span>
                 Faltam {pendentes.length} segredo(s) para os instrumentos funcionarem
-                (senhas/tokens). Cadastre no cofre, na tela do time.
+                (senhas/tokens). Cadastre em <strong>Chaves e credenciais</strong> (no
+                menu lateral) ou direto no instrumento, na tela do time.
               </span>
             </div>
           )}

@@ -167,7 +167,13 @@ def configurar_instrumento(
     if segredos_novos:
         segredos.salvar_segredos(sessao, inst.id, segredos_novos)
     _audit(sessao, usuario, "instrumento.criado", "instrumento", inst.id, time.organizacao_id)
-    pendentes = [c for c in encaixe.campos_secretos(tipo) if c not in segredos_novos]
+    # Pendentes = só os segredos que NENHUMA fonte cobre. Recém-criado pela IA não
+    # tem credencial apontada; a chave compartilhada (Tavily/OpenAI) já vem do pool.
+    pendentes = segredos.pendentes(
+        tipo,
+        guardados=set(segredos_novos),
+        servicos_resolviveis=segredos.servicos_resolviveis(sessao, time.organizacao_id),
+    )
     return inst, pendentes
 
 

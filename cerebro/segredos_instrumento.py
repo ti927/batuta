@@ -9,11 +9,13 @@ Na execução, os segredos são DECIFRADOS e injetados na config do instrumento
 (via atributo transitório `segredos_decifrados`, que o SQLAlchemy não persiste).
 """
 
+import os
 import uuid
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import chaves
 import cofre
 from modelos import SegredoInstrumento
 
@@ -133,3 +135,53 @@ def anexar_aos_instrumentos(sessao: Session, instrumentos: list) -> None:
             if not (valores.get(campo) or "").strip() and pool.get(servico):
                 valores = {**valores, campo: pool[servico]}
         inst.segredos_decifrados = valores
+
+
+# Serviços de chave compartilhada com queda de legado no `.env` do cérebro
+# (espelha `chaves.SERVICOS_COM_LEGADO`): mapeia o serviço à variável de ambiente.
+_ENV_LEGADO_SERVICO = {"tavily": "TAVILY_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
+
+
+def servicos_resolviveis(
+    sessao: Session, organizacao_id: uuid.UUID | None
+) -> set[str]:
+    """Serviços de chave compartilhada que a organização CONSEGUE resolver — pelo
+    pool (cofre da org → cofre da consultoria) ou pela queda de legado no `.env`.
+    Serve para o cálculo de segredos pendentes não acusar como 'faltando' uma chave
+    que o instrumento já reusa do pool (ex.: a Tavily da busca, a OpenAI da imagem)."""
+    pool, _ = chaves.resolver_chaves_por_organizacao(sessao, organizacao_id)
+    resolviveis = set(pool)
+    for servico, env in _ENV_LEGADO_SERVICO.items():
+        if servico in chaves.SERVICOS_COM_LEGADO and os.environ.get(env):
+            resolviveis.add(servico)
+    return resolviveis
+
+
+def pendentes(
+    tipo: str,
+    *,
+    guardados: set[str],
+    cobertos_por_credencial: frozenset[str] | set[str] = frozenset(),
+    servicos_resolviveis: frozenset[str] | set[str] = frozenset(),
+) -> list[str]:
+    """Campos secretos de um instrumento que NENHUMA das três fontes de resolução
+    cobre — só esses faltam de verdade. As fontes são as mesmas (e na mesma ordem)
+    que a borda aplica em `anexar_aos_instrumentos`: (1) segredo inline guardado no
+    próprio instrumento; (2) credencial nomeada apontada; (3) chave de serviço
+    compartilhada resolvível pelo pool da org/consultoria.
+
+    Antes este cálculo olhava só a fonte (1), o que gerava falso-alerta de 'faltam
+    segredos' para instrumentos já cobertos pelo cofre."""
+    from instrumentos.base import campos_secretos, obter_tipo
+
+    cobertos = set(guardados) | set(cobertos_por_credencial)
+    tipo_obj = obter_tipo(tipo)
+    compart = getattr(tipo_obj, "chave_compartilhada", None) if tipo_obj else None
+    faltando: list[str] = []
+    for campo in campos_secretos(tipo):
+        if campo in cobertos:
+            continue
+        if compart and campo == compart[0] and compart[1] in servicos_resolviveis:
+            continue
+        faltando.append(campo)
+    return faltando
