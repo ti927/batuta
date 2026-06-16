@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 type CampoConfig = {
   nome: string;
+  rotulo: string; // rótulo amigável (title do schema); cai no nome se não houver
   tipo: string; // string | integer | number | boolean | array | object
   descricao: string;
   obrigatorio: boolean;
@@ -65,6 +66,7 @@ export function camposDoTipo(tipo: TipoInstrumento | undefined): CampoConfig[] {
   const [campoCompart, servicoCompart] = tipo.chave_compartilhada ?? [null, null];
   return Object.entries(props).map(([nome, prop]) => ({
     nome,
+    rotulo: (prop.title as string) || nome,
     tipo: tipoDoCampo(prop),
     descricao: (prop.description as string) ?? "",
     obrigatorio: obrigatorios.has(nome),
@@ -146,7 +148,7 @@ function CampoConfigInput({
     <Label className="flex-col items-start gap-1">
       <span className="flex items-center gap-1.5">
         {campo.secreto && <Lock className="size-3 text-muted-foreground" />}
-        {campo.nome}
+        {campo.rotulo}
         {campo.obrigatorio && <span className="text-destructive">*</span>}
       </span>
       {entrada}

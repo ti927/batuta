@@ -7,6 +7,7 @@ e devolve o link.
 
 import base64
 
+import pydantic
 import pytest
 
 import instrumentos as encaixe
@@ -47,6 +48,32 @@ def test_gerar_imagem_registrado_com_chave_secreta():
 def test_sem_chave_falha_clara():
     with pytest.raises(FalhaInstrumento, match="chave"):
         GerarImagem().executar(ConfigImagem(), ArgsImagem(prompt="um gato"))
+
+
+# ─────────────── config guiada: modelo/tamanho como conjunto fechado ───────────
+
+
+def test_modelo_e_tamanho_padrao():
+    """Default funciona de saída: gpt-image-1 (mais novo) + 1024x1024 (vale p/ todos)."""
+    cfg = ConfigImagem()
+    assert cfg.modelo == "gpt-image-1" and cfg.tamanho == "1024x1024"
+
+
+def test_combinacao_modelo_tamanho_valida_passa():
+    cfg = ConfigImagem(modelo="dall-e-3", tamanho="1024x1792")
+    assert cfg.modelo == "dall-e-3" and cfg.tamanho == "1024x1792"
+
+
+def test_combinacao_modelo_tamanho_invalida_recusa_com_mensagem():
+    # 1024x1536 é do gpt-image-1, não do dall-e-3 → erro claro.
+    with pytest.raises(pydantic.ValidationError, match="não vale para o modelo"):
+        ConfigImagem(modelo="dall-e-3", tamanho="1024x1536")
+
+
+def test_modelo_fora_do_conjunto_recusado():
+    """`modelo` é um Literal — valor inventado nem é aceito (vira dropdown na UI)."""
+    with pytest.raises(pydantic.ValidationError):
+        ConfigImagem(modelo="dall-e-4")
 
 
 def test_gera_salva_arquivo_e_devolve_link(monkeypatch):
