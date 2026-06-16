@@ -12,13 +12,10 @@ import {
   MessageSquare,
   Pencil,
   Plus,
-  ShieldCheck,
-  Wrench,
 } from "lucide-react";
 
 import { CardAgente } from "@/components/card-agente";
 import { DrawerAgente } from "@/components/drawer-agente";
-import { DrawerInstrumento } from "@/components/drawer-instrumento";
 import { Rise } from "@/components/rise";
 import { RobotFace } from "@/components/robot-face";
 import { Badge } from "@/components/ui/badge";
@@ -29,18 +26,14 @@ import {
   type Agente,
   type Automacao,
   type Cadeia,
-  type Execucao,
+  type ExecucaoNaLista,
   type Instrumento,
   type PapelAcesso,
-  type ResumoUso,
-  type TipoInstrumento,
   type Time,
+  type TimeResumo,
 } from "@/lib/api";
 
-export type ExecucaoRecente = Execucao & { automacao_nome: string };
-
-// ── Estados de execução: rótulo amigável + variante de cor (igual à tela de
-// execuções, mas com rótulos em português para o hub do time). ──
+// ── Estados de execução: rótulo amigável + variante de cor. ──
 type VarianteBadge = "neutral" | "info" | "success" | "warning" | "error";
 const ESTADO: Record<string, { label: string; variante: VarianteBadge }> = {
   aguardando: { label: "na fila", variante: "neutral" },
@@ -74,260 +67,208 @@ function formatarData(iso: string | null): string {
 export function DashboardCliente({
   time,
   meuPapel,
+  resumo,
   agentes,
   cintos,
   instrumentos,
-  tiposInstrumento,
   automacoes,
   recentes,
-  aguardando,
-  pendenteAutomacaoId,
-  totalExecucoes,
-  custo,
   conversaId,
 }: {
   time: Time;
   meuPapel: PapelAcesso | null;
+  resumo: TimeResumo | null;
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
-  tiposInstrumento: TipoInstrumento[];
   automacoes: Automacao[];
-  recentes: ExecucaoRecente[];
-  aguardando: number;
-  pendenteAutomacaoId: string | null;
-  totalExecucoes: number;
-  custo: ResumoUso | null;
+  recentes: ExecucaoNaLista[];
   conversaId: string | null;
 }) {
-  // O drawer abre por id (não pelo objeto) para sobreviver ao router.refresh():
-  // o agente é re-derivado da prop recarregada. `criando` abre o drawer vazio.
+  // O drawer abre por id (não pelo objeto) para sobreviver ao router.refresh().
   const [abertoId, setAbertoId] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
-  // Drawer de instrumento: null = fechado; "novo" = criando; instrumento = editando.
-  const [instrAberto, setInstrAberto] = useState<null | "novo" | Instrumento>(null);
   const souOperador = podeOperar(meuPapel);
 
   const agenteAberto = abertoId
     ? (agentes.find((a) => a.id === abertoId) ?? null)
     : null;
 
-  const ativo = automacoes.some((a) => a.ativa);
+  const nAutomacoes = resumo?.automacoes ?? automacoes.length;
+  const ativo = resumo?.ativo ?? false;
   const gatilhoLabel =
-    automacoes.length === 0
+    nAutomacoes === 0
       ? "Sem automação"
-      : automacoes.length === 1
-        ? (ROTULO_GATILHO[automacoes[0].tipo_gatilho] ?? automacoes[0].tipo_gatilho)
-        : `${automacoes.length} automações`;
+      : nAutomacoes === 1 && resumo?.gatilho
+        ? (ROTULO_GATILHO[resumo.gatilho] ?? resumo.gatilho)
+        : `${nAutomacoes} automações`;
+
+  const pendencias = resumo?.pendencias ?? 0;
+  const custo = resumo?.custo_acumulado_usd ?? 0;
+  const totalExec = resumo?.execucoes ?? recentes.length;
+  const taxa = resumo?.taxa_sucesso ?? null;
 
   return (
     <main className="mx-auto w-full max-w-[1000px] px-5 py-8 sm:px-8">
       <Rise>
-      {/* Stat cards */}
-      <div className="mt-6 flex flex-wrap gap-3.5">
-        <StatCard
-          Icone={Clock}
-          tom={{ bg: "#EFEAFF", fg: "#6D4AFF" }}
-          rotulo="Gatilho"
-          valor={gatilhoLabel}
-          sub={ativo ? "disparando normalmente" : "ainda não ativado"}
-        />
-        <StatCard
-          Icone={MessageSquare}
-          tom={{ bg: "#FDF1E3", fg: "#E89638" }}
-          rotulo="Aguardando você"
-          valor={
-            aguardando > 0
-              ? `${aguardando} ${aguardando === 1 ? "pendência" : "pendências"}`
-              : "Nada pendente"
-          }
-          sub={aguardando > 0 ? "um fluxo espera seu ok →" : "nenhum fluxo parado"}
-          acento={aguardando > 0}
-          href={
-            aguardando > 0 && pendenteAutomacaoId
-              ? `/automacoes/${pendenteAutomacaoId}`
-              : undefined
-          }
-        />
-        <StatCard
-          Icone={Gauge}
-          tom={{ bg: "#E6F4EA", fg: "#3DAA5C" }}
-          rotulo="Custo acumulado"
-          valor={custo ? `~US$ ${custo.custo_usd.toFixed(2)}` : "US$ 0,00"}
-          sub={`${totalExecucoes} ${totalExecucoes === 1 ? "execução" : "execuções"} · estimado`}
-        />
-      </div>
+        {/* Stat cards — a visão de saúde do time (só leitura). */}
+        <div className="flex flex-wrap gap-3.5">
+          <StatCard
+            Icone={Clock}
+            tom={{ bg: "#EFEAFF", fg: "#6D4AFF" }}
+            rotulo="Gatilho"
+            valor={gatilhoLabel}
+            sub={ativo ? "disparando normalmente" : "ainda não ativado"}
+          />
+          <StatCard
+            Icone={MessageSquare}
+            tom={{ bg: "#FDF1E3", fg: "#E89638" }}
+            rotulo="Aguardando você"
+            valor={
+              pendencias > 0
+                ? `${pendencias} ${pendencias === 1 ? "pendente" : "pendentes"}`
+                : "Nada pendente"
+            }
+            sub={
+              pendencias > 0 ? "uma execução parou pra você →" : "nenhum fluxo parado"
+            }
+            acento={pendencias > 0}
+            href={pendencias > 0 ? `/times/${time.id}/execucoes` : undefined}
+          />
+          <StatCard
+            Icone={Gauge}
+            tom={{ bg: "#E6F4EA", fg: "#3DAA5C" }}
+            rotulo="Custo acumulado"
+            valor={`~US$ ${custo.toFixed(2)}`}
+            sub={`${totalExec} ${totalExec === 1 ? "execução" : "execuções"} · estimado`}
+          />
+          <StatCard
+            Icone={Activity}
+            tom={{ bg: "#E6F4EA", fg: "#3DAA5C" }}
+            rotulo="Taxa de sucesso"
+            valor={taxa === null ? "—" : `${Math.round(taxa * 100)}%`}
+            sub={taxa === null ? "sem execuções finalizadas" : "das finalizadas"}
+          />
+        </div>
 
-      {/* Cadeia */}
-      {automacoes.some((a) => a.cadeia?.inicio) && (
-        <>
-          <RotuloSecao Icone={GitBranch}>Cadeia · o caminho da tarefa</RotuloSecao>
-          <div className="space-y-4">
-            {automacoes
-              .filter((a) => a.cadeia?.inicio)
-              .map((a) => (
-                <div
-                  key={a.id}
-                  className="rounded-xl border border-border bg-card p-4"
+        {/* Cadeia */}
+        {automacoes.some((a) => a.cadeia?.inicio) && (
+          <>
+            <RotuloSecao
+              Icone={GitBranch}
+              acao={
+                <Link
+                  href={`/times/${time.id}/automacoes`}
+                  className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
                 >
-                  {automacoes.length > 1 && (
-                    <p className="mb-3 text-xs font-medium text-muted-foreground">
-                      {a.nome}
-                    </p>
-                  )}
-                  <CadeiaHorizontal cadeia={a.cadeia!} agentes={agentes} />
-                </div>
-              ))}
-          </div>
-        </>
-      )}
+                  <Pencil className="size-3.5" /> Editar a automação
+                </Link>
+              }
+            >
+              Cadeia · o caminho da tarefa
+            </RotuloSecao>
+            <div className="space-y-4">
+              {automacoes
+                .filter((a) => a.cadeia?.inicio)
+                .map((a) => (
+                  <div
+                    key={a.id}
+                    className="rounded-xl border border-border bg-card p-4"
+                  >
+                    {automacoes.length > 1 && (
+                      <p className="mb-3 text-xs font-medium text-muted-foreground">
+                        {a.nome}
+                      </p>
+                    )}
+                    <CadeiaHorizontal cadeia={a.cadeia!} agentes={agentes} />
+                  </div>
+                ))}
+            </div>
+          </>
+        )}
 
-      {/* Execuções recentes */}
-      <RotuloSecao Icone={Activity}>Execuções recentes</RotuloSecao>
-      {recentes.length === 0 ? (
-        <EstadoVazio icone={Activity} titulo="Nenhuma execução ainda.">
-          Quando este time rodar, as execuções aparecem aqui.
-        </EstadoVazio>
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {recentes.map((e, i) => {
-            const est = ESTADO[e.estado] ?? ESTADO.aguardando;
-            return (
+        {/* Execuções recentes — abrem o detalhe na aba Execuções. */}
+        <RotuloSecao
+          Icone={Activity}
+          acao={
+            recentes.length > 0 ? (
               <Link
-                key={e.id}
-                href={`/automacoes/${e.automacao_id}`}
-                className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/50 ${
-                  i > 0 ? "border-t border-border" : ""
-                }`}
+                href={`/times/${time.id}/execucoes`}
+                className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
               >
-                <Badge variant={est.variante}>{est.label}</Badge>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm text-foreground">
-                    {e.automacao_nome}
-                  </span>
-                  {e.entrada?.texto && (
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {e.entrada.texto}
-                    </span>
-                  )}
-                </span>
-                <span className="hidden whitespace-nowrap text-xs text-muted-foreground sm:block">
-                  {formatarData(e.criado_em)}
-                </span>
-                <ChevronRight className="size-4 shrink-0 text-muted-foreground/60" />
+                Ver todas
               </Link>
-            );
-          })}
-        </div>
-      )}
+            ) : undefined
+          }
+        >
+          Execuções recentes
+        </RotuloSecao>
+        {recentes.length === 0 ? (
+          <EstadoVazio icone={Activity} titulo="Nenhuma execução ainda.">
+            Quando este time rodar, as execuções aparecem aqui.
+          </EstadoVazio>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            {recentes.slice(0, 3).map((e, i) => {
+              const est = ESTADO[e.estado] ?? ESTADO.aguardando;
+              return (
+                <Link
+                  key={e.id}
+                  href={`/times/${time.id}/execucoes/${e.id}`}
+                  className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/50 ${
+                    i > 0 ? "border-t border-border" : ""
+                  }`}
+                >
+                  <Badge variant={est.variante}>{est.label}</Badge>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-foreground">
+                      {e.entrada?.texto || e.automacao_nome}
+                    </span>
+                  </span>
+                  <span className="hidden whitespace-nowrap text-xs text-muted-foreground sm:block">
+                    {formatarData(e.criado_em)}
+                  </span>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground/60" />
+                </Link>
+              );
+            })}
+          </div>
+        )}
 
-      {/* Agentes */}
-      <RotuloSecao
-        Icone={Bot}
-        contagem={agentes.length}
-        acao={
-          souOperador ? (
-            <Button size="sm" variant="outline" onClick={() => setCriando(true)}>
-              <Plus className="size-4" /> Novo agente
-            </Button>
-          ) : undefined
-        }
-      >
-        Agentes
-      </RotuloSecao>
-      {agentes.length === 0 ? (
-        <EstadoVazio icone={Bot} titulo="Nenhum agente ainda.">
-          {souOperador
-            ? "Converse com a IA ou clique em Novo agente para montar o time."
-            : "Os agentes deste time aparecerão aqui."}
-        </EstadoVazio>
-      ) : (
-        <div className="grid gap-2.5 sm:grid-cols-2">
-          {agentes.map((a, i) => (
-            <CardAgente
-              key={a.id}
-              agente={a}
-              indice={i}
-              cinto={cintos[a.id] ?? []}
-              onAbrir={() => setAbertoId(a.id)}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Instrumentos */}
-      <RotuloSecao
-        Icone={Wrench}
-        contagem={instrumentos.length}
-        acao={
-          souOperador ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setInstrAberto("novo")}
-              disabled={tiposInstrumento.length === 0}
-            >
-              <Plus className="size-4" /> Novo instrumento
-            </Button>
-          ) : undefined
-        }
-      >
-        Instrumentos
-      </RotuloSecao>
-      {instrumentos.length === 0 ? (
-        <EstadoVazio icone={Wrench} titulo="Nenhum instrumento ainda.">
-          {souOperador
-            ? "Crie instrumentos para os agentes usarem (APIs, banco, web…)."
-            : "Os instrumentos deste time aparecerão aqui."}
-        </EstadoVazio>
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {instrumentos.map((inst, i) => (
-            <button
-              key={inst.id}
-              onClick={() => souOperador && setInstrAberto(inst)}
-              disabled={!souOperador}
-              className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
-                souOperador ? "hover:bg-accent/50" : "cursor-default"
-              } ${i > 0 ? "border-t border-border" : ""}`}
-            >
-              <span className="flex size-8 items-center justify-center rounded-lg bg-accent">
-                <Wrench className="size-4 text-accent-foreground" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium text-foreground">
-                  {inst.nome}
-                </span>
-                <span className="font-mono text-xs text-muted-foreground">
-                  {inst.tipo}
-                </span>
-              </span>
-              {inst.acao_irreversivel && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#FDF1E3] px-2 py-0.5 text-xs text-[#A05E16]">
-                  <ShieldCheck className="size-3" /> exige aprovação
-                </span>
-              )}
-              {souOperador && (
-                <Pencil className="size-4 shrink-0 text-muted-foreground/60" />
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
+        {/* Agentes */}
+        <RotuloSecao
+          Icone={Bot}
+          contagem={agentes.length}
+          acao={
+            souOperador ? (
+              <Button size="sm" variant="outline" onClick={() => setCriando(true)}>
+                <Plus className="size-4" /> Novo agente
+              </Button>
+            ) : undefined
+          }
+        >
+          Agentes
+        </RotuloSecao>
+        {agentes.length === 0 ? (
+          <EstadoVazio icone={Bot} titulo="Nenhum agente ainda.">
+            {souOperador
+              ? "Converse com a IA ou clique em Novo agente para montar o time."
+              : "Os agentes deste time aparecerão aqui."}
+          </EstadoVazio>
+        ) : (
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            {agentes.map((a, i) => (
+              <CardAgente
+                key={a.id}
+                agente={a}
+                indice={i}
+                cinto={cintos[a.id] ?? []}
+                onAbrir={() => setAbertoId(a.id)}
+              />
+            ))}
+          </div>
+        )}
       </Rise>
-
-      {/* Criar/editar instrumento */}
-      {instrAberto && (
-        <DrawerInstrumento
-          key={instrAberto === "novo" ? "novo" : instrAberto.id}
-          instrumento={instrAberto === "novo" ? null : instrAberto}
-          tipos={tiposInstrumento}
-          time={time}
-          meuPapel={meuPapel}
-          onFechar={() => setInstrAberto(null)}
-        />
-      )}
 
       {/* Criar agente */}
       {criando && (
@@ -391,17 +332,12 @@ function StatCard({
           <Icone className="size-4.5" style={{ color: tom.fg }} />
         </span>
         <span className="text-[13px] text-muted-foreground">{rotulo}</span>
-        {href && (
-          <ChevronRight className="ml-auto size-4 text-muted-foreground/60" />
-        )}
+        {href && <ChevronRight className="ml-auto size-4 text-muted-foreground/60" />}
       </div>
       <div className="font-heading text-2xl font-medium leading-tight text-foreground">
         {valor}
       </div>
-      <div
-        className="mt-1 text-xs"
-        style={{ color: acento ? "#E89638" : undefined }}
-      >
+      <div className="mt-1 text-xs" style={{ color: acento ? "#E89638" : undefined }}>
         <span className={acento ? "" : "text-muted-foreground"}>{sub}</span>
       </div>
     </>
@@ -434,15 +370,9 @@ function ChipCadeia({ children }: { children: React.ReactNode }) {
   );
 }
 
-function CadeiaHorizontal({
-  cadeia,
-  agentes,
-}: {
-  cadeia: Cadeia;
-  agentes: Agente[];
-}) {
+function CadeiaHorizontal({ cadeia, agentes }: { cadeia: Cadeia; agentes: Agente[] }) {
   // Segue a primeira saída de cada nó, do início ao fim/repetição (visão linear
-  // do caminho principal; bifurcações completas vivem na tela de automação).
+  // do caminho principal; bifurcações completas vivem na aba Automações).
   const ordem: string[] = [];
   let atual = cadeia.inicio ?? null;
   const visto = new Set<string>();
