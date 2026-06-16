@@ -1,47 +1,15 @@
-import { notFound } from "next/navigation";
+import { Inbox } from "lucide-react";
 
-import {
-  type Conversa,
-  type MetricasAtendimento,
-  type Time,
-} from "@/lib/api";
-import { buscarCerebro } from "@/lib/cerebro-servidor";
-
-import { ConversasCliente } from "./conversas-cliente";
-
-async function carregar(timeId: string): Promise<{
-  time: Time;
-  conversas: Conversa[];
-  metricas: MetricasAtendimento | null;
-} | null> {
-  const [respTime, respConv, respMetricas] = await Promise.all([
-    buscarCerebro(`/times/${timeId}`),
-    buscarCerebro(`/times/${timeId}/conversas`),
-    buscarCerebro(`/times/${timeId}/conversas/metricas`),
-  ]);
-  if (respTime.status === 404) return null;
-  if (!respTime.ok || !respConv.ok) throw new Error("Falha ao carregar conversas");
-  return {
-    time: await respTime.json(),
-    conversas: await respConv.json(),
-    // As métricas são um plus; se falharem, a inbox ainda carrega.
-    metricas: respMetricas.ok ? await respMetricas.json() : null,
-  };
-}
-
-export default async function ConversasPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-  const dados = await carregar(id);
-  if (!dados) notFound();
+// Pane direito quando nenhuma conversa está selecionada. A lista (esquerda) e as
+// métricas vêm do layout (ConversasShell); aqui é só o convite a escolher uma.
+export default function ConversasIndexPage() {
   return (
-    <ConversasCliente
-      time={dados.time}
-      inicial={dados.conversas}
-      metricas={dados.metricas}
-    />
+    <div className="flex h-full flex-1 flex-col items-center justify-center p-8 text-center">
+      <Inbox className="size-8 text-muted-foreground/50" />
+      <p className="mt-3 max-w-xs text-sm text-muted-foreground">
+        Selecione uma conversa à esquerda para acompanhar, assumir o atendimento
+        ou responder.
+      </p>
+    </div>
   );
 }

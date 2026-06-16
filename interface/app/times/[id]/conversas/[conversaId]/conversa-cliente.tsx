@@ -103,18 +103,18 @@ export function ConversaCliente({
   };
 
   return (
-    <main className="mx-auto flex h-[calc(100vh-2rem)] w-full max-w-3xl flex-col px-4 py-6 sm:px-6">
+    <div className="flex h-full min-h-[55vh] flex-col p-4">
       <Link
         href={`/times/${time.id}/conversas`}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground lg:hidden"
       >
         <ChevronLeft className="size-4" />
         Conversas
       </Link>
 
-      <div className="mt-2 flex items-center gap-3">
+      <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-xl font-medium text-foreground">
+          <h1 className="truncate text-lg font-medium text-foreground">
             {conversa.contato_nome || conversa.contato_chave}
           </h1>
           <p className="text-xs text-muted-foreground">
@@ -158,7 +158,7 @@ export function ConversaCliente({
 
       {erro && <Aviso className="mt-3">{erro}</Aviso>}
 
-      <div className="mt-4 flex-1 space-y-2 overflow-y-auto rounded-lg border border-border bg-card p-4">
+      <div className="mt-4 flex-1 space-y-2 overflow-y-auto rounded-lg bg-background p-3">
         {conversa.mensagens.length === 0 ? (
           <p className="text-sm text-muted-foreground">Sem mensagens ainda.</p>
         ) : (
@@ -225,6 +225,6 @@ export function ConversaCliente({
           você mesmo.
         </p>
       )}
-    </main>
+    </div>
   );
 }
