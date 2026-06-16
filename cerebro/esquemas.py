@@ -104,6 +104,26 @@ class TimeLer(BaseModel):
     atualizado_em: datetime
 
 
+class TimeResumoLer(BaseModel):
+    """Visão de saúde do time para a barra de abas e a aba Início: contadores das
+    coleções + agregados (gatilho, custo, taxa de sucesso, pendências). Só leitura
+    e agregação — nada do núcleo de orquestração é tocado."""
+
+    # contadores (alimentam as pílulas das abas)
+    agentes: int
+    instrumentos: int
+    automacoes: int
+    execucoes: int
+    conversas: int
+    # agregados da aba Início
+    ativo: bool  # alguma automação ativa? (badge ativo/em repouso no cabeçalho)
+    gatilho: str | None  # tipo_gatilho da automação principal (manual/agendamento/webhook)
+    custo_acumulado_usd: float
+    taxa_sucesso: float | None  # concluídas / (concluídas + falhou); None se nenhuma finalizou
+    pendencias: int  # execuções aguardando_humano
+    conversas_em_andamento: int  # conversas não fechadas (ponto de alerta)
+
+
 # ──────────────────────────── Agentes ────────────────────────────
 
 

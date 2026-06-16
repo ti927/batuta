@@ -113,6 +113,22 @@ export type Time = {
   atualizado_em: string;
 };
 
+// Visão de saúde do time: contadores das coleções (pílulas das abas) + agregados
+// da aba Início. Vem de GET /times/{id}/resumo.
+export type TimeResumo = {
+  agentes: number;
+  instrumentos: number;
+  automacoes: number;
+  execucoes: number;
+  conversas: number;
+  ativo: boolean;
+  gatilho: string | null;
+  custo_acumulado_usd: number;
+  taxa_sucesso: number | null;
+  pendencias: number;
+  conversas_em_andamento: number;
+};
+
 export type Papel = "lider" | "agente";
 
 export type Agente = {

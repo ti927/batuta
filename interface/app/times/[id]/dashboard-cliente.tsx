@@ -11,18 +11,14 @@ import {
   Clock,
   Gauge,
   GitBranch,
-  Inbox,
   MessageSquare,
   Pencil,
   Plus,
-  Settings2,
   ShieldCheck,
   Sparkles,
   Trash2,
-  Users,
   Wrench,
   X,
-  Zap,
 } from "lucide-react";
 
 import { FormularioAgente } from "@/components/formulario-agente";
@@ -135,60 +131,6 @@ export function DashboardCliente({
   return (
     <main className="mx-auto w-full max-w-[1000px] px-5 py-8 sm:px-8">
       <Rise>
-      {/* Cabeçalho */}
-      <div className="flex flex-wrap items-start gap-4">
-        <div className="min-w-60 flex-1">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-heading text-[27px] font-medium leading-tight text-foreground">
-              {time.nome}
-            </h1>
-            <Badge variant={ativo ? "success" : "neutral"}>
-              {ativo ? "ativo" : "em repouso"}
-            </Badge>
-          </div>
-          {time.descricao && (
-            <p className="mt-1.5 text-sm text-muted-foreground">{time.descricao}</p>
-          )}
-        </div>
-        {souOperador && (
-          <Link
-            href={conversaId ? `/criar/${conversaId}` : "/criar"}
-            className={buttonVariants({ variant: "outline" })}
-          >
-            <Sparkles className="size-4 text-primary" />
-            Conversar sobre o projeto
-          </Link>
-        )}
-      </div>
-
-      {/* Atalhos de gestão */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
-        <Link
-          href={`/times/${time.id}/agentes`}
-          className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-        >
-          <Users className="size-3.5" /> Gerenciar agentes
-        </Link>
-        <Link
-          href={`/times/${time.id}/instrumentos`}
-          className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-        >
-          <Settings2 className="size-3.5" /> Instrumentos
-        </Link>
-        <Link
-          href={`/times/${time.id}/automacoes`}
-          className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-        >
-          <Zap className="size-3.5" /> Automações
-        </Link>
-        <Link
-          href={`/times/${time.id}/conversas`}
-          className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-        >
-          <Inbox className="size-3.5" /> Conversas
-        </Link>
-      </div>
-
       {/* Stat cards */}
       <div className="mt-6 flex flex-wrap gap-3.5">
         <StatCard

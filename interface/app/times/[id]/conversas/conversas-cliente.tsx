@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ChevronLeft, Inbox } from "lucide-react";
+import { Inbox } from "lucide-react";
 
 import { type Conversa, type MetricasAtendimento, type Time } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -77,18 +77,13 @@ export function ConversasCliente({
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6">
-      <Link
-        href={`/times/${time.id}`}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ChevronLeft className="size-4" />
-        {time.nome}
-      </Link>
-      <h1 className="mt-2 text-2xl font-medium text-foreground">Conversas</h1>
-      <p className="mb-6 mt-1 text-sm text-muted-foreground">
-        As conversas dos canais deste time. Abra uma para acompanhar, assumir o
-        atendimento ou responder.
-      </p>
+      <div className="mb-6">
+        <h2 className="text-sm font-medium text-foreground">Conversas</h2>
+        <p className="text-sm text-muted-foreground">
+          As conversas dos canais deste time. Abra uma para acompanhar, assumir o
+          atendimento ou responder.
+        </p>
+      </div>
 
       {metricas && metricas.total > 0 && (
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">

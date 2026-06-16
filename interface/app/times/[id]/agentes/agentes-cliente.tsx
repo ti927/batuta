@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Bot, ChevronLeft, Plus, Settings2, Zap } from "lucide-react";
+import { Bot, Plus } from "lucide-react";
 
 import {
   api,
@@ -64,30 +64,12 @@ export function AgentesCliente({
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
-      <Link
-        href={`/times/${time.id}`}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ChevronLeft className="size-4" />
-        Voltar ao time
-      </Link>
-      <h1 className="mt-2 text-2xl font-medium text-foreground">{time.nome}</h1>
-      <div className="mb-6 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-        <p className="text-sm text-muted-foreground">Gerenciar agentes</p>
-        <Link
-          href={`/times/${time.id}/instrumentos`}
-          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-        >
-          <Settings2 className="size-3.5" />
-          Instrumentos do time
-        </Link>
-        <Link
-          href={`/times/${time.id}/automacoes`}
-          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-        >
-          <Zap className="size-3.5" />
-          Automações do time
-        </Link>
+      <div className="mb-6">
+        <h2 className="text-sm font-medium text-foreground">Agentes do time</h2>
+        <p className="text-sm text-muted-foreground">
+          Cada agente é um especialista. Clique para editar quem ele é, o que sabe
+          e o seu cinto.
+        </p>
       </div>
 
       {erro && <Aviso className="mb-4">{erro}</Aviso>}

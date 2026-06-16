@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, Plus, Wrench } from "lucide-react";
+import { Plus, Wrench } from "lucide-react";
 
 import {
   api,
@@ -121,17 +120,13 @@ export function InstrumentosCliente({
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
-      <Link
-        href={`/times/${time.id}`}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ChevronLeft className="size-4" />
-        Voltar ao time
-      </Link>
-      <h1 className="mt-2 text-2xl font-medium text-foreground">{time.nome}</h1>
-      <p className="mb-6 mt-1 text-sm text-muted-foreground">
-        Instrumentos do time
-      </p>
+      <div className="mb-6">
+        <h2 className="text-sm font-medium text-foreground">Instrumentos do time</h2>
+        <p className="text-sm text-muted-foreground">
+          As ferramentas que os agentes podem usar. Um instrumento pode exigir sua
+          aprovação antes de agir.
+        </p>
+      </div>
 
       {erro && <Aviso className="mb-4">{erro}</Aviso>}
 
