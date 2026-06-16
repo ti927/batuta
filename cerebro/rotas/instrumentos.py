@@ -136,6 +136,7 @@ def criar(
         nome=dados.nome,
         tipo=dados.tipo,
         configuracao=config_limpa,
+        icone=dados.icone,
         exige_aprovacao=dados.exige_aprovacao,
         credencial_id=dados.credencial_id,
     )
@@ -184,6 +185,7 @@ def editar(
     aprovacao_antes = inst.exige_aprovacao
     inst.nome = dados.nome
     inst.configuracao = config_limpa
+    inst.icone = dados.icone
     inst.exige_aprovacao = dados.exige_aprovacao
     inst.credencial_id = dados.credencial_id
     alterados = segredos.salvar_segredos(sessao, inst.id, segredos_novos)

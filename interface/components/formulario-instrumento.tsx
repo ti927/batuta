@@ -12,6 +12,7 @@ import {
   type TipoInstrumento,
   type Time,
 } from "@/lib/api";
+import { SeletorIcone } from "@/components/seletor-icone";
 import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -184,6 +185,7 @@ export function FormularioInstrumento({
   const criando = instrumento === null;
 
   const [nome, setNome] = useState(instrumento?.nome ?? "");
+  const [icone, setIcone] = useState<string | null>(instrumento?.icone ?? null);
   const [tipoSel, setTipoSel] = useState(
     instrumento?.tipo ?? tipos[0]?.tipo ?? "",
   );
@@ -320,12 +322,14 @@ export function FormularioInstrumento({
             nome: nome.trim(),
             tipo: tipoSel,
             configuracao: config,
+            icone,
             exige_aprovacao,
             credencial_id,
           })
         : await api.put<Instrumento>(`/instrumentos/${instrumento.id}`, {
             nome: nome.trim(),
             configuracao: config,
+            icone,
             exige_aprovacao,
             credencial_id,
           });
@@ -346,6 +350,14 @@ export function FormularioInstrumento({
         Nome
         <Input value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
       </Label>
+      <div className="flex flex-col gap-1">
+        <span className="text-sm font-medium text-foreground">Ícone</span>
+        <SeletorIcone valor={icone} onChange={setIcone} />
+        <span className="text-xs text-muted-foreground">
+          Opcional. Escolha um ícone para identificar este instrumento — sem
+          escolha, fica o ícone padrão.
+        </span>
+      </div>
       <Label className="flex-col items-start gap-1">
         Tipo
         <Select

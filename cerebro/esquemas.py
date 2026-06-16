@@ -181,6 +181,8 @@ class InstrumentoCriar(BaseModel):
     tipo: str = Field(min_length=1, max_length=50)
     configuracao: dict = Field(default_factory=dict)
     exige_aprovacao: bool | None = None
+    # Ícone escolhido na UI (ex.: "fab:whatsapp"). NULL = ícone genérico.
+    icone: str | None = Field(default=None, max_length=60)
     # Caixa-forte: se preenchido, o instrumento usa uma credencial nomeada da
     # central em vez de segredo inline. NULL = inline/pool, como antes.
     credencial_id: uuid.UUID | None = None
@@ -193,6 +195,7 @@ class InstrumentoEditar(BaseModel):
     nome: str = Field(min_length=1, max_length=200)
     configuracao: dict = Field(default_factory=dict)
     exige_aprovacao: bool | None = None
+    icone: str | None = Field(default=None, max_length=60)
     credencial_id: uuid.UUID | None = None
 
 
@@ -210,6 +213,7 @@ class InstrumentoLer(BaseModel):
     nome: str
     tipo: str
     configuracao: dict | None
+    icone: str | None = None
     segredos: dict[str, str] = Field(default_factory=dict)
     exige_aprovacao: bool | None = None
     acao_irreversivel: bool = False

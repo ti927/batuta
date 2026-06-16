@@ -129,6 +129,9 @@ class Instrumento(IdData, Base):
     nome: Mapped[str] = mapped_column(String(200), nullable=False)
     tipo: Mapped[str] = mapped_column(String(50), nullable=False)
     configuracao: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Ícone escolhido pelo usuário (id no catálogo da UI, ex.: "fab:whatsapp").
+    # NULL = sem escolha → a interface mostra o ícone genérico. Só apresentação.
+    icone: Mapped[str | None] = mapped_column(String(60), nullable=True)
     # Interruptor de aprovação humana por instância (sobrepõe a derivação por
     # tipo/config): NULL = automático; True = sempre exige portão; False = nunca.
     # A parede de ativação resolve via instrumentos.exige_portao().

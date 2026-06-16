@@ -151,6 +151,8 @@ export type Instrumento = {
   nome: string;
   tipo: string;
   configuracao: Record<string, unknown> | null;
+  // Ícone escolhido na UI (id do catálogo, ex.: "fab:whatsapp"). Null = genérico.
+  icone: string | null;
   // Segredos já guardados (cifrados): campo → 4 últimos dígitos (Fase 7-B).
   segredos: Record<string, string>;
   // Interruptor de aprovação humana: null = automático, true = sempre, false = nunca.

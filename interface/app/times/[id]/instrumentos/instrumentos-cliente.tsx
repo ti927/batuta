@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import { podeOperar } from "@/lib/permissoes";
 import { DrawerInstrumento } from "@/components/drawer-instrumento";
+import { IconeInstrumento } from "@/components/icone-instrumento";
 import { Button } from "@/components/ui/button";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
 
@@ -69,8 +70,8 @@ export function InstrumentosCliente({
                   souOperador ? "hover:bg-accent/50" : "cursor-default"
                 } ${i > 0 ? "border-t border-border" : ""}`}
               >
-                <span className="flex size-8 items-center justify-center rounded-lg bg-accent">
-                  <Wrench className="size-4 text-accent-foreground" />
+                <span className="flex size-8 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                  <IconeInstrumento icone={inst.icone} className="size-4" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">

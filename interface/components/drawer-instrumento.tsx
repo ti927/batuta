@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { FlaskConical, Radio, Trash2, Wrench, X } from "lucide-react";
+import { FlaskConical, Radio, Trash2, X } from "lucide-react";
 
 import {
   api,
@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { FormularioInstrumento } from "@/components/formulario-instrumento";
+import { IconeInstrumento } from "@/components/icone-instrumento";
 import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -132,8 +133,11 @@ export function DrawerInstrumento({
       />
       <aside className="relative flex h-full w-full max-w-[460px] flex-col overflow-y-auto border-l border-border bg-card shadow-xl">
         <header className="flex items-center gap-3 border-b border-border p-4">
-          <span className="flex size-9 items-center justify-center rounded-lg bg-accent">
-            <Wrench className="size-4.5 text-accent-foreground" />
+          <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+            <IconeInstrumento
+              icone={instrumento?.icone}
+              className="size-4.5"
+            />
           </span>
           <h2 className="min-w-0 flex-1 truncate font-medium text-foreground">
             {criando ? "Novo instrumento" : instrumento.nome}

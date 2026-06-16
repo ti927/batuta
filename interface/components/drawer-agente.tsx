@@ -16,6 +16,7 @@ import {
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { FormularioAgente } from "@/components/formulario-agente";
+import { IconeInstrumento } from "@/components/icone-instrumento";
 import { RobotFace } from "@/components/robot-face";
 import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
@@ -245,7 +246,10 @@ export function DrawerAgente({
                         key={i.id}
                         className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
                       >
-                        <Wrench className="size-3.5 text-muted-foreground" />
+                        <IconeInstrumento
+                          icone={i.icone}
+                          className="size-3.5 text-muted-foreground"
+                        />
                         <span className="min-w-0 flex-1 truncate text-foreground">
                           {i.nome}
                         </span>

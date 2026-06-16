@@ -1,8 +1,9 @@
 "use client";
 
-import { Sparkles, Wrench } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 import { type Agente, type Instrumento } from "@/lib/api";
+import { IconeInstrumento } from "@/components/icone-instrumento";
 import { RobotFace } from "@/components/robot-face";
 import { Badge } from "@/components/ui/badge";
 
@@ -54,7 +55,7 @@ export function CardAgente({
               key={i.id}
               className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-accent-foreground"
             >
-              <Wrench className="size-3" />
+              <IconeInstrumento icone={i.icone} className="size-3" />
               {i.nome}
             </span>
           ))}

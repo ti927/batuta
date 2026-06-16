@@ -411,6 +411,22 @@ Por que: já vem incluída no shadcn/ui (e portanto no Paperclip), consistente, 
 
 Sempre 1.5px (default do lucide). Nunca misturar com ícones de outro pacote (Font Awesome, Heroicons, etc.) — quebra a consistência.
 
+### Exceção pontual: ícone escolhido por instrumento (2026-06-16)
+
+Há **uma** exceção à regra "só lucide": o **ícone que o usuário escolhe para um
+instrumento** (no cadastro/edição do instrumento) vem da **Font Awesome free**, porque
+o lucide removeu os **logos de marca** (WhatsApp, Telegram, Google, WordPress…) que o
+usuário precisa para identificar canais e serviços. A exceção é estreita e proposital:
+
+- Vale **só** para o ícone do instrumento (seletor no formulário + exibição na lista,
+  no chip do cinto e no header do drawer). **Toda a iconografia de UI continua lucide.**
+- Um logo de marca é, por natureza, um estilo próprio — não há "versão lucide" dele;
+  por isso não conta como "misturar estilos" no sentido que esta seção combate.
+- Se o usuário não escolher nada, o instrumento usa o ícone genérico do lucide
+  (`wrench`) — o padrão de sempre.
+- Implementação: catálogo curado em `interface/lib/icones-instrumento.tsx` (ícones
+  importados explicitamente, tree-shaking) + `IconeInstrumento` (fallback p/ lucide).
+
 ### Ícones favoritos (referência)
 
 Ícones que aparecem com frequência no produto e devem ser usados consistentemente:
