@@ -300,6 +300,9 @@ export type Automacao = {
   configuracao_gatilho: Record<string, unknown> | null;
   cadeia: Cadeia | null;
   ativa: boolean;
+  // Canal de aprovação (opcional): instrumento de canal pelo qual o portão de
+  // aprovação humana pode ser resolvido por mensageria. Null = só pela tela.
+  aprovacao_instrumento_id: string | null;
   criado_em: string;
   atualizado_em: string;
 };

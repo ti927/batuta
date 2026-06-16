@@ -23,8 +23,16 @@ import medicao_instrumentos
 import precos
 import segredos_instrumento
 from chaves import resolver_chaves_por_time
-from mensageria import telegram, transcricao
-from modelos import Agente, AgenteInstrumento, Conversa, Instrumento, MensagemConversa
+from mensageria import retoma, telegram, transcricao
+from modelos import (
+    Agente,
+    AgenteInstrumento,
+    Automacao,
+    Conversa,
+    Execucao,
+    Instrumento,
+    MensagemConversa,
+)
 from orquestracao.agente import executar_agente
 from orquestracao.llm import usar_chaves
 from orquestracao.modelos_ia import provedor_do_modelo_seguro
@@ -182,10 +190,12 @@ def registrar_entrada(
     conversa.ultima_entrada_em = datetime.now(timezone.utc)
     conversa.nudge_enviado = False
 
-    deve_processar = (
-        conversa.estado not in ("humano_assumiu", "fechada")
-        and conversa.destino_tipo == "agente"
-        and conversa.destino_id is not None
+    # Aprovação por canal: se a conversa conduz uma execução pausada, a resposta do
+    # contato é a decisão do aprovador (processada como retoma, não conversacional).
+    aprovacao_pendente = _execucao_pausada(sessao, conversa) is not None
+    deve_processar = conversa.estado not in ("humano_assumiu", "fechada") and (
+        aprovacao_pendente
+        or (conversa.destino_tipo == "agente" and conversa.destino_id is not None)
     )
     if deve_processar:
         conversa.estado = "bot_respondendo"
@@ -353,6 +363,74 @@ def _transcrever_pendentes(
     return usos
 
 
+def _execucao_pausada(sessao: Session, conversa: Conversa) -> Execucao | None:
+    """A execução que esta conversa conduz, se estiver pausada aguardando humano
+    (aprovação por canal). None caso contrário (segue o modo conversacional)."""
+    if not conversa.execucao_id:
+        return None
+    execucao = sessao.get(Execucao, conversa.execucao_id)
+    if execucao is not None and execucao.estado == "aguardando_humano":
+        return execucao
+    return None
+
+
+def _ultima_msg_contato(sessao: Session, conversa_id: uuid.UUID) -> str:
+    """O texto da última mensagem do contato — a decisão do aprovador."""
+    m = sessao.scalars(
+        select(MensagemConversa)
+        .where(MensagemConversa.conversa_id == conversa_id)
+        .where(MensagemConversa.papel == "contato")
+        .order_by(MensagemConversa.criado_em.desc())
+        .limit(1)
+    ).first()
+    return (m.conteudo or "").strip() if m else ""
+
+
+def _ack_aprovacao(execucao: Execucao) -> str:
+    """Confirmação curta ao aprovador depois de religar (ou tentar religar) o fluxo."""
+    if execucao.estado == "aguardando_humano":
+        return "✅ Recebido. Ainda há uma etapa aguardando a sua aprovação."
+    if execucao.estado == "concluida":
+        return "✅ Decisão registrada. Segui com o fluxo."
+    if execucao.estado == "cancelada":
+        return "⛔ Entendido, encerrei o fluxo."
+    return "⚠️ Recebi sua resposta, mas houve uma falha ao seguir o fluxo."
+
+
+def _processar_aprovacao(
+    sessao: Session, conversa: Conversa, execucao: Execucao, token: str
+) -> None:
+    """A resposta do aprovador a uma execução pausada: religa o fluxo pela MESMA
+    mecânica da tela (`retoma`) e confirma pelo canal. Coexiste com a tela — vale a
+    primeira resposta (a retoma valida o estado; não dá para aprovar duas vezes)."""
+    resposta = _ultima_msg_contato(sessao, conversa.id)
+    if not resposta:
+        conversa.estado = "aguardando_resposta"
+        sessao.commit()
+        return
+    auto = sessao.get(Automacao, execucao.automacao_id)
+    chaves, origens = resolver_chaves_por_time(sessao, auto.time_id if auto else None)
+    try:
+        retoma.retomar_execucao(
+            sessao, execucao, resposta, chaves=chaves, origens=origens
+        )
+    except Exception as e:  # falha de LLM/cadeia — não morre em silêncio
+        _enviar_e_registrar(
+            sessao, conversa, token, f"Não consegui processar a aprovação agora: {e}"
+        )
+        conversa.estado = "aguardando_resposta"
+        sessao.commit()
+        return
+    sessao.refresh(execucao)
+    # Pausou de novo? A retoma já re-amarrou a conversa. Senão, desfaz o vínculo
+    # (a conversa volta ao modo conversacional, se houver agente atendente).
+    if execucao.estado != "aguardando_humano":
+        conversa.execucao_id = None
+    _enviar_e_registrar(sessao, conversa, token, _ack_aprovacao(execucao))
+    conversa.estado = "aguardando_resposta"
+    sessao.commit()
+
+
 def processar_turno(conversa_id: uuid.UUID) -> None:
     """Roda UM turno do agente para a conversa e entrega a resposta ao contato.
     Pensado para rodar em segundo plano (a resposta ao Telegram já foi dada).
@@ -377,18 +455,28 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
         conversa = sessao.get(Conversa, conversa_id)
         if conversa is None or conversa.estado in ("humano_assumiu", "fechada"):
             return
-        if conversa.destino_tipo != "agente" or conversa.destino_id is None:
-            return
         # Chegou mensagem mais nova durante a espera? A tarefa dela responde.
         if marca and conversa.ultima_entrada_em and conversa.ultima_entrada_em > marca:
             return
 
-        agente = sessao.get(Agente, conversa.destino_id)
         instrumento = sessao.get(Instrumento, conversa.instrumento_id)
-        if agente is None or instrumento is None:
+        if instrumento is None:
+            return
+        token = segredos_instrumento.decifrar(sessao, instrumento.id).get("token_bot", "")
+
+        # Aprovação por canal: conversa amarrada a uma execução pausada → a resposta
+        # do contato religa o fluxo (retoma), em vez de rodar o agente atendente.
+        execucao = _execucao_pausada(sessao, conversa)
+        if execucao is not None:
+            _processar_aprovacao(sessao, conversa, execucao, token)
             return
 
-        token = segredos_instrumento.decifrar(sessao, instrumento.id).get("token_bot", "")
+        # Modo conversacional: requer um agente atendente.
+        if conversa.destino_tipo != "agente" or conversa.destino_id is None:
+            return
+        agente = sessao.get(Agente, conversa.destino_id)
+        if agente is None:
+            return
 
         # Teto de gasto / máx. de turnos → passa para um humano (não roda a IA).
         max_turnos, teto = _limites(instrumento)
