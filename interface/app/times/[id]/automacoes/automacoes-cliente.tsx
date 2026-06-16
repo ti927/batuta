@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Plus, X, Zap } from "lucide-react";
@@ -523,17 +522,26 @@ export function AutomacoesCliente({
         <ul className="divide-y divide-border rounded-lg border border-border bg-card">
           {inicial.map((a) => (
             <li key={a.id} className="flex items-center gap-2 p-3">
-              <Link href={`/automacoes/${a.id}`} className="group flex-1">
-                <span className="text-sm font-medium text-foreground group-hover:text-primary group-hover:underline">
-                  {a.nome}
-                </span>
+              <div className="min-w-0 flex-1">
+                {souOperador ? (
+                  <button
+                    onClick={() => abrirEdicao(a)}
+                    className="text-left text-sm font-medium text-foreground hover:text-primary hover:underline"
+                  >
+                    {a.nome}
+                  </button>
+                ) : (
+                  <span className="text-sm font-medium text-foreground">
+                    {a.nome}
+                  </span>
+                )}
                 <span className="block text-xs text-muted-foreground">
                   {ROTULO_GATILHO[a.tipo_gatilho] ?? a.tipo_gatilho}
                   {a.tipo_gatilho !== "manual" && !a.ativa && " (pausado)"}
                   {" · início: "}
                   {nomeAgente(a.cadeia?.inicio ?? null)}
                 </span>
-              </Link>
+              </div>
               {souOperador && (
                 <BotaoRodarAgora
                   timeId={time.id}
