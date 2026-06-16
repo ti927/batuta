@@ -111,6 +111,28 @@ em dobro e a pegadinha da imagem.
 > Desenho APROVADO pelo maestro (2026-06-15). Fase focada, menor que a Caixa-forte.
 > Registrada no `BUILD-PLAN.md` (FILA, item "Chave de IA por provedor").
 
+### Progresso (2026-06-15) — Passos 1–4 ✅, Passo 5 em curso
+Branch `chave-por-provedor`. **Passo 1 ✅** migração `una00prov001` aplicada em
+produção (5→4 linhas, zero duplicatas, head `una00prov001`); backup lógico das 5
+linhas guardado antes. **Passos 2–4 ✅** cérebro e interface sem papel; **228
+testes verdes**, `tsc`/`eslint` limpos; núcleo (`cadeia.py`/`agente.py`) sem diff.
+
+**Correção de teste (importante):** os testes rodam contra o banco REAL e agora a
+consultoria tem chaves cadastradas em prod — os testes que assumiam cofre vazio
+colidiam (12 falhas: fallback resolvendo + IntegrityError no índice único). O
+`conftest` passou a **esvaziar `chaves_api` no início de cada teste, dentro da
+transação revertida** (nada é comitado) — torna a resolução determinística.
+
+**Lição de ordenação de migração:** a migração (drop de coluna) foi aplicada em
+prod ANTES do deploy do código novo. Enquanto o código velho (com `tipo_ia` no
+WHERE) roda contra o schema novo, a resolução de chave em prod falha. O remédio é
+o deploy do código novo — por isso o merge+redeploy desta fase RECONCILIA o prod.
+Para drops futuros: subir o código que não usa a coluna ANTES de dropá-la.
+
+**Passo 5 (resta):** merge → push → redeploy (reconcilia o prod) → e2e ao vivo EM
+PRODUÇÃO (o cofre local não decifra as chaves de prod, master key diferente): uma
+chave OpenAI já cadastrada cobre conversa + agente + gerar_imagem.
+
 ### Passo 1 — Migração (consolidar + reindexar)
 Antes: anotar/backup lógico das linhas atuais de `chaves_api`. Migração: consolida
 para uma linha por `(organizacao_id, provedor)` (regra de dedup: mantém a
