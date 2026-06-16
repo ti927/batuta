@@ -986,8 +986,15 @@ encerra, vigia no agendador), **G** (guarda-corpo anti prompt-injection) e **H**
      uma imagem real (gatinho, servida em `api.batuta.team/arquivos/...png`). **NB:** o agente no chat esconde o
      erro técnico (persona) e às vezes nem retenta a ferramenta — o botão "Testar" do instrumento é o
      diagnóstico confiável (mostra o erro real via 502). Detalhe na memória.
-6. **Fase K — polimento de atendimento** (saudação/transparência automática, horário comercial, painel de
-   métricas de atendimento). Menor valor-por-esforço; precisa de UI/config próprias.
+6. ✅ **Fase K — polimento de atendimento** (CONCLUÍDA · NO AR 2026-06-16, merge `6af0fd2`, 239 testes).
+   Tudo na borda, **núcleo congelado, SEM migração**. (a) **Horário comercial:** campos declarados na
+   `ConfigTelegram` (ativar, início/fim HH:MM, só dias úteis, mensagem fora do horário); fora do horário a
+   borda responde automático e NÃO aciona a IA (fuso fixo UTC−3, sem `tzdata`). (b) **Saudação/transparência:**
+   enviada uma vez no 1º contato de cada conversa (nasce ligada, editável/desligável). (c) **Métricas:**
+   `GET /times/{id}/conversas/metricas` (volume, % handoff, tempo médio de 1ª resposta, custo de IA) + faixa de
+   cards na inbox. (d) **Status de entrega** já existia (`MensagemConversa.entregue`). Lição reforçada: os
+   campos novos do instrumento só aparecem após reiniciar o cérebro (processo velho serve schema velho) —
+   `--reload` no dev evita. Campos declarados na Config persistem (model_dump descarta não-declarados).
 7. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
 8. **Biblioteca** (RAG da organização; plano de 10 passos aprovado, `docs/BIBLIOTECA-DECISAO.md`).
 
