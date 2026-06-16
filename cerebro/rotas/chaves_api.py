@@ -8,11 +8,11 @@ Duas frentes:
 O valor da chave é cifrado ao salvar (`cofre.py`) e NUNCA é reexibido: a leitura
 mostra só os últimos 4 dígitos. `PUT` faz upsert — cadastra a primeira vez,
 substitui (troca de chave) nas seguintes, respeitando o índice único
-(organização, tipo de IA, provedor). Toda troca/remoção é auditada (MIGRACAO §6.4).
+(organização, provedor). Toda troca/remoção é auditada (MIGRACAO §6.4).
 
-Nesta fase só o provedor Anthropic é suportado (MIGRACAO: o campo `provedor` já
-existe para o futuro, mas o motor só consome Anthropic) — cadastrar outro seria
-chave morta, então é recusado com 422.
+A chave é UMA por provedor (unificação 2026-06-15): não há mais dimensão de papel
+(executora/criadora). Quem escolhe a IA é o modelo (da conversa e de cada
+agente), não a chave.
 """
 
 import uuid
@@ -48,9 +48,9 @@ def _validar_provedor(provedor: str) -> None:
 
 
 def _buscar(
-    sessao: Session, organizacao_id: uuid.UUID | None, tipo_ia: str, provedor: str
+    sessao: Session, organizacao_id: uuid.UUID | None, provedor: str
 ) -> ChaveApi | None:
-    """A chave de (organização, tipo, provedor) — a única que o índice permite."""
+    """A chave de (organização, provedor) — a única que o índice permite."""
     condicao_org = (
         ChaveApi.organizacao_id.is_(None)
         if organizacao_id is None
@@ -59,7 +59,6 @@ def _buscar(
     return sessao.scalars(
         select(ChaveApi).where(
             condicao_org,
-            ChaveApi.tipo_ia == tipo_ia,
             ChaveApi.provedor == provedor,
         )
     ).first()
@@ -69,11 +68,11 @@ def _upsert(
     sessao: Session, organizacao_id: uuid.UUID | None, dados: ChaveApiCriar
 ) -> tuple[ChaveApi, bool]:
     """Cadastra a chave, ou substitui o valor se já existe uma para aquele
-    (organização, tipo, provedor). Devolve (chave, era_nova)."""
-    existente = _buscar(sessao, organizacao_id, dados.tipo_ia, dados.provedor)
+    (organização, provedor). Devolve (chave, era_nova)."""
+    existente = _buscar(sessao, organizacao_id, dados.provedor)
     nova = existente is None
     chave = existente or ChaveApi(
-        organizacao_id=organizacao_id, tipo_ia=dados.tipo_ia, provedor=dados.provedor
+        organizacao_id=organizacao_id, provedor=dados.provedor
     )
     chave.valor_cifrado = cofre.cifrar(dados.valor)
     chave.ultimos4 = cofre.ultimos4(dados.valor)
@@ -101,7 +100,7 @@ def listar_chaves_org(
     return sessao.scalars(
         select(ChaveApi)
         .where(ChaveApi.organizacao_id == organizacao_id)
-        .order_by(ChaveApi.tipo_ia, ChaveApi.provedor)
+        .order_by(ChaveApi.provedor)
     ).all()
 
 
@@ -111,18 +110,12 @@ def modelos_disponiveis_org(
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
-    """Por tipo de IA, quais provedores têm chave resolvível (própria ou da
-    consultoria). Alimenta os seletores de modelo da interface — só booleanos,
-    nenhum segredo. Visível a qualquer membro (não revela chave, só disponibilidade)."""
+    """Quais provedores têm chave resolvível (própria ou da consultoria) — um mapa
+    único {provedor: bool}, já que a chave é por provedor (unificação 2026-06-15).
+    Alimenta os seletores de modelo da interface (conversa e agentes): só
+    booleanos, nenhum segredo. Visível a qualquer membro."""
     organizacao_acessivel(sessao, usuario, organizacao_id)
-    return {
-        "executora": provedores_disponiveis(
-            sessao, organizacao_id, tipo_ia="executora"
-        ),
-        "criadora": provedores_disponiveis(
-            sessao, organizacao_id, tipo_ia="criadora"
-        ),
-    }
+    return provedores_disponiveis(sessao, organizacao_id)
 
 
 @rotas.put(
@@ -142,7 +135,7 @@ def salvar_chave_org(
         sessao, usuario=usuario,
         acao="chave.cadastrada" if nova else "chave.trocada",
         recurso_tipo="chave_api", recurso_id=chave.id, organizacao_id=organizacao_id,
-        detalhe={"tipo_ia": chave.tipo_ia, "provedor": chave.provedor, "ultimos4": chave.ultimos4},
+        detalhe={"provedor": chave.provedor, "ultimos4": chave.ultimos4},
     )
     sessao.commit()
     sessao.refresh(chave)
@@ -167,7 +160,7 @@ def remover_chave_org(
     auditoria.registrar(
         sessao, usuario=usuario, acao="chave.removida",
         recurso_tipo="chave_api", recurso_id=chave.id, organizacao_id=organizacao_id,
-        detalhe={"tipo_ia": chave.tipo_ia, "provedor": chave.provedor},
+        detalhe={"provedor": chave.provedor},
     )
     sessao.delete(chave)
     sessao.commit()
@@ -186,7 +179,7 @@ def listar_chaves_consultoria(
     return sessao.scalars(
         select(ChaveApi)
         .where(ChaveApi.organizacao_id.is_(None))
-        .order_by(ChaveApi.tipo_ia, ChaveApi.provedor)
+        .order_by(ChaveApi.provedor)
     ).all()
 
 
@@ -204,7 +197,7 @@ def salvar_chave_consultoria(
         sessao, usuario=usuario,
         acao="chave_mae.cadastrada" if nova else "chave_mae.trocada",
         recurso_tipo="chave_api", recurso_id=chave.id, organizacao_id=None,
-        detalhe={"tipo_ia": chave.tipo_ia, "provedor": chave.provedor, "ultimos4": chave.ultimos4},
+        detalhe={"provedor": chave.provedor, "ultimos4": chave.ultimos4},
     )
     sessao.commit()
     sessao.refresh(chave)
@@ -227,7 +220,7 @@ def remover_chave_consultoria(
     auditoria.registrar(
         sessao, usuario=usuario, acao="chave_mae.removida",
         recurso_tipo="chave_api", recurso_id=chave.id, organizacao_id=None,
-        detalhe={"tipo_ia": chave.tipo_ia, "provedor": chave.provedor},
+        detalhe={"provedor": chave.provedor},
     )
     sessao.delete(chave)
     sessao.commit()

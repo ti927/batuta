@@ -69,7 +69,6 @@ def test_resolve_tavily_do_cofre_da_org(sessao, dados):
     sessao.add(
         ChaveApi(
             organizacao_id=org,
-            tipo_ia="executora",
             provedor="tavily",
             valor_cifrado=cofre.cifrar("tvly-123"),
             ultimos4="-123",

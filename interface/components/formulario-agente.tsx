@@ -82,8 +82,9 @@ export function FormularioAgente({
   const [form, setForm] = useState<Campos>(agente ? deAgente(agente) : VAZIO);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
-  // Disponibilidade de provedores (executora) por chave: só oferecemos modelos
-  // cujo provedor tem chave — escolher um sem chave quebraria na execução.
+  // Disponibilidade de provedores por chave: só oferecemos modelos cujo provedor
+  // tem chave — escolher um sem chave quebraria na execução. A chave é por
+  // provedor (unificação 2026-06-15): o mapa já vem achatado.
   const [disponiveis, setDisponiveis] = useState<ProvedoresDisponiveis>();
 
   useEffect(() => {
@@ -93,7 +94,7 @@ export function FormularioAgente({
         `/organizacoes/${time.organizacao_id}/modelos-disponiveis`,
       )
       .then((d) => {
-        if (vivo) setDisponiveis(d.executora);
+        if (vivo) setDisponiveis(d);
       })
       .catch(() => {
         /* sem disponibilidade: o seletor mostra todos (fallback seguro) */

@@ -430,16 +430,14 @@ class MeuAcesso(BaseModel):
 
 # ───────────────────── Cofre de chaves (Etapa 2, Fase 7) ─────────────────────
 
-# Os três tipos de IA (MIGRACAO Virada 4). Nesta fase só a 'executora' é
-# consumida pelo motor; as outras já são modeladas para as Fases 9/10.
-TipoIA = Literal["executora", "criadora", "companheira"]
+# A chave é UMA por provedor (unificação 2026-06-15): não há mais dimensão de
+# papel (executora/criadora). Quem escolhe a IA é o modelo, não a chave.
 
 
 class ChaveApiCriar(BaseModel):
     """Cadastra ou troca uma chave de IA. O `valor` é o segredo: entra cifrado
     no cofre e NUNCA volta numa leitura (PRODUTO §26)."""
 
-    tipo_ia: TipoIA = "executora"
     provedor: str = Field(default="anthropic", min_length=1, max_length=40)
     valor: str = Field(min_length=1)
     apelido: str | None = Field(default=None, max_length=200)
@@ -457,7 +455,6 @@ class ChaveApiLer(BaseModel):
 
     id: uuid.UUID
     organizacao_id: uuid.UUID | None
-    tipo_ia: str
     provedor: str
     ultimos4: str | None
     apelido: str | None

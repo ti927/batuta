@@ -70,7 +70,7 @@ def test_sem_credencial_pool_segue_funcionando(sessao, dados):
 def test_chave_consultoria_nao_compartilhavel_nao_cai_no_fallback(sessao, dados):
     sessao.add(
         ChaveApi(
-            organizacao_id=None, tipo_ia="executora", provedor="openai",
+            organizacao_id=None, provedor="openai",
             valor_cifrado=cofre.cifrar("MAE-KEY"), ultimos4="-KEY",
             ativa=True, compartilhavel=False,
         )
@@ -83,7 +83,7 @@ def test_chave_consultoria_nao_compartilhavel_nao_cai_no_fallback(sessao, dados)
 def test_chave_consultoria_compartilhavel_cai_no_fallback(sessao, dados):
     sessao.add(
         ChaveApi(
-            organizacao_id=None, tipo_ia="executora", provedor="openai",
+            organizacao_id=None, provedor="openai",
             valor_cifrado=cofre.cifrar("MAE-KEY"), ultimos4="-KEY",
             ativa=True, compartilhavel=True,
         )

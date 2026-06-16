@@ -76,7 +76,7 @@ export function ChavesCliente({
             <SeletorModeloConversa
               organizacaoId={organizacao.id}
               modeloAtual={organizacao.modelo_criadora}
-              disponiveis={disponiveis?.criadora ?? {}}
+              disponiveis={disponiveis ?? {}}
             />
           </section>
 

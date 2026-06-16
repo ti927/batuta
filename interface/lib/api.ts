@@ -99,11 +99,10 @@ export type Organizacao = {
   atualizado_em: string;
 };
 
-// Disponibilidade de provedores por tipo de IA (GET /organizacoes/{id}/modelos-disponiveis).
-export type ModelosDisponiveis = {
-  executora: Record<string, boolean>;
-  criadora: Record<string, boolean>;
-};
+// Disponibilidade de provedores (GET /organizacoes/{id}/modelos-disponiveis).
+// Um mapa único {provedor: bool}, já que a chave é por provedor (unificação
+// 2026-06-15): a mesma chave serve à conversa e aos agentes.
+export type ModelosDisponiveis = Record<string, boolean>;
 
 export type Time = {
   id: string;
@@ -408,14 +407,12 @@ export type MeuAcesso = {
 
 // ───────────────────── Cofre de chaves (Fase 7) ─────────────────────
 
-export type TipoIA = "executora" | "criadora" | "companheira";
-
 // Uma chave do cofre como a API a devolve: NUNCA o valor, só os 4 últimos
 // dígitos + metadados (PRODUTO §26). organizacao_id null = chave-mãe da consultoria.
+// A chave é uma por provedor (unificação 2026-06-15): sem dimensão de papel.
 export type ChaveApiLer = {
   id: string;
   organizacao_id: string | null;
-  tipo_ia: TipoIA;
   provedor: string;
   ultimos4: string | null;
   apelido: string | null;
