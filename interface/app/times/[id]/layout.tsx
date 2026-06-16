@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Sparkles } from "lucide-react";
 
 import {
+  type Automacao,
   type ConversaCriacaoResumo,
   type PapelAcesso,
   type Time,
@@ -11,14 +12,20 @@ import {
 import { buscarCerebro, buscarMeuAcesso } from "@/lib/cerebro-servidor";
 import { podeOperar } from "@/lib/permissoes";
 import { BarraAbasTime } from "@/components/barra-abas-time";
+import { BotaoRodarAgora } from "@/components/botao-rodar-agora";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+
+async function jsonOu<T>(resp: Response, padrao: T): Promise<T> {
+  return resp.ok ? ((await resp.json()) as T) : padrao;
+}
 
 async function carregar(timeId: string): Promise<{
   time: Time;
   resumo: TimeResumo | null;
   meuPapel: PapelAcesso | null;
   conversaId: string | null;
+  automacoes: { id: string; nome: string }[];
 } | null> {
   const [respTime, respResumo, eu] = await Promise.all([
     buscarCerebro(`/times/${timeId}`),
@@ -32,17 +39,20 @@ async function carregar(timeId: string): Promise<{
   const resumo: TimeResumo | null = respResumo.ok ? await respResumo.json() : null;
   const meuPapel = eu?.papeis[time.organizacao_id] ?? null;
 
-  // A conversa (eterna) da IA criadora que mantém este time — para o botão
-  // "Conversar sobre o projeto" cair na conversa certa (ou abrir uma nova).
-  const respConversas = await buscarCerebro(
-    `/organizacoes/${time.organizacao_id}/conversas-criacao`,
-  );
-  const conversas: ConversaCriacaoResumo[] = respConversas.ok
-    ? await respConversas.json()
-    : [];
+  // A conversa (eterna) da IA criadora que mantém este time (para "Conversar
+  // sobre o projeto") e as automações (para "Rodar agora").
+  const [respConversas, respAutomacoes] = await Promise.all([
+    buscarCerebro(`/organizacoes/${time.organizacao_id}/conversas-criacao`),
+    buscarCerebro(`/times/${timeId}/automacoes`),
+  ]);
+  const conversas = await jsonOu<ConversaCriacaoResumo[]>(respConversas, []);
   const conversaId = conversas.find((c) => c.time_id === timeId)?.id ?? null;
+  const automacoes = (await jsonOu<Automacao[]>(respAutomacoes, [])).map((a) => ({
+    id: a.id,
+    nome: a.nome,
+  }));
 
-  return { time, resumo, meuPapel, conversaId };
+  return { time, resumo, meuPapel, conversaId, automacoes };
 }
 
 export default async function TimeLayout({
@@ -55,7 +65,7 @@ export default async function TimeLayout({
   const { id } = await params;
   const dados = await carregar(id);
   if (!dados) notFound();
-  const { time, resumo, meuPapel, conversaId } = dados;
+  const { time, resumo, meuPapel, conversaId, automacoes } = dados;
   const souOperador = podeOperar(meuPapel);
   const ativo = resumo?.ativo ?? false;
 
@@ -82,13 +92,16 @@ export default async function TimeLayout({
               )}
             </div>
             {souOperador && (
-              <Link
-                href={conversaId ? `/criar/${conversaId}` : "/criar"}
-                className={buttonVariants({ variant: "outline" })}
-              >
-                <Sparkles className="size-4 text-primary" />
-                Conversar sobre o projeto
-              </Link>
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  href={conversaId ? `/criar/${conversaId}` : "/criar"}
+                  className={buttonVariants({ variant: "outline" })}
+                >
+                  <Sparkles className="size-4 text-primary" />
+                  Conversar sobre o projeto
+                </Link>
+                <BotaoRodarAgora timeId={time.id} automacoes={automacoes} />
+              </div>
             )}
           </div>
 

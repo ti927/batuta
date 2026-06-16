@@ -84,3 +84,23 @@ def test_resumo_isolado_por_organizacao(cliente, entrar, dados):
     entrar(dados["estranho"])
     r = cliente.get(f"/times/{dados['timeA'].id}/resumo")
     assert r.status_code in (403, 404)
+
+
+def test_execucoes_do_time_agrega_todas_as_automacoes(cliente, entrar, dados, sessao):
+    _montar_time(sessao, dados["timeA"])
+    entrar(dados["observador"])  # leitura: qualquer membro
+
+    r = cliente.get(f"/times/{dados['timeA'].id}/execucoes")
+    assert r.status_code == 200
+    corpo = r.json()
+    assert len(corpo) == 3  # as 3 execuções da automação do time
+    # cada item traz o nome da automação e a organização (ExecucaoNaLista)
+    assert all(item["automacao_nome"] == "Fluxo" for item in corpo)
+    estados = {item["estado"] for item in corpo}
+    assert estados == {"concluida", "falhou", "aguardando_humano"}
+
+
+def test_execucoes_do_time_isolado_por_organizacao(cliente, entrar, dados):
+    entrar(dados["estranho"])
+    r = cliente.get(f"/times/{dados['timeA'].id}/execucoes")
+    assert r.status_code in (403, 404)

@@ -267,6 +267,31 @@ def listar_execucoes(
     ).all()
 
 
+@rotas.get("/times/{time_id}/execucoes", response_model=list[ExecucaoNaLista])
+def listar_execucoes_do_time(
+    time_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """As execuções de TODAS as automações do time, mais recentes primeiro — a
+    aba Execuções (master-detail) da página do time. Observador vê."""
+    time = time_acessivel(sessao, usuario, time_id)
+    consulta = (
+        select(Execucao, Automacao.nome)
+        .join(Automacao, Automacao.id == Execucao.automacao_id)
+        .where(Automacao.time_id == time_id)
+        .order_by(Execucao.criado_em.desc())
+    )
+    return [
+        ExecucaoNaLista(
+            **ExecucaoLer.model_validate(e).model_dump(),
+            automacao_nome=nome,
+            organizacao_id=time.organizacao_id,
+        )
+        for e, nome in sessao.execute(consulta).all()
+    ]
+
+
 @rotas.get("/execucoes", response_model=list[ExecucaoNaLista])
 def listar_todas_execucoes(
     estado: str | None = None,

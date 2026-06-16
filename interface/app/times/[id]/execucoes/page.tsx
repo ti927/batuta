@@ -1,14 +1,50 @@
-import { AreaEmBreve } from "@/components/area-em-breve";
+import { notFound } from "next/navigation";
 
-// Placeholder da aba Execuções (Fase 1). A lista por time (master-detail com o
-// passo a passo e o portão de aprovação dentro da aba) chega na Fase 3 — por ora
-// a aba existe e navega, sem link morto. As execuções seguem visíveis pela
-// automação (/automacoes/[id]) e pela visão consolidada (/execucoes).
-export default function ExecucoesTabPage() {
+import {
+  type ExecucaoNaLista,
+  type Time,
+  type TimeResumo,
+} from "@/lib/api";
+import { buscarCerebro } from "@/lib/cerebro-servidor";
+
+import { ExecucoesCliente } from "./execucoes-cliente";
+
+async function jsonOu<T>(resp: Response, padrao: T): Promise<T> {
+  return resp.ok ? ((await resp.json()) as T) : padrao;
+}
+
+async function carregar(timeId: string): Promise<{
+  time: Time;
+  execucoes: ExecucaoNaLista[];
+  resumo: TimeResumo | null;
+} | null> {
+  const [respTime, respExec, respResumo] = await Promise.all([
+    buscarCerebro(`/times/${timeId}`),
+    buscarCerebro(`/times/${timeId}/execucoes`),
+    buscarCerebro(`/times/${timeId}/resumo`),
+  ]);
+  if (respTime.status === 404) return null;
+  if (!respTime.ok) throw new Error("Falha ao carregar o time");
+  return {
+    time: await respTime.json(),
+    execucoes: await jsonOu<ExecucaoNaLista[]>(respExec, []),
+    resumo: respResumo.ok ? await respResumo.json() : null,
+  };
+}
+
+export default async function ExecucoesTabPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const dados = await carregar(id);
+  if (!dados) notFound();
   return (
-    <AreaEmBreve titulo="Execuções do time">
-      Em breve as execuções de todas as automações deste time aparecem aqui — com
-      o passo a passo e a aprovação dentro da própria aba.
-    </AreaEmBreve>
+    <ExecucoesCliente
+      time={dados.time}
+      inicial={dados.execucoes}
+      resumo={dados.resumo}
+    />
   );
 }
