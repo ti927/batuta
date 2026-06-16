@@ -982,7 +982,10 @@ encerra, vigia no agendador), **G** (guarda-corpo anti prompt-injection) e **H**
      Correção: `modelo`/`tamanho` viraram `Literal` (a UI já os renderiza como **dropdown**), default passou a
      `gpt-image-1`, `model_validator` valida o par modelo×tamanho com mensagem clara já ao salvar, e os campos
      ganharam `title` (rótulo amigável; o frontend lê o `title` do schema). Princípio geral: **campo de
-     conjunto fechado = `Literal`/enum, nunca texto livre.** Detalhe na memória.
+     conjunto fechado = `Literal`/enum, nunca texto livre.** **Validado ao vivo:** o agente do Telegram gerou
+     uma imagem real (gatinho, servida em `api.batuta.team/arquivos/...png`). **NB:** o agente no chat esconde o
+     erro técnico (persona) e às vezes nem retenta a ferramenta — o botão "Testar" do instrumento é o
+     diagnóstico confiável (mostra o erro real via 502). Detalhe na memória.
 6. **Fase K — polimento de atendimento** (saudação/transparência automática, horário comercial, painel de
    métricas de atendimento). Menor valor-por-esforço; precisa de UI/config próprias.
 7. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).

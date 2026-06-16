@@ -111,11 +111,12 @@ em dobro e a pegadinha da imagem.
 > Desenho APROVADO pelo maestro (2026-06-15). Fase focada, menor que a Caixa-forte.
 > Registrada no `BUILD-PLAN.md` (FILA, item "Chave de IA por provedor").
 
-### Progresso (2026-06-15) — Passos 1–4 ✅, Passo 5 em curso
-Branch `chave-por-provedor`. **Passo 1 ✅** migração `una00prov001` aplicada em
-produção (5→4 linhas, zero duplicatas, head `una00prov001`); backup lógico das 5
-linhas guardado antes. **Passos 2–4 ✅** cérebro e interface sem papel; **228
-testes verdes**, `tsc`/`eslint` limpos; núcleo (`cadeia.py`/`agente.py`) sem diff.
+### Progresso (2026-06-15) — ✅ CONCLUÍDA, NO AR e VALIDADA AO VIVO
+Merge `d674bb5` em `main`; redeploy OK. **Passo 1 ✅** migração `una00prov001`
+aplicada em produção (5→4 linhas, zero duplicatas, head `una00prov001`); backup
+lógico das 5 linhas guardado antes e já apagado. **Passos 2–4 ✅** cérebro e
+interface sem papel; **228 testes verdes**, `tsc`/`eslint` limpos; núcleo
+(`cadeia.py`/`agente.py`) sem diff.
 
 **Correção de teste (importante):** os testes rodam contra o banco REAL e agora a
 consultoria tem chaves cadastradas em prod — os testes que assumiam cofre vazio
@@ -129,9 +130,20 @@ WHERE) roda contra o schema novo, a resolução de chave em prod falha. O reméd
 o deploy do código novo — por isso o merge+redeploy desta fase RECONCILIA o prod.
 Para drops futuros: subir o código que não usa a coluna ANTES de dropá-la.
 
-**Passo 5 (resta):** merge → push → redeploy (reconcilia o prod) → e2e ao vivo EM
-PRODUÇÃO (o cofre local não decifra as chaves de prod, master key diferente): uma
-chave OpenAI já cadastrada cobre conversa + agente + gerar_imagem.
+**Passo 5 ✅** merge → push → redeploy (reconciliou o prod) → **e2e ao vivo EM
+PRODUÇÃO validado**: a IA de conversa via OpenAI respondeu e editou um instrumento;
+e o `gerar_imagem` gerou uma imagem real pelo agente do Telegram (gatinho fofinho,
+servida em `api.batuta.team/arquivos/...png`) — uma chave OpenAI por provedor cobre
+conversa + agente + imagem.
+
+> **Sub-melhoria `gerar_imagem` (merge `f551952`, 232 testes):** o e2e da imagem
+> expôs que `modelo`/`tamanho` eram texto livre e o default `dall-e-3` falha em
+> contas que só têm `gpt-image-1`. Corrigido: ambos viraram `Literal` (dropdown na
+> UI), default `gpt-image-1`, `model_validator` do par modelo×tamanho, e rótulos via
+> `Field(title=...)`. Princípio geral: campo de conjunto fechado = enum, nunca texto
+> livre. Validado ao vivo (imagem gerada). **NB diagnóstico:** o agente no chat
+> esconde o erro técnico (persona) e às vezes nem retenta a ferramenta — o botão
+> "Testar" do instrumento é o caminho confiável (mostra o erro real via 502).
 
 ### Passo 1 — Migração (consolidar + reindexar)
 Antes: anotar/backup lógico das linhas atuais de `chaves_api`. Migração: consolida
