@@ -31,7 +31,7 @@ def test_admin_cadastra_chave_da_org(cliente, entrar, dados):
     # O valor NUNCA volta; só os últimos 4 dígitos e os metadados.
     assert "valor" not in corpo and "valor_cifrado" not in corpo
     assert corpo["ultimos4"] == "9999"
-    assert corpo["tipo_ia"] == "executora" and corpo["provedor"] == "anthropic"
+    assert corpo["provedor"] == "anthropic"
     assert corpo["ativa"] is True
 
 

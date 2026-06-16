@@ -4,14 +4,15 @@
 // unificação de chaves). Usado em duas telas: chaves da organização e chave-mãe
 // da consultoria — a diferença é só o `basePath`. Mostra as chaves MASCARADAS (só
 // os 4 últimos dígitos; o valor nunca volta do cérebro) e permite cadastrar/
-// trocar/remover. Salvar um serviço (e tipo de IA) que já existe SUBSTITUI a chave.
-// Inclui serviços não-modelo compartilháveis (Tavily/busca), que os instrumentos
-// reusam — por isso "serviço", não só "provedor de IA".
+// trocar/remover. A chave é UMA por serviço/provedor (unificação 2026-06-15):
+// salvar um serviço que já existe SUBSTITUI a chave — quem escolhe a IA é o
+// modelo (da conversa e de cada agente), não a chave. Inclui serviços não-modelo
+// compartilháveis (Tavily/busca), que os instrumentos reusam.
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { api, ErroDaApi, type ChaveApiLer, type TipoIA } from "@/lib/api";
+import { api, ErroDaApi, type ChaveApiLer } from "@/lib/api";
 import {
   ROTULO_SERVICO,
   SERVICOS,
@@ -23,21 +24,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-
-// Dois tipos de IA consomem chave: a executora (os agentes do time) e a IA de
-// conversa (a criadora/companheira). Serviços não-IA (Tavily) não têm essa
-// distinção — usam sempre o bucket "executora".
-const TIPOS: TipoIA[] = ["executora", "criadora"];
-const ROTULO_TIPO: Record<string, string> = {
-  executora: "IA executora (agentes)",
-  criadora: "IA de conversa",
-  companheira: "IA de conversa",
-};
-
-// Serviços que distinguem papel (executora × conversa). Tavily não distingue.
-function temPapel(servico: string): boolean {
-  return servico !== "tavily";
-}
 
 export function GestaoChaves({
   basePath,
@@ -52,17 +38,12 @@ export function GestaoChaves({
 }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
-  const [tipo, setTipo] = useState<TipoIA>("executora");
   const [servico, setServico] = useState<Servico>("anthropic");
   const [valor, setValor] = useState("");
   const [apelido, setApelido] = useState("");
   const [compartilhavel, setCompartilhavel] = useState(true);
 
-  // Tavily não tem papel: força executora.
-  const tipoEfetivo: TipoIA = temPapel(servico) ? tipo : "executora";
-  const jaTem = chavesIniciais.some(
-    (c) => c.tipo_ia === tipoEfetivo && c.provedor === servico,
-  );
+  const jaTem = chavesIniciais.some((c) => c.provedor === servico);
 
   function tratar(e: unknown, padrao: string) {
     setErro(e instanceof ErroDaApi ? e.message : padrao);
@@ -72,7 +53,6 @@ export function GestaoChaves({
     if (!valor.trim()) return;
     try {
       await api.put(basePath, {
-        tipo_ia: tipoEfetivo,
         provedor: servico,
         valor: valor.trim(),
         apelido: apelido.trim() || null,
@@ -115,11 +95,6 @@ export function GestaoChaves({
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 text-sm font-medium text-foreground">
                   {ROTULO_SERVICO[c.provedor as Servico] ?? c.provedor}
-                  {temPapel(c.provedor) && (
-                    <span className="text-xs font-normal text-muted-foreground">
-                      {ROTULO_TIPO[c.tipo_ia] ?? c.tipo_ia}
-                    </span>
-                  )}
                   {!c.ativa && <Badge>inativa</Badge>}
                   {ehConsultoria && (
                     <Badge variant={c.compartilhavel ? "success" : "neutral"}>
@@ -157,19 +132,6 @@ export function GestaoChaves({
               </option>
             ))}
           </Select>
-          {temPapel(servico) && (
-            <Select
-              className="w-auto"
-              value={tipo}
-              onChange={(e) => setTipo(e.target.value as TipoIA)}
-            >
-              {TIPOS.map((t) => (
-                <option key={t} value={t}>
-                  {ROTULO_TIPO[t] ?? t}
-                </option>
-              ))}
-            </Select>
-          )}
         </div>
         <Input
           type="password"
@@ -197,8 +159,7 @@ export function GestaoChaves({
         )}
         {jaTem && (
           <p className="text-xs text-warning">
-            Já existe uma chave de {ROTULO_SERVICO[servico]}
-            {temPapel(servico) ? ` (${ROTULO_TIPO[tipoEfetivo]})` : ""}. Salvar vai
+            Já existe uma chave de {ROTULO_SERVICO[servico]}. Salvar vai
             substituí-la.
           </p>
         )}

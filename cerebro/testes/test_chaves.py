@@ -16,6 +16,7 @@ from chaves import (
     resolver_chave,
     resolver_chave_e_origem_por_time,
     resolver_chave_por_time,
+    resolver_chaves_por_organizacao,
 )
 from modelos import ChaveApi
 from orquestracao.llm import construir_modelo, usar_chaves
@@ -23,11 +24,10 @@ from orquestracao.modelos_ia import provedor_do_modelo
 
 
 def _add_chave(
-    sessao, organizacao_id, segredo, *, tipo_ia="executora", provedor="anthropic", ativa=True
+    sessao, organizacao_id, segredo, *, provedor="anthropic", ativa=True
 ):
     chave = ChaveApi(
         organizacao_id=organizacao_id,
-        tipo_ia=tipo_ia,
         provedor=provedor,
         valor_cifrado=cifrar(segredo),
         ultimos4=ultimos4(segredo),
@@ -69,12 +69,15 @@ def test_chave_inativa_e_ignorada(sessao, dados):
     assert resolver_chave(sessao, dados["orgA"].id) == "sk-consultoria"
 
 
-def test_tipo_ia_isolado(sessao, dados):
-    """Só a IA executora é consumida pelo motor nesta fase: uma chave de outro
-    tipo (criadora) não responde pela executora."""
-    _add_chave(sessao, dados["orgA"].id, "sk-criadora", tipo_ia="criadora")
-    assert resolver_chave(sessao, dados["orgA"].id, tipo_ia="executora") is None
-    assert resolver_chave(sessao, dados["orgA"].id, tipo_ia="criadora") == "sk-criadora"
+def test_uma_chave_por_provedor_serve_qualquer_uso(sessao, dados):
+    """Unificação 2026-06-15: a chave é por provedor, sem dimensão de papel. Uma
+    chave Anthropic cadastrada serve tanto à execução quanto à conversa — quem
+    escolhe a IA é o modelo, não a chave."""
+    _add_chave(sessao, dados["orgA"].id, "sk-anthropic")
+    # A mesma chave resolve, sem distinção de papel (não há mais `tipo_ia`).
+    assert resolver_chave(sessao, dados["orgA"].id) == "sk-anthropic"
+    chaves, _ = resolver_chaves_por_organizacao(sessao, dados["orgA"].id)
+    assert chaves["anthropic"] == "sk-anthropic"
 
 
 def test_resolver_por_time_segue_a_organizacao(sessao, dados):
@@ -166,24 +169,18 @@ def test_resolver_chaves_por_time_mapa_por_provedor(sessao, dados):
     assert "google" not in chaves  # sem chave Google cadastrada
 
 
-# ─────────────────── Chave da IA criadora (Fase 9) ────────────────────
+# ─────────────────── Resolução por organização (conversa/criadora) ──────────
 
 
-def test_resolver_chaves_por_organizacao_criadora(sessao, dados):
-    """A IA criadora resolve por ORGANIZAÇÃO, com tipo_ia='criadora', seguindo o
-    mesmo fallback org → consultoria. Uma chave 'criadora' não é vista como
-    'executora' (tipos isolados)."""
-    from chaves import resolver_chaves_por_organizacao
-
-    _add_chave(sessao, dados["orgA"].id, "sk-criadora-A", tipo_ia="criadora")
-    chaves, origens = resolver_chaves_por_organizacao(
-        sessao, dados["orgA"].id, tipo_ia="criadora"
-    )
-    assert chaves["anthropic"] == "sk-criadora-A"
+def test_resolver_chaves_por_organizacao(sessao, dados):
+    """A conversa (IA criadora) resolve a chave por ORGANIZAÇÃO, seguindo o mesmo
+    fallback org → consultoria. É a MESMA chave por provedor da execução
+    (unificação 2026-06-15)."""
+    _add_chave(sessao, dados["orgA"].id, "sk-org-A")
+    chaves, origens = resolver_chaves_por_organizacao(sessao, dados["orgA"].id)
+    assert chaves["anthropic"] == "sk-org-A"
     assert origens["anthropic"] == ORIGEM_ORGANIZACAO
-    # sem chave 'criadora', cai no legado (.env) para a Anthropic
-    vazio, origens_b = resolver_chaves_por_organizacao(
-        sessao, dados["orgB"].id, tipo_ia="criadora"
-    )
+    # sem chave própria, cai no legado (.env) para a Anthropic
+    vazio, origens_b = resolver_chaves_por_organizacao(sessao, dados["orgB"].id)
     assert "anthropic" not in vazio
     assert origens_b["anthropic"] == ORIGEM_LEGADO

@@ -9,12 +9,13 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 import auth
 import main
 from db import engine
-from modelos import Membro, Organizacao, Time, Usuario
+from modelos import ChaveApi, Membro, Organizacao, Time, Usuario
 from sessao import obter_sessao
 
 
@@ -22,10 +23,18 @@ from sessao import obter_sessao
 def sessao():
     """Sessão ligada a uma transação externa que é sempre revertida. As escritas
     das rotas (commit) caem em savepoints internos; ao fim, o rollback descarta
-    tudo — os testes não sujam o banco real."""
+    tudo — os testes não sujam o banco real.
+
+    Como os testes rodam contra o banco real (que em produção já tem chaves da
+    consultoria cadastradas), esvaziamos o cofre `chaves_api` no início de cada
+    teste — DENTRO da transação revertida, então o rollback restaura tudo e nada
+    é comitado. Assim a resolução de chave parte sempre de um cofre vazio e os
+    testes ficam determinísticos, independentemente do estado real do banco."""
     conexao = engine.connect()
     trans = conexao.begin()
     s = Session(bind=conexao, join_transaction_mode="create_savepoint")
+    s.execute(delete(ChaveApi))
+    s.flush()
     try:
         yield s
     finally:

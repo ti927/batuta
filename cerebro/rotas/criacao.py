@@ -44,7 +44,7 @@ def _rodar_turno(
     conversa e o time real. Depois, sincroniza o agendador (a IA pode ter ativado/
     mudado o gatilho). Devolve {resposta, chips, time_id, time, uso}."""
     chaves, origens = resolver_chaves_por_organizacao(
-        sessao, conversa.organizacao_id, tipo_ia="criadora"
+        sessao, conversa.organizacao_id
     )
     # O modelo da conversa é escolhido por organização (nulo = padrão Opus). A origem
     # da medição sai do provedor DESSE modelo, não mais fixa no de Opus.

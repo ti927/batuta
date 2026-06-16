@@ -109,9 +109,7 @@ def definir_modelo_criadora(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 f"Modelo de IA '{dados.modelo}' não reconhecido.",
             )
-        if not provedores_disponiveis(
-            sessao, organizacao_id, tipo_ia="criadora"
-        ).get(provedor):
+        if not provedores_disponiveis(sessao, organizacao_id).get(provedor):
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 f"O modelo '{dados.modelo}' usa {provedor}, mas não há chave de IA "

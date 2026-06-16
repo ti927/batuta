@@ -170,28 +170,29 @@ def test_uso_consultoria_soma_chave_mae_por_org_e_exige_admin(
 # ───────────────────── modelos disponíveis + modelo da conversa ─────────────
 
 
-def test_modelos_disponiveis_refletem_chave_por_tipo(cliente, entrar, dados, sessao):
+def test_modelos_disponiveis_refletem_chave(cliente, entrar, dados, sessao):
     entrar(dados["admin"])
     org = dados["orgA"].id
-    # Chave OpenAI só para a executora.
+    # Sem chave OpenAI, o provedor não aparece como disponível.
+    antes = cliente.get(f"/organizacoes/{org}/modelos-disponiveis").json()
+    assert antes["openai"] is False
+    # Cadastrada a chave OpenAI (uma por provedor, sem papel), o provedor fica
+    # disponível para QUALQUER uso (conversa e agentes) — um mapa único.
     cliente.put(
         f"/organizacoes/{org}/chaves",
-        json={"tipo_ia": "executora", "provedor": "openai", "valor": "sk-test-exec"},
+        json={"provedor": "openai", "valor": "sk-test-openai"},
     )
     corpo = cliente.get(f"/organizacoes/{org}/modelos-disponiveis").json()
-    assert set(corpo.keys()) == {"executora", "criadora"}
-    assert corpo["executora"]["openai"] is True
-    # A chave era só de executora — a conversa (criadora) não a herda.
-    assert corpo["criadora"]["openai"] is False
+    assert corpo["openai"] is True
 
 
 def test_definir_modelo_criadora_valida_chave(cliente, entrar, dados, sessao):
     entrar(dados["admin"])
     org = dados["orgA"].id
-    # Com chave criadora OpenAI, pode escolher um modelo OpenAI.
+    # Com chave OpenAI (uma por provedor), pode escolher um modelo OpenAI.
     cliente.put(
         f"/organizacoes/{org}/chaves",
-        json={"tipo_ia": "criadora", "provedor": "openai", "valor": "sk-test-cria"},
+        json={"provedor": "openai", "valor": "sk-test-cria"},
     )
     ok = cliente.put(f"/organizacoes/{org}/modelo-criadora", json={"modelo": "gpt-4o"})
     assert ok.status_code == 200 and ok.json()["modelo_criadora"] == "gpt-4o"
