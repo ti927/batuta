@@ -15,7 +15,7 @@ import uuid
 from typing import Literal
 
 import httpx
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from arquivos import DIRETORIO_ARQUIVOS, url_do_arquivo
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
@@ -24,18 +24,60 @@ from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 TIMEOUT_S = 120.0
 URL_OPENAI = "https://api.openai.com/v1/images/generations"
 
+# Tamanhos VÁLIDOS por modelo (fonte única da verdade da combinação modelo×tamanho).
+# Espelha os tamanhos de `precos.PRECOS_IMAGEM_USD`. O campo `modelo`/`tamanho` da
+# config é um `Literal` (vira dropdown na interface); este mapa valida o PAR — nem
+# todo tamanho vale para todo modelo. `1024x1024` vale para os três (é o default).
+TAMANHOS_POR_MODELO: dict[str, tuple[str, ...]] = {
+    "gpt-image-1": ("1024x1024", "1024x1536", "1536x1024"),
+    "dall-e-3": ("1024x1024", "1024x1792", "1792x1024"),
+    "dall-e-2": ("1024x1024", "512x512", "256x256"),
+}
+
 
 class ConfigImagem(BaseModel):
-    """Configuração fixa. `chave_api` é SEGREDO (cofre 7-B)."""
+    """Configuração fixa. `chave_api` é SEGREDO (cofre 7-B).
+
+    `modelo` e `tamanho` são conjuntos fechados (`Literal`) — a interface os mostra
+    como dropdown, em vez de texto livre. O par modelo×tamanho é validado abaixo
+    (cada modelo aceita só alguns tamanhos)."""
 
     provedor: Literal["openai"] = Field(
-        default="openai", description="Provedor de geração de imagem (por ora, OpenAI)."
+        default="openai",
+        title="Provedor",
+        description="Provedor de geração de imagem (por ora, só OpenAI).",
     )
-    modelo: str = Field(
-        default="dall-e-3", description="Modelo de imagem (ex.: dall-e-3, gpt-image-1)."
+    # Mantido em sincronia com TAMANHOS_POR_MODELO (Literal exige valores estáticos).
+    modelo: Literal["gpt-image-1", "dall-e-3", "dall-e-2"] = Field(
+        default="gpt-image-1",
+        title="Modelo da imagem",
+        description="Modelo usado para gerar a imagem. gpt-image-1 é o mais novo da OpenAI.",
     )
-    tamanho: str = Field(default="1024x1024", description="Tamanho da imagem (ex.: 1024x1024).")
-    chave_api: str = Field(default="", description="Chave da API de imagem (segredo).")
+    # União dos tamanhos válidos (1024x1024 primeiro/padrão, vale para todos).
+    tamanho: Literal[
+        "1024x1024", "1024x1536", "1536x1024", "1024x1792", "1792x1024", "512x512", "256x256"
+    ] = Field(
+        default="1024x1024",
+        title="Tamanho",
+        description="Tamanho da imagem. Atenção: o tamanho válido depende do modelo.",
+    )
+    chave_api: str = Field(
+        default="",
+        title="Chave da API (opcional)",
+        description="Chave da API de imagem (segredo).",
+    )
+
+    @model_validator(mode="after")
+    def _validar_tamanho_do_modelo(self) -> "ConfigImagem":
+        """O tamanho precisa ser válido para o modelo escolhido — senão a OpenAI
+        recusaria com um erro cru. Avisa claro já ao salvar o instrumento."""
+        validos = TAMANHOS_POR_MODELO.get(self.modelo, ())
+        if self.tamanho not in validos:
+            raise ValueError(
+                f"O tamanho '{self.tamanho}' não vale para o modelo '{self.modelo}'. "
+                f"Tamanhos válidos: {', '.join(validos)}."
+            )
+        return self
 
 
 class ArgsImagem(BaseModel):
