@@ -235,6 +235,20 @@ export type ConversaComMensagens = Conversa & {
   mensagens: MensagemDaConversa[];
 };
 
+// Métricas do atendimento de um time (GET /times/{id}/conversas/metricas).
+export type MetricasAtendimento = {
+  periodo_dias: number;
+  total: number;
+  abertas: number;
+  com_humano: number;
+  fechadas: number;
+  percent_humano: number; // 0..100
+  turnos_total: number;
+  custo_total_usd: number;
+  tempo_resposta_medio_s: number | null;
+  por_estado: Record<string, number>;
+};
+
 // Estado do canal (GET /mensageria/{id}/canal).
 export type StatusCanal = {
   conectado: boolean;

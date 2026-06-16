@@ -4,10 +4,36 @@ import Link from "next/link";
 import { useState } from "react";
 import { ChevronLeft, Inbox } from "lucide-react";
 
-import { type Conversa, type Time } from "@/lib/api";
+import { type Conversa, type MetricasAtendimento, type Time } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
+
+// Segundos → texto curto e humano ("12s", "3 min", "1.2 h", ou "—").
+function formataDuracao(s: number | null): string {
+  if (s === null || s === undefined) return "—";
+  if (s < 60) return `${Math.round(s)}s`;
+  const min = Math.round(s / 60);
+  return min < 60 ? `${min} min` : `${(min / 60).toFixed(1)} h`;
+}
+
+function CartaoMetrica({
+  rotulo,
+  valor,
+  sub,
+}: {
+  rotulo: string;
+  valor: string;
+  sub?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-3">
+      <div className="text-xs text-muted-foreground">{rotulo}</div>
+      <div className="mt-1 text-xl font-medium text-foreground">{valor}</div>
+      {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
+    </div>
+  );
+}
 
 type VarianteBadge = "neutral" | "info" | "success" | "warning" | "error";
 
@@ -40,9 +66,11 @@ function visivel(c: Conversa, filtro: string): boolean {
 export function ConversasCliente({
   time,
   inicial,
+  metricas,
 }: {
   time: Time;
   inicial: Conversa[];
+  metricas: MetricasAtendimento | null;
 }) {
   const [filtro, setFiltro] = useState("abertas");
   const lista = inicial.filter((c) => visivel(c, filtro));
@@ -61,6 +89,30 @@ export function ConversasCliente({
         As conversas dos canais deste time. Abra uma para acompanhar, assumir o
         atendimento ou responder.
       </p>
+
+      {metricas && metricas.total > 0 && (
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <CartaoMetrica
+            rotulo="Conversas"
+            valor={String(metricas.total)}
+            sub={`últimos ${metricas.periodo_dias} dias`}
+          />
+          <CartaoMetrica rotulo="Em andamento" valor={String(metricas.abertas)} />
+          <CartaoMetrica
+            rotulo="Foram p/ humano"
+            valor={String(metricas.com_humano)}
+            sub={`${metricas.percent_humano}%`}
+          />
+          <CartaoMetrica
+            rotulo="1ª resposta (média)"
+            valor={formataDuracao(metricas.tempo_resposta_medio_s)}
+          />
+          <CartaoMetrica
+            rotulo="Custo de IA"
+            valor={`~US$ ${metricas.custo_total_usd.toFixed(2)}`}
+          />
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap gap-2">
         {FILTROS.map((f) => {

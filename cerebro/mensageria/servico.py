@@ -56,6 +56,19 @@ MSG_LIMITE = "Vou te encaminhar para um atendente humano. Um instante."
 # e depois encerra.
 TIMEOUT_RESPOSTA_MIN_PADRAO = 60
 
+# Atendimento (Fase K). Defaults usados quando o instrumento ainda NÃO tem o campo
+# salvo (config criada antes da Fase K): saudação nasce LIGADA (transparência);
+# horário comercial nasce DESLIGADO (não muda o comportamento de quem já está no
+# ar). O Brasil não usa horário de verão desde 2019 → fuso fixo UTC−3 (sem tzdata).
+SAUDACAO_PADRAO = "Olá! Você está falando com um assistente virtual. Como posso ajudar?"
+MSG_FORA_HORARIO_PADRAO = (
+    "Olá! No momento estamos fora do horário de atendimento. "
+    "Assim que possível retornaremos sua mensagem."
+)
+FUSO_BR = timezone(timedelta(hours=-3))
+HORARIO_INICIO_PADRAO = "09:00"
+HORARIO_FIM_PADRAO = "18:00"
+
 _ROTULOS = {
     "contato": "Cliente",
     "agente": "Você",
@@ -220,6 +233,71 @@ def _passar_para_humano(sessao: Session, conversa: Conversa, nota: str) -> None:
     )
 
 
+def _minutos_do_dia(hhmm: str) -> int | None:
+    """'HH:MM' → minutos desde a meia-noite; None se malformado."""
+    try:
+        h_txt, m_txt = str(hhmm).strip().split(":")
+        h, m = int(h_txt), int(m_txt)
+    except (ValueError, AttributeError):
+        return None
+    return h * 60 + m if 0 <= h <= 23 and 0 <= m <= 59 else None
+
+
+def _fora_do_horario(cfg: dict, agora: datetime | None = None) -> bool:
+    """True se o horário comercial está ativo e AGORA (fuso de SP, UTC−3) está
+    fora dele. Fail-open: config malformada (HH:MM inválido ou início ≥ fim) é
+    tratada como DENTRO do horário, para nunca calar o bot por engano. `agora`
+    (em UTC) é injetável para teste; sem ele, usa o relógio."""
+    if not cfg.get("horario_comercial_ativo"):
+        return False
+    base = agora or datetime.now(timezone.utc)
+    agora = base.astimezone(FUSO_BR)
+    if cfg.get("dias_uteis_apenas", True) and agora.weekday() >= 5:
+        return True  # sábado (5) ou domingo (6)
+    inicio = _minutos_do_dia(cfg.get("horario_inicio") or HORARIO_INICIO_PADRAO)
+    fim = _minutos_do_dia(cfg.get("horario_fim") or HORARIO_FIM_PADRAO)
+    if inicio is None or fim is None or inicio >= fim:
+        return False  # config inválida → fail-open (dentro do horário)
+    agora_min = agora.hour * 60 + agora.minute
+    return not (inicio <= agora_min < fim)
+
+
+def _bot_ja_respondeu(sessao: Session, conversa_id: uuid.UUID) -> bool:
+    """Se já houve qualquer mensagem do bot (papel 'agente') nesta conversa — para
+    enviar a saudação de abertura uma única vez."""
+    return (
+        sessao.scalars(
+            select(MensagemConversa.id)
+            .where(MensagemConversa.conversa_id == conversa_id)
+            .where(MensagemConversa.papel == "agente")
+            .limit(1)
+        ).first()
+        is not None
+    )
+
+
+def _enviar_e_registrar(
+    sessao: Session, conversa: Conversa, token: str, texto: str
+) -> bool:
+    """Envia uma mensagem da BORDA (saudação ou aviso de fora-de-horário) e a
+    registra na thread como mensagem do bot. Não gasta IA. Devolve se foi
+    entregue."""
+    entregue = False
+    try:
+        if token:
+            entregue = bool(
+                telegram.enviar(token, conversa.contato_chave, texto).get("ok")
+            )
+    except Exception:
+        entregue = False
+    sessao.add(
+        MensagemConversa(
+            conversa_id=conversa.id, papel="agente", conteudo=texto, entregue=entregue
+        )
+    )
+    return entregue
+
+
 def _transcrever_pendentes(
     sessao: Session,
     conversa: Conversa,
@@ -327,6 +405,27 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
             )
             sessao.commit()
             return
+
+        cfg = instrumento.configuracao or {}
+
+        # Horário comercial (Fase K): fora do horário, responde automático e NÃO
+        # aciona a IA — não conta turno nem custo; deixa a conversa aberta.
+        if _fora_do_horario(cfg):
+            _enviar_e_registrar(
+                sessao,
+                conversa,
+                token,
+                cfg.get("mensagem_fora_horario") or MSG_FORA_HORARIO_PADRAO,
+            )
+            conversa.estado = "aberta"
+            sessao.commit()
+            return
+
+        # Saudação de abertura (Fase K): uma única vez, no 1º contato da conversa,
+        # antes da resposta da IA (transparência). Vazia = desligada.
+        saudacao = (cfg.get("saudacao_abertura", SAUDACAO_PADRAO) or "").strip()
+        if saudacao and not _bot_ja_respondeu(sessao, conversa.id):
+            _enviar_e_registrar(sessao, conversa, token, saudacao)
 
         chaves, origens = resolver_chaves_por_time(sessao, agente.time_id)
         # Áudio → texto (Fase H): transcreve vozes pendentes antes de montar o turno.

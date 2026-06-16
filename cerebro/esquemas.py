@@ -625,3 +625,19 @@ class ResponderOperador(BaseModel):
     """Texto que o operador (humano) envia ao contato numa conversa assumida."""
 
     texto: str = Field(min_length=1)
+
+
+class MetricasAtendimentoLer(BaseModel):
+    """Métricas do atendimento por mensageria de um time (Fase K), num período.
+    Tudo agregado/leitura — não expõe nenhum segredo."""
+
+    periodo_dias: int
+    total: int  # conversas iniciadas no período
+    abertas: int  # ainda não fechadas
+    com_humano: int  # foram transferidas para um humano (handoff)
+    fechadas: int
+    percent_humano: float  # 0..100 — fatia que precisou de humano
+    turnos_total: int  # respostas do bot no período
+    custo_total_usd: float  # custo aproximado de IA do atendimento
+    tempo_resposta_medio_s: float | None  # 1ª resposta do bot; None se nenhuma
+    por_estado: dict[str, int]

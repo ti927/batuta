@@ -10,7 +10,7 @@ segurar a resposta ao Telegram.
 import os
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -22,6 +22,7 @@ from esquemas import (
     ConversaComMensagens,
     ConversaLer,
     MensagemConversaLer,
+    MetricasAtendimentoLer,
     ResponderOperador,
 )
 from mensageria import servico, telegram
@@ -149,6 +150,79 @@ def listar_conversas(
     if estado:
         consulta = consulta.where(Conversa.estado == estado)
     return sessao.scalars(consulta).all()
+
+
+@rotas.get(
+    "/times/{time_id}/conversas/metricas", response_model=MetricasAtendimentoLer
+)
+def metricas_atendimento(
+    time_id: uuid.UUID,
+    dias: int = 30,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Métricas do atendimento por mensageria do time, nos últimos `dias`:
+    volume e quebra por estado, % que foi para um humano, tempo médio até a 1ª
+    resposta do bot e custo de IA. Só agregação/leitura (qualquer membro)."""
+    time_acessivel(sessao, usuario, time_id)
+    dias = max(1, min(dias, 365))
+    corte = datetime.now(timezone.utc) - timedelta(days=dias)
+
+    conversas = sessao.scalars(
+        select(Conversa)
+        .join(Instrumento, Instrumento.id == Conversa.instrumento_id)
+        .where(Instrumento.time_id == time_id, Conversa.criado_em >= corte)
+    ).all()
+    total = len(conversas)
+    por_estado: dict[str, int] = {}
+    com_humano = turnos_total = 0
+    custo_total = 0.0
+    for c in conversas:
+        por_estado[c.estado] = por_estado.get(c.estado, 0) + 1
+        if c.estado == "humano_assumiu" or c.atribuida_a is not None:
+            com_humano += 1
+        turnos_total += c.turnos or 0
+        custo_total += float(c.custo_acumulado_usd or 0)
+    fechadas = por_estado.get("fechada", 0)
+
+    # Tempo até a 1ª resposta do bot: (1ª msg 'agente') − (1ª msg 'contato'),
+    # por conversa, em segundos. Média sobre as conversas que tiveram resposta.
+    tempos: list[float] = []
+    if conversas:
+        ids = [c.id for c in conversas]
+        linhas = sessao.execute(
+            select(
+                MensagemConversa.conversa_id,
+                MensagemConversa.papel,
+                MensagemConversa.criado_em,
+            )
+            .where(MensagemConversa.conversa_id.in_(ids))
+            .order_by(MensagemConversa.criado_em)
+        ).all()
+        primeiro_contato: dict[uuid.UUID, datetime] = {}
+        primeira_resposta: dict[uuid.UUID, datetime] = {}
+        for cid, papel, criado in linhas:
+            if papel == "contato":
+                primeiro_contato.setdefault(cid, criado)
+            elif papel == "agente":
+                primeira_resposta.setdefault(cid, criado)
+        for cid, t_resp in primeira_resposta.items():
+            t_ini = primeiro_contato.get(cid)
+            if t_ini and t_resp >= t_ini:
+                tempos.append((t_resp - t_ini).total_seconds())
+
+    return MetricasAtendimentoLer(
+        periodo_dias=dias,
+        total=total,
+        abertas=total - fechadas,
+        com_humano=com_humano,
+        fechadas=fechadas,
+        percent_humano=round(100 * com_humano / total, 1) if total else 0.0,
+        turnos_total=turnos_total,
+        custo_total_usd=round(custo_total, 6),
+        tempo_resposta_medio_s=(round(sum(tempos) / len(tempos), 1) if tempos else None),
+        por_estado=por_estado,
+    )
 
 
 @rotas.get("/conversas/{conversa_id}", response_model=ConversaComMensagens)
