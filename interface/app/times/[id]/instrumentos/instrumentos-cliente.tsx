@@ -1,248 +1,113 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { toast } from "sonner";
-import { Plus, Wrench } from "lucide-react";
+import { Pencil, Plus, ShieldCheck, Wrench } from "lucide-react";
 
 import {
-  api,
-  ErroDaApi,
   type Instrumento,
   type PapelAcesso,
   type TipoInstrumento,
   type Time,
 } from "@/lib/api";
-import { podeAdmin, podeOperar } from "@/lib/permissoes";
-import { FormularioInstrumento } from "@/components/formulario-instrumento";
-import { Aviso } from "@/components/ui/aviso";
+import { podeOperar } from "@/lib/permissoes";
+import { DrawerInstrumento } from "@/components/drawer-instrumento";
 import { Button } from "@/components/ui/button";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-
-// Tenta interpretar um texto como objeto JSON. Devolve [valor, null] ou
-// [null, mensagemDeErro]. Vazio vira objeto vazio.
-function lerJson(texto: string): [Record<string, unknown> | null, string | null] {
-  const t = texto.trim();
-  if (!t) return [{}, null];
-  try {
-    const v = JSON.parse(t);
-    if (typeof v !== "object" || v === null || Array.isArray(v))
-      return [null, "Os argumentos precisam ser um objeto JSON { ... }"];
-    return [v as Record<string, unknown>, null];
-  } catch {
-    return [null, "JSON inválido."];
-  }
-}
 
 export function InstrumentosCliente({
   time,
   inicial,
   tipos,
+  usadoPor,
   meuPapel,
 }: {
   time: Time;
   inicial: Instrumento[];
   tipos: TipoInstrumento[];
+  usadoPor: Record<string, string[]>;
   meuPapel: PapelAcesso | null;
 }) {
-  const router = useRouter();
-  const [erro, setErro] = useState<string | null>(null);
   const souOperador = podeOperar(meuPapel);
-  const souAdmin = podeAdmin(meuPapel);
-
-  // modo: null = nenhum form aberto; "novo" = criando; instrumento = editando
-  const [modo, setModo] = useState<null | "novo" | Instrumento>(null);
-
-  // Estado do "Testar": instrumento sendo testado, argumentos e resultado.
-  const [testandoId, setTestandoId] = useState<string | null>(null);
-  const [argsTexto, setArgsTexto] = useState("{}");
-  const [resultado, setResultado] = useState<string | null>(null);
-
-  function tratar(e: unknown, padrao: string) {
-    setErro(e instanceof ErroDaApi ? e.message : padrao);
-  }
-
-  function aoSalvar() {
-    toast.success(modo === "novo" ? "Instrumento criado" : "Instrumento salvo");
-    setModo(null);
-    setErro(null);
-    router.refresh();
-  }
-
-  async function remover(inst: Instrumento) {
-    if (!confirm(`Remover o instrumento "${inst.nome}"?`)) return;
-    try {
-      await api.delete(`/instrumentos/${inst.id}`);
-      toast.success("Instrumento removido");
-      setErro(null);
-      router.refresh();
-    } catch (e) {
-      tratar(e, "Falha ao remover instrumento");
-    }
-  }
-
-  function abrirTeste(inst: Instrumento) {
-    setTestandoId(inst.id);
-    setArgsTexto("{}");
-    setResultado(null);
-    setErro(null);
-  }
-
-  async function conectarCanal(inst: Instrumento) {
-    try {
-      await api.post(`/mensageria/${inst.id}/ativar-canal`, {});
-      toast.success("Canal conectado ao Telegram");
-      setErro(null);
-      router.refresh();
-    } catch (e) {
-      tratar(e, "Falha ao conectar o canal");
-    }
-  }
-
-  async function acionar(inst: Instrumento) {
-    const [args, erroJson] = lerJson(argsTexto);
-    if (erroJson) {
-      setErro(erroJson);
-      return;
-    }
-    try {
-      const r = await api.post<unknown>(`/instrumentos/${inst.id}/acionar`, {
-        argumentos: args,
-      });
-      setResultado(JSON.stringify(r, null, 2));
-      setErro(null);
-    } catch (e) {
-      tratar(e, "Falha ao acionar instrumento");
-    }
-  }
+  // null = fechado; "novo" = criando; instrumento = editando.
+  const [aberto, setAberto] = useState<null | "novo" | Instrumento>(null);
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
-      <div className="mb-6">
-        <h2 className="text-sm font-medium text-foreground">Instrumentos do time</h2>
-        <p className="text-sm text-muted-foreground">
-          As ferramentas que os agentes podem usar. Um instrumento pode exigir sua
-          aprovação antes de agir.
-        </p>
-      </div>
-
-      {erro && <Aviso className="mb-4">{erro}</Aviso>}
-
-      {modo === null && souOperador && (
-        <Button
-          className="mb-6"
-          onClick={() => setModo("novo")}
-          disabled={tipos.length === 0}
-        >
-          <Plus />
-          Novo instrumento
-        </Button>
-      )}
-
-      {modo !== null && (
-        <div className="mb-6 flex flex-col gap-3 rounded-lg border border-border bg-card p-6">
-          <h2 className="text-lg font-medium text-foreground">
-            {modo === "novo" ? "Novo instrumento" : "Editar instrumento"}
+    <main className="mx-auto w-full max-w-[1000px] px-5 py-8 sm:px-8">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-medium text-foreground">
+            Instrumentos do time
           </h2>
-          <FormularioInstrumento
-            time={time}
-            instrumento={modo === "novo" ? null : modo}
-            tipos={tipos}
-            onSalvo={aoSalvar}
-            onCancelar={() => setModo(null)}
-          />
+          <p className="text-sm text-muted-foreground">
+            As ferramentas que os agentes podem usar. Um instrumento pode exigir sua
+            aprovação antes de agir.
+          </p>
         </div>
-      )}
+        {souOperador && (
+          <Button onClick={() => setAberto("novo")} disabled={tipos.length === 0}>
+            <Plus className="size-4" /> Novo instrumento
+          </Button>
+        )}
+      </div>
 
       {inicial.length === 0 ? (
         <EstadoVazio icone={Wrench} titulo="Nenhum instrumento ainda.">
           {souOperador
-            ? "Crie o primeiro instrumento para este time."
+            ? "Crie instrumentos para os agentes usarem (APIs, banco, web…)."
             : "Os instrumentos deste time aparecerão aqui."}
         </EstadoVazio>
       ) : (
-        <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-          {inicial.map((inst) => (
-            <li key={inst.id} className="flex flex-col gap-2 p-3">
-              <div className="flex items-center gap-2">
-                <span className="flex flex-1 flex-wrap items-center gap-2 text-sm font-medium text-foreground">
-                  {inst.nome}
-                  <span className="rounded-sm bg-secondary px-1.5 py-0.5 font-mono text-xs font-normal text-muted-foreground">
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          {inicial.map((inst, i) => {
+            const usos = usadoPor[inst.id] ?? [];
+            return (
+              <button
+                key={inst.id}
+                onClick={() => souOperador && setAberto(inst)}
+                disabled={!souOperador}
+                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+                  souOperador ? "hover:bg-accent/50" : "cursor-default"
+                } ${i > 0 ? "border-t border-border" : ""}`}
+              >
+                <span className="flex size-8 items-center justify-center rounded-lg bg-accent">
+                  <Wrench className="size-4 text-accent-foreground" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {inst.nome}
+                    </span>
+                    {inst.acao_irreversivel && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#FDF1E3] px-2 py-0.5 text-xs text-[#A05E16]">
+                        <ShieldCheck className="size-3" /> exige aprovação
+                      </span>
+                    )}
+                  </span>
+                  <span className="block truncate font-mono text-xs text-muted-foreground">
                     {inst.tipo}
+                    {usos.length > 0 && (
+                      <span className="font-sans"> · usado por {usos.join(", ")}</span>
+                    )}
                   </span>
                 </span>
-                {souOperador && inst.tipo === "enviar_telegram" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => conectarCanal(inst)}
-                  >
-                    Conectar canal
-                  </Button>
-                )}
                 {souOperador && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => abrirTeste(inst)}
-                  >
-                    Testar
-                  </Button>
+                  <Pencil className="size-4 shrink-0 text-muted-foreground/60" />
                 )}
-                {souOperador && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setModo(inst)}
-                  >
-                    Editar
-                  </Button>
-                )}
-                {souAdmin && (
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => remover(inst)}
-                  >
-                    Remover
-                  </Button>
-                )}
-              </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-              {testandoId === inst.id && (
-                <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-3">
-                  <Label className="flex-col items-start gap-1">
-                    Argumentos (JSON)
-                    <Textarea
-                      className="min-h-20 font-mono"
-                      value={argsTexto}
-                      onChange={(e) => setArgsTexto(e.target.value)}
-                    />
-                  </Label>
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={() => acionar(inst)}>
-                      Acionar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setTestandoId(null)}
-                    >
-                      Fechar
-                    </Button>
-                  </div>
-                  {resultado && (
-                    <pre className="max-h-72 overflow-auto rounded-md bg-foreground p-3 text-xs text-background">
-                      {resultado}
-                    </pre>
-                  )}
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+      {aberto && (
+        <DrawerInstrumento
+          key={aberto === "novo" ? "novo" : aberto.id}
+          instrumento={aberto === "novo" ? null : aberto}
+          tipos={tipos}
+          time={time}
+          meuPapel={meuPapel}
+          onFechar={() => setAberto(null)}
+        />
       )}
     </main>
   );
