@@ -11,6 +11,7 @@ import {
   type Agente,
   type Automacao,
   type Cadeia,
+  type Instrumento,
   type PapelAcesso,
   type SaidaCadeia,
   type Time,
@@ -50,6 +51,9 @@ const ROTULO_GATILHO: Record<string, string> = {
   webhook: "Webhook",
 };
 
+// Tipos de instrumento que são canais de mensageria (podem ser canal de aprovação).
+const CANAIS_TIPOS = ["enviar_telegram", "enviar_whatsapp"];
+
 function horaParaTexto(h: number, m: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
@@ -82,11 +86,13 @@ export function AutomacoesCliente({
   time,
   inicial,
   agentes,
+  instrumentos,
   meuPapel,
 }: {
   time: Time;
   inicial: Automacao[];
   agentes: Agente[];
+  instrumentos: Instrumento[];
   meuPapel: PapelAcesso | null;
 }) {
   const router = useRouter();
@@ -94,11 +100,18 @@ export function AutomacoesCliente({
   const souOperador = podeOperar(meuPapel);
   const souAdmin = podeAdmin(meuPapel);
 
+  // Canais do time que podem servir de canal de aprovação (Telegram/WhatsApp).
+  const canais = instrumentos.filter((i) => CANAIS_TIPOS.includes(i.tipo));
+
   const [modo, setModo] = useState<null | "novo" | string>(null);
   const [nome, setNome] = useState("");
   const [inicio, setInicio] = useState(agentes[0]?.id ?? "");
   const [saidas, setSaidas] = useState<SaidasPorAgente>({});
   const [pausa, setPausa] = useState<PausaPorAgente>({});
+  // Canal de aprovação (opcional): null = portões resolvidos só pela tela.
+  const [aprovacaoInstrumentoId, setAprovacaoInstrumentoId] = useState<
+    string | null
+  >(null);
 
   // Gatilho: o que inicia o fluxo (PRODUTO §12).
   const [tipoGatilho, setTipoGatilho] = useState<TipoGatilho>("manual");
@@ -134,6 +147,7 @@ export function AutomacoesCliente({
     setInicio(f.inicio);
     setSaidas(f.saidas);
     setPausa(f.pausa);
+    setAprovacaoInstrumentoId(null);
     carregarGatilho(null);
     setErro(null);
     setModo("novo");
@@ -145,6 +159,7 @@ export function AutomacoesCliente({
     setInicio(f.inicio);
     setSaidas(f.saidas);
     setPausa(f.pausa);
+    setAprovacaoInstrumentoId(a.aprovacao_instrumento_id ?? null);
     carregarGatilho(a);
     setErro(null);
     setModo(a.id);
@@ -207,6 +222,7 @@ export function AutomacoesCliente({
       cadeia: formParaCadeia(inicio, saidas, pausa),
       // O interruptor liga/desliga só vale para gatilhos automáticos.
       ativa: tipoGatilho === "manual" ? false : ativa,
+      aprovacao_instrumento_id: aprovacaoInstrumentoId,
     };
     try {
       if (modo === "novo") {
@@ -408,6 +424,57 @@ export function AutomacoesCliente({
               </label>
             )}
           </div>
+
+          {canais.length > 0 && (
+            <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-4">
+              <Label className="flex-col items-start gap-1">
+                Canal de aprovação (opcional)
+                <Select
+                  value={aprovacaoInstrumentoId ?? ""}
+                  onChange={(e) =>
+                    setAprovacaoInstrumentoId(e.target.value || null)
+                  }
+                >
+                  <option value="">Só pela tela</option>
+                  {canais.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nome}
+                    </option>
+                  ))}
+                </Select>
+              </Label>
+              {(() => {
+                const canalSel = canais.find(
+                  (c) => c.id === aprovacaoInstrumentoId,
+                );
+                if (!canalSel) {
+                  return (
+                    <span className="text-xs text-muted-foreground">
+                      Os portões de aprovação desta automação são resolvidos só na
+                      tela. Escolha um canal para também poder aprovar por mensagem.
+                    </span>
+                  );
+                }
+                const dest = String(
+                  (canalSel.configuracao?.destinatario_padrao as string) ?? "",
+                ).trim();
+                return dest ? (
+                  <span className="text-xs text-muted-foreground">
+                    O pedido de aprovação chega ao destinatário padrão deste canal (
+                    <code>{dest}</code>) e a resposta dele (ex.:
+                    &quot;aprovado&quot;) segue o fluxo. A tela continua valendo —
+                    conta a primeira resposta.
+                  </span>
+                ) : (
+                  <span className="text-xs text-warning">
+                    ⚠ Este canal não tem destinatário padrão. Defina o
+                    &quot;destinatário padrão&quot; no instrumento para a aprovação
+                    por mensagem funcionar; sem isso, vale só a tela.
+                  </span>
+                );
+              })()}
+            </div>
+          )}
 
           <p className="text-xs text-muted-foreground">
             Para cada agente, defina suas saídas: o rótulo, quando segui-la, e o

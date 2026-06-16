@@ -89,6 +89,11 @@ def retomar_execucao(
                 registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
             )
         _aplicar_resultado(execucao, r)
+        if execucao.estado == "aguardando_humano":
+            # Pausou de novo (outro portão): re-amarra a conversa do aprovador para
+            # a próxima resposta também religar o fluxo (aprovação por canal).
+            from mensageria import aprovacao
+            aprovacao.vincular_pausa(sessao, execucao)
     except Exception as e:
         execucao.estado = "falhou"
         execucao.resultado = {"erro": str(e)}

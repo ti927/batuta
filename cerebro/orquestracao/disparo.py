@@ -143,6 +143,11 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
                 cancelado=lambda: _esta_cancelada(sessao, execucao.id),
             )
         _aplicar_resultado(execucao, r)
+        if execucao.estado == "aguardando_humano":
+            # Pausou: se a automação tem canal de aprovação, amarra a conversa do
+            # aprovador a esta execução (a resposta dele religa o fluxo). Borda.
+            from mensageria import aprovacao
+            aprovacao.vincular_pausa(sessao, execucao)
     except Exception as e:  # falha de LLM/rede/cadeia inválida — registra e segue
         execucao.estado = "falhou"
         execucao.resultado = {"erro": str(e)}

@@ -54,7 +54,7 @@ from chaves import (
     resolver_chaves_por_time,
 )
 from consultoria import exigir_admin_consultoria
-from mensageria import retoma
+from mensageria import aprovacao, retoma
 from orquestracao.cadeia import validar_cadeia
 from orquestracao.disparo import criar_execucao
 from rotas._comum import automacao_acessivel, execucao_acessivel, time_acessivel
@@ -80,6 +80,21 @@ def _validar_cadeia_ou_422(sessao: Session, time_id: uuid.UUID, cadeia: dict) ->
         validar_cadeia(cadeia or {}, _ids_dos_agentes(sessao, time_id))
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
+
+
+def _validar_aprovacao_canal_ou_422(
+    sessao: Session, time_id: uuid.UUID, instrumento_id: uuid.UUID | None
+) -> None:
+    """Canal de aprovação (opcional): se informado, precisa ser um instrumento de
+    canal (enviar_telegram/enviar_whatsapp) DO próprio time. None = só tela."""
+    if instrumento_id is None:
+        return
+    inst = sessao.get(Instrumento, instrumento_id)
+    if inst is None or inst.time_id != time_id or inst.tipo not in aprovacao.CANAIS_TIPOS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Canal de aprovação inválido: escolha um instrumento de canal deste time.",
+        )
 
 
 def _validar_portao_ou_422(sessao: Session, time_id: uuid.UUID, cadeia: dict) -> None:
@@ -123,6 +138,7 @@ def criar(
 ):
     time_acessivel(sessao, usuario, time_id, minimo="operador")
     _validar_cadeia_ou_422(sessao, time_id, dados.cadeia)
+    _validar_aprovacao_canal_ou_422(sessao, time_id, dados.aprovacao_instrumento_id)
     if dados.ativa:
         _validar_portao_ou_422(sessao, time_id, dados.cadeia)
     auto = Automacao(time_id=time_id, **dados.model_dump())
@@ -151,6 +167,7 @@ def editar(
 ):
     auto = automacao_acessivel(sessao, usuario, automacao_id, minimo="operador")
     _validar_cadeia_ou_422(sessao, auto.time_id, dados.cadeia)
+    _validar_aprovacao_canal_ou_422(sessao, auto.time_id, dados.aprovacao_instrumento_id)
     if dados.ativa:
         _validar_portao_ou_422(sessao, auto.time_id, dados.cadeia)
     for campo, valor in dados.model_dump().items():
@@ -248,6 +265,11 @@ def responder(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "Não foi possível retomar: passo de pausa ausente.",
         )
+    # Coexistência (aprovação por canal): resolver pela tela desfaz o vínculo de
+    # qualquer conversa que aguardava esta aprovação por mensageria — a não ser que
+    # a cadeia tenha pausado de novo (a retoma já re-vincula nesse caso).
+    if execucao.estado != "aguardando_humano":
+        aprovacao.desvincular(sessao, execucao.id)
     return _montar_com_passos(sessao, execucao)
 
 

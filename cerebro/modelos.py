@@ -173,6 +173,15 @@ class Automacao(IdData, Base):
     ativa: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
     )
+    # Canal de aprovação (opcional): um instrumento de canal (enviar_telegram/
+    # enviar_whatsapp) do time pelo qual o portão de aprovação humana pode ser
+    # resolvido por mensageria, COEXISTINDO com a tela. NULL = só tela (padrão e
+    # comportamento de hoje). O destinatário (aprovador) vem do `destinatario_padrao`
+    # do próprio instrumento — sem cadastro extra. SET NULL: apagar o instrumento
+    # não derruba a automação, só desliga a aprovação por canal.
+    aprovacao_instrumento_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("instrumentos.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class Execucao(IdData, Base):
