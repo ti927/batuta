@@ -146,6 +146,8 @@ Um fluxo é o caminho de uma tarefa, do gatilho até a entrega. Comportamentos q
 
 O caminho da cadeia é **definido por quem monta o time** — não improvisado pela IA na hora. O usuário desenha: "a tarefa entra no Líder, vai pro Agente A, depois pro B, depois volta pro Líder". A documentação de cada agente diz para onde vai o resultado dele: para outro agente ou para o usuário. Isso torna o fluxo previsível e confiável — o que uma empresa exige de um processo.
 
+> **Como se desenha (UI):** a automação é montada num **construtor visual de grafo** — nós (gatilho, agentes, roteador, fim) ligados por arestas rotuladas, com bifurcações, loops (voltar a um agente anterior) e portão de aprovação. É a forma visual de desenhar o que o motor já executa. Vale para a criação **manual** e para a **IA criadora** (ambas produzem o mesmo fluxo). Especificação em `docs/design_handoff_automacoes_grafo/`; fase no `BUILD-PLAN.md` ("FASE — Automações como GRAFO").
+
 ### Espera por humano
 
 Um fluxo precisa saber **pausar, fazer uma pergunta a um humano, e retomar de onde parou** quando a resposta chega — que pode ser minutos ou um dia depois. Esta é a capacidade mais delicada do produto. Ela aparece em três formas:

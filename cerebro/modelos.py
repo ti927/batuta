@@ -173,15 +173,10 @@ class Automacao(IdData, Base):
     ativa: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
     )
-    # Canal de aprovação (opcional): um instrumento de canal (enviar_telegram/
-    # enviar_whatsapp) do time pelo qual o portão de aprovação humana pode ser
-    # resolvido por mensageria, COEXISTINDO com a tela. NULL = só tela (padrão e
-    # comportamento de hoje). O destinatário (aprovador) vem do `destinatario_padrao`
-    # do próprio instrumento — sem cadastro extra. SET NULL: apagar o instrumento
-    # não derruba a automação, só desliga a aprovação por canal.
-    aprovacao_instrumento_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("instrumentos.id", ondelete="SET NULL"), nullable=True
-    )
+    # Canal de aprovação: NÃO é mais por automação. A config de aprovação por canal
+    # vive no NÓ com portão da `cadeia` (`no.aprovacao = {instrumento_id, destinatario}`,
+    # construtor visual). A coluna antiga `aprovacao_instrumento_id` foi aposentada
+    # (migração de drop pós-deploy).
 
 
 class Execucao(IdData, Base):
@@ -218,6 +213,10 @@ class PassoExecucao(IdData, Base):
     agente_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("agentes.id", ondelete="SET NULL"), nullable=True
     )
+    # Id do NÓ do grafo onde este passo rodou (cadeia como grafo). Permite à
+    # retomada localizar o nó pausado por id — necessário porque o mesmo agente
+    # pode aparecer em vários nós. Nullable: passos antigos não o têm.
+    no_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     entrada: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     saida: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     estado: Mapped[str] = mapped_column(

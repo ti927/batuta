@@ -111,6 +111,8 @@ def test_remover_agente_limpa_cadeia(sessao, dados):
     auto = servicos.definir_automacao(sessao, time, nome="A", tipo_gatilho="manual", cadeia=cadeia)
     servicos.remover_agente(sessao, ag)
     sessao.refresh(auto)
+    # cadeia agora é grafo (lista de nós): indexa por id
+    nos = {n["id"]: n for n in auto.cadeia["nos"]}
     # o nó do agente sumiu e a saída do líder que apontava para ele também
-    assert str(ag.id) not in auto.cadeia["nos"]
-    assert auto.cadeia["nos"][str(lider.id)]["saidas"] == []
+    assert str(ag.id) not in nos
+    assert nos[str(lider.id)]["saidas"] == []

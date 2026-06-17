@@ -55,6 +55,7 @@ from chaves import (
 )
 from consultoria import exigir_admin_consultoria
 from mensageria import aprovacao, retoma
+from orquestracao import grafo
 from orquestracao.cadeia import validar_cadeia
 from orquestracao.disparo import criar_execucao
 from rotas._comum import automacao_acessivel, execucao_acessivel, time_acessivel
@@ -75,26 +76,19 @@ def _ids_dos_agentes(sessao: Session, time_id: uuid.UUID) -> set[str]:
     }
 
 
+def _ler_automacao(auto: Automacao) -> AutomacaoLer:
+    """Serializa uma automação com a `cadeia` no formato canônico de grafo (normaliza
+    na leitura, sem mutar o ORM — cobre linhas legadas ainda no formato antigo)."""
+    dados = AutomacaoLer.model_validate(auto)
+    dados.cadeia = grafo.normalizar(dados.cadeia or {})
+    return dados
+
+
 def _validar_cadeia_ou_422(sessao: Session, time_id: uuid.UUID, cadeia: dict) -> None:
     try:
         validar_cadeia(cadeia or {}, _ids_dos_agentes(sessao, time_id))
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
-
-
-def _validar_aprovacao_canal_ou_422(
-    sessao: Session, time_id: uuid.UUID, instrumento_id: uuid.UUID | None
-) -> None:
-    """Canal de aprovação (opcional): se informado, precisa ser um instrumento de
-    canal (enviar_telegram/enviar_whatsapp) DO próprio time. None = só tela."""
-    if instrumento_id is None:
-        return
-    inst = sessao.get(Instrumento, instrumento_id)
-    if inst is None or inst.time_id != time_id or inst.tipo not in aprovacao.CANAIS_TIPOS:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "Canal de aprovação inválido: escolha um instrumento de canal deste time.",
-        )
 
 
 def _validar_portao_ou_422(sessao: Session, time_id: uuid.UUID, cadeia: dict) -> None:
@@ -118,11 +112,12 @@ def listar(
     usuario: Usuario = Depends(usuario_atual),
 ):
     time_acessivel(sessao, usuario, time_id)
-    return sessao.scalars(
+    autos = sessao.scalars(
         select(Automacao)
         .where(Automacao.time_id == time_id)
         .order_by(Automacao.criado_em)
     ).all()
+    return [_ler_automacao(a) for a in autos]
 
 
 @rotas.post(
@@ -138,15 +133,15 @@ def criar(
 ):
     time_acessivel(sessao, usuario, time_id, minimo="operador")
     _validar_cadeia_ou_422(sessao, time_id, dados.cadeia)
-    _validar_aprovacao_canal_ou_422(sessao, time_id, dados.aprovacao_instrumento_id)
     if dados.ativa:
         _validar_portao_ou_422(sessao, time_id, dados.cadeia)
     auto = Automacao(time_id=time_id, **dados.model_dump())
+    auto.cadeia = grafo.normalizar(auto.cadeia or {})  # grava no formato canônico
     sessao.add(auto)
     sessao.commit()
     sessao.refresh(auto)
     agendador.sincronizar(auto)
-    return auto
+    return _ler_automacao(auto)
 
 
 @rotas.get("/automacoes/{automacao_id}", response_model=AutomacaoLer)
@@ -155,7 +150,7 @@ def obter(
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
-    return automacao_acessivel(sessao, usuario, automacao_id)
+    return _ler_automacao(automacao_acessivel(sessao, usuario, automacao_id))
 
 
 @rotas.put("/automacoes/{automacao_id}", response_model=AutomacaoLer)
@@ -167,15 +162,15 @@ def editar(
 ):
     auto = automacao_acessivel(sessao, usuario, automacao_id, minimo="operador")
     _validar_cadeia_ou_422(sessao, auto.time_id, dados.cadeia)
-    _validar_aprovacao_canal_ou_422(sessao, auto.time_id, dados.aprovacao_instrumento_id)
     if dados.ativa:
         _validar_portao_ou_422(sessao, auto.time_id, dados.cadeia)
     for campo, valor in dados.model_dump().items():
         setattr(auto, campo, valor)
+    auto.cadeia = grafo.normalizar(auto.cadeia or {})  # grava no formato canônico
     sessao.commit()
     sessao.refresh(auto)
     agendador.sincronizar(auto)
-    return auto
+    return _ler_automacao(auto)
 
 
 @rotas.delete("/automacoes/{automacao_id}", status_code=status.HTTP_204_NO_CONTENT)

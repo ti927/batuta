@@ -270,11 +270,10 @@ class AutomacaoCriar(BaseModel):
     nome: str = Field(min_length=1, max_length=200)
     tipo_gatilho: str = Field(default="manual", max_length=50)
     configuracao_gatilho: dict = Field(default_factory=dict)
+    # A `cadeia` é o grafo de nós tipados; a config de aprovação por canal vive no
+    # nó com portão (`no.aprovacao`), não mais por automação.
     cadeia: dict = Field(default_factory=dict)
     ativa: bool = False
-    # Canal de aprovação (opcional): instrumento de canal do time pelo qual o portão
-    # de aprovação humana pode ser resolvido por mensageria. None = só tela.
-    aprovacao_instrumento_id: uuid.UUID | None = None
 
 
 class AutomacaoEditar(BaseModel):
@@ -283,7 +282,6 @@ class AutomacaoEditar(BaseModel):
     configuracao_gatilho: dict = Field(default_factory=dict)
     cadeia: dict = Field(default_factory=dict)
     ativa: bool = False
-    aprovacao_instrumento_id: uuid.UUID | None = None
 
 
 class AutomacaoLer(BaseModel):
@@ -296,7 +294,6 @@ class AutomacaoLer(BaseModel):
     configuracao_gatilho: dict | None
     cadeia: dict | None
     ativa: bool
-    aprovacao_instrumento_id: uuid.UUID | None
     criado_em: datetime
     atualizado_em: datetime
 
@@ -322,6 +319,7 @@ class PassoExecucaoLer(BaseModel):
     id: uuid.UUID
     ordem: int
     agente_id: uuid.UUID | None
+    no_id: str | None = None
     entrada: dict | None
     saida: dict | None
     estado: str

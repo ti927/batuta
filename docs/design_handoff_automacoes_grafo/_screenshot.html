@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Harness — Construtor de Automações</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body,#root{height:100%;}
+  body{font-family:'Inter',system-ui,sans-serif;color:#1A1730;background:#FAFAF7;-webkit-font-smoothing:antialiased;overflow:hidden;}
+  .btn-primary{display:inline-flex;align-items:center;gap:8px;background:#6D4AFF;color:#fff;border:none;border-radius:6px;padding:0 16px;height:40px;font:500 14px/1 'Inter',sans-serif;cursor:pointer;}
+  .btn-primary:hover{background:#5A3FE0;}
+  .btn-ghost{display:inline-flex;align-items:center;gap:8px;background:#fff;color:#1A1730;border:1px solid #E8E6F0;border-radius:6px;padding:0 14px;height:40px;font:500 13.5px/1 'Inter',sans-serif;cursor:pointer;}
+  .btn-ghost:hover{background:#FAFAF7;border-color:#D6D3E8;}
+  .row-btn:hover{background:#FAFAF7!important;}
+  ::-webkit-scrollbar{width:11px;height:11px;}
+  ::-webkit-scrollbar-thumb{background:#E0DDF0;border-radius:99px;border:3px solid transparent;background-clip:content-box;}
+  input::placeholder,textarea::placeholder{color:#A09DB8;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="app-icons.jsx"></script>
+<script type="text/babel" src="app-data.jsx"></script>
+<script type="text/babel" src="app-data-team.jsx"></script>
+<script type="text/babel" src="app-creation.jsx"></script>
+<script type="text/babel" src="app-team-automacoes.jsx"></script>
+<script type="text/babel">
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <div style={{ height: '100%', display: 'flex', background: '#FAFAF7' }}>
+      <TabAutomacoes onToast={() => {}} />
+    </div>
+  );
+</script>
+</body>
+</html>

@@ -274,23 +274,73 @@ export type StatusCanal = {
   webhook: Record<string, unknown> | null;
 };
 
-// ─── Automações: a cadeia é um grafo de caminhos (bifurcação) ───
+// ─── Automações: a cadeia é um GRAFO de nós tipados (bifurcação, loop, portão) ───
+// Forma canônica (cérebro: orquestracao/grafo.py). `tone`/`x`/`y` são cosméticos.
+
+export type ToneSaida = "normal" | "ok" | "loop";
+export type TipoNo = "gatilho" | "agente" | "roteador" | "fim";
+export type TipoGatilho = "manual" | "agendamento" | "webhook";
 
 export type SaidaCadeia = {
-  rotulo: string;
-  quando: string;
-  destino: string | null; // id de outro agente, ou null = fim (entrega ao usuário)
+  id?: string;
+  rotulo: string; // a condição/decisão — é a CHAVE de roteamento
+  quando?: string; // descrição que ajuda o roteador
+  destino: string; // id de outro nó (inclui o nó "fim"; pode ser anterior = loop)
+  tone?: ToneSaida; // cor da aresta (UI)
+  lane?: "above" | "below"; // dica de curva p/ loops (UI)
+};
+
+// Aprovação por canal configurada no nó com portão (Fase 6).
+export type AprovacaoNo = {
+  instrumento_id?: string | null;
+  destinatario?: string | null;
 };
 
 export type NoCadeia = {
+  id: string;
+  tipo: TipoNo;
+  ref?: string; // id do agente (tipo 'agente'); o mesmo agente pode estar em vários nós
+  nome?: string; // rótulo do roteador
+  inicial?: boolean; // marca visual do nó inicial
+  gate?: boolean; // portão de aprovação (pausa após este nó)
+  aprovacao?: AprovacaoNo | null;
+  gatilho?: TipoGatilho; // tipo 'gatilho'
+  x?: number;
+  y?: number;
   saidas: SaidaCadeia[];
-  pausa_humano?: boolean; // se true, pausa e pergunta ao humano após este agente
 };
 
 export type Cadeia = {
-  inicio?: string;
-  nos?: Record<string, NoCadeia>;
+  inicial?: string; // id do nó inicial (nó-agente que recebe a entrada do gatilho)
+  nos?: NoCadeia[];
 };
+
+// Índice {id: nó} para travessia rápida do grafo no front.
+export function indexarCadeia(
+  cadeia: Cadeia | null | undefined,
+): Record<string, NoCadeia> {
+  const idx: Record<string, NoCadeia> = {};
+  for (const n of cadeia?.nos ?? []) idx[n.id] = n;
+  return idx;
+}
+
+// Caminho principal (segue a 1ª saída de cada nó, do inicial ao fim/repetição),
+// só com nós-agente/roteador — para as visões compactas (dashboard, criação).
+export function caminhoPrincipal(
+  cadeia: Cadeia | null | undefined,
+): NoCadeia[] {
+  const idx = indexarCadeia(cadeia);
+  const ordem: NoCadeia[] = [];
+  const visto = new Set<string>();
+  let atual: string | null = cadeia?.inicial ?? null;
+  while (atual && idx[atual] && !visto.has(atual)) {
+    const no = idx[atual];
+    visto.add(atual);
+    if (no.tipo === "agente" || no.tipo === "roteador") ordem.push(no);
+    atual = no.saidas?.[0]?.destino ?? null;
+  }
+  return ordem;
+}
 
 export type Automacao = {
   id: string;
@@ -300,9 +350,6 @@ export type Automacao = {
   configuracao_gatilho: Record<string, unknown> | null;
   cadeia: Cadeia | null;
   ativa: boolean;
-  // Canal de aprovação (opcional): instrumento de canal pelo qual o portão de
-  // aprovação humana pode ser resolvido por mensageria. Null = só pela tela.
-  aprovacao_instrumento_id: string | null;
   criado_em: string;
   atualizado_em: string;
 };
@@ -350,6 +397,7 @@ export type PassoExecucao = {
   id: string;
   ordem: number;
   agente_id: string | null;
+  no_id?: string | null; // id do nó do grafo onde o passo rodou
   entrada: { texto?: string } | null;
   saida: {
     texto?: string;

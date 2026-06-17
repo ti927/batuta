@@ -19,6 +19,7 @@ import {
 import {
   api,
   ErroDaApi,
+  indexarCadeia,
   type Agente,
   type Automacao,
   type ExecucaoComPassos,
@@ -323,8 +324,10 @@ function PainelAprovacao({
   onResponder: (decisao?: string) => void;
 }) {
   const ultimo = aberta.passos[aberta.passos.length - 1];
-  const saidasPausa = ultimo?.agente_id
-    ? (automacao.cadeia?.nos?.[ultimo.agente_id]?.saidas ?? [])
+  // O nó pausado é localizado por id de nó (fallback ao agente, p/ execuções antigas).
+  const noPausado = ultimo?.no_id ?? ultimo?.agente_id ?? null;
+  const saidasPausa = noPausado
+    ? (indexarCadeia(automacao.cadeia)[noPausado]?.saidas ?? [])
     : [];
   return (
     <div className="mt-4">

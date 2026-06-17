@@ -58,7 +58,11 @@ def _fazer_registrador(
             PassoExecucao(
                 execucao_id=execucao_id,
                 ordem=ordem,
-                agente_id=uuid.UUID(passo["agente_id"]),
+                no_id=passo.get("no_id"),
+                # agente_id pode ser nulo num nó roteador (que não roda agente).
+                agente_id=(
+                    uuid.UUID(passo["agente_id"]) if passo.get("agente_id") else None
+                ),
                 entrada={"texto": passo["entrada"]},
                 saida={
                     "texto": passo["saida"],

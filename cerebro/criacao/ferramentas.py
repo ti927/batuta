@@ -29,6 +29,7 @@ import segredos_instrumento as segredos
 import tipos_credencial
 from criacao import memoria, servicos
 from criacao.servicos import ConflitoDominio
+from orquestracao import grafo
 from modelos import (
     Agente,
     AgenteInstrumento,
@@ -229,7 +230,9 @@ def _snapshot_time(ctx: ContextoCriacao) -> dict:
         ],
         "automacao": None if auto is None else {
             "id": str(auto.id), "nome": auto.nome, "tipo_gatilho": auto.tipo_gatilho,
-            "configuracao_gatilho": auto.configuracao_gatilho, "cadeia": auto.cadeia,
+            "configuracao_gatilho": auto.configuracao_gatilho,
+            # cadeia no formato canônico de grafo (lista de nós tipados).
+            "cadeia": grafo.normalizar(auto.cadeia or {}),
             "ativa": auto.ativa,
         },
     }
@@ -394,13 +397,22 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         return _ok("Instrumento tirado do cinto.")
 
     def montar_cadeia(cadeia: dict) -> str:
-        """Define a cadeia (o fluxo) da automação. Grafo: {"inicio": "<id de
-        agente>", "nos": {"<id>": {"pausa_humano": false, "saidas": [{"rotulo": "1",
-        "quando": "quando seguir por aqui", "destino": "<id ou null para fim>"}]}}}.
-        Use os `id`s dos agentes. PORTÃO DE APROVAÇÃO: marque "pausa_humano": true NO
-        NÓ do agente que vem ANTES de uma ação irreversível — o fluxo pausa depois
-        desse agente e espera um humano aprovar antes de seguir para quem publica/
-        envia. (A pausa fica no NÓ, não na saída.)"""
+        """Define a cadeia (o fluxo) da automação como um GRAFO de nós:
+        {"inicial": "<id do nó inicial>", "nos": [
+          {"id": "<id do nó>", "tipo": "agente", "ref": "<id do agente>",
+           "gate": false, "saidas": [
+             {"rotulo": "rótulo curto da decisão", "quando": "quando seguir por aqui",
+              "destino": "<id de outro nó, ou \\"fim\\" para encerrar>"}]},
+          ...
+        ]}.
+        Regras: cada nó-agente tem `ref` = id do agente (o MESMO agente pode aparecer
+        em vários nós, com `id` diferentes). `destino` aponta para o `id` de outro nó
+        (pode ser um nó anterior = LOOP) ou "fim" para encerrar. Mais de uma saída num
+        nó = BIFURCAÇÃO (o roteador escolhe pela melhor correspondência com o "quando"/
+        rótulo). Não precisa informar posições, nem criar os nós "gatilho"/"fim" — o
+        sistema completa. PORTÃO DE APROVAÇÃO: ponha "gate": true NO NÓ do agente que
+        vem ANTES de uma ação irreversível — o fluxo pausa depois dele e espera um
+        humano aprovar antes de seguir para quem publica/envia (a pausa fica no NÓ)."""
         time = _exigir_time()
         if time is None:
             return _erro("Defina o time primeiro, com definir_time.")

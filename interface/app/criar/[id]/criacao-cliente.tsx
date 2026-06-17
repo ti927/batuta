@@ -31,6 +31,7 @@ import {
   api,
   URL_CEREBRO,
   ErroDaApi,
+  caminhoPrincipal,
   type AgenteTime,
   type Cadeia,
   type ConversaCriacao,
@@ -525,7 +526,7 @@ function Canvas({
         </>
       )}
 
-      {automacao?.cadeia?.inicio && (
+      {automacao?.cadeia?.inicial && (
         <>
           <RotuloSecao Icone={GitBranch}>Cadeia</RotuloSecao>
           <CadeiaVertical cadeia={automacao.cadeia} agentes={agentes} />
@@ -544,31 +545,24 @@ function CadeiaVertical({
 }) {
   const nome = (id: string | null | undefined) =>
     agentes.find((a) => a.id === id)?.nome ?? "—";
-  // ordem simples: começa no início e segue a primeira saída até o fim/repetição.
-  const ordem: string[] = [];
-  let atual = cadeia.inicio ?? null;
-  const visto = new Set<string>();
-  while (atual && cadeia.nos?.[atual] && !visto.has(atual)) {
-    ordem.push(atual);
-    visto.add(atual);
-    const saidas = cadeia.nos[atual].saidas ?? [];
-    atual = saidas[0]?.destino ?? null;
-  }
+  // ordem simples: começa no inicial e segue a primeira saída até o fim/repetição.
+  const ordem = caminhoPrincipal(cadeia);
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
-      {ordem.map((id, i) => {
-        const no = cadeia.nos?.[id];
-        const pausa = no?.pausa_humano;
+      {ordem.map((no, i) => {
+        const pausa = no.gate;
+        const rotulo =
+          no.tipo === "roteador" ? (no.nome ?? "Roteador") : nome(no.ref);
         return (
-          <div key={id}>
+          <div key={no.id}>
             <div className="flex items-center gap-3">
               <RobotFace
                 size={28}
-                indice={agentes.findIndex((a) => a.id === id)}
-                lider={agentes.find((a) => a.id === id)?.papel === "lider"}
+                indice={agentes.findIndex((a) => a.id === no.ref)}
+                lider={agentes.find((a) => a.id === no.ref)?.papel === "lider"}
               />
-              <span className="text-sm text-foreground">{nome(id)}</span>
+              <span className="text-sm text-foreground">{rotulo}</span>
               {pausa && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-[#FDF1E3] px-2 py-0.5 text-xs text-[#A05E16]">
                   <MessageSquare className="size-3" /> portão de aprovação

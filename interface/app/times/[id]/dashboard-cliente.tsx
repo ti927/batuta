@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
 import { podeOperar } from "@/lib/permissoes";
 import {
+  caminhoPrincipal,
   type Agente,
   type Automacao,
   type Cadeia,
@@ -152,7 +153,7 @@ export function DashboardCliente({
         </div>
 
         {/* Cadeia */}
-        {automacoes.some((a) => a.cadeia?.inicio) && (
+        {automacoes.some((a) => a.cadeia?.inicial) && (
           <>
             <RotuloSecao
               Icone={GitBranch}
@@ -169,7 +170,7 @@ export function DashboardCliente({
             </RotuloSecao>
             <div className="space-y-4">
               {automacoes
-                .filter((a) => a.cadeia?.inicio)
+                .filter((a) => a.cadeia?.inicial)
                 .map((a) => (
                   <div
                     key={a.id}
@@ -373,14 +374,7 @@ function ChipCadeia({ children }: { children: React.ReactNode }) {
 function CadeiaHorizontal({ cadeia, agentes }: { cadeia: Cadeia; agentes: Agente[] }) {
   // Segue a primeira saída de cada nó, do início ao fim/repetição (visão linear
   // do caminho principal; bifurcações completas vivem na aba Automações).
-  const ordem: string[] = [];
-  let atual = cadeia.inicio ?? null;
-  const visto = new Set<string>();
-  while (atual && cadeia.nos?.[atual] && !visto.has(atual)) {
-    ordem.push(atual);
-    visto.add(atual);
-    atual = cadeia.nos[atual].saidas?.[0]?.destino ?? null;
-  }
+  const ordem = caminhoPrincipal(cadeia);
 
   const Chip = ChipCadeia;
 
@@ -393,16 +387,17 @@ function CadeiaHorizontal({ cadeia, agentes }: { cadeia: Cadeia; agentes: Agente
         <span className="text-[13px] font-medium text-foreground">Gatilho</span>
       </Chip>
       <ChevronRight className="size-4 text-[#C9C3E0]" />
-      {ordem.map((id, i) => {
-        const idx = agentes.findIndex((a) => a.id === id);
+      {ordem.map((no, i) => {
+        const idx = agentes.findIndex((a) => a.id === no.ref);
         const ag = agentes[idx];
-        const pausa = cadeia.nos?.[id]?.pausa_humano;
+        const pausa = no.gate;
+        const rotulo = no.tipo === "roteador" ? (no.nome ?? "Roteador") : (ag?.nome ?? "—");
         return (
-          <div key={id} className="flex items-center gap-2">
+          <div key={no.id} className="flex items-center gap-2">
             <Chip>
               <RobotFace size={24} indice={idx} lider={ag?.papel === "lider"} />
               <span className="text-[13px] font-medium text-foreground">
-                {ag?.nome ?? "—"}
+                {rotulo}
               </span>
             </Chip>
             {pausa && (
