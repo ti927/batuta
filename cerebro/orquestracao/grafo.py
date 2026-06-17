@@ -149,7 +149,10 @@ def _completar(cadeia: dict) -> dict:
         usados.add(fid)
     id_fim = next(n["id"] for n in nos if n["tipo"] == "fim")
 
-    # 4) garante um nó `gatilho` apontando para o inicial (se há inicial).
+    # 4) garante um nó `gatilho` apontando para o inicial (se há inicial). A saída do
+    #    gatilho é DERIVADA do `inicial` (fonte da verdade): re-aponta SEMPRE para ele,
+    #    curando gatilhos soltos (sem saída) ou com destino velho/inválido — assim a
+    #    seta gatilho→início nunca some e o usuário troca o início mexendo só no `inicial`.
     gatilho = next((n for n in nos if n["tipo"] == "gatilho"), None)
     if inicial and gatilho is None:
         gid = ID_GATILHO
@@ -167,9 +170,12 @@ def _completar(cadeia: dict) -> dict:
             },
         )
         usados.add(gid)
-    elif inicial and gatilho is not None and not (gatilho.get("saidas") or []):
-        # gatilho já existe mas estava solto (grafo recém-montado): liga-o ao inicial.
-        gatilho["saidas"] = [{"rotulo": "inicia o fluxo", "destino": inicial}]
+    elif inicial and gatilho is not None:
+        anterior = (gatilho.get("saidas") or [{}])[0]
+        nova = {"rotulo": anterior.get("rotulo") or "inicia o fluxo", "destino": inicial}
+        if anterior.get("id"):
+            nova["id"] = anterior["id"]
+        gatilho["saidas"] = [nova]
 
     # 5) completa saídas (id estável, tone, destino sentinela → nó fim) e marca o
     #    nó inicial.

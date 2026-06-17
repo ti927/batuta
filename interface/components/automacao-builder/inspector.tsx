@@ -170,6 +170,7 @@ export function Inspector({
   gatilho,
   setGatilho,
   webhookUrl,
+  onDefinirInicial,
   onPatchNode,
   onPatchSaida,
   onAddSaida,
@@ -184,6 +185,7 @@ export function Inspector({
   gatilho: ConfigGatilho;
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
   webhookUrl?: string | null;
+  onDefinirInicial: (nodeId: string) => void;
   onPatchNode: (id: string, patch: Partial<NoCadeia>) => void;
   onPatchSaida: (id: string, sid: string, patch: Partial<SaidaCadeia>) => void;
   onAddSaida: (id: string) => void;
@@ -210,6 +212,10 @@ export function Inspector({
 
   const ag = no.tipo === "agente" ? agentes.find((a) => a.id === no.ref) : undefined;
   const indice = ag ? agentes.findIndex((a) => a.id === ag.id) : 0;
+  // Candidatos a "primeiro nó": só o que o motor sabe executar (agente/roteador).
+  const inicios = (cadeia.nos ?? []).filter(
+    (n) => n.tipo === "agente" || n.tipo === "roteador",
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -289,6 +295,45 @@ export function Inspector({
                   </button>
                 );
               })}
+            </div>
+
+            {/* Começa em: o primeiro nó que o gatilho aciona (= cadeia.inicial). */}
+            <div className="flex flex-col gap-1.5 rounded-[9px] border border-[#E8E6F0] p-3">
+              <span
+                className="flex items-center gap-1.5 text-[12px] font-medium"
+                style={{ color: "#1A1730" }}
+              >
+                <Play size={12} color="#6D4AFF" /> Começa em
+              </span>
+              {inicios.length > 0 ? (
+                <select
+                  className={`${inputCls} cursor-pointer`}
+                  value={cadeia.inicial ?? ""}
+                  disabled={!podeEditar}
+                  onChange={(e) => onDefinirInicial(e.target.value)}
+                >
+                  {!cadeia.inicial && (
+                    <option value="" disabled>
+                      Escolha o primeiro agente…
+                    </option>
+                  )}
+                  {inicios.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {nomeNo(n, agentes)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="text-[11.5px]" style={{ color: "#A09DB8" }}>
+                  Adicione um agente ao fluxo para escolher por onde ele começa.
+                </span>
+              )}
+              <span
+                className="text-[11px] leading-snug"
+                style={{ color: "#A09DB8" }}
+              >
+                O primeiro agente que o gatilho aciona quando o fluxo dispara.
+              </span>
             </div>
 
             {gatilho.tipo === "agendamento" && (
