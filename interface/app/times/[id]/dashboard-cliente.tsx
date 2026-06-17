@@ -24,6 +24,7 @@ import { EstadoVazio } from "@/components/ui/estado-vazio";
 import { podeOperar } from "@/lib/permissoes";
 import {
   caminhoPrincipal,
+  inicialDaCadeia,
   type Agente,
   type Automacao,
   type Cadeia,
@@ -153,7 +154,7 @@ export function DashboardCliente({
         </div>
 
         {/* Cadeia */}
-        {automacoes.some((a) => a.cadeia?.inicial) && (
+        {automacoes.some((a) => inicialDaCadeia(a.cadeia)) && (
           <>
             <RotuloSecao
               Icone={GitBranch}
@@ -170,7 +171,7 @@ export function DashboardCliente({
             </RotuloSecao>
             <div className="space-y-4">
               {automacoes
-                .filter((a) => a.cadeia?.inicial)
+                .filter((a) => inicialDaCadeia(a.cadeia))
                 .map((a) => (
                   <div
                     key={a.id}

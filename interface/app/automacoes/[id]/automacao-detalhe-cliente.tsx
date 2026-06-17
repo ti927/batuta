@@ -10,6 +10,7 @@ import {
   URL_CEREBRO,
   ErroDaApi,
   indexarCadeia,
+  inicialDaCadeia,
   type Agente,
   type Automacao,
   type Execucao,
@@ -101,8 +102,9 @@ export function AutomacaoDetalheCliente({
           <span className="inline-flex items-center gap-1">
             início:{" "}
             {nomeAgente(
-              indexarCadeia(automacao.cadeia)[automacao.cadeia?.inicial ?? ""]
-                ?.ref ?? null,
+              indexarCadeia(automacao.cadeia)[
+                inicialDaCadeia(automacao.cadeia) ?? ""
+              ]?.ref ?? null,
             )}
           </span>
         </p>

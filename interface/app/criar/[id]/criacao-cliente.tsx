@@ -32,6 +32,7 @@ import {
   URL_CEREBRO,
   ErroDaApi,
   caminhoPrincipal,
+  inicialDaCadeia,
   type AgenteTime,
   type Cadeia,
   type ConversaCriacao,
@@ -526,7 +527,7 @@ function Canvas({
         </>
       )}
 
-      {automacao?.cadeia?.inicial && (
+      {automacao?.cadeia && inicialDaCadeia(automacao.cadeia) && (
         <>
           <RotuloSecao Icone={GitBranch}>Cadeia</RotuloSecao>
           <CadeiaVertical cadeia={automacao.cadeia} agentes={agentes} />

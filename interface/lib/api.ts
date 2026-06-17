@@ -315,12 +315,49 @@ export type Cadeia = {
   nos?: NoCadeia[];
 };
 
+// Tolerância na leitura (espelha o backend `grafo.normalizar`): o front pode receber
+// uma cadeia no formato ANTIGO (dict-por-agente, `nos` é um objeto + `inicio`) — de
+// dados legados ou de uma página renderizada antes do deploy. Estas funções aceitam
+// os dois formatos para nenhuma tela quebrar.
+
+// O id do nó inicial, no formato novo (`inicial`) ou antigo (`inicio`).
+export function inicialDaCadeia(
+  cadeia: Cadeia | null | undefined,
+): string | null {
+  const c = cadeia as (Cadeia & { inicio?: string }) | null | undefined;
+  return c?.inicial ?? c?.inicio ?? null;
+}
+
+// Os nós como LISTA, convertendo o formato antigo (nos = dict) na hora.
+export function nosDaCadeia(cadeia: Cadeia | null | undefined): NoCadeia[] {
+  const nos = cadeia?.nos as unknown;
+  if (Array.isArray(nos)) return nos as NoCadeia[];
+  if (nos && typeof nos === "object") {
+    // formato antigo: { "<agente_id>": { saidas, pausa_humano } }
+    const inicio = inicialDaCadeia(cadeia);
+    return Object.entries(nos as Record<string, Record<string, unknown>>).map(
+      ([id, no]) => ({
+        id,
+        tipo: "agente" as const,
+        ref: id,
+        gate: !!(no?.pausa_humano ?? no?.gate),
+        inicial: id === inicio,
+        saidas: ((no?.saidas as SaidaCadeia[]) ?? []).map((s) => ({
+          ...s,
+          destino: s?.destino ?? "fim",
+        })),
+      }),
+    );
+  }
+  return [];
+}
+
 // Índice {id: nó} para travessia rápida do grafo no front.
 export function indexarCadeia(
   cadeia: Cadeia | null | undefined,
 ): Record<string, NoCadeia> {
   const idx: Record<string, NoCadeia> = {};
-  for (const n of cadeia?.nos ?? []) idx[n.id] = n;
+  for (const n of nosDaCadeia(cadeia)) idx[n.id] = n;
   return idx;
 }
 
@@ -332,7 +369,7 @@ export function caminhoPrincipal(
   const idx = indexarCadeia(cadeia);
   const ordem: NoCadeia[] = [];
   const visto = new Set<string>();
-  let atual: string | null = cadeia?.inicial ?? null;
+  let atual: string | null = inicialDaCadeia(cadeia);
   while (atual && idx[atual] && !visto.has(atual)) {
     const no = idx[atual];
     visto.add(atual);
