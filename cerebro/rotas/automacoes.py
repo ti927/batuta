@@ -10,6 +10,7 @@ cancela; só admin apaga automação ou execução (apagar histórico). Responde
 espera-por-humano (portão de aprovação) é ação de observador (MIGRACAO §3.7).
 """
 
+import copy
 import uuid
 from datetime import datetime, timezone
 
@@ -22,6 +23,7 @@ from esquemas import (
     AutomacaoEditar,
     AutomacaoLer,
     DispararAutomacao,
+    DuplicarAutomacao,
     ExecucaoComPassos,
     ExecucaoLer,
     ExecucaoNaLista,
@@ -183,6 +185,57 @@ def remover(
     sessao.delete(auto)
     sessao.commit()
     agendador.remover(automacao_id)
+
+
+@rotas.post(
+    "/automacoes/{automacao_id}/duplicar",
+    response_model=AutomacaoLer,
+    status_code=status.HTTP_201_CREATED,
+)
+def duplicar(
+    automacao_id: uuid.UUID,
+    dados: DuplicarAutomacao,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Cria uma cópia independente de uma automação existente. Copia o *design*
+    (gatilho, configuração, cadeia) no MESMO time; gera id/datas novos.
+
+    A cópia nasce SEMPRE inativa (decisão do maestro): evita que uma cópia de
+    automação agendada/webhook dispare em dobro com a original. O estado de
+    execução (execuções, conversas) não existe no modelo — nasce limpo por
+    construção. Deep-copy do JSONB isola a cópia da original. Acesso: operador.
+    """
+    original = automacao_acessivel(sessao, usuario, automacao_id, minimo="operador")
+
+    nome = dados.nome.strip()
+    if not nome:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "Dê um nome à cópia."
+        )
+
+    # Deep-copy + normalização: a cópia fica isolada da original (mutar uma não
+    # afeta a outra), no formato canônico que o motor enxerga (cobre linha legada).
+    cadeia = grafo.normalizar(copy.deepcopy(original.cadeia or {}))
+    config = copy.deepcopy(original.configuracao_gatilho or {})
+
+    # Mesma validação do criar (refs de agente do time). Não validamos o portão de
+    # ativação: a cópia nasce inativa, a parede é checada quando o operador ligar.
+    _validar_cadeia_ou_422(sessao, original.time_id, cadeia)
+
+    copia = Automacao(
+        time_id=original.time_id,
+        nome=nome,
+        tipo_gatilho=original.tipo_gatilho,
+        configuracao_gatilho=config,
+        cadeia=cadeia,
+        ativa=False,
+    )
+    sessao.add(copia)
+    sessao.commit()
+    sessao.refresh(copia)
+    agendador.sincronizar(copia)  # inativa → garante que nenhum job fica no relógio
+    return _ler_automacao(copia)
 
 
 # ─────────────────────── Disparo e inspeção ──────────────────────

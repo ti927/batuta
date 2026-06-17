@@ -284,6 +284,13 @@ class AutomacaoEditar(BaseModel):
     ativa: bool = False
 
 
+class DuplicarAutomacao(BaseModel):
+    """Duplica uma automação existente: só o nome da cópia. O resto (gatilho,
+    config, cadeia) é copiado da original; a cópia nasce inativa."""
+
+    nome: str = Field(min_length=1, max_length=200)
+
+
 class AutomacaoLer(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
