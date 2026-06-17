@@ -1,86 +1,270 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Plus, X, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Layers, Plus, Trash2, Zap } from "lucide-react";
 
 import {
   api,
   ErroDaApi,
-  URL_CEREBRO,
   type Agente,
   type Automacao,
   type Cadeia,
   type Instrumento,
   type PapelAcesso,
-  type SaidaCadeia,
   type Time,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
+import { AutomacaoBuilder } from "@/components/automacao-builder/builder";
+import type { ConfigGatilho } from "@/components/automacao-builder/inspector";
 import { BotaoRodarAgora } from "@/components/botao-rodar-agora";
-import { UrlCopiavel } from "@/components/url-copiavel";
 import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-
-type SaidasPorAgente = Record<string, SaidaCadeia[]>;
-type PausaPorAgente = Record<string, boolean>;
-
-type TipoGatilho = "manual" | "agendamento" | "webhook";
-type Frequencia = "diaria" | "semanal" | "mensal";
-
-// índice 0 = segunda, alinhado ao agendador do cérebro (agendador.py)
-const DIAS_SEMANA = [
-  "Segunda",
-  "Terça",
-  "Quarta",
-  "Quinta",
-  "Sexta",
-  "Sábado",
-  "Domingo",
-];
-
-const ROTULO_GATILHO: Record<string, string> = {
-  manual: "Manual (botão)",
-  agendamento: "Agendamento",
-  webhook: "Webhook",
-};
 
 // Tipos de instrumento que são canais de mensageria (podem ser canal de aprovação).
 const CANAIS_TIPOS = ["enviar_telegram", "enviar_whatsapp"];
+const NOVA = "__nova__";
 
-function horaParaTexto(h: number, m: number): string {
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+function hhmm(h: unknown, m: unknown): string {
+  return `${String(Number(h ?? 8)).padStart(2, "0")}:${String(
+    Number(m ?? 0),
+  ).padStart(2, "0")}`;
 }
 
-function cadeiaParaForm(
-  cadeia: Cadeia | null,
-  agentes: Agente[],
-): { inicio: string; saidas: SaidasPorAgente; pausa: PausaPorAgente } {
-  const saidas: SaidasPorAgente = {};
-  const pausa: PausaPorAgente = {};
-  for (const a of agentes) {
-    saidas[a.id] = cadeia?.nos?.[a.id]?.saidas ?? [];
-    pausa[a.id] = cadeia?.nos?.[a.id]?.pausa_humano ?? false;
+function gatilhoDe(a: Automacao | null): ConfigGatilho {
+  const tipo = (a?.tipo_gatilho ?? "manual") as ConfigGatilho["tipo"];
+  const cfg = (a?.configuracao_gatilho ?? {}) as Record<string, unknown>;
+  return {
+    tipo: ["agendamento", "webhook"].includes(tipo) ? tipo : "manual",
+    frequencia: (cfg.frequencia as ConfigGatilho["frequencia"]) ?? "diaria",
+    diaSemana: Number(cfg.dia_semana ?? 0),
+    diaMes: Number(cfg.dia_mes ?? 1),
+    horario: hhmm(cfg.hora, cfg.minuto),
+    entrada: (cfg.entrada as string) ?? "",
+  };
+}
+
+// Grafo inicial de uma automação nova: só gatilho + fim (o usuário adiciona agentes).
+function cadeiaInicial(tipo: ConfigGatilho["tipo"]): Cadeia {
+  return {
+    inicial: undefined,
+    nos: [
+      { id: "gatilho", tipo: "gatilho", gatilho: tipo, x: 60, y: 240, saidas: [] },
+      { id: "fim", tipo: "fim", x: 760, y: 250, saidas: [] },
+    ],
+  };
+}
+
+// ───────────────────── editor de UMA automação ─────────────────────
+// Remontado por `key={selId}` no pai: o estado editável é inicializado dos props,
+// sem efeito de sincronização (padrão recomendado pelo React).
+
+function EditorAutomacao({
+  time,
+  automacao,
+  automacoes,
+  agentes,
+  canais,
+  souOperador,
+  souAdmin,
+  onSelecionar,
+  onNova,
+  onCriou,
+  onAtualizou,
+  onRemoveu,
+}: {
+  time: Time;
+  automacao: Automacao | null;
+  automacoes: Automacao[];
+  agentes: Agente[];
+  canais: Instrumento[];
+  souOperador: boolean;
+  souAdmin: boolean;
+  onSelecionar: (id: string) => void;
+  onNova: () => void;
+  onCriou: (a: Automacao) => void;
+  onAtualizou: (a: Automacao) => void;
+  onRemoveu: (id: string) => void;
+}) {
+  const router = useRouter();
+  const [erro, setErro] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+
+  const [nome, setNome] = useState(automacao?.nome ?? "");
+  const [gatilho, setGatilhoEstado] = useState<ConfigGatilho>(() =>
+    gatilhoDe(automacao),
+  );
+  const [ativa, setAtiva] = useState(
+    automacao ? (automacao.tipo_gatilho === "manual" ? true : automacao.ativa) : true,
+  );
+  const [cadeia, setCadeia] = useState<Cadeia>(() =>
+    automacao && (automacao.cadeia?.nos?.length ?? 0) > 0
+      ? automacao.cadeia!
+      : cadeiaInicial(gatilhoDe(automacao).tipo),
+  );
+
+  const setGatilho = (patch: Partial<ConfigGatilho>) =>
+    setGatilhoEstado((g) => ({ ...g, ...patch }));
+
+  function tratar(e: unknown, padrao: string) {
+    setErro(e instanceof ErroDaApi ? e.message : padrao);
   }
-  return { inicio: cadeia?.inicio ?? agentes[0]?.id ?? "", saidas, pausa };
+
+  function montarConfigGatilho(): Record<string, unknown> {
+    if (gatilho.tipo !== "agendamento") return {};
+    const [h, m] = gatilho.horario.split(":").map(Number);
+    const cfg: Record<string, unknown> = {
+      frequencia: gatilho.frequencia,
+      hora: h,
+      minuto: m,
+      entrada: gatilho.entrada,
+    };
+    if (gatilho.frequencia === "semanal") cfg.dia_semana = gatilho.diaSemana;
+    if (gatilho.frequencia === "mensal") cfg.dia_mes = gatilho.diaMes;
+    return cfg;
+  }
+
+  async function salvar() {
+    if (!nome.trim()) {
+      setErro("Dê um nome à automação.");
+      return;
+    }
+    if (gatilho.tipo === "agendamento" && !gatilho.entrada.trim()) {
+      setErro("No agendamento, escreva a mensagem que o gatilho envia ao fluxo.");
+      return;
+    }
+    const corpo = {
+      nome: nome.trim(),
+      tipo_gatilho: gatilho.tipo,
+      configuracao_gatilho: montarConfigGatilho(),
+      cadeia,
+      ativa: gatilho.tipo === "manual" ? false : ativa,
+    };
+    setSalvando(true);
+    try {
+      if (!automacao) {
+        const nova = await api.post<Automacao>(`/times/${time.id}/automacoes`, corpo);
+        onCriou(nova);
+      } else {
+        const atual = await api.put<Automacao>(`/automacoes/${automacao.id}`, corpo);
+        onAtualizou(atual);
+      }
+      setErro(null);
+      router.refresh();
+    } catch (e) {
+      tratar(e, "Falha ao salvar a automação");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function remover() {
+    if (!automacao) return;
+    if (!confirm(`Remover a automação "${automacao.nome}"?`)) return;
+    try {
+      await api.delete(`/automacoes/${automacao.id}`);
+      onRemoveu(automacao.id);
+      router.refresh();
+    } catch (e) {
+      tratar(e, "Falha ao remover a automação");
+    }
+  }
+
+  const webhookSalvo = !!automacao && gatilho.tipo === "webhook";
+  const nAgentes = (cadeia.nos ?? []).filter((n) => n.tipo === "agente").length;
+  const nBifurca = (cadeia.nos ?? []).filter(
+    (n) => (n.saidas?.length ?? 0) > 1,
+  ).length;
+
+  return (
+    <div className="flex w-full flex-col px-4 py-4 sm:px-6">
+      {/* toolbar da automação */}
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <Input
+          value={nome}
+          onChange={(e) => setNome(e.target.value)}
+          placeholder="Nome da automação"
+          disabled={!souOperador}
+          className="h-9 w-64"
+        />
+        <Badge variant="neutral" className="gap-1">
+          <Layers className="size-3" /> {nAgentes} agentes · {nBifurca} bifurcações
+        </Badge>
+        {gatilho.tipo !== "manual" && souOperador && (
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              className="accent-primary"
+              checked={ativa}
+              onChange={(e) => setAtiva(e.target.checked)}
+            />
+            gatilho ativo
+          </label>
+        )}
+        <div className="flex-1" />
+        {automacoes.length > 1 && automacao && (
+          <Select
+            value={automacao.id}
+            onChange={(e) => onSelecionar(e.target.value)}
+            className="h-9 w-auto"
+          >
+            {automacoes.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.nome}
+              </option>
+            ))}
+          </Select>
+        )}
+        {souOperador && automacao && (
+          <BotaoRodarAgora
+            timeId={time.id}
+            automacoes={[{ id: automacao.id, nome }]}
+            rotulo="Rodar"
+            variant="outline"
+            size="sm"
+          />
+        )}
+        {souOperador && (
+          <Button variant="outline" size="sm" onClick={onNova}>
+            <Plus /> Nova
+          </Button>
+        )}
+        {souOperador && (
+          <Button size="sm" onClick={salvar} disabled={salvando}>
+            {salvando ? "Salvando…" : "Salvar"}
+          </Button>
+        )}
+        {souAdmin && automacao && (
+          <Button variant="destructive" size="sm" onClick={remover}>
+            <Trash2 />
+          </Button>
+        )}
+      </div>
+
+      {erro && <Aviso className="mb-3">{erro}</Aviso>}
+
+      {/* canvas + inspector */}
+      <div className="h-[calc(100vh-17rem)] min-h-[480px] overflow-hidden rounded-xl border border-border bg-card">
+        <AutomacaoBuilder
+          cadeia={cadeia}
+          setCadeia={setCadeia}
+          agentes={agentes}
+          canais={canais}
+          podeEditar={souOperador}
+          gatilho={gatilho}
+          setGatilho={setGatilho}
+          webhookUrl={webhookSalvo ? "salvo" : null}
+        />
+      </div>
+    </div>
+  );
 }
 
-function formParaCadeia(
-  inicio: string,
-  saidas: SaidasPorAgente,
-  pausa: PausaPorAgente,
-): Cadeia {
-  const nos: Cadeia["nos"] = {};
-  for (const [id, lista] of Object.entries(saidas))
-    nos![id] = { saidas: lista, pausa_humano: pausa[id] ?? false };
-  return { inicio, nos };
-}
+// ───────────────────── lista + seleção ─────────────────────
 
 export function AutomacoesCliente({
   time,
@@ -95,543 +279,68 @@ export function AutomacoesCliente({
   instrumentos: Instrumento[];
   meuPapel: PapelAcesso | null;
 }) {
-  const router = useRouter();
-  const [erro, setErro] = useState<string | null>(null);
   const souOperador = podeOperar(meuPapel);
   const souAdmin = podeAdmin(meuPapel);
-
-  // Canais do time que podem servir de canal de aprovação (Telegram/WhatsApp).
   const canais = instrumentos.filter((i) => CANAIS_TIPOS.includes(i.tipo));
 
-  const [modo, setModo] = useState<null | "novo" | string>(null);
-  const [nome, setNome] = useState("");
-  const [inicio, setInicio] = useState(agentes[0]?.id ?? "");
-  const [saidas, setSaidas] = useState<SaidasPorAgente>({});
-  const [pausa, setPausa] = useState<PausaPorAgente>({});
-  // Canal de aprovação (opcional): null = portões resolvidos só pela tela.
-  const [aprovacaoInstrumentoId, setAprovacaoInstrumentoId] = useState<
-    string | null
-  >(null);
+  // A lista vive em estado local após montar (criar/editar/remover atualizam aqui;
+  // o router.refresh sincroniza os contadores do servidor).
+  const [automacoes, setAutomacoes] = useState<Automacao[]>(inicial);
+  const [selId, setSelId] = useState<string | null>(inicial[0]?.id ?? null);
 
-  // Gatilho: o que inicia o fluxo (PRODUTO §12).
-  const [tipoGatilho, setTipoGatilho] = useState<TipoGatilho>("manual");
-  const [frequencia, setFrequencia] = useState<Frequencia>("diaria");
-  const [diaSemana, setDiaSemana] = useState(0);
-  const [diaMes, setDiaMes] = useState(1);
-  const [horario, setHorario] = useState("08:00");
-  const [entradaAgendada, setEntradaAgendada] = useState("");
-  const [ativa, setAtiva] = useState(true);
-
-  const nomeAgente = (id: string | null) =>
-    id === null ? "— fim (entrega ao usuário) —" : agentes.find((a) => a.id === id)?.nome ?? id;
-
-  function tratar(e: unknown, padrao: string) {
-    setErro(e instanceof ErroDaApi ? e.message : padrao);
+  if (agentes.length === 0) {
+    return (
+      <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+        <EstadoVazio icone={Zap} titulo="Crie agentes antes da automação.">
+          A automação encadeia os agentes do time — adicione agentes primeiro.
+        </EstadoVazio>
+      </main>
+    );
   }
 
-  function carregarGatilho(a: Automacao | null) {
-    const tipo = (a?.tipo_gatilho ?? "manual") as TipoGatilho;
-    const cfg = (a?.configuracao_gatilho ?? {}) as Record<string, unknown>;
-    setTipoGatilho(["agendamento", "webhook"].includes(tipo) ? tipo : "manual");
-    setFrequencia((cfg.frequencia as Frequencia) ?? "diaria");
-    setDiaSemana(Number(cfg.dia_semana ?? 0));
-    setDiaMes(Number(cfg.dia_mes ?? 1));
-    setHorario(horaParaTexto(Number(cfg.hora ?? 8), Number(cfg.minuto ?? 0)));
-    setEntradaAgendada((cfg.entrada as string) ?? "");
-    setAtiva(a ? a.ativa : true);
-  }
-
-  function abrirNovo() {
-    const f = cadeiaParaForm(null, agentes);
-    setNome("");
-    setInicio(f.inicio);
-    setSaidas(f.saidas);
-    setPausa(f.pausa);
-    setAprovacaoInstrumentoId(null);
-    carregarGatilho(null);
-    setErro(null);
-    setModo("novo");
-  }
-
-  function abrirEdicao(a: Automacao) {
-    const f = cadeiaParaForm(a.cadeia, agentes);
-    setNome(a.nome);
-    setInicio(f.inicio);
-    setSaidas(f.saidas);
-    setPausa(f.pausa);
-    setAprovacaoInstrumentoId(a.aprovacao_instrumento_id ?? null);
-    carregarGatilho(a);
-    setErro(null);
-    setModo(a.id);
-  }
-
-  function addSaida(agenteId: string) {
-    setSaidas((s) => ({
-      ...s,
-      [agenteId]: [...(s[agenteId] ?? []), { rotulo: "", quando: "", destino: null }],
-    }));
-  }
-
-  function mudarSaida(agenteId: string, i: number, campo: keyof SaidaCadeia, valor: string | null) {
-    setSaidas((s) => {
-      const lista = [...(s[agenteId] ?? [])];
-      lista[i] = { ...lista[i], [campo]: valor };
-      return { ...s, [agenteId]: lista };
-    });
-  }
-
-  function removerSaida(agenteId: string, i: number) {
-    setSaidas((s) => {
-      const lista = [...(s[agenteId] ?? [])];
-      lista.splice(i, 1);
-      return { ...s, [agenteId]: lista };
-    });
-  }
-
-  function montarConfigGatilho(): Record<string, unknown> {
-    if (tipoGatilho !== "agendamento") return {};
-    const [h, m] = horario.split(":").map(Number);
-    const cfg: Record<string, unknown> = {
-      frequencia,
-      hora: h,
-      minuto: m,
-      entrada: entradaAgendada,
-    };
-    if (frequencia === "semanal") cfg.dia_semana = diaSemana;
-    if (frequencia === "mensal") cfg.dia_mes = diaMes;
-    return cfg;
-  }
-
-  async function salvar() {
-    if (!nome.trim()) {
-      setErro("O nome é obrigatório.");
-      return;
-    }
-    if (!inicio) {
-      setErro("Escolha o agente inicial.");
-      return;
-    }
-    if (tipoGatilho === "agendamento" && !entradaAgendada.trim()) {
-      setErro("No agendamento, escreva a mensagem que o gatilho envia ao fluxo.");
-      return;
-    }
-    const corpo = {
-      nome: nome.trim(),
-      tipo_gatilho: tipoGatilho,
-      configuracao_gatilho: montarConfigGatilho(),
-      cadeia: formParaCadeia(inicio, saidas, pausa),
-      // O interruptor liga/desliga só vale para gatilhos automáticos.
-      ativa: tipoGatilho === "manual" ? false : ativa,
-      aprovacao_instrumento_id: aprovacaoInstrumentoId,
-    };
-    try {
-      if (modo === "novo") {
-        await api.post<Automacao>(`/times/${time.id}/automacoes`, corpo);
-      } else if (modo) {
-        await api.put<Automacao>(`/automacoes/${modo}`, corpo);
-      }
-      setErro(null);
-      setModo(null);
-      router.refresh();
-    } catch (e) {
-      tratar(e, "Falha ao salvar automação");
-    }
-  }
-
-  async function remover(a: Automacao) {
-    if (!confirm(`Remover a automação "${a.nome}"?`)) return;
-    try {
-      await api.delete(`/automacoes/${a.id}`);
-      setErro(null);
-      router.refresh();
-    } catch (e) {
-      tratar(e, "Falha ao remover automação");
-    }
-  }
-
-  return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
-      <div className="mb-6">
-        <h2 className="text-sm font-medium text-foreground">Automações do time</h2>
-        <p className="text-sm text-muted-foreground">
-          Como a tarefa entra, por quais agentes passa e quando para pra você decidir.
-        </p>
-      </div>
-
-      {erro && <Aviso className="mb-4">{erro}</Aviso>}
-
-      {agentes.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Crie agentes no time antes de montar uma automação.
-        </p>
-      ) : (
-        modo === null &&
-        souOperador && (
-          <Button className="mb-6" onClick={abrirNovo}>
-            <Plus />
-            Nova automação
-          </Button>
-        )
-      )}
-
-      {modo !== null && (
-        <div className="mb-6 flex flex-col gap-4 rounded-lg border border-border bg-card p-6">
-          <h2 className="text-lg font-medium text-foreground">
-            {modo === "novo" ? "Nova automação" : "Editar automação"}
-          </h2>
-          <Label className="flex-col items-start gap-1">
-            Nome
-            <Input
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              autoFocus
-            />
-          </Label>
-          <Label className="flex-col items-start gap-1">
-            Agente inicial (por onde a tarefa entra)
-            <Select value={inicio} onChange={(e) => setInicio(e.target.value)}>
-              {agentes.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.nome}
-                </option>
-              ))}
-            </Select>
-          </Label>
-
-          <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-4">
-            <span className="text-sm font-medium text-foreground">
-              Gatilho — o que inicia este fluxo
-            </span>
-            <div className="flex flex-wrap gap-3 text-sm">
-              {(["manual", "agendamento", "webhook"] as TipoGatilho[]).map((t) => (
-                <label key={t} className="flex items-center gap-1.5">
-                  <input
-                    type="radio"
-                    name="gatilho"
-                    className="accent-primary"
-                    checked={tipoGatilho === t}
-                    onChange={() => setTipoGatilho(t)}
-                  />
-                  {ROTULO_GATILHO[t]}
-                </label>
-              ))}
-            </div>
-
-            {tipoGatilho === "manual" && (
-              <p className="text-xs text-muted-foreground">
-                Dispara apenas pelo botão de teste, na tela da automação.
-              </p>
-            )}
-
-            {tipoGatilho === "agendamento" && (
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-wrap items-end gap-2">
-                  <Label className="flex-col items-start gap-1">
-                    Frequência
-                    <Select
-                      className="w-auto"
-                      value={frequencia}
-                      onChange={(e) => setFrequencia(e.target.value as Frequencia)}
-                    >
-                      <option value="diaria">Todo dia</option>
-                      <option value="semanal">Toda semana</option>
-                      <option value="mensal">Todo mês</option>
-                    </Select>
-                  </Label>
-                  {frequencia === "semanal" && (
-                    <Label className="flex-col items-start gap-1">
-                      Dia da semana
-                      <Select
-                        className="w-auto"
-                        value={diaSemana}
-                        onChange={(e) => setDiaSemana(Number(e.target.value))}
-                      >
-                        {DIAS_SEMANA.map((d, i) => (
-                          <option key={i} value={i}>
-                            {d}
-                          </option>
-                        ))}
-                      </Select>
-                    </Label>
-                  )}
-                  {frequencia === "mensal" && (
-                    <Label className="flex-col items-start gap-1">
-                      Dia do mês
-                      <Input
-                        type="number"
-                        min={1}
-                        max={31}
-                        className="w-20"
-                        value={diaMes}
-                        onChange={(e) => setDiaMes(Number(e.target.value))}
-                      />
-                    </Label>
-                  )}
-                  <Label className="flex-col items-start gap-1">
-                    Horário
-                    <Input
-                      type="time"
-                      className="w-auto"
-                      value={horario}
-                      onChange={(e) => setHorario(e.target.value)}
-                    />
-                  </Label>
-                </div>
-                <Label className="flex-col items-start gap-1">
-                  Mensagem que o gatilho envia ao fluxo (a entrada do agente inicial)
-                  <Textarea
-                    className="min-h-16"
-                    placeholder="Ex.: Gere o lembrete mensal de fechamento."
-                    value={entradaAgendada}
-                    onChange={(e) => setEntradaAgendada(e.target.value)}
-                  />
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Horário no fuso de Brasília.
-                </p>
-              </div>
-            )}
-
-            {tipoGatilho === "webhook" && (
-              <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-                <p>
-                  Um sistema externo dispara este fluxo por uma URL (POST). O corpo
-                  enviado vira a entrada — o campo <code>entrada</code> do JSON, se
-                  houver; senão, o corpo inteiro.
-                </p>
-                {modo !== "novo" ? (
-                  <UrlCopiavel
-                    url={`${URL_CEREBRO}/webhooks/automacoes/${modo}`}
-                  />
-                ) : (
-                  <p className="text-warning">
-                    Salve a automação para gerar a URL do webhook.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {tipoGatilho !== "manual" && (
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  className="accent-primary"
-                  checked={ativa}
-                  onChange={(e) => setAtiva(e.target.checked)}
-                />
-                Gatilho ativo (dispara automaticamente). Desmarque para pausar sem
-                apagar a automação.
-              </label>
-            )}
-          </div>
-
-          {canais.length > 0 && (
-            <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-4">
-              <Label className="flex-col items-start gap-1">
-                Canal de aprovação (opcional)
-                <Select
-                  value={aprovacaoInstrumentoId ?? ""}
-                  onChange={(e) =>
-                    setAprovacaoInstrumentoId(e.target.value || null)
-                  }
-                >
-                  <option value="">Só pela tela</option>
-                  {canais.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nome}
-                    </option>
-                  ))}
-                </Select>
-              </Label>
-              {(() => {
-                const canalSel = canais.find(
-                  (c) => c.id === aprovacaoInstrumentoId,
-                );
-                if (!canalSel) {
-                  return (
-                    <span className="text-xs text-muted-foreground">
-                      Os portões de aprovação desta automação são resolvidos só na
-                      tela. Escolha um canal para também poder aprovar por mensagem.
-                    </span>
-                  );
-                }
-                const dest = String(
-                  (canalSel.configuracao?.destinatario_padrao as string) ?? "",
-                ).trim();
-                return dest ? (
-                  <span className="text-xs text-muted-foreground">
-                    O pedido de aprovação chega ao destinatário padrão deste canal (
-                    <code>{dest}</code>) e a resposta dele (ex.:
-                    &quot;aprovado&quot;) segue o fluxo. A tela continua valendo —
-                    conta a primeira resposta.
-                  </span>
-                ) : (
-                  <span className="text-xs text-warning">
-                    ⚠ Este canal não tem destinatário padrão. Defina o
-                    &quot;destinatário padrão&quot; no instrumento para a aprovação
-                    por mensagem funcionar; sem isso, vale só a tela.
-                  </span>
-                );
-              })()}
-            </div>
-          )}
-
-          <p className="text-xs text-muted-foreground">
-            Para cada agente, defina suas saídas: o rótulo, quando segui-la, e o
-            destino (outro agente — pode ser anterior — ou o fim). Sem saídas = o
-            agente encerra a cadeia.
-          </p>
-
-          <div className="flex flex-col gap-3">
-            {agentes.map((a) => (
-              <div
-                key={a.id}
-                className="rounded-md border border-border bg-background p-3"
-              >
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    {a.nome}
-                    {a.id === inicio && <Badge variant="info">inicial</Badge>}
-                  </span>
-                  <Button size="xs" variant="outline" onClick={() => addSaida(a.id)}>
-                    <Plus />
-                    saída
-                  </Button>
-                </div>
-                <label className="mb-2 flex items-start gap-1.5 text-xs text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5 accent-primary"
-                    checked={pausa[a.id] ?? false}
-                    onChange={(e) =>
-                      setPausa((p) => ({ ...p, [a.id]: e.target.checked }))
-                    }
-                  />
-                  Ao terminar, pausar e esperar sua decisão (portão de
-                  aprovação): sua resposta escolhe por qual saída seguir (ex.:
-                  &quot;aprovado&quot; / &quot;reprovado, mude X&quot;) e vai junto
-                  com o trabalho do agente ao próximo
-                </label>
-                {pausa[a.id] && (saidas[a.id] ?? []).length === 0 && (
-                  <p className="mb-2 text-xs text-warning">
-                    ⚠ Este agente espera resposta mas não tem saída: ao responder,
-                    o fluxo encerra. Para ele reagir à sua resposta, adicione uma
-                    saída (pode apontar para este mesmo agente, criando uma
-                    conversa de ida e volta).
-                  </p>
-                )}
-                {(saidas[a.id] ?? []).length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    Sem saídas (encerra aqui).
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {(saidas[a.id] ?? []).map((s, i) => (
-                      <div key={i} className="flex flex-wrap items-center gap-2">
-                        <Input
-                          className="h-8 w-20 text-xs"
-                          placeholder="rótulo"
-                          value={s.rotulo}
-                          onChange={(e) => mudarSaida(a.id, i, "rotulo", e.target.value)}
-                        />
-                        <Input
-                          className="h-8 flex-1 text-xs"
-                          placeholder="quando seguir por aqui"
-                          value={s.quando}
-                          onChange={(e) => mudarSaida(a.id, i, "quando", e.target.value)}
-                        />
-                        <Select
-                          className="h-8 w-auto text-xs"
-                          value={s.destino ?? ""}
-                          onChange={(e) =>
-                            mudarSaida(a.id, i, "destino", e.target.value || null)
-                          }
-                        >
-                          <option value="">→ fim</option>
-                          {agentes.map((d) => (
-                            <option key={d.id} value={d.id}>
-                              → {d.nome}
-                            </option>
-                          ))}
-                        </Select>
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          aria-label="Remover saída"
-                          onClick={() => removerSaida(a.id, i)}
-                        >
-                          <X />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-2">
-            <Button onClick={salvar}>Salvar</Button>
-            <Button variant="ghost" onClick={() => setModo(null)}>
-              Cancelar
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {inicial.length === 0 ? (
+  if (selId === null) {
+    return (
+      <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
         <EstadoVazio icone={Zap} titulo="Nenhuma automação ainda.">
-          {souOperador && agentes.length > 0
-            ? "Monte a primeira automação encadeando os agentes do time."
+          {souOperador
+            ? "Monte o fluxo do time como um grafo: gatilho, agentes e o fim."
             : "As automações deste time aparecerão aqui."}
         </EstadoVazio>
-      ) : (
-        <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-          {inicial.map((a) => (
-            <li key={a.id} className="flex items-center gap-2 p-3">
-              <div className="min-w-0 flex-1">
-                {souOperador ? (
-                  <button
-                    onClick={() => abrirEdicao(a)}
-                    className="text-left text-sm font-medium text-foreground hover:text-primary hover:underline"
-                  >
-                    {a.nome}
-                  </button>
-                ) : (
-                  <span className="text-sm font-medium text-foreground">
-                    {a.nome}
-                  </span>
-                )}
-                <span className="block text-xs text-muted-foreground">
-                  {ROTULO_GATILHO[a.tipo_gatilho] ?? a.tipo_gatilho}
-                  {a.tipo_gatilho !== "manual" && !a.ativa && " (pausado)"}
-                  {" · início: "}
-                  {nomeAgente(a.cadeia?.inicio ?? null)}
-                </span>
-              </div>
-              {souOperador && (
-                <BotaoRodarAgora
-                  timeId={time.id}
-                  automacoes={[{ id: a.id, nome: a.nome }]}
-                  rotulo="Rodar"
-                  variant="outline"
-                  size="sm"
-                />
-              )}
-              {souOperador && (
-                <Button size="sm" variant="outline" onClick={() => abrirEdicao(a)}>
-                  Editar
-                </Button>
-              )}
-              {souAdmin && (
-                <Button size="sm" variant="destructive" onClick={() => remover(a)}>
-                  Remover
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </main>
+        {souOperador && (
+          <Button className="mt-4" onClick={() => setSelId(NOVA)}>
+            <Plus /> Nova automação
+          </Button>
+        )}
+      </main>
+    );
+  }
+
+  const automacao = selId === NOVA ? null : automacoes.find((a) => a.id === selId) ?? null;
+
+  return (
+    <EditorAutomacao
+      key={selId}
+      time={time}
+      automacao={automacao}
+      automacoes={automacoes}
+      agentes={agentes}
+      canais={canais}
+      souOperador={souOperador}
+      souAdmin={souAdmin}
+      onSelecionar={(id) => setSelId(id)}
+      onNova={() => setSelId(NOVA)}
+      onCriou={(a) => {
+        setAutomacoes((lista) => [...lista, a]);
+        setSelId(a.id);
+      }}
+      onAtualizou={(a) =>
+        setAutomacoes((lista) => lista.map((x) => (x.id === a.id ? a : x)))
+      }
+      onRemoveu={(id) => {
+        const resto = automacoes.filter((a) => a.id !== id);
+        setAutomacoes(resto);
+        setSelId(resto[0]?.id ?? null);
+      }}
+    />
   );
 }

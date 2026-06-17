@@ -1,26 +1,27 @@
-"""Execução de uma cadeia com bifurcação (Tarefa 4.3).
+"""Execução de uma cadeia com bifurcação (Tarefa 4.3; grafo visual 2026-06-16).
 
 A cadeia é um GRAFO, não uma fila linear (decisão do maestro, alinhada ao
-PRODUTO.md §14 "Bifurcação por intenção"). Formato guardado em
-`automacoes.cadeia` (JSONB):
+PRODUTO.md §14 "Bifurcação por intenção"). A forma canônica (lista de nós tipados)
+e suas transformações vivem em `orquestracao.grafo`:
 
-    {
-      "inicio": "<agente_id>",
-      "nos": {
-        "<agente_id>": {
-          "saidas": [
-            {"rotulo": "1", "quando": "descrição de quando seguir por aqui",
-             "destino": "<agente_id>"},     # outro agente (pode ser anterior: loop)
-            {"rotulo": "2", "quando": "...", "destino": null}   # null = fim (entrega)
-          ]
-        }
-      }
-    }
+    {"inicial": "<id do nó-agente inicial>",
+     "nos": [
+       {"id","tipo":"gatilho|agente|roteador|fim","ref":<agente_id>,
+        "gate":bool, "saidas":[{"rotulo","quando","destino","tone"}]},
+       ...
+     ]}
 
-Cada agente roda pelo executor da Tarefa 4.2 (que é LangGraph). Quando o nó tem
-mais de uma saída, um passo de roteamento escolhe a saída cujo "quando" melhor
-casa com a saída do agente. A saída de um agente vira a entrada do próximo.
-Loops são permitidos; um guarda de máximo de passos evita laço infinito.
+O motor NORMALIZA a cadeia na leitura (`grafo.normalizar`, idempotente): assim ele
+lê tanto a forma canônica nova quanto o formato antigo (dict-por-agente) sem
+migração de dados — cada automação migra de forma preguiçosa ao ser re-salva.
+
+Tipos de nó: `gatilho`/`fim` são estruturais (o motor não os roda — começa no
+`inicial`); `agente` roda pelo executor da Tarefa 4.2; `roteador` só classifica a
+entrada sobre suas saídas (sem agente). Quando um nó tem mais de uma saída, um
+passo de roteamento escolhe a saída cujo "quando"/"rótulo" melhor casa com a saída
+produzida. A saída de um nó vira a entrada do próximo. Loops são permitidos; um
+guarda de máximo de passos evita laço infinito. `gate` (antes `pausa_humano`) pausa
+para um humano: quem escolhe a saída é a RESPOSTA dele (portão de aprovação).
 """
 
 import uuid
@@ -33,14 +34,15 @@ from sqlalchemy.orm import Session
 
 import segredos_instrumento
 from modelos import Agente, AgenteInstrumento, Instrumento
+from orquestracao import grafo
 from orquestracao.agente import executar_agente
 from orquestracao.llm import MODELO_PADRAO, construir_modelo
 
 # Guarda contra laço infinito: nº máximo de passos (agentes executados).
 MAX_PASSOS = 25
 
-# Destinos que encerram a cadeia (entregar ao usuário).
-_DESTINOS_FIM = {None, "", "fim", "FIM"}
+# Destinos que encerram a cadeia (mantido para retrocompatibilidade de imports).
+_DESTINOS_FIM = grafo.DESTINOS_FIM
 
 
 class _Escolha(BaseModel):
@@ -50,33 +52,48 @@ class _Escolha(BaseModel):
 
 
 def validar_cadeia(cadeia: dict, ids_agentes_validos: set[str]) -> None:
-    """Valida a estrutura do grafo e que todo nó/destino é um agente do time.
-    Levanta ValueError com mensagem clara. Cadeia vazia é permitida (rascunho)."""
+    """Valida a estrutura do grafo: tipos de nó, um inicial executável, cada nó
+    `agente` apontando para um agente real do time, rótulos de saída únicos por nó
+    e destinos que existem (outro nó, inclusive o `fim`). Levanta ValueError com
+    mensagem clara. Cadeia vazia é permitida (rascunho). Aceita tanto a forma nova
+    quanto a antiga (normaliza antes de validar)."""
+    if cadeia is None:
+        return
     if not isinstance(cadeia, dict):
         raise ValueError("A cadeia precisa ser um objeto.")
-    nos = cadeia.get("nos")
-    inicio = cadeia.get("inicio")
-    if not nos and not inicio:
+    if grafo.vazia(cadeia):
         return  # rascunho ainda sem cadeia montada
-    if not isinstance(nos, dict) or not nos:
-        raise ValueError("A cadeia precisa ter ao menos um nó em 'nos'.")
-    if not inicio or inicio not in nos:
-        raise ValueError("A cadeia precisa de um 'inicio' que esteja em 'nos'.")
-    for no_id, no in nos.items():
-        if no_id not in ids_agentes_validos:
-            raise ValueError(f"O nó {no_id} não é um agente deste time.")
+
+    cadeia = grafo.normalizar(cadeia)
+    nos = cadeia.get("nos") or []
+    ids_nos = {n["id"] for n in nos}
+    inicial = cadeia.get("inicial")
+    no_inicial = next((n for n in nos if n["id"] == inicial), None)
+    if no_inicial is None or no_inicial.get("tipo") not in ("agente", "roteador"):
+        raise ValueError("A cadeia precisa de um nó inicial que seja agente ou roteador.")
+
+    for no in nos:
+        tipo = no.get("tipo")
+        if tipo not in grafo.TIPOS_VALIDOS:
+            raise ValueError(f"Tipo de nó inválido no nó {no['id']}: {tipo}")
+        if tipo == "agente":
+            ref = no.get("ref")
+            if not ref or str(ref) not in ids_agentes_validos:
+                raise ValueError(
+                    f"O nó {no['id']} aponta para um agente que não é deste time."
+                )
         rotulos: set[str] = set()
-        for saida in (no or {}).get("saidas") or []:
+        for saida in no.get("saidas") or []:
             rotulo = saida.get("rotulo")
             if not rotulo:
-                raise ValueError(f"Há uma saída sem 'rotulo' no nó {no_id}.")
+                raise ValueError(f"Há uma saída sem 'rotulo' no nó {no['id']}.")
             if rotulo in rotulos:
-                raise ValueError(f"Rótulo de saída repetido no nó {no_id}: {rotulo}")
+                raise ValueError(f"Rótulo de saída repetido no nó {no['id']}: {rotulo}")
             rotulos.add(rotulo)
             destino = saida.get("destino")
-            if destino not in _DESTINOS_FIM and destino not in ids_agentes_validos:
+            if destino not in ids_nos:
                 raise ValueError(
-                    f"Destino inválido no nó {no_id} (saída {rotulo}): {destino}"
+                    f"Destino inválido no nó {no['id']} (saída {rotulo}): {destino}"
                 )
 
 
@@ -143,18 +160,18 @@ def executar_cadeia(
 
     Devolve um dicionário com `estado`:
     - "concluida": chegou ao fim. `resultado` tem o texto final.
-    - "aguardando_humano": parou num agente marcado `pausa_humano`. `pergunta`
-      tem a saída desse agente (a proposta/pergunta). O caminho a seguir NÃO é
-      decidido aqui — é a resposta do humano que escolhe a saída, no resume
-      (portão de aprovação, PRODUTO §14).
+    - "aguardando_humano": parou num nó com `gate`. `pergunta` tem a saída desse
+      nó (a proposta/pergunta). O caminho a seguir NÃO é decidido aqui — é a
+      resposta do humano que escolhe a saída, no resume (portão, PRODUTO §14).
     `ordem` é o número do último passo; `passos`, o rastro deste trecho.
 
-    Se `registrar_passo` for dado, é chamado após cada passo com (passo, ordem)
-    — é como a Tarefa 4.4 persiste cada passo em `passos_execucao`."""
-    nos = cadeia.get("nos") or {}
-    no_atual: str | None = no_inicial or cadeia.get("inicio")
-    if not no_atual or no_atual not in nos:
-        raise ValueError("Cadeia inválida: nó inicial ausente ou fora de 'nos'.")
+    `no_inicial` é o ID do NÓ por onde começar (retomada); na partida normal usa o
+    `inicial` da cadeia. Se `registrar_passo` for dado, é chamado após cada passo
+    com (passo, ordem) — é como a Tarefa 4.4 persiste cada passo."""
+    idx = grafo.indexar(grafo.normalizar(cadeia or {}))
+    no_atual: str | None = no_inicial or idx.inicial
+    if idx.no(no_atual) is None:
+        raise ValueError("Cadeia inválida: nó inicial ausente ou fora do grafo.")
 
     entrada_atual = entrada
     passos: list[dict] = []
@@ -166,6 +183,31 @@ def executar_cadeia(
         # cancelou, paramos aqui — os passos já feitos ficam registrados.
         if cancelado is not None and cancelado():
             return {"estado": "cancelada", "ordem": ordem, "passos": passos}
+
+        no = idx.no(no_atual)
+        if no is None:
+            raise ValueError(f"Nó da cadeia não encontrado: {no_atual}")
+        tipo = no.get("tipo", "agente")
+
+        # Nós estruturais: o `fim` encerra; o `gatilho` apenas repassa para a sua
+        # saída (o motor normalmente parte do `inicial`, não do gatilho, mas
+        # tratamos por robustez). Nenhum dos dois conta como passo.
+        if tipo == "fim":
+            return {
+                "estado": "concluida", "resultado": entrada_atual,
+                "ordem": ordem, "passos": passos,
+            }
+        if tipo == "gatilho":
+            saidas = no.get("saidas") or []
+            destino = saidas[0].get("destino") if saidas else None
+            if not destino or idx.eh_fim(destino):
+                return {
+                    "estado": "concluida", "resultado": entrada_atual,
+                    "ordem": ordem, "passos": passos,
+                }
+            no_atual = destino
+            continue
+
         neste_trecho += 1
         if neste_trecho > max_passos:
             raise RuntimeError(
@@ -173,27 +215,37 @@ def executar_cadeia(
             )
         ordem += 1
 
-        agente = sessao.get(Agente, uuid.UUID(no_atual))
-        if agente is None:
-            raise ValueError(f"Agente da cadeia não encontrado: {no_atual}")
-
         iniciado_em = datetime.now(timezone.utc)
-        cinto = _carregar_cinto(sessao, agente.id)
-        resultado = executar_agente(agente, cinto, entrada_atual)
+        if tipo == "roteador":
+            # Roteador: não roda agente nem produz conteúdo — só classifica a
+            # entrada sobre as suas saídas e segue. A entrada passa adiante intacta.
+            agente_id_str: str | None = None
+            agente_nome = no.get("nome") or "roteador"
+            saida_texto = entrada_atual
+            instrumentos: list = []
+            uso_passo: list = []
+        else:  # agente
+            ref = no.get("ref")
+            agente = sessao.get(Agente, uuid.UUID(str(ref))) if ref else None
+            if agente is None:
+                raise ValueError(f"Agente da cadeia não encontrado: {ref}")
+            cinto = _carregar_cinto(sessao, agente.id)
+            resultado = executar_agente(agente, cinto, entrada_atual)
+            saida_texto = resultado["saida"]
+            instrumentos = resultado["instrumentos_acionados"]
+            uso_passo = list(resultado.get("uso") or [])
+            agente_id_str = str(agente.id)
+            agente_nome = agente.nome
         finalizado_em = datetime.now(timezone.utc)
-        saida_texto = resultado["saida"]
 
-        uso_passo = list(resultado.get("uso") or [])
-        no = nos.get(no_atual, {})
         saidas = no.get("saidas") or []
-        pausa = bool(no.get("pausa_humano"))
+        gate = bool(no.get("gate"))
 
-        # Roteamento automático só quando NÃO há pausa. Com pausa (portão de
+        # Roteamento automático só quando NÃO há gate. Com gate (portão de
         # aprovação, PRODUTO §14), quem escolhe a saída é a RESPOSTA DO HUMANO,
-        # decidida no resume — por isso aqui o agente não roteia (e não gasta a
-        # chamada de roteamento à toa).
+        # decidida no resume — por isso aqui não roteia (e não gasta a chamada).
         escolhida = None
-        if not pausa:
+        if not gate:
             if len(saidas) == 1:
                 escolhida = saidas[0]
             elif len(saidas) >= 2:
@@ -201,11 +253,12 @@ def executar_cadeia(
                 uso_passo.append(uso_roteamento)
 
         passo = {
-            "agente_id": no_atual,
-            "agente_nome": agente.nome,
+            "no_id": no_atual,
+            "agente_id": agente_id_str,
+            "agente_nome": agente_nome,
             "entrada": entrada_atual,
             "saida": saida_texto,
-            "instrumentos_acionados": resultado["instrumentos_acionados"],
+            "instrumentos_acionados": instrumentos,
             "saida_escolhida": escolhida["rotulo"] if escolhida else None,
             "uso": uso_passo,
             "iniciado_em": iniciado_em,
@@ -215,9 +268,9 @@ def executar_cadeia(
         if registrar_passo is not None:
             registrar_passo(passo, ordem)
 
-        # Pausa para humano: o agente terminou (sua saída é a pergunta/proposta).
+        # Pausa para humano: o nó terminou (sua saída é a pergunta/proposta).
         # Para aqui; o caminho a seguir é decidido pela resposta do humano.
-        if pausa:
+        if gate:
             return {
                 "estado": "aguardando_humano",
                 "pergunta": saida_texto,
@@ -226,8 +279,7 @@ def executar_cadeia(
             }
 
         destino = escolhida.get("destino") if escolhida else None
-        proximo = None if destino in _DESTINOS_FIM else destino
-        if proximo is None:
+        if destino is None or idx.eh_fim(destino):
             return {
                 "estado": "concluida",
                 "resultado": saida_texto,
@@ -236,4 +288,4 @@ def executar_cadeia(
             }
 
         entrada_atual = saida_texto
-        no_atual = proximo
+        no_atual = destino

@@ -1,0 +1,199 @@
+"""Motor de cadeia no formato de GRAFO (lista de nós tipados).
+
+Cobre o `executar_cadeia` adaptado: linear, bifurcação (segue o ramo certo),
+loop com guarda de passos, portão (gate) que pausa, nó roteador (classifica sem
+rodar agente), nó fim como destino e o mesmo agente em dois nós (no_id distingue).
+
+`executar_agente` e `_escolher_saida` são mockados — o motor não chama LLM aqui.
+"""
+
+import pytest
+
+from modelos import Agente
+from orquestracao import cadeia as motor
+
+
+@pytest.fixture
+def ag(sessao, dados):
+    """Fábrica de agentes reais no time de teste (transação revertida)."""
+    def criar(nome):
+        a = Agente(time_id=dados["timeA"].id, nome=nome, papel="agente")
+        sessao.add(a)
+        sessao.flush()
+        return a
+    return criar
+
+
+def _mock_agentes(monkeypatch, saidas_por_nome):
+    """Mocka `executar_agente`: devolve a saída configurada por nome do agente."""
+    def fake(agente, cinto, entrada):
+        return {
+            "saida": saidas_por_nome.get(agente.nome, "ok"),
+            "instrumentos_acionados": [],
+            "uso": [],
+        }
+    monkeypatch.setattr(motor, "executar_agente", fake)
+
+
+def _mock_roteador(monkeypatch):
+    """Mocka `_escolher_saida`: escolhe a saída cujo rótulo == texto (senão a 1ª)."""
+    def fake(saida_texto, saidas):
+        alvo = (saida_texto or "").strip()
+        por_rotulo = {s["rotulo"]: s for s in saidas}
+        uso = {"modelo": "x", "tokens_entrada": 0, "tokens_saida": 0}
+        return por_rotulo.get(alvo, saidas[0]), uso
+    monkeypatch.setattr(motor, "_escolher_saida", fake)
+
+
+def test_linear_conclui(sessao, dados, ag, monkeypatch):
+    a = ag("Solo")
+    _mock_agentes(monkeypatch, {"Solo": "feito"})
+    cadeia = {
+        "inicial": "n1",
+        "nos": [
+            {"id": "n1", "tipo": "agente", "ref": str(a.id),
+             "saidas": [{"rotulo": "ok", "destino": "fim"}]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    r = motor.executar_cadeia(sessao, cadeia, "vai")
+    assert r["estado"] == "concluida"
+    assert r["resultado"] == "feito"
+    # cada passo registra o id do nó
+    assert r["passos"][0]["no_id"] == "n1"
+
+
+def test_bifurcacao_segue_ramo_certo(sessao, dados, ag, monkeypatch):
+    cacador = ag("Cacador")
+    validador = ag("Validador")
+    publicador = ag("Publicador")
+    _mock_roteador(monkeypatch)
+
+    cadeia = {
+        "inicial": "cacador",
+        "nos": [
+            {"id": "cacador", "tipo": "agente", "ref": str(cacador.id),
+             "saidas": [{"rotulo": "tema", "destino": "validador"}]},
+            {"id": "validador", "tipo": "agente", "ref": str(validador.id),
+             "saidas": [
+                 {"rotulo": "ok", "destino": "publicador"},
+                 {"rotulo": "refazer", "destino": "cacador"},
+             ]},
+            {"id": "publicador", "tipo": "agente", "ref": str(publicador.id),
+             "saidas": [{"rotulo": "pub", "destino": "fim"}]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+
+    # validador diz "ok" → segue para publicador (ramo ok)
+    _mock_agentes(monkeypatch, {"Cacador": "tema", "Validador": "ok", "Publicador": "publicado"})
+    r = motor.executar_cadeia(sessao, cadeia, "vai")
+    assert r["estado"] == "concluida"
+    nos_visitados = [p["no_id"] for p in r["passos"]]
+    assert nos_visitados == ["cacador", "validador", "publicador"]
+
+
+def test_loop_com_guarda_de_passos(sessao, dados, ag, monkeypatch):
+    a = ag("Eterno")
+    _mock_agentes(monkeypatch, {"Eterno": "de novo"})
+    cadeia = {
+        "inicial": "n1",
+        "nos": [
+            {"id": "n1", "tipo": "agente", "ref": str(a.id),
+             "saidas": [{"rotulo": "loop", "destino": "n1"}]},  # volta para si mesmo
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    with pytest.raises(RuntimeError, match="Máximo de passos"):
+        motor.executar_cadeia(sessao, cadeia, "vai", max_passos=3)
+
+
+def test_gate_pausa(sessao, dados, ag, monkeypatch):
+    revisor = ag("Revisor")
+    _mock_agentes(monkeypatch, {"Revisor": "Artigo pronto para aprovação"})
+    cadeia = {
+        "inicial": "rev",
+        "nos": [
+            {"id": "rev", "tipo": "agente", "ref": str(revisor.id), "gate": True,
+             "saidas": [
+                 {"rotulo": "aprovado", "destino": "fim"},
+                 {"rotulo": "reprovado", "destino": "rev"},
+             ]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    r = motor.executar_cadeia(sessao, cadeia, "vai")
+    assert r["estado"] == "aguardando_humano"
+    assert r["pergunta"] == "Artigo pronto para aprovação"
+    # o nó com gate NÃO roteia sozinho (a resposta do humano decide depois)
+    assert r["passos"][-1]["saida_escolhida"] is None
+    assert r["passos"][-1]["no_id"] == "rev"
+
+
+def test_no_roteador_classifica_sem_agente(sessao, dados, ag, monkeypatch):
+    destino_a = ag("CaminhoA")
+    _mock_agentes(monkeypatch, {"CaminhoA": "cheguei em A"})
+    _mock_roteador(monkeypatch)
+    cadeia = {
+        "inicial": "rot",
+        "nos": [
+            {"id": "rot", "tipo": "roteador", "nome": "Triagem",
+             "saidas": [
+                 {"rotulo": "A", "destino": "na"},
+                 {"rotulo": "B", "destino": "fim"},
+             ]},
+            {"id": "na", "tipo": "agente", "ref": str(destino_a.id),
+             "saidas": [{"rotulo": "ok", "destino": "fim"}]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    # entrada "A" → o roteador (mock) escolhe a saída de rótulo "A" → vai p/ o agente
+    r = motor.executar_cadeia(sessao, cadeia, "A")
+    assert r["estado"] == "concluida"
+    assert r["resultado"] == "cheguei em A"
+    primeiro = r["passos"][0]
+    assert primeiro["no_id"] == "rot"
+    assert primeiro["agente_id"] is None  # roteador não roda agente
+    assert primeiro["saida_escolhida"] == "A"
+
+
+def test_mesmo_agente_em_dois_nos(sessao, dados, ag, monkeypatch):
+    a = ag("Reaproveitado")
+    _mock_agentes(monkeypatch, {"Reaproveitado": "ok"})
+    _mock_roteador(monkeypatch)
+    cadeia = {
+        "inicial": "p1",
+        "nos": [
+            {"id": "p1", "tipo": "agente", "ref": str(a.id),
+             "saidas": [{"rotulo": "segue", "destino": "p2"}]},
+            {"id": "p2", "tipo": "agente", "ref": str(a.id),
+             "saidas": [{"rotulo": "fim", "destino": "fim"}]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    r = motor.executar_cadeia(sessao, cadeia, "vai")
+    assert r["estado"] == "concluida"
+    nos = [p["no_id"] for p in r["passos"]]
+    agentes = [p["agente_id"] for p in r["passos"]]
+    assert nos == ["p1", "p2"]               # dois nós distintos
+    assert agentes == [str(a.id), str(a.id)]  # o mesmo agente nos dois
+
+
+def test_retomada_por_no_inicial(sessao, dados, ag, monkeypatch):
+    """Retomada começa de um nó específico (como faz a `retoma`)."""
+    pub = ag("Publi")
+    _mock_agentes(monkeypatch, {"Publi": "publicado"})
+    _mock_roteador(monkeypatch)
+    cadeia = {
+        "inicial": "rev",
+        "nos": [
+            {"id": "rev", "tipo": "agente", "ref": str(pub.id), "gate": True,
+             "saidas": [{"rotulo": "ok", "destino": "pub"}]},
+            {"id": "pub", "tipo": "agente", "ref": str(pub.id),
+             "saidas": [{"rotulo": "fim", "destino": "fim"}]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    r = motor.executar_cadeia(sessao, cadeia, "feedback", no_inicial="pub")
+    assert r["estado"] == "concluida"
+    assert [p["no_id"] for p in r["passos"]] == ["pub"]

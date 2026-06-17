@@ -1,0 +1,256 @@
+"""Forma canônica do `cadeia` (grafo) e suas transformações puras.
+
+A automação é um GRAFO dirigido (decisão do maestro; PRODUTO §14). Até aqui o
+`automacoes.cadeia` guardava o grafo como **dict por agente**:
+
+    {"inicio": "<agente_id>",
+     "nos": {"<agente_id>": {"pausa_humano": bool,
+                              "saidas": [{"rotulo", "quando", "destino"}]}}}
+
+O construtor visual (handoff `docs/design_handoff_automacoes_grafo/SPEC.md §2`) pede
+uma **lista de nós tipados**, separando o `id` do nó do `ref` (agente) — assim o
+mesmo agente pode aparecer em vários nós, e há nós que não são agentes (gatilho,
+fim, roteador):
+
+    {"inicial": "<id do nó-agente inicial>",
+     "nos": [
+       {"id","tipo","ref","gate","inicial","gatilho","x","y",
+        "saidas": [{"id","rotulo","quando","destino","tone"}]},
+       ...
+     ]}
+
+Este módulo é **puro** (não toca o banco) e é reusado pelo motor, pela IA criadora
+e pela migração de dados:
+
+- `normalizar(cadeia)`   → completa um grafo (canônico, simplificado da IA, ou no
+  formato antigo) para a forma canônica acima. Idempotente.
+- `converter_linear_para_grafo(antiga)` → traduz o dict-por-agente antigo.
+- `indexar(cadeia)`      → índice `{id: nó}` + helpers de travessia para o motor.
+
+Princípio (SPEC §2): `tone`, `x`, `y` são **cosméticos** — o motor nunca depende
+deles. O que o motor lê: `inicial`, `nos[].id/tipo/ref/gate`, `saidas[].rotulo/destino`.
+"""
+
+from dataclasses import dataclass, field
+
+# Tipos de nó (SPEC §2). gatilho/fim são estruturais; o motor só roda agente/roteador.
+TIPOS_VALIDOS = {"gatilho", "agente", "roteador", "fim"}
+# Cor da aresta na UI (cosmético).
+TONES_VALIDOS = {"normal", "ok", "loop"}
+# Tipos de gatilho (espelham `automacoes.tipo_gatilho`).
+TIPOS_GATILHO = {"manual", "agendamento", "webhook"}
+
+# Sentinelas de "encerrar a cadeia" aceitas num `destino` (retrocompat com o
+# formato antigo, onde destino null/"" significava fim).
+DESTINOS_FIM = {None, "", "fim", "FIM"}
+
+# Ids estáveis dos nós estruturais criados na normalização.
+ID_GATILHO = "gatilho"
+ID_FIM = "fim"
+
+
+def vazia(cadeia: dict | None) -> bool:
+    """True para um rascunho ainda sem grafo montado (cadeia permitida vazia)."""
+    if not cadeia:
+        return True
+    return not cadeia.get("nos") and not cadeia.get("inicio") and not cadeia.get("inicial")
+
+
+def eh_formato_antigo(cadeia: dict) -> bool:
+    """Detecta o formato dict-por-agente (antigo). No novo, `nos` é uma LISTA."""
+    nos = cadeia.get("nos")
+    if isinstance(nos, dict):
+        return True
+    # `inicio` (antigo) sem `inicial` (novo) também denuncia o formato antigo.
+    return "inicio" in cadeia and "inicial" not in cadeia
+
+
+def normalizar(cadeia: dict | None) -> dict:
+    """Completa qualquer entrada para a forma canônica (lista de nós tipados).
+
+    Aceita: o formato antigo (converte), um grafo "simplificado" da IA (só nós-
+    agente + saídas + `gate` + qual é o inicial — o resto é preenchido aqui) ou o
+    canônico já pronto (caso em que apenas garante campos faltantes). Idempotente:
+    re-normalizar o resultado devolve a mesma estrutura. Rascunho vazio → {}."""
+    cadeia = cadeia or {}
+    if vazia(cadeia):
+        return {}
+    if eh_formato_antigo(cadeia):
+        return converter_linear_para_grafo(cadeia)
+    return _completar(cadeia)
+
+
+def converter_linear_para_grafo(antiga: dict | None) -> dict:
+    """Traduz o dict-por-agente antigo para a forma canônica. O id de cada nó passa
+    a ser o próprio `agente_id` (no formato antigo cada agente aparecia uma vez), o
+    que mantém os `destino`s existentes válidos. `inicio`→`inicial`,
+    `pausa_humano`→`gate`, destino sentinela→nó `fim`."""
+    antiga = antiga or {}
+    nos_antigos = antiga.get("nos") or {}
+    inicio = antiga.get("inicio")
+    if not nos_antigos and not inicio:
+        return {}
+    nos = []
+    for agente_id, no in nos_antigos.items():
+        no = no or {}
+        nos.append(
+            {
+                "id": agente_id,
+                "tipo": "agente",
+                "ref": agente_id,
+                "gate": bool(no.get("pausa_humano")),
+                "saidas": [
+                    {
+                        "rotulo": s.get("rotulo"),
+                        "quando": s.get("quando"),
+                        "destino": s.get("destino"),
+                    }
+                    for s in (no.get("saidas") or [])
+                ],
+            }
+        )
+    return _completar({"inicial": inicio, "nos": nos})
+
+
+def _completar(cadeia: dict) -> dict:
+    """Núcleo da normalização de um grafo já em lista de nós: garante ids únicos,
+    tipos, nó `gatilho` e nó `fim`, ids/tone das saídas, mapeia destino sentinela
+    para o nó `fim`, deriva `inicial` e faz um auto-layout das posições faltantes."""
+    nos = [dict(n) for n in (cadeia.get("nos") or [])]
+
+    # 1) ids de nó únicos e tipo/saidas garantidos.
+    usados: set[str] = set()
+    for i, n in enumerate(nos):
+        nid = n.get("id") or n.get("ref") or f"no{i}"
+        base, k = nid, 1
+        while nid in usados:
+            nid = f"{base}_{k}"
+            k += 1
+        n["id"] = nid
+        usados.add(nid)
+        n.setdefault("tipo", "agente")
+        n["saidas"] = [dict(s) for s in (n.get("saidas") or [])]
+
+    # 2) nó inicial: explícito > nó marcado `inicial` > primeiro agente.
+    inicial = cadeia.get("inicial")
+    if not inicial or inicial not in usados:
+        marcados = [n["id"] for n in nos if n.get("inicial")]
+        agentes = [n["id"] for n in nos if n.get("tipo") == "agente"]
+        inicial = marcados[0] if marcados else (agentes[0] if agentes else None)
+
+    # 3) garante um nó `fim`.
+    if not any(n["tipo"] == "fim" for n in nos):
+        fid = ID_FIM
+        base, k = fid, 1
+        while fid in usados:
+            fid = f"{base}_{k}"
+            k += 1
+        nos.append({"id": fid, "tipo": "fim", "saidas": []})
+        usados.add(fid)
+    id_fim = next(n["id"] for n in nos if n["tipo"] == "fim")
+
+    # 4) garante um nó `gatilho` apontando para o inicial (se há inicial).
+    gatilho = next((n for n in nos if n["tipo"] == "gatilho"), None)
+    if inicial and gatilho is None:
+        gid = ID_GATILHO
+        base, k = gid, 1
+        while gid in usados:
+            gid = f"{base}_{k}"
+            k += 1
+        nos.insert(
+            0,
+            {
+                "id": gid,
+                "tipo": "gatilho",
+                "gatilho": "manual",
+                "saidas": [{"rotulo": "inicia o fluxo", "destino": inicial}],
+            },
+        )
+        usados.add(gid)
+    elif inicial and gatilho is not None and not (gatilho.get("saidas") or []):
+        # gatilho já existe mas estava solto (grafo recém-montado): liga-o ao inicial.
+        gatilho["saidas"] = [{"rotulo": "inicia o fluxo", "destino": inicial}]
+
+    # 5) completa saídas (id estável, tone, destino sentinela → nó fim) e marca o
+    #    nó inicial.
+    for n in nos:
+        for j, s in enumerate(n["saidas"]):
+            s.setdefault("id", f"{n['id']}-{j}")
+            if s.get("tone") not in TONES_VALIDOS:
+                s["tone"] = "normal"
+            if s.get("destino") in DESTINOS_FIM:
+                s["destino"] = id_fim
+        n["inicial"] = n["id"] == inicial
+        n["saidas"] = n["saidas"]
+
+    # 6) auto-layout das posições faltantes (cosmético; preserva o que o usuário moveu).
+    _auto_layout(nos, inicial, id_fim)
+
+    return {"inicial": inicial, "nos": nos}
+
+
+def _auto_layout(nos: list[dict], inicial: str | None, id_fim: str) -> None:
+    """Preenche `x`/`y` só onde faltam, em colunas por profundidade (BFS) a partir
+    do gatilho/inicial. Puramente visual: o motor ignora x/y."""
+    por_id = {n["id"]: n for n in nos}
+    coluna: dict[str, int] = {}
+
+    # raiz da travessia: o nó gatilho, senão o inicial.
+    raiz = next((n["id"] for n in nos if n.get("tipo") == "gatilho"), inicial)
+    if raiz:
+        fila = [(raiz, 0)]
+        visto = set()
+        while fila:
+            nid, c = fila.pop(0)
+            if nid in visto or nid not in por_id:
+                continue
+            visto.add(nid)
+            coluna[nid] = min(coluna.get(nid, c), c) if nid in coluna else c
+            for s in por_id[nid].get("saidas") or []:
+                d = s.get("destino")
+                if d in por_id and d not in visto:
+                    fila.append((d, c + 1))
+
+    # o nó fim fica numa coluna além de todos.
+    max_col = max(coluna.values(), default=0)
+    coluna.setdefault(id_fim, max_col + 1)
+
+    # empilhamento vertical por coluna (para nós no mesmo nível não se sobreporem).
+    ocupacao: dict[int, int] = {}
+    LARGURA, ALTURA, BASE_Y = 300, 150, 240
+    for n in nos:
+        c = coluna.get(n["id"], 0)
+        linha = ocupacao.get(c, 0)
+        ocupacao[c] = linha + 1
+        if "x" not in n or n.get("x") is None:
+            n["x"] = 60 + c * LARGURA
+        if "y" not in n or n.get("y") is None:
+            n["y"] = BASE_Y + linha * ALTURA
+
+
+@dataclass
+class GrafoIndex:
+    """Índice de travessia do grafo para o motor (Fase 2). Não toca o banco."""
+
+    inicial: str | None
+    nos: dict[str, dict] = field(default_factory=dict)
+
+    def no(self, nid: str | None) -> dict | None:
+        return self.nos.get(nid) if nid is not None else None
+
+    def saidas(self, nid: str | None) -> list[dict]:
+        return list((self.no(nid) or {}).get("saidas") or [])
+
+    def eh_fim(self, destino: str | None) -> bool:
+        """True se o destino encerra a cadeia: sentinela antiga ou nó `tipo:fim`."""
+        if destino in DESTINOS_FIM:
+            return True
+        n = self.nos.get(destino)
+        return bool(n) and n.get("tipo") == "fim"
+
+
+def indexar(cadeia: dict | None) -> GrafoIndex:
+    """Constrói o índice `{id: nó}` + `inicial` para o motor percorrer o grafo."""
+    cadeia = cadeia or {}
+    nos = {n["id"]: n for n in (cadeia.get("nos") or []) if n.get("id")}
+    return GrafoIndex(inicial=cadeia.get("inicial"), nos=nos)

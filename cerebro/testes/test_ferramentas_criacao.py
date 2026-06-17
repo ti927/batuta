@@ -78,7 +78,8 @@ def test_remover_agente_limpa_cadeia(sessao, dados):
     assert _chamar(f, "montar_cadeia", cadeia=cadeia)["ok"]
     assert _chamar(f, "remover_agente", agente_id=a2)["ok"]
     visto = json.loads(f["ver_time"].func())
-    nos = visto["automacao"]["cadeia"]["nos"]
+    # cadeia é grafo (lista de nós): indexa por id
+    nos = {n["id"]: n for n in visto["automacao"]["cadeia"]["nos"]}
     assert a2 not in nos
     assert all(s["destino"] != a2 for s in nos[a1]["saidas"])
 
@@ -112,6 +113,39 @@ def test_encaixar_instrumento(sessao, dados):
     agente = next(a for a in visto["agentes"] if a["id"] == ag)
     assert agente["cinto"] == [inst]
     assert _chamar(f, "encaixar_instrumento", agente_id="00000000-0000-0000-0000-000000000000", instrumento_id=inst)["ok"] is False
+
+
+def test_montar_cadeia_grafo_normaliza(sessao, dados):
+    """A IA monta um grafo simplificado (bifurcação + gate, sem posições nem nós
+    estruturais); a normalização completa ids/posições e cria gatilho/fim."""
+    _ctx, f = _setup(sessao, dados)
+    _chamar(f, "definir_time", nome="T")
+    cacador = _chamar(f, "adicionar_agente", nome="Cacador", papel="lider")["id"]
+    validador = _chamar(f, "adicionar_agente", nome="Validador")["id"]
+    cadeia = {
+        "inicial": "n_cacador",
+        "nos": [
+            {"id": "n_cacador", "tipo": "agente", "ref": cacador,
+             "saidas": [{"rotulo": "tema", "destino": "n_val"}]},
+            {"id": "n_val", "tipo": "agente", "ref": validador, "gate": True,
+             "saidas": [
+                 {"rotulo": "aprovado", "destino": "fim"},
+                 {"rotulo": "refazer", "destino": "n_cacador"},  # loop
+             ]},
+        ],
+    }
+    assert _chamar(f, "montar_cadeia", cadeia=cadeia)["ok"]
+    visto = json.loads(f["ver_time"].func())
+    g = visto["automacao"]["cadeia"]
+    nos = {n["id"]: n for n in g["nos"]}
+    assert g["inicial"] == "n_cacador"
+    # nós estruturais criados; gate preservado; loop preservado
+    assert "gatilho" in nos and "fim" in nos
+    assert nos["n_val"]["gate"] is True
+    assert any(s["destino"] == "n_cacador" for s in nos["n_val"]["saidas"])
+    # posições e ids de saída preenchidos
+    assert all("x" in n and "y" in n for n in g["nos"])
+    assert all(s.get("id") for s in nos["n_cacador"]["saidas"])
 
 
 def test_montar_cadeia_invalida(sessao, dados):

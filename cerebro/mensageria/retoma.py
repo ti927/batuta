@@ -13,7 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from modelos import Automacao, Execucao, PassoExecucao
-from orquestracao.cadeia import _DESTINOS_FIM, _escolher_saida, executar_cadeia
+from orquestracao import grafo
+from orquestracao.cadeia import _escolher_saida, executar_cadeia
 from orquestracao.disparo import _aplicar_resultado, _fazer_registrador
 from orquestracao.llm import usar_chaves
 
@@ -47,11 +48,17 @@ def retomar_execucao(
         .where(PassoExecucao.execucao_id == execucao.id)
         .order_by(PassoExecucao.ordem.desc())
     ).first()
-    if ultimo is None or ultimo.agente_id is None:
+    # O nó pausado é localizado por id de nó (`no_id`). Para execuções antigas (sem
+    # `no_id` gravado), cai no `agente_id` — que, na cadeia convertida, é o id do nó.
+    no_pausado = (ultimo.no_id if ultimo else None) or (
+        str(ultimo.agente_id) if ultimo and ultimo.agente_id else None
+    )
+    if no_pausado is None:
         raise ValueError("passo de pausa ausente")
 
-    cadeia = auto.cadeia or {}
-    no = (cadeia.get("nos") or {}).get(str(ultimo.agente_id)) or {}
+    cadeia = grafo.normalizar(auto.cadeia or {})
+    idx = grafo.indexar(cadeia)
+    no = idx.no(no_pausado) or {}
     saidas = no.get("saidas") or []
 
     # Portão de aprovação (PRODUTO §14): a RESPOSTA escolhe o caminho.
@@ -63,7 +70,7 @@ def retomar_execucao(
         with usar_chaves(chaves):
             escolhida, _ = _escolher_saida(resposta, saidas)
     destino = escolhida.get("destino") if escolhida else None
-    proximo = None if destino in _DESTINOS_FIM else destino
+    proximo = None if (destino is None or idx.eh_fim(destino)) else destino
 
     entrada_proxima = entrada_retomada((ultimo.saida or {}).get("texto", ""), resposta)
 

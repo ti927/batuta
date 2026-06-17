@@ -6,11 +6,13 @@ aprovação humana antes de uma AÇÃO IRREVERSÍVEL (publicar, enviar, gravar e
 externo): um agente que use um instrumento irreversível só pode ser ativado se a
 cadeia pausar para um humano ANTES de ele rodar.
 
-Semântica do portão (CUIDADO — fonte de bug clássico): o motor lê `pausa_humano`
-no NÓ (`orquestracao/cadeia.py`: `no.get("pausa_humano")`), não na saída. Pausar um
-nó significa "depois deste agente, espere a aprovação humana antes de seguir". Logo,
-para blindar um agente irreversível X, TODO nó que tem uma saída levando a X precisa
-ter `pausa_humano: true` — e X não pode ser o início (não há nó antes dele).
+Semântica do portão (CUIDADO — fonte de bug clássico): o motor lê `gate` no NÓ
+(`orquestracao/cadeia.py`: `no.get("gate")`), não na saída. Pôr `gate` num nó
+significa "depois deste nó, espere a aprovação humana antes de seguir". Logo, para
+blindar um nó-agente irreversível X, TODO nó que tem uma saída levando a X precisa
+ter `gate: true` — e X não pode ser o início (não há nó antes dele). Como o mesmo
+agente pode aparecer em vários nós, a checagem é por NÓ-agente cujo `ref` é o agente
+irreversível.
 
 Reaproveitado pela rota de automações (vira HTTP 422) e pela ferramenta da IA (vira
 texto de volta para ela corrigir na conversa)."""
@@ -22,6 +24,7 @@ from sqlalchemy.orm import Session
 
 import instrumentos as encaixe
 from modelos import Agente, AgenteInstrumento, Instrumento
+from orquestracao import grafo
 
 
 def coletar_agentes(
@@ -60,48 +63,59 @@ def problemas_de_portao(
     cadeia: dict, nomes: dict[str, str], irreversiveis: set[str]
 ) -> list[str]:
     """Lista, em português, os problemas de portão que impedem a ativação (vazia =
-    pode ativar). Pura e testável: não toca no banco."""
+    pode ativar). Pura e testável: não toca no banco. Aceita a cadeia em qualquer
+    formato (normaliza para o grafo de nós tipados antes de checar)."""
     problemas: list[str] = []
-    nos = (cadeia or {}).get("nos") or {}
-    inicio = (cadeia or {}).get("inicio")
+    cadeia = grafo.normalizar(cadeia or {})
+    nos = cadeia.get("nos") or []
+    inicial = cadeia.get("inicial")
+    por_id = {n["id"]: n for n in nos}
 
-    def nome(aid: str) -> str:
-        return nomes.get(aid, "agente")
+    def nome_no(no: dict) -> str:
+        # nó-agente: nome do agente; senão, nome do nó (roteador) ou o tipo.
+        if no.get("tipo") == "agente":
+            return nomes.get(str(no.get("ref")), "agente")
+        return no.get("nome") or no.get("tipo") or "passo"
 
-    for aid in sorted(irreversiveis, key=nome):
+    # Nós-agente cujo `ref` é um agente de ação irreversível (o mesmo agente pode
+    # aparecer em vários nós; cada um precisa de portão antes).
+    nos_irrev = [
+        n for n in nos
+        if n.get("tipo") == "agente" and str(n.get("ref")) in irreversiveis
+    ]
+    for no in sorted(nos_irrev, key=nome_no):
+        nid = no["id"]
+        nome_agente = nome_no(no)
         # Início: roda primeiro, não há como pausar antes dele.
-        if aid == inicio:
+        if nid == inicial:
             problemas.append(
-                f"O agente '{nome(aid)}' faz uma ação que não dá para desfazer e é "
+                f"O agente '{nome_agente}' faz uma ação que não dá para desfazer e é "
                 f"o início da automação — não há passo antes dele para a aprovação. "
                 f"Ponha um agente antes, com portão de aprovação humana."
             )
             continue
-        # Nós cujas saídas levam a este agente (os "anteriores" a ele na cadeia).
+        # Nós cujas saídas levam a este nó (os "anteriores"); o gatilho não conta
+        # (ele só aponta para o inicial, já tratado acima).
         anteriores = [
-            no_id
-            for no_id, no in nos.items()
-            if any(
-                (s or {}).get("destino") == aid for s in (no or {}).get("saidas") or []
-            )
+            n for n in nos
+            if n.get("tipo") != "gatilho"
+            and any((s or {}).get("destino") == nid for s in n.get("saidas") or [])
         ]
         if not anteriores:
             # Não é início nem destino de ninguém: não roda nesta automação → sem risco.
             continue
-        sem_portao = [
-            no_id
-            for no_id in anteriores
-            if not bool((nos.get(no_id) or {}).get("pausa_humano"))
-        ]
+        sem_portao = [n for n in anteriores if not bool(n.get("gate"))]
         if sem_portao:
-            quais = ", ".join(f"'{nome(n)}'" for n in sem_portao)
+            quais = ", ".join(f"'{nome_no(n)}'" for n in sem_portao)
             problemas.append(
-                f"O agente '{nome(aid)}' faz uma ação que não dá para desfazer "
+                f"O agente '{nome_agente}' faz uma ação que não dá para desfazer "
                 f"(publicar/enviar/gravar), mas o passo anterior ({quais}) não tem "
                 f"portão de aprovação humana antes dele. Marque a pausa para humano "
                 f"nesse passo, para alguém aprovar antes de a ação acontecer."
             )
-    return problemas
+    # Dedup mantendo a ordem (um mesmo agente irreversível em vários nós pode gerar
+    # a mesma mensagem).
+    return list(dict.fromkeys(problemas))
 
 
 def validar(sessao: Session, time_id: uuid.UUID, cadeia: dict) -> list[str]:

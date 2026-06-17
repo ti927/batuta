@@ -21,7 +21,7 @@ def test_prompt_tem_as_pecas_essenciais():
     assert "agent_md" in p and "soul_md" in p
     assert "AGE, não pergunta" in p and "REPASSE LIMPO" in p
     # a PAREDE: portão no NÓ anterior (não na saída)
-    assert "pausa_humano" in p
+    assert "gate" in p
     assert "NÓ" in p
     # sinaliza ativação (não decide sozinha) e modelos válidos por papel
     assert "SINALIZE" in p and "nunca ativa sozinho" in p.lower()

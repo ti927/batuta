@@ -25,9 +25,8 @@ import instrumentos as encaixe
 import portao_ativacao
 import segredos_instrumento as segredos
 from modelos import Agente, AgenteInstrumento, Automacao, Instrumento, Time, Usuario
+from orquestracao import grafo
 from orquestracao.cadeia import validar_cadeia
-
-_DESTINOS_FIM = {None, "", "fim", "FIM"}
 
 
 class ConflitoDominio(Exception):
@@ -129,23 +128,38 @@ def remover_agente(sessao: Session, agente: Agente, *, usuario: Usuario | None =
 
 
 def _limpar_agente_das_cadeias(sessao: Session, time_id: uuid.UUID, agente_id: str) -> None:
-    """Tira um agente removido das cadeias das automações do time: apaga o nó, as
-    saídas que apontavam para ele, e zera o `inicio` se era ele (evita cadeia órfã)."""
+    """Tira um agente removido das cadeias das automações do time: apaga TODO nó cujo
+    `ref` é esse agente (ele pode aparecer em vários nós), as saídas que apontavam
+    para esses nós, e reconcilia o inicial/gatilho (evita cadeia órfã). Grava no
+    formato canônico de grafo."""
     autos = sessao.scalars(select(Automacao).where(Automacao.time_id == time_id)).all()
     for auto in autos:
-        cadeia = dict(auto.cadeia or {})
-        nos = dict(cadeia.get("nos") or {})
-        if agente_id not in nos and cadeia.get("inicio") != agente_id:
+        cadeia = grafo.normalizar(auto.cadeia or {})
+        nos = cadeia.get("nos") or []
+        ids_remover = {
+            n["id"] for n in nos
+            if n.get("tipo") == "agente" and str(n.get("ref")) == agente_id
+        }
+        if not ids_remover:
             continue
-        nos.pop(agente_id, None)
-        for no in nos.values():
-            no["saidas"] = [
-                s for s in (no.get("saidas") or []) if s.get("destino") != agente_id
+        nos = [n for n in nos if n["id"] not in ids_remover]
+        # Se não sobra agente, a cadeia volta a rascunho vazio.
+        if not any(n.get("tipo") == "agente" for n in nos):
+            auto.cadeia = {}
+            continue
+        inicial = cadeia.get("inicial")
+        if inicial in ids_remover:
+            inicial = next((n["id"] for n in nos if n.get("tipo") == "agente"), None)
+        for n in nos:
+            n["saidas"] = [
+                s for s in (n.get("saidas") or []) if s.get("destino") not in ids_remover
             ]
-        cadeia["nos"] = nos
-        if cadeia.get("inicio") == agente_id:
-            cadeia["inicio"] = None
-        auto.cadeia = cadeia  # reatribui: o ORM detecta a troca do JSONB
+            # o gatilho passa a apontar para o novo inicial
+            if n.get("tipo") == "gatilho" and inicial:
+                base = n["saidas"][0] if n["saidas"] else {"rotulo": "inicia o fluxo"}
+                n["saidas"] = [{**base, "destino": inicial}]
+        # reatribui (o ORM detecta a troca do JSONB), renormalizando para reconciliar.
+        auto.cadeia = grafo.normalizar({"inicial": inicial, "nos": nos})
 
 
 # ──────────────────────────── Instrumento ───────────────────────────
@@ -248,7 +262,7 @@ def definir_cadeia(
     except ValueError as e:
         raise ConflitoDominio(f"Cadeia inválida: {e}")
     auto = _obter_ou_criar_automacao(sessao, time)
-    auto.cadeia = cadeia or {}
+    auto.cadeia = grafo.normalizar(cadeia or {})  # grava no formato canônico de grafo
     sessao.flush()
     _audit(sessao, usuario, "automacao.definida", "automacao", auto.id, time.organizacao_id)
     return auto
@@ -279,6 +293,7 @@ def definir_automacao(
         validar_cadeia(cadeia, _ids_agentes(sessao, time.id))
     except ValueError as e:
         raise ConflitoDominio(f"Cadeia inválida: {e}")
+    cadeia = grafo.normalizar(cadeia)  # grava no formato canônico de grafo
     auto = sessao.scalars(
         select(Automacao).where(Automacao.time_id == time.id).order_by(Automacao.criado_em)
     ).first()

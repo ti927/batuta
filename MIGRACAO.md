@@ -247,6 +247,12 @@ A Etapa 2 original tinha sete fases (6 a 12). Com as viradas, ela encolhe e se r
 **Fase final — Implantação em produção**
 - Publicação no Railway, domínio definitivo, teste de ponta a ponta. Dá a URL pública HTTPS de que a Mensageria (WhatsApp) precisa.
 
+**Fase — Automações como GRAFO (construtor visual)** — ✅ **IMPLEMENTADA local (suíte verde) 2026-06-16, aguarda deploy**
+- **Lacuna corrigida:** a aba Automações nasceu como **lista linear** (rápida para provar o core); ao montar times reais com bifurcações/loops virou gargalo. Esta fase a substituiu por um **construtor de grafo** (React Flow; handoff `docs/design_handoff_automacoes_grafo/`), aproveitando que o motor **já** executa grafo.
+- **Decisões do maestro (2026-06-16):** (1) **adaptar** o motor atual ao novo formato de `cadeia` (lista de nós tipados) — **não** migrar para LangGraph nativo; (2) **integrar a aprovação por canal** (Telegram) no nó com portão (absorveu a config por-automação `apv00canal001`). Detalhe e Definition of Done no `BUILD-PLAN.md` ("FASE — Automações como GRAFO").
+- **Como ficou (2 desvios para proteger a produção):** (1) **sem migração de dados** — o motor **normaliza na leitura** (lê o shape antigo e o novo); só a coluna aditiva `passos_execucao.no_id` foi aplicada (`gra00grafo001`). (2) o drop da coluna `aprovacao_instrumento_id` (`apv00drop001`) é aplicado **pós-deploy** (subir o código que não a usa antes — lição `una00prov001`).
+- **Cuidado/exceção registrada:** diferente das outras fases, esta **toca o parser do motor** (`orquestracao/cadeia.py`) para ler o novo shape — evolução **autorizada pelo maestro**; o laço de execução de um agente (`agente.py`) permanece intocado. Ver a exceção registrada na §6.1 (item 1).
+
 ### 4.2. O que sai da Etapa 2 original
 
 Eliminadas do escopo (conforme Virada 1):
@@ -293,6 +299,7 @@ Esta seção é dirigida ao Claude Code. Lê com atenção; ela governa o **como
 ### 6.1. Princípios não-negociáveis
 
 1. **O núcleo já validado é intocável.** A orquestração de agentes, o LangGraph, a espera-por-humano, os gatilhos, a tela de inspeção, os instrumentos já construídos — todo o motor da Etapa 1 está fora do escopo desta migração. Você **estende e adiciona**, não refatora. Se uma fase desta migração parece exigir mudança no núcleo, pare e pergunte ao maestro antes de prosseguir.
+   - **Exceção autorizada (2026-06-16):** a **FASE — Automações como GRAFO** muda o **formato do `cadeia`** (de dict por-agente para lista de nós tipados), o que **toca o parser do motor** (`orquestracao/cadeia.py`: `validar_cadeia`/`executar_cadeia`) e a retomada (`mensageria/retoma.py`). O maestro autorizou essa evolução explicitamente (foi perguntado e decidiu *adaptar* o motor, não reescrevê-lo para LangGraph nativo). O **laço de execução de um agente** (`agente.py`, o `create_react_agent`) permanece **intocado**. Toda outra fase segue a regra acima.
 
 2. **Migrations no banco são aditivas, nunca destrutivas.** Você adiciona tabelas e colunas; não apaga nem renomeia o que já tem dados em produção interna. Onde for inevitável uma transformação (como o caso de `organizacoes.dono` migrando para a tabela `membros`), faz-se em duas etapas: adiciona o novo, popula com base no existente, e só então — depois de validação — descontinua o antigo.
 

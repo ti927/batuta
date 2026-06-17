@@ -995,8 +995,20 @@ encerra, vigia no agendador), **G** (guarda-corpo anti prompt-injection) e **H**
    cards na inbox. (d) **Status de entrega** já existia (`MensagemConversa.entregue`). Lição reforçada: os
    campos novos do instrumento só aparecem após reiniciar o cérebro (processo velho serve schema velho) —
    `--reload` no dev evita. Campos declarados na Config persistem (model_dump descarta não-declarados).
-7. **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
-8. **Biblioteca** (RAG da organização; plano de 10 passos aprovado, `docs/BIBLIOTECA-DECISAO.md`).
+7. ✅ **Aprovação do portão por canal (Telegram)** (IMPLEMENTADA · NO AR 2026-06-16, merge `52431bc`,
+   migração `apv00canal001`, 265 testes). O portão de aprovação (`pausa_humano`) passou a ser resolvível
+   **também pelo Telegram**, coexistindo com a tela (vale a 1ª resposta): a automação aponta um canal de
+   aprovação (`automacoes.aprovacao_instrumento_id`); ao pausar, a borda amarra a conversa do aprovador à
+   execução (`Conversa.execucao_id`) e a resposta de entrada religa o fluxo (`retoma`). **NB:** será
+   **ABSORVIDA pela FASE — Automações como grafo** (a config de aprovação migra para o NÓ com portão, no
+   inspector; a coluna por-automação será aposentada — resolve também o atrito do destinatário).
+8. ✅ **FASE — Automações como grafo (construtor visual)** — **IMPLEMENTADA (local, suíte verde) 2026-06-16,
+   aguarda deploy**. Substituiu a lista linear pelo construtor de grafo (React Flow), adaptou o motor ao
+   novo `cadeia` (lista de nós tipados), e **absorveu a aprovação por canal** (config no NÓ com portão; a
+   coluna `aprovacao_instrumento_id` é dropada pós-deploy via `apv00drop001`). Detalhes na seção própria
+   abaixo. **Próximas:** (9) WhatsApp, (10) Biblioteca.
+9. 📋 **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
+10. 📋 **Biblioteca** (RAG da organização; plano de 10 passos aprovado, `docs/BIBLIOTECA-DECISAO.md`).
 
 O `PRODUTO.md` prevê que os agentes conversem com pessoas por mensageria (§10/§111/§126/§14). Hoje a
 espera-por-humano é respondida **na tela do Batuta**, e o Batuta só sabe *enviar* (instrumentos de mão
@@ -1042,6 +1054,89 @@ cumprido**: URL pública HTTPS (`api.batuta.team`).
 um turno; a conversa aparece na inbox e um operador pode assumir/devolver; inatividade gera nudge e depois
 encerra; estourar o teto passa a conversa para humano; suíte verde; núcleo `cadeia.py`/`agente.py` sem
 diff.
+
+## FASE — Automações como GRAFO (construtor visual + motor adaptado + aprovação no nó)  ✅ IMPLEMENTADA (local, suíte verde · `tsc`/`eslint`/`next build` limpos) — aguarda deploy (2026-06-16)
+
+> **Fontes da verdade:** o handoff de design **`docs/design_handoff_automacoes_grafo/`** (`README.md`,
+> `SPEC.md` = formato do `cadeia`, `LANGGRAPH.md` = mapa visual→motor, `app-team-automacoes.jsx` +
+> screenshots) e o plano detalhado em **`~/.claude/plans/temos-um-problema-pra-replicated-noodle.md`**.
+> Esta seção é o resumo durável no BUILD-PLAN.
+
+> **Como ficou (2 desvios do plano, ambos para proteger a produção no ar — banco = produção):**
+> (1) **Sem migração de dados destrutiva.** Em vez de converter as automações em produção (o que quebraria
+> o código antigo ainda no ar), o motor **NORMALIZA na leitura** (`grafo.normalizar`, idempotente, lê o
+> formato antigo e o novo); cada automação migra de forma preguiçosa ao ser re-salva pelo construtor. A
+> migração `gra00grafo001` ficou **só aditiva** (coluna `passos_execucao.no_id`, nullable) — já aplicada.
+> (2) **Drop da coluna `aprovacao_instrumento_id` em migração à parte** (`apv00drop001`), a aplicar **depois
+> do deploy** do código que parou de usá-la (lição `una00prov001`: subir o código antes do drop).
+> Canvas: **React Flow (`@xyflow/react`)** confirmado pelo maestro. Núcleo: `agente.py` intocado.
+
+**Por que (o problema):** a aba Automações nasceu como **lista linear** (1 cartão por agente, 1 saída)
+para acelerar a prova do core. Ao montar times com vários agentes, múltiplas saídas, bifurcações e loops,
+isso virou gargalo e não comunica a topologia. O motor (`PRODUTO.md §14`, Fase 4) **já executa** grafo
+com bifurcação, loops e portão — falta a **TELA** para desenhá-lo.
+
+**Verdade técnica (apurada no código, registra para não repetir o engano do handoff):** o motor do Batuta
+**NÃO é LangGraph nativo** — é um motor próprio em Python (`orquestracao/cadeia.py::executar_cadeia`:
+caminha pelos nós, roteia via `_escolher_saida` com LLM Haiku, pausa retornando `aguardando_humano`,
+retoma em `mensageria/retoma.py`; `MAX_PASSOS=25`). O `create_react_agent` do LangGraph é usado só para UM
+agente rodar suas ferramentas (`orquestracao/agente.py`). O `LANGGRAPH.md` é educativo/aspiracional; o
+próprio §6 manda **NÃO reescrever a orquestração**.
+
+**Decisões do maestro (2026-06-16):** (1) **adaptar** o motor atual ao novo formato de grafo — **não**
+migrar para StateGraph/checkpointer/interrupt nativos; (2) **integrar a aprovação por canal** nesta
+reforma: a config de aprovação passa a viver **no nó com portão** (inspector), substituindo a coluna
+por-automação `aprovacao_instrumento_id` (item 7 da fila acima) — resolve de forma coesa o portão por
+Telegram (inclusive o atrito do destinatário, que passa a ser explícito por portão).
+
+**Novo formato do `cadeia` (JSONB) — `SPEC.md §2`:** de **dict por-agente** (`{inicio, nos:{agente_id:
+{saidas:[{rotulo,quando,destino}], pausa_humano}}}`) para **lista de nós tipados** (`{inicial,
+nos:[{id,tipo,ref,gate,aprovacao,x,y,saidas:[{id,rotulo,destino,tone}]}]}`). Tipos de nó: **gatilho**,
+**agente**, **roteador** (classificação sem agente — novo), **fim**. `tone`/`x`/`y` são **cosméticos** (o
+motor ignora); o `rotulo` é a **chave de roteamento** (mantém-se `quando` como descrição opcional). O nó
+tem `id` próprio separado do `ref` (agente) → **o mesmo agente pode aparecer em vários nós** (novo).
+
+**Faseamento (cada fase = investigar/implementar/verificar + DoD; suíte verde entre fases; ordem sugerida
+1→2→3→5→4→6):**
+1. **Fundação no cérebro:** `orquestracao/grafo.py` (novo: `normalizar`, `converter_linear_para_grafo`,
+   `indexar`); **migração de dados** idempotente convertendo as automações em produção para o novo shape;
+   coluna `passos_execucao.no_id` (nullable) para a retomada localizar o nó pausado por id; `esquemas.py`
+   aceita/expõe o novo `cadeia`.
+2. **Adaptar o motor:** `cadeia.py` (`validar_cadeia` + `executar_cadeia` indexando por id de nó;
+   resolve agente por `ref`; ignora `gatilho`; `fim`/sem-saída = encerra; `gate` no lugar de
+   `pausa_humano`; nó **roteador** só classifica); `retoma.py` (localiza o nó pausado por `no_id`);
+   `disparo.py` (grava `no_id`); `portao_ativacao.py` (parede no novo shape). Testes do motor.
+3. **Caminho da IA criadora:** `montar_cadeia` aceita grafo **simplificado** e o backend `normaliza`
+   (a IA não cuida de x/y/ids/gatilho/fim); `criacao/servicos.py` opera no novo shape; `criacao/prompt.py`
+   reescreve cadeia/bifurcação/portão (`gate`, `rotulo`); `_snapshot_time` expõe o novo formato. Os **dois
+   caminhos (manual e IA)** produzem o MESMO `cadeia`.
+4. **Construtor visual (React Flow / `@xyflow/react`):** substitui `automacoes-cliente.tsx` por um
+   `AutomacaoBuilder` (canvas full-bleed; nós custom Gatilho/Agente/Roteador/Fim com handles de entrada/
+   saída; arestas `CondEdge` com rótulo + cor por `tone`, curva de loop; inspector 348px com editor de
+   saídas + toggle de portão; pan/zoom/enquadrar; gating por papel). Tipos `Cadeia/NoCadeia/SaidaCadeia`
+   reescritos em `lib/api.ts`.
+5. **Consumidores read-only adaptados:** `inspecao-execucao.tsx` (botões do portão a partir do nó pausado
+   por `no_id`), `dashboard-cliente.tsx` (`CadeiaHorizontal`), `criar/[id]/criacao-cliente.tsx`
+   (`CadeiaVertical`), `automacao-detalhe-cliente.tsx` (`inicial`).
+6. **Aprovação por canal no nó (absorve o item 7 da fila):** o nó `gate` carrega
+   `aprovacao:{instrumento_id, destinatario}`; `mensageria/aprovacao.py::vincular_pausa` lê a config do nó
+   pausado (não mais da automação); inspector do nó configura "pedir aprovação por" (tela/canal) +
+   destinatário; a coluna `automacoes.aprovacao_instrumento_id` é aposentada (drop ADITIVO depois que o
+   código parar de usá-la). O restante (correlação `Conversa.execucao_id`, roteamento da resposta →
+   `retoma`, ack, coexistência com a tela) **já existe** e permanece.
+
+**Princípios/cuidados:** o redesenho **toca o parser do motor** (antes "congelado") — é evolução
+autorizada; `agente.py` (laço react de UM agente) **permanece intocado**. Gatilho continua tendo
+`tipo_gatilho`/`configuracao_gatilho` na `Automacao` como fonte da verdade do agendador/webhook (o nó
+`gatilho` é reflexo). Mudança de shape toca muitos lugares (listados no plano) → fazer por fase, nunca
+meio-quebrado. Migração de dados pede confirmação do maestro (banco = produção).
+
+**Definition of Done:** abrir uma automação real (migrada) no construtor mostra o mesmo fluxo; montar
+bifurcação + loop + portão visualmente e salvar/reabrir idêntico; disparar segue o ramo certo nos dois
+casos; o portão pausa e é resolvido pela **tela** OU pelo **Telegram** (canal configurado no nó);
+a IA criadora também monta o grafo; suíte verde; `tsc`/`eslint` limpos; `agente.py`/laço de agente sem diff.
+
+---
 
 ## FASE — Biblioteca: a base de conhecimento da organização (§9)  📋 PLANEJADA — APROVADA, aguarda execução
 O `PRODUTO.md` §9 prevê a **Biblioteca** ("segundo cérebro") — mas ela **caiu num vão** e nunca foi implementada (hoje só há um placeholder em `/biblioteca`; não há tabela). O maestro **revisou o conceito**: é uma **base de conhecimento da ORGANIZAÇÃO inteira** (todos os times acessam, não é por-time) de **documentos gerais** (PDF, Word, planilhas, texto — não só markdown), que os agentes **consultam** durante a execução. Esta fase fecha essa lacuna. A decisão arquitetural está fechada em **`docs/BIBLIOTECA-DECISAO.md`** e o pano de fundo técnico em **`docs/ARQUITETURA.md`**; o **plano de implementação detalhado (10 passos) está aprovado** e aguarda o sinal do maestro para começar.

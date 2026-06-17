@@ -57,18 +57,24 @@ def _agente(sessao, dados, nome="Revisor"):
     return ag
 
 
-def _automacao(sessao, dados, agente, *, canal=None, destino=None):
-    """Automação de um nó com portão (pausa_humano) e uma única saída — destino
-    None encerra ao retomar (sem rodar a cadeia/LLM)."""
-    cadeia = {
-        "inicio": str(agente.id),
-        "nos": {
-            str(agente.id): {
-                "pausa_humano": True,
-                "saidas": [{"rotulo": "ok", "quando": "sempre", "destino": destino}],
-            }
-        },
+# Id do nó com portão usado nos testes (a config de aprovação vive nele).
+NO_GATE = "rev"
+
+
+def _automacao(sessao, dados, agente, *, canal=None, destino=None, destinatario="555"):
+    """Automação de um nó com portão (gate) e uma única saída — destino None encerra
+    ao retomar (sem rodar a cadeia/LLM). A config de aprovação por canal vive no NÓ
+    (`no.aprovacao = {instrumento_id, destinatario}`), não mais na automação."""
+    no = {
+        "id": NO_GATE,
+        "tipo": "agente",
+        "ref": str(agente.id),
+        "gate": True,
+        "saidas": [{"id": "s0", "rotulo": "ok", "quando": "sempre", "destino": destino or "fim"}],
     }
+    if canal is not None:
+        no["aprovacao"] = {"instrumento_id": str(canal.id), "destinatario": destinatario}
+    cadeia = {"inicial": NO_GATE, "nos": [no]}
     auto = Automacao(
         time_id=dados["timeA"].id,
         nome="Fluxo",
@@ -76,7 +82,6 @@ def _automacao(sessao, dados, agente, *, canal=None, destino=None):
         configuracao_gatilho={},
         cadeia=cadeia,
         ativa=False,
-        aprovacao_instrumento_id=(canal.id if canal else None),
     )
     sessao.add(auto)
     sessao.flush()
@@ -102,6 +107,7 @@ def _exec_pausada(sessao, auto, agente, texto="Artigo para aprovar"):
             execucao_id=execucao.id,
             ordem=1,
             agente_id=agente.id,
+            no_id=NO_GATE,  # a aprovação por canal é lida do nó pausado
             entrada={"texto": "x"},
             saida={
                 "texto": texto,
@@ -135,9 +141,9 @@ def test_vincular_pausa_amarra_conversa_do_aprovador(sessao, dados):
 
 
 def test_vincular_pausa_sem_destinatario_nao_amarra(sessao, dados):
-    canal = _canal(sessao, dados, destinatario="")  # sem destinatário fixo
+    canal = _canal(sessao, dados)
     ag = _agente(sessao, dados)
-    auto = _automacao(sessao, dados, ag, canal=canal)
+    auto = _automacao(sessao, dados, ag, canal=canal, destinatario="")  # nó sem destinatário
     execucao = _exec_pausada(sessao, auto, ag)
 
     aprovacao.vincular_pausa(sessao, execucao)

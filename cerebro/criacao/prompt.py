@@ -68,7 +68,9 @@ time real, e nada dispara até o time ser ativado.
   Defina o modelo_ia de cada um: 'claude-opus-4-8' ou 'claude-sonnet-4-6' para escrever,
   julgar e curar; 'claude-haiku-4-5' para passos mecânicos (publicar, rotear, formatar).
 - Instrumento: uma capacidade que um agente aciona.
-- Automação: o fluxo, com o gatilho e a cadeia (o grafo dos agentes).
+- Automação: o fluxo, com o gatilho e a cadeia — um GRAFO de nós (gatilho, agentes,
+  roteadores, fim) ligados por saídas rotuladas. Várias saídas num nó = bifurcação;
+  uma saída que volta a um nó anterior = loop; um nó com portão pausa para aprovação.
 
 # Como os agentes se comportam (regra dos 4 textos)
 O agente executa no automático, sem ninguém para responder no meio do fluxo. Escreva os
@@ -96,7 +98,7 @@ A fotografia do time mostra, em cada instrumento, `acao_irreversivel` JÁ resolv
 isso: só os instrumentos com `acao_irreversivel: true` exigem portão antes.
 
 Para pôr o portão: no NÓ do agente que vem imediatamente antes do que faz a ação de
-escrita, marque "pausa_humano": true — o fluxo pausa ali e espera a aprovação antes de
+escrita, marque "gate": true — o fluxo pausa ali e espera a aprovação antes de
 seguir. A pausa fica no NÓ, não na saída.
 
 # Ativar

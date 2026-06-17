@@ -9,6 +9,8 @@ import {
   api,
   URL_CEREBRO,
   ErroDaApi,
+  indexarCadeia,
+  inicialDaCadeia,
   type Agente,
   type Automacao,
   type Execucao,
@@ -98,7 +100,12 @@ export function AutomacaoDetalheCliente({
             {ROTULO_GATILHO[automacao.tipo_gatilho] ?? automacao.tipo_gatilho}
           </span>
           <span className="inline-flex items-center gap-1">
-            início: {nomeAgente(automacao.cadeia?.inicio ?? null)}
+            início:{" "}
+            {nomeAgente(
+              indexarCadeia(automacao.cadeia)[
+                inicialDaCadeia(automacao.cadeia) ?? ""
+              ]?.ref ?? null,
+            )}
           </span>
         </p>
 
