@@ -23,6 +23,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# === Logs do dev.ps1 (reinício limpo do ambiente local) ===
+.dev-cerebro.log
+.dev-cerebro.err.log
+.dev-interface.log
+.dev-interface.err.log
+
 # === Sistema operacional ===
 .DS_Store
 Thumbs.db
