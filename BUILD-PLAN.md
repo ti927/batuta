@@ -1002,11 +1002,11 @@ encerra, vigia no agendador), **G** (guarda-corpo anti prompt-injection) e **H**
    execução (`Conversa.execucao_id`) e a resposta de entrada religa o fluxo (`retoma`). **NB:** será
    **ABSORVIDA pela FASE — Automações como grafo** (a config de aprovação migra para o NÓ com portão, no
    inspector; a coluna por-automação será aposentada — resolve também o atrito do destinatário).
-8. ✅ **FASE — Automações como grafo (construtor visual)** — **IMPLEMENTADA (local, suíte verde) 2026-06-16,
-   aguarda deploy**. Substituiu a lista linear pelo construtor de grafo (React Flow), adaptou o motor ao
-   novo `cadeia` (lista de nós tipados), e **absorveu a aprovação por canal** (config no NÓ com portão; a
-   coluna `aprovacao_instrumento_id` é dropada pós-deploy via `apv00drop001`). Detalhes na seção própria
-   abaixo. **Próximas:** (9) WhatsApp, (10) Biblioteca.
+8. ✅ **FASE — Automações como grafo (construtor visual)** — **NO AR EM PRODUÇÃO (merge `bf6066f`,
+   2026-06-17); Salvar validado ao vivo**. Substituiu a lista linear pelo construtor de grafo (React Flow),
+   adaptou o motor ao novo `cadeia` (lista de nós tipados), e **absorveu a aprovação por canal** (config no
+   NÓ com portão). **Pendente:** arrastar (React Flow), QA completo em prod, e aplicar o drop adiado da
+   coluna `aprovacao_instrumento_id`. Detalhes na seção própria abaixo. **Próximas:** (9) WhatsApp, (10) Biblioteca.
 9. 📋 **Fase 2 — WhatsApp** (mesmo desenho + provedor + janela de 24h/templates).
 10. 📋 **Biblioteca** (RAG da organização; plano de 10 passos aprovado, `docs/BIBLIOTECA-DECISAO.md`).
 
@@ -1055,20 +1055,34 @@ um turno; a conversa aparece na inbox e um operador pode assumir/devolver; inati
 encerra; estourar o teto passa a conversa para humano; suíte verde; núcleo `cadeia.py`/`agente.py` sem
 diff.
 
-## FASE — Automações como GRAFO (construtor visual + motor adaptado + aprovação no nó)  ✅ IMPLEMENTADA (local, suíte verde · `tsc`/`eslint`/`next build` limpos) — aguarda deploy (2026-06-16)
+## FASE — Automações como GRAFO (construtor visual + motor adaptado + aprovação no nó)  ✅ NO AR EM PRODUÇÃO (merge `bf6066f`, 2026-06-17) — Salvar validado ao vivo
 
 > **Fontes da verdade:** o handoff de design **`docs/design_handoff_automacoes_grafo/`** (`README.md`,
 > `SPEC.md` = formato do `cadeia`, `LANGGRAPH.md` = mapa visual→motor, `app-team-automacoes.jsx` +
 > screenshots) e o plano detalhado em **`~/.claude/plans/temos-um-problema-pra-replicated-noodle.md`**.
 > Esta seção é o resumo durável no BUILD-PLAN.
 
+> **Status (2026-06-17):** mergeada em `main` (`bf6066f`) e **NO AR**; o **Salvar foi validado ao vivo em
+> produção**. 281 testes verdes; `tsc`/`eslint`/`next build` limpos. **PENDENTE:** (a) corrigir o ARRASTAR
+> de nós no React Flow (aviso "node not initialized" — nós totalmente controlados é antipadrão no v12; usar
+> `useNodesState`/`applyNodeChanges`; não bloqueia montar via "Adicionar nó"+inspector nem Salvar);
+> (b) QA completo em prod (bifurcação/loop/portão/Rodar/aprovar); (c) quando estável, recriar e aplicar o
+> **drop** `apv00drop001` (`automacoes.aprovacao_instrumento_id`).
+>
+> **LIÇÃO (importante):** o QA LOCAL dava `422 "A cadeia precisa ter ao menos um nó em 'nos'"` (validador
+> ANTIGO) — era **AMBIENTE LOCAL CONTAMINADO** (workers órfãos do `uvicorn --reload` no Windows servindo
+> bytecode velho; a string nem existia no código). O **deploy em ambiente limpo (produção) funcionou de
+> primeira**, com **rollback só-de-código** garantido por ter ADIADO o drop. Detalhe em
+> `~/.claude/.../memory/feedback_qa-local-contaminado-deploy-limpo.md`.
+
 > **Como ficou (2 desvios do plano, ambos para proteger a produção no ar — banco = produção):**
 > (1) **Sem migração de dados destrutiva.** Em vez de converter as automações em produção (o que quebraria
 > o código antigo ainda no ar), o motor **NORMALIZA na leitura** (`grafo.normalizar`, idempotente, lê o
 > formato antigo e o novo); cada automação migra de forma preguiçosa ao ser re-salva pelo construtor. A
 > migração `gra00grafo001` ficou **só aditiva** (coluna `passos_execucao.no_id`, nullable) — já aplicada.
-> (2) **Drop da coluna `aprovacao_instrumento_id` em migração à parte** (`apv00drop001`), a aplicar **depois
-> do deploy** do código que parou de usá-la (lição `una00prov001`: subir o código antes do drop).
+> (2) **Drop da coluna `aprovacao_instrumento_id` ADIADO** para depois de estável (a migração `apv00drop001`
+> foi REMOVIDA deste deploy; recriar e aplicar quando confirmado). Mantendo a coluna, código novo e antigo
+> convivem no mesmo schema → rollback do deploy é só de código, sem downgrade de banco.
 > Canvas: **React Flow (`@xyflow/react`)** confirmado pelo maestro. Núcleo: `agente.py` intocado.
 
 **Por que (o problema):** a aba Automações nasceu como **lista linear** (1 cartão por agente, 1 saída)

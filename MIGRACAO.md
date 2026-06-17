@@ -247,7 +247,7 @@ A Etapa 2 original tinha sete fases (6 a 12). Com as viradas, ela encolhe e se r
 **Fase final — Implantação em produção**
 - Publicação no Railway, domínio definitivo, teste de ponta a ponta. Dá a URL pública HTTPS de que a Mensageria (WhatsApp) precisa.
 
-**Fase — Automações como GRAFO (construtor visual)** — ✅ **IMPLEMENTADA local (suíte verde) 2026-06-16, aguarda deploy**
+**Fase — Automações como GRAFO (construtor visual)** — ✅ **NO AR EM PRODUÇÃO (merge `bf6066f`, 2026-06-17); Salvar validado ao vivo.** Pendente: arrastar (React Flow), QA completo em prod, e aplicar o drop adiado da coluna.
 - **Lacuna corrigida:** a aba Automações nasceu como **lista linear** (rápida para provar o core); ao montar times reais com bifurcações/loops virou gargalo. Esta fase a substituiu por um **construtor de grafo** (React Flow; handoff `docs/design_handoff_automacoes_grafo/`), aproveitando que o motor **já** executa grafo.
 - **Decisões do maestro (2026-06-16):** (1) **adaptar** o motor atual ao novo formato de `cadeia` (lista de nós tipados) — **não** migrar para LangGraph nativo; (2) **integrar a aprovação por canal** (Telegram) no nó com portão (absorveu a config por-automação `apv00canal001`). Detalhe e Definition of Done no `BUILD-PLAN.md` ("FASE — Automações como GRAFO").
 - **Como ficou (2 desvios para proteger a produção):** (1) **sem migração de dados** — o motor **normaliza na leitura** (lê o shape antigo e o novo); só a coluna aditiva `passos_execucao.no_id` foi aplicada (`gra00grafo001`). (2) o drop da coluna `aprovacao_instrumento_id` (`apv00drop001`) é aplicado **pós-deploy** (subir o código que não a usa antes — lição `una00prov001`).
