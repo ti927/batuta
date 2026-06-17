@@ -305,52 +305,32 @@ function BuilderInterno({
     [setCadeia],
   );
 
+  // As mutações abaixo mexem SÓ no que é fonte de verdade (estrutura + `cadeia.inicial`).
+  // A flag `n.inicial` e a saída do gatilho são derivadas por `normalizarCadeia`, que
+  // o pai aplica a TODA escrita (ver automacoes-cliente.tsx). Por isso aqui não as
+  // tocamos — assim não há como divergirem.
   const deleteNode = useCallback(
     (id: string) => {
-      setCadeia((c) => {
-        const restantes = (c.nos ?? []).filter((n) => n.id !== id);
-        const novoInicial =
-          c.inicial === id
-            ? (restantes.find((n) => n.tipo === "agente")?.id ?? undefined)
-            : c.inicial;
-        return {
-          inicial: novoInicial,
-          nos: restantes.map((n) => ({
+      setCadeia((c) => ({
+        ...c,
+        // se o removido era o início, zera — normalizarCadeia escolhe o próximo.
+        inicial: c.inicial === id ? undefined : c.inicial,
+        nos: (c.nos ?? [])
+          .filter((n) => n.id !== id)
+          .map((n) => ({
             ...n,
-            inicial: n.id === novoInicial,
             saidas: (n.saidas ?? []).filter((s) => s.destino !== id),
           })),
-        };
-      });
+      }));
       setSelId(null);
     },
     [setCadeia],
   );
 
-  // Define o nó inicial de forma consistente: a saída do gatilho é DERIVADA do
-  // `inicial` (espelha o motor — ver grafo.py). Re-aponta o gatilho, marca o flag
-  // `inicial` em cada nó e atualiza `cadeia.inicial` numa tacada só.
+  // Escolher o primeiro nó = setar só `cadeia.inicial`; o gatilho e as flags saem
+  // corretos pela normalização do pai.
   const definirInicial = useCallback(
-    (nodeId: string) =>
-      setCadeia((c) => ({
-        ...c,
-        inicial: nodeId,
-        nos: (c.nos ?? []).map((n) =>
-          n.tipo === "gatilho"
-            ? {
-                ...n,
-                saidas: [
-                  {
-                    id: n.saidas?.[0]?.id ?? novoIdSaida(),
-                    rotulo: n.saidas?.[0]?.rotulo ?? "inicia o fluxo",
-                    destino: nodeId,
-                    tone: "normal" as const,
-                  },
-                ],
-              }
-            : { ...n, inicial: n.id === nodeId },
-        ),
-      })),
+    (nodeId: string) => setCadeia((c) => ({ ...c, inicial: nodeId })),
     [setCadeia],
   );
 
@@ -360,8 +340,9 @@ function BuilderInterno({
       setCadeia((c) => {
         const fim = (c.nos ?? []).find((n) => n.tipo === "fim");
         const baseX = 360 + ((c.nos?.length ?? 0) % 4) * 40;
-        // Primeiro agente do fluxo: vira o inicial e liga o gatilho a ele.
-        const primeiroAgente =
+        // 1º agente do fluxo: vira o início (só setamos `inicial`; gatilho/flags
+        // saem da normalização do pai).
+        const ehPrimeiroAgente =
           kind === "agente" &&
           !(c.nos ?? []).some((n) => n.tipo === "agente") &&
           !c.inicial;
@@ -388,7 +369,6 @@ function BuilderInterno({
                 ref,
                 x: baseX,
                 y: 360,
-                inicial: primeiroAgente || undefined,
                 saidas: [
                   {
                     id: novoIdSaida(),
@@ -398,20 +378,10 @@ function BuilderInterno({
                   },
                 ],
               };
-        const nos = [...(c.nos ?? []), novo].map((n) =>
-          primeiroAgente && n.tipo === "gatilho"
-            ? {
-                ...n,
-                saidas: [
-                  { id: novoIdSaida(), rotulo: "inicia o fluxo", destino: id, tone: "normal" as const },
-                ],
-              }
-            : n,
-        );
         return {
           ...c,
-          inicial: primeiroAgente ? id : c.inicial,
-          nos,
+          inicial: ehPrimeiroAgente ? id : c.inicial,
+          nos: [...(c.nos ?? []), novo],
         };
       });
       setSelId(id);

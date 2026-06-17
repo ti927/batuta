@@ -67,10 +67,20 @@ def validar_cadeia(cadeia: dict, ids_agentes_validos: set[str]) -> None:
     cadeia = grafo.normalizar(cadeia)
     nos = cadeia.get("nos") or []
     ids_nos = {n["id"] for n in nos}
+
+    # Rascunho permitido: só gatilho/fim, sem nada que rode ainda. Sem nó executável,
+    # não há "início" a exigir — o usuário ainda está montando.
+    executaveis = [n for n in nos if n.get("tipo") in ("agente", "roteador")]
+    if not executaveis:
+        return
+
     inicial = cadeia.get("inicial")
     no_inicial = next((n for n in nos if n["id"] == inicial), None)
     if no_inicial is None or no_inicial.get("tipo") not in ("agente", "roteador"):
-        raise ValueError("A cadeia precisa de um nó inicial que seja agente ou roteador.")
+        raise ValueError(
+            "Esta automação não tem um início que possa rodar. Abra o nó do gatilho "
+            "e escolha em 'Começa em' por qual agente o fluxo começa."
+        )
 
     for no in nos:
         tipo = no.get("tipo")
@@ -228,7 +238,10 @@ def executar_cadeia(
             ref = no.get("ref")
             agente = sessao.get(Agente, uuid.UUID(str(ref))) if ref else None
             if agente is None:
-                raise ValueError(f"Agente da cadeia não encontrado: {ref}")
+                raise ValueError(
+                    f"O nó '{no_atual}' aponta para um agente que não existe mais "
+                    f"(ref {ref}). Edite a automação e troque ou remova esse passo."
+                )
             cinto = _carregar_cinto(sessao, agente.id)
             resultado = executar_agente(agente, cinto, entrada_atual)
             saida_texto = resultado["saida"]

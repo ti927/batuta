@@ -66,30 +66,59 @@ export function indexar(cadeia: Cadeia): Record<string, NoCadeia> {
   return idx;
 }
 
-// A saída do gatilho é DERIVADA do `inicial` (espelha grafo.py no cérebro). Curar
-// na abertura garante que o cordão gatilho→início apareça mesmo se a cadeia salva
-// veio com a saída "velha" (destino inexistente, que o canvas descartaria) — sem
-// depender do tempo de redeploy do cérebro. Idempotente; só age se há um `inicial`
-// válido. Mexe apenas no nó gatilho.
-export function sanearGatilho(cadeia: Cadeia): Cadeia {
-  const inicial = cadeia.inicial;
-  if (!inicial || !(cadeia.nos ?? []).some((n) => n.id === inicial)) return cadeia;
+// Normalização canônica da cadeia NO FRONT. É a FONTE ÚNICA de verdade do "início":
+// `cadeia.inicial`. A flag `n.inicial` de cada nó e a saída do nó gatilho são
+// DERIVADAS dele — nunca editadas à mão. Esta função ESPELHA `grafo._completar` do
+// cérebro (cerebro/orquestracao/grafo.py): mesma regra para inicial, mesma religação
+// do gatilho, mesmos defaults de saída. Assim TELA == BANCO == MOTOR, sem divergir.
+//
+// Pura e idempotente. NUNCA toca x/y (preserva o arrasto) e NÃO inventa nós nem
+// posições (o motor segue dono do layout). Se mudar a regra aqui, mude lá também.
+export function normalizarCadeia(cadeia: Cadeia): Cadeia {
+  const nos = cadeia.nos ?? [];
+  const ids = new Set(nos.map((n) => n.id));
+
+  // 1) inicial: explícito-válido > 1º nó marcado `inicial` > 1º agente > undefined
+  //    (mesma ordem de grafo._completar passo 2).
+  let inicial =
+    cadeia.inicial && ids.has(cadeia.inicial) ? cadeia.inicial : undefined;
+  if (!inicial) {
+    inicial =
+      nos.find((n) => n.inicial)?.id ??
+      nos.find((n) => n.tipo === "agente")?.id ??
+      undefined;
+  }
+
   return {
     ...cadeia,
-    nos: (cadeia.nos ?? []).map((n) =>
-      n.tipo === "gatilho"
-        ? {
-            ...n,
-            saidas: [
-              {
-                id: n.saidas?.[0]?.id ?? novoIdSaida(),
-                rotulo: n.saidas?.[0]?.rotulo ?? "inicia o fluxo",
-                destino: inicial,
-                tone: "normal" as const,
-              },
-            ],
-          }
-        : n,
-    ),
+    inicial,
+    nos: nos.map((n) => {
+      if (n.tipo === "gatilho") {
+        // 2) saída do gatilho DERIVADA do inicial (preserva id/rotulo existentes).
+        return {
+          ...n,
+          saidas: inicial
+            ? [
+                {
+                  id: n.saidas?.[0]?.id ?? novoIdSaida(),
+                  rotulo: n.saidas?.[0]?.rotulo ?? "inicia o fluxo",
+                  destino: inicial,
+                  tone: "normal" as const,
+                },
+              ]
+            : [],
+        };
+      }
+      // 3) saídas: garante id + tone (cosméticos); 4) flag inicial DERIVADA.
+      return {
+        ...n,
+        inicial: n.id === inicial,
+        saidas: (n.saidas ?? []).map((s, j) => ({
+          ...s,
+          id: s.id ?? `${n.id}-${j}`,
+          tone: s.tone ?? ("normal" as const),
+        })),
+      };
+    }),
   };
 }

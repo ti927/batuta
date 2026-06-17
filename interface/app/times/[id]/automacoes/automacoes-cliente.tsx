@@ -16,7 +16,7 @@ import {
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { AutomacaoBuilder } from "@/components/automacao-builder/builder";
-import { sanearGatilho } from "@/components/automacao-builder/nucleo";
+import { normalizarCadeia } from "@/components/automacao-builder/nucleo";
 import type { ConfigGatilho } from "@/components/automacao-builder/inspector";
 import { BotaoRodarAgora } from "@/components/botao-rodar-agora";
 import { Aviso } from "@/components/ui/aviso";
@@ -103,15 +103,30 @@ function EditorAutomacao({
     automacao ? (automacao.tipo_gatilho === "manual" ? true : automacao.ativa) : true,
   );
   const [cadeia, setCadeia] = useState<Cadeia>(() =>
-    sanearGatilho(
+    normalizarCadeia(
       automacao && (automacao.cadeia?.nos?.length ?? 0) > 0
         ? automacao.cadeia!
         : cadeiaInicial(gatilhoDe(automacao).tipo),
     ),
   );
 
+  // PONTO ÚNICO de normalização: toda escrita da cadeia (vinda do construtor — add,
+  // remove, conectar, mover, escolher início, editar saída) passa por aqui. Assim a
+  // flag `inicial`, a saída do gatilho e os ids/tones de saída ficam SEMPRE coerentes
+  // com `cadeia.inicial` — tela == banco == motor. `normalizarCadeia` não toca x/y,
+  // então o arrastar segue barato.
+  const setCadeiaNorm = (atualiza: (c: Cadeia) => Cadeia) =>
+    setCadeia((c) => normalizarCadeia(atualiza(c)));
+
   const setGatilho = (patch: Partial<ConfigGatilho>) =>
     setGatilhoEstado((g) => ({ ...g, ...patch }));
+
+  // Aviso (não bloqueia edição): nós-agente cujo `ref` aponta para um agente que não
+  // existe mais no time. O save é barrado pelo cérebro; aqui só alertamos cedo.
+  const agentesIds = new Set(agentes.map((a) => a.id));
+  const refsOrfaos = (cadeia.nos ?? []).filter(
+    (n) => n.tipo === "agente" && n.ref && !agentesIds.has(n.ref),
+  ).length;
 
   function tratar(e: unknown, padrao: string) {
     setErro(e instanceof ErroDaApi ? e.message : padrao);
@@ -144,7 +159,7 @@ function EditorAutomacao({
       nome: nome.trim(),
       tipo_gatilho: gatilho.tipo,
       configuracao_gatilho: montarConfigGatilho(),
-      cadeia,
+      cadeia: normalizarCadeia(cadeia),
       ativa: gatilho.tipo === "manual" ? false : ativa,
     };
     setSalvando(true);
@@ -250,11 +265,19 @@ function EditorAutomacao({
 
       {erro && <Aviso className="mb-3">{erro}</Aviso>}
 
+      {refsOrfaos > 0 && (
+        <Aviso className="mb-3">
+          {refsOrfaos === 1
+            ? "Um passo aponta para um agente que não existe mais no time. Troque-o ou remova-o antes de rodar."
+            : `${refsOrfaos} passos apontam para agentes que não existem mais no time. Troque-os ou remova-os antes de rodar.`}
+        </Aviso>
+      )}
+
       {/* canvas + inspector */}
       <div className="h-[calc(100vh-17rem)] min-h-[480px] overflow-hidden rounded-xl border border-border bg-card">
         <AutomacaoBuilder
           cadeia={cadeia}
-          setCadeia={setCadeia}
+          setCadeia={setCadeiaNorm}
           agentes={agentes}
           canais={canais}
           podeEditar={souOperador}

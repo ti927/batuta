@@ -7,10 +7,13 @@ rodar agente), nó fim como destino e o mesmo agente em dois nós (no_id disting
 `executar_agente` e `_escolher_saida` são mockados — o motor não chama LLM aqui.
 """
 
+import uuid
+
 import pytest
 
 from modelos import Agente
 from orquestracao import cadeia as motor
+from orquestracao.cadeia import validar_cadeia
 
 
 @pytest.fixture
@@ -177,6 +180,49 @@ def test_mesmo_agente_em_dois_nos(sessao, dados, ag, monkeypatch):
     agentes = [p["agente_id"] for p in r["passos"]]
     assert nos == ["p1", "p2"]               # dois nós distintos
     assert agentes == [str(a.id), str(a.id)]  # o mesmo agente nos dois
+
+
+def test_validar_rascunho_so_gatilho_e_fim_nao_levanta():
+    # rascunho permitido: nada para rodar ainda (sem agente/roteador) → não exige início
+    cadeia = {
+        "inicial": None,
+        "nos": [
+            {"id": "gatilho", "tipo": "gatilho", "gatilho": "manual", "saidas": []},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    validar_cadeia(cadeia, set())  # não levanta
+
+
+def test_validar_executavel_sem_inicio_erro_acionavel():
+    # há um nó executável (roteador) mas nenhum início escolhido → erro H1 claro
+    cadeia = {
+        "nos": [
+            {"id": "gatilho", "tipo": "gatilho", "gatilho": "manual", "saidas": []},
+            {"id": "rot", "tipo": "roteador", "nome": "T",
+             "saidas": [{"rotulo": "a", "destino": "fim"}]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    with pytest.raises(ValueError, match="início que possa rodar"):
+        validar_cadeia(cadeia, set())
+
+
+def test_ref_para_agente_inexistente_erro_cita_o_no(sessao, dados):
+    # nó cujo `ref` aponta para um agente que não existe mais → erro claro com o no_id
+    fantasma = str(uuid.uuid4())
+    cadeia = {
+        "inicial": "n1",
+        "nos": [
+            {"id": "n1", "tipo": "agente", "ref": fantasma,
+             "saidas": [{"rotulo": "ok", "destino": "fim"}]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    with pytest.raises(ValueError) as exc:
+        motor.executar_cadeia(sessao, cadeia, "vai")
+    assert "n1" in str(exc.value)
+    assert "não existe mais" in str(exc.value)
 
 
 def test_retomada_por_no_inicial(sessao, dados, ag, monkeypatch):

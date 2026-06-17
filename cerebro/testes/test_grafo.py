@@ -139,6 +139,29 @@ def test_gatilho_solto_e_ligado_ao_inicial():
     assert nos["gatilho"]["saidas"][0]["destino"] == "a1"
 
 
+def test_inicial_invalido_recuperado_e_gatilho_religado():
+    # inicial aponta p/ id inexistente e o gatilho tem destino "velho": normalizar
+    # recupera o inicial p/ o 1º agente E re-aponta o gatilho a ele. (É o cenário do
+    # bug recorrente: a TELA precisa fazer o MESMO via normalizarCadeia.)
+    cadeia = {
+        "inicial": "fantasma",
+        "nos": [
+            {"id": "gatilho", "tipo": "gatilho", "gatilho": "manual",
+             "saidas": [{"rotulo": "x", "destino": "fantasma"}]},
+            {"id": "a1", "tipo": "agente", "ref": "ag-1",
+             "saidas": [{"rotulo": "ok", "destino": "fim"}]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    g = grafo.normalizar(cadeia)
+    nos = {n["id"]: n for n in g["nos"]}
+    assert g["inicial"] == "a1"
+    assert nos["gatilho"]["saidas"][0]["destino"] == "a1"  # gatilho religado
+    assert nos["a1"]["inicial"] is True
+    # idempotente mesmo partindo de inicial inválido
+    assert grafo.normalizar(g) == g
+
+
 def test_indexar_e_eh_fim():
     g = grafo.normalizar(
         {

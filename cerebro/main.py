@@ -54,7 +54,12 @@ app.add_middleware(
 
 @app.get("/saude")
 def saude():
-    return {"mensagem": "Batuta cérebro no ar"}
+    # `versao` = commit no ar (a Railway injeta RAILWAY_GIT_COMMIT_SHA). Serve para
+    # confirmar, sem adivinhação, qual código produção está realmente rodando.
+    return {
+        "mensagem": "Batuta cérebro no ar",
+        "versao": os.environ.get("RAILWAY_GIT_COMMIT_SHA", "dev"),
+    }
 
 
 app.include_router(organizacoes.rotas)
