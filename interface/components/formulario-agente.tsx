@@ -192,8 +192,10 @@ export function FormularioAgente({
       {MARKDOWNS.map(([chave, rotulo]) => (
         <Label key={chave} className="flex-col items-start gap-1">
           {rotulo}
+          {/* Cresce com o conteúdo (field-sizing): piso confortável p/ ler/editar,
+              teto na altura da barra; o drawer rola no conjunto. */}
           <Textarea
-            className="min-h-24 font-mono"
+            className="field-sizing-content max-h-[70vh] min-h-40 font-mono"
             value={form[chave]}
             onChange={(e) => campo(chave, e.target.value)}
           />
