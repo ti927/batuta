@@ -131,8 +131,8 @@ export function DrawerAgente({
         onClick={onFechar}
         aria-label="Fechar"
       />
-      <aside className="relative flex h-full w-full max-w-[460px] flex-col overflow-y-auto border-l border-border bg-card shadow-xl">
-        <header className="flex items-start gap-3 border-b border-border p-4">
+      <aside className="relative flex h-full w-full max-w-[460px] flex-col overflow-hidden border-l border-border bg-card shadow-xl">
+        <header className="flex flex-none items-start gap-3 border-b border-border p-4">
           <RobotFace size={44} indice={indice} lider={agente?.papel === "lider"} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -158,7 +158,7 @@ export function DrawerAgente({
         </header>
 
         {editando || criando ? (
-          <div className="p-4">
+          <div className="flex min-h-0 flex-1 flex-col p-4">
             <FormularioAgente
               time={time}
               agente={agente}
@@ -173,7 +173,9 @@ export function DrawerAgente({
           </div>
         ) : (
           <>
-            {(souOperador || souAdmin) && (
+            {/* conteúdo de leitura rola por dentro; rodapé fica fixo embaixo */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              {(souOperador || souAdmin) && (
               <div className="flex gap-2 border-b border-border p-4">
                 {souOperador && (
                   <Button
@@ -293,9 +295,10 @@ export function DrawerAgente({
                 )}
               </div>
             </div>
+            </div>
 
             {souOperador && (
-              <div className="mt-auto border-t border-border p-4">
+              <div className="flex-none border-t border-border p-4">
                 <Link
                   href={conversaId ? `/criar/${conversaId}` : "/criar"}
                   className={buttonVariants({

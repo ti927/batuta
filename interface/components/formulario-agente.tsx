@@ -147,7 +147,7 @@ export function FormularioAgente({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       {erro && <Aviso>{erro}</Aviso>}
 
       <div className="flex flex-wrap gap-3">
@@ -189,18 +189,21 @@ export function FormularioAgente({
         </Label>
       </div>
 
-      {MARKDOWNS.map(([chave, rotulo]) => (
-        <Label key={chave} className="flex-col items-start gap-1">
-          {rotulo}
-          {/* Cresce com o conteúdo (field-sizing): piso confortável p/ ler/editar,
-              teto na altura da barra; o drawer rola no conjunto. */}
-          <Textarea
-            className="field-sizing-content max-h-[70vh] min-h-40 font-mono"
-            value={form[chave]}
-            onChange={(e) => campo(chave, e.target.value)}
-          />
-        </Label>
-      ))}
+      {/* Os 4 markdowns DIVIDEM IGUALMENTE o espaço vertical que sobra na barra
+          (cada Label flex-1), cada textarea rola por dentro quando o texto passa
+          da sua fatia. Salvar/Cancelar (abaixo) ficam sempre visíveis. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        {MARKDOWNS.map(([chave, rotulo]) => (
+          <Label key={chave} className="min-h-0 flex-1 flex-col items-start gap-1">
+            {rotulo}
+            <Textarea
+              className="min-h-0 w-full flex-1 resize-none font-mono"
+              value={form[chave]}
+              onChange={(e) => campo(chave, e.target.value)}
+            />
+          </Label>
+        ))}
+      </div>
 
       <div className="flex gap-2">
         <Button onClick={salvar} disabled={salvando}>
