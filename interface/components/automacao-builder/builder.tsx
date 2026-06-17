@@ -4,6 +4,7 @@ import "@xyflow/react/dist/style.css";
 
 import { useCallback, useMemo, useState } from "react";
 import {
+  applyNodeChanges,
   Background,
   BackgroundVariant,
   Controls,
@@ -63,9 +64,13 @@ export function AutomacaoBuilder({
   const idx = useMemo(() => indexar(cadeia), [cadeia]);
   const sel = selId ? (idx[selId] ?? null) : null;
 
-  // ── nós do React Flow (derivados da cadeia) ──
-  const nodes = useMemo<Node[]>(() => {
-    return (cadeia.nos ?? []).map((no) => {
+  // ── nós do React Flow ──
+  // O React Flow precisa ser DONO do seu próprio array de nós: é nele que
+  // `applyNodeChanges` grava `measured` (medição do ResizeObserver) — sem isso
+  // o nó nunca "inicializa" e o arrastar quebra (erro #015). A `cadeia` segue
+  // sendo a fonte da verdade persistida; `rfNodes` é uma projeção viva.
+  const projetarNo = useCallback(
+    (no: NoCadeia): Node => {
       const agente =
         no.tipo === "agente" ? agentes.find((a) => a.id === no.ref) : undefined;
       const indice = agente ? agentes.findIndex((a) => a.id === agente.id) : 0;
@@ -80,8 +85,73 @@ export function AutomacaoBuilder({
         draggable: podeEditar,
         selected: no.id === selId,
       };
+    },
+    [agentes, gatilho.tipo, podeEditar, selId],
+  );
+
+  // Assinatura do que afeta a PROJEÇÃO dos nós. Dispara a reconciliação
+  // cadeia→RF. Inclui TUDO que muda o visual do nó (ids, tipo, ref, gate, nome,
+  // inicial e o CONTEÚDO das saídas — rótulo/destino/tone/lane afetam handles e
+  // rótulos), o tipo do gatilho, o modo de edição e a seleção. NÃO inclui x/y de
+  // propósito: a posição é mão única (RF→cadeia via onNodesChange); reprojetar a
+  // cada frame de arrasto criaria novos objetos de nó e brigaria com o drag
+  // interno do React Flow. A posição persistida na cadeia é relida na próxima
+  // reconciliação estrutural.
+  const assinatura = useMemo(
+    () =>
+      JSON.stringify({
+        n: (cadeia.nos ?? []).map((n) => ({
+          i: n.id,
+          t: n.tipo,
+          r: n.ref,
+          g: n.gate,
+          nm: n.nome,
+          ini: n.inicial,
+          s: (n.saidas ?? []).map((s) => [
+            s.id,
+            s.rotulo,
+            s.destino,
+            s.tone,
+            s.lane,
+          ]),
+        })),
+        gat: gatilho.tipo,
+        e: podeEditar,
+        sel: selId,
+      }),
+    [cadeia, gatilho.tipo, podeEditar, selId],
+  );
+
+  const [rfNodes, setRfNodes] = useState<Node[]>(() =>
+    (cadeia.nos ?? []).map(projetarNo),
+  );
+  // Guarda de reconciliação. `setState` no corpo do render (com guarda de
+  // igualdade) é o padrão oficial do React para sincronizar com props/estado
+  // externo e NÃO é pego pela regra `react-hooks/set-state-in-effect` (que só
+  // vale para effects). Roda uma vez por mudança de assinatura (sem loop).
+  const [prevSig, setPrevSig] = useState(assinatura);
+  if (assinatura !== prevSig) {
+    setPrevSig(assinatura);
+    setRfNodes((prev) => {
+      const anteriores = new Map(prev.map((n) => [n.id, n]));
+      return (cadeia.nos ?? []).map((no) => {
+        const base = projetarNo(no);
+        const old = anteriores.get(no.id);
+        // Nó já existente: preserva a medição do RF (senão "des-inicializa" e o
+        // #015 volta) e a posição viva do drag. Nó novo: sem `measured` → o
+        // ResizeObserver mede e emite `dimensions` via onNodesChange.
+        return old
+          ? {
+              ...base,
+              position: old.position,
+              measured: old.measured,
+              width: old.width,
+              height: old.height,
+            }
+          : base;
+      });
     });
-  }, [cadeia, agentes, gatilho.tipo, podeEditar, selId]);
+  }
 
   // ── arestas (uma por saída) ──
   const edges = useMemo<Edge[]>(() => {
@@ -120,6 +190,11 @@ export function AutomacaoBuilder({
   // ── mutações da cadeia ──
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
+      // 1) Deixa o RF gravar TODAS as changes (incl. `dimensions`/`select`) no
+      //    seu próprio array — é o que popula `measured` e mata o #015.
+      setRfNodes((nds) => applyNodeChanges(changes, nds));
+      // 2) Espelha só a posição de volta na cadeia (persistência). `measured` é
+      //    transitório e não se persiste.
       const moves = changes.filter(
         (c): c is Extract<NodeChange, { type: "position" }> =>
           c.type === "position" && !!c.position,
@@ -319,7 +394,7 @@ export function AutomacaoBuilder({
       {/* canvas */}
       <div className="relative min-w-0 flex-1">
         <ReactFlow
-          nodes={nodes}
+          nodes={rfNodes}
           edges={edges}
           nodeTypes={NODE_TYPES}
           edgeTypes={EDGE_TYPES}
