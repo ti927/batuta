@@ -2,7 +2,7 @@
 
 import "@xyflow/react/dist/style.css";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   applyNodeChanges,
   Background,
@@ -11,6 +11,8 @@ import {
   MarkerType,
   Panel,
   ReactFlow,
+  ReactFlowProvider,
+  useUpdateNodeInternals,
   type Connection,
   type Edge,
   type Node,
@@ -39,16 +41,7 @@ function primeiroDestino(cadeia: Cadeia, exceto: string): string {
   return alvo?.id ?? fim?.id ?? "fim";
 }
 
-export function AutomacaoBuilder({
-  cadeia,
-  setCadeia,
-  agentes,
-  canais,
-  podeEditar,
-  gatilho,
-  setGatilho,
-  webhookUrl,
-}: {
+type BuilderProps = {
   cadeia: Cadeia;
   setCadeia: (atualiza: (c: Cadeia) => Cadeia) => void;
   agentes: Agente[];
@@ -57,8 +50,30 @@ export function AutomacaoBuilder({
   gatilho: ConfigGatilho;
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
   webhookUrl?: string | null;
-}) {
+};
+
+// `useUpdateNodeInternals` exige estar dentro de um ReactFlowProvider; por isso o
+// construtor real vive em BuilderInterno e o export embrulha no provider.
+export function AutomacaoBuilder(props: BuilderProps) {
+  return (
+    <ReactFlowProvider>
+      <BuilderInterno {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+function BuilderInterno({
+  cadeia,
+  setCadeia,
+  agentes,
+  canais,
+  podeEditar,
+  gatilho,
+  setGatilho,
+  webhookUrl,
+}: BuilderProps) {
   const [selId, setSelId] = useState<string | null>(null);
+  const updateNodeInternals = useUpdateNodeInternals();
   const [addAberto, setAddAberto] = useState(false);
 
   const idx = useMemo(() => indexar(cadeia), [cadeia]);
@@ -152,6 +167,21 @@ export function AutomacaoBuilder({
       });
     });
   }
+
+  // Recomputa os "handle bounds" do React Flow quando a ESTRUTURA muda (saída
+  // adicionada/removida, gatilho religado, nó novo). Como preservamos `measured`
+  // p/ o arrastar (#015), o RF não recomputa as âncoras dos handles sozinho — sem
+  // isto, arestas para handles novos/alterados não desenham (some o cordão do
+  // gatilho e as bifurcações além da 1ª). É a API oficial p/ handles dinâmicos.
+  const idsComHandles = useMemo(
+    () => (cadeia.nos ?? []).map((n) => n.id),
+    // `assinatura` já captura a estrutura (ids/tipos/saídas), excluindo x/y.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [assinatura],
+  );
+  useEffect(() => {
+    for (const id of idsComHandles) updateNodeInternals(id);
+  }, [idsComHandles, updateNodeInternals]);
 
   // ── arestas (uma por saída) ──
   const edges = useMemo<Edge[]>(() => {
