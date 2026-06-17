@@ -1055,25 +1055,36 @@ um turno; a conversa aparece na inbox e um operador pode assumir/devolver; inati
 encerra; estourar o teto passa a conversa para humano; suíte verde; núcleo `cadeia.py`/`agente.py` sem
 diff.
 
-## FASE — Automações como GRAFO (construtor visual + motor adaptado + aprovação no nó)  ✅ NO AR EM PRODUÇÃO (merge `bf6066f`, 2026-06-17) — Salvar validado ao vivo
+## FASE — Automações como GRAFO (construtor visual + motor adaptado + aprovação no nó)  ✅ NO AR E VALIDADA AO VIVO EM PRODUÇÃO (2026-06-17)
 
 > **Fontes da verdade:** o handoff de design **`docs/design_handoff_automacoes_grafo/`** (`README.md`,
 > `SPEC.md` = formato do `cadeia`, `LANGGRAPH.md` = mapa visual→motor, `app-team-automacoes.jsx` +
 > screenshots) e o plano detalhado em **`~/.claude/plans/temos-um-problema-pra-replicated-noodle.md`**.
 > Esta seção é o resumo durável no BUILD-PLAN.
 
-> **Status (2026-06-17):** mergeada em `main` (`bf6066f`) e **NO AR**; o **Salvar foi validado ao vivo em
-> produção**. 281 testes verdes; `tsc`/`eslint`/`next build` limpos. **PENDENTE:** (a) corrigir o ARRASTAR
-> de nós no React Flow (aviso "node not initialized" — nós totalmente controlados é antipadrão no v12; usar
-> `useNodesState`/`applyNodeChanges`; não bloqueia montar via "Adicionar nó"+inspector nem Salvar);
-> (b) QA completo em prod (bifurcação/loop/portão/Rodar/aprovar); (c) quando estável, recriar e aplicar o
-> **drop** `apv00drop001` (`automacoes.aprovacao_instrumento_id`).
+> **Status (2026-06-17): VALIDADA AO VIVO em produção** pelo maestro — montar/Salvar, **nó inicial**,
+> **arrastar**, **bifurcação/loop**, **Rodar**, e o **portão aprovado por Telegram + pela tela** funcionam.
+> **285 testes** verdes; `tsc`/`eslint`/`next build` limpos. `main`=`64d0088`. **PENDENTE (1 item):** quando
+> o maestro autorizar, recriar e aplicar o **drop** `apv00drop001` (`automacoes.aprovacao_instrumento_id`,
+> hoje órfã — a aprovação vive no nó). Banco = produção → confirmar antes.
 >
-> **LIÇÃO (importante):** o QA LOCAL dava `422 "A cadeia precisa ter ao menos um nó em 'nos'"` (validador
-> ANTIGO) — era **AMBIENTE LOCAL CONTAMINADO** (workers órfãos do `uvicorn --reload` no Windows servindo
-> bytecode velho; a string nem existia no código). O **deploy em ambiente limpo (produção) funcionou de
-> primeira**, com **rollback só-de-código** garantido por ter ADIADO o drop. Detalhe em
-> `~/.claude/.../memory/feedback_qa-local-contaminado-deploy-limpo.md`.
+> **A saga do "nó inicial" (whack-a-mole) e a correção DEFINITIVA (commits `77687fd`→`9254296`):** o erro
+> "nó inicial ausente" voltava porque "quem é o início" morava em **3 lugares** (`cadeia.inicial`, a flag
+> `n.inicial` por nó, a saída do nó gatilho) com **regras de conserto DIFERENTES** no front e no motor —
+> cada fix mexia num só e voltava. **Raiz resolvida:** fonte ÚNICA = `cadeia.inicial`; o front ganhou
+> `normalizarCadeia` (em `automacao-builder/nucleo.ts`) que **ESPELHA** `grafo._completar` do cérebro e é
+> aplicada em **ponto único** (todo `setCadeia` do construtor passa por ela + no load + antes de salvar);
+> flag e saída do gatilho viraram **derivadas**. As **arestas que sumiam** (cordão do gatilho + bifurcações
+> além da 1ª) eram **handle bounds** desatualizados do React Flow após o fix do arrastar → resolvido com
+> `useUpdateNodeInternals` (+`ReactFlowProvider`). O **arrastar** (#015 "node not initialized") foi
+> resolvido com `useNodesState`/`applyNodeChanges` + reconciliação-em-render preservando `measured`.
+>
+> **LIÇÃO 1 — verifique qual código produção roda, não adivinhe:** parte do "fix que não fixava" era
+> **deploy defasado** — a mensagem de erro vista era de uma versão ANTIGA. Agora `GET /saude` reporta o
+> commit no ar (`RAILWAY_GIT_COMMIT_SHA`); confirmado por WebFetch que prod == HEAD do fix. Ver
+> `memory/reference_verificar-deploy-prod.md`.
+> **LIÇÃO 2 — QA local contaminado:** workers órfãos do `uvicorn --reload` no Windows serviam bytecode
+> velho; valide em deploy LIMPO. Ver `memory/feedback_qa-local-contaminado-deploy-limpo.md`.
 
 > **Como ficou (2 desvios do plano, ambos para proteger a produção no ar — banco = produção):**
 > (1) **Sem migração de dados destrutiva.** Em vez de converter as automações em produção (o que quebraria
