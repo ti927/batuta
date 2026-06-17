@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Layers, Plus, Trash2, Zap } from "lucide-react";
+import { Copy, Layers, Plus, Trash2, X, Zap } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   api,
@@ -24,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 
 // Tipos de instrumento que são canais de mensageria (podem ser canal de aprovação).
@@ -127,6 +129,45 @@ function EditorAutomacao({
   const refsOrfaos = (cadeia.nos ?? []).filter(
     (n) => n.tipo === "agente" && n.ref && !agentesIds.has(n.ref),
   ).length;
+
+  // Duplicar: copia a versão SALVA (o cérebro lê do banco), pergunta só o nome e
+  // cria uma cópia independente — que nasce SEMPRE pausada (decisão do maestro:
+  // evita uma cópia de automação agendada/webhook disparar em dobro).
+  const [dialogoDuplicar, setDialogoDuplicar] = useState(false);
+  const [nomeDupla, setNomeDupla] = useState("");
+  const [erroDupla, setErroDupla] = useState<string | null>(null);
+  const [duplicando, setDuplicando] = useState(false);
+
+  function abrirDuplicar() {
+    if (!automacao) return;
+    setNomeDupla(`Cópia de ${automacao.nome}`);
+    setErroDupla(null);
+    setDialogoDuplicar(true);
+  }
+
+  async function confirmarDuplicacao() {
+    if (!automacao || duplicando) return;
+    if (!nomeDupla.trim()) {
+      setErroDupla("Dê um nome à cópia.");
+      return;
+    }
+    setDuplicando(true);
+    setErroDupla(null);
+    try {
+      const copia = await api.post<Automacao>(
+        `/automacoes/${automacao.id}/duplicar`,
+        { nome: nomeDupla.trim() },
+      );
+      toast.success(`Cópia criada: “${copia.nome}”.`);
+      router.refresh();
+      onCriou(copia); // adiciona à lista e seleciona a cópia (remonta o editor)
+    } catch (e) {
+      const msg = e instanceof ErroDaApi ? e.message : "Falha ao duplicar a automação";
+      setErroDupla(msg);
+      toast.error(msg);
+      setDuplicando(false);
+    }
+  }
 
   function tratar(e: unknown, padrao: string) {
     setErro(e instanceof ErroDaApi ? e.message : padrao);
@@ -246,6 +287,16 @@ function EditorAutomacao({
             size="sm"
           />
         )}
+        {souOperador && automacao && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={abrirDuplicar}
+            disabled={duplicando}
+          >
+            <Copy /> Duplicar
+          </Button>
+        )}
         {souOperador && (
           <Button variant="outline" size="sm" onClick={onNova}>
             <Plus /> Nova
@@ -286,6 +337,73 @@ function EditorAutomacao({
           webhookUrl={webhookSalvo ? "salvo" : null}
         />
       </div>
+
+      {dialogoDuplicar && automacao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            className="absolute inset-0 bg-foreground/20"
+            onClick={() => !duplicando && setDialogoDuplicar(false)}
+            aria-label="Fechar"
+          />
+          <div className="relative w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-heading text-lg font-medium text-foreground">
+                Duplicar automação
+              </h2>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setDialogoDuplicar(false)}
+                disabled={duplicando}
+                aria-label="Fechar"
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+
+            {erroDupla && (
+              <div className="mb-3">
+                <Aviso>{erroDupla}</Aviso>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3">
+              <Label className="flex-col items-start gap-1">
+                Nome da cópia
+                <Input
+                  autoFocus
+                  value={nomeDupla}
+                  onChange={(e) => setNomeDupla(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") confirmarDuplicacao();
+                  }}
+                  placeholder="Nome da nova automação"
+                  className="w-full"
+                />
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                A cópia leva o mesmo gatilho, configuração e fluxo. Nasce{" "}
+                <strong>pausada</strong> — revise e ative quando quiser.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setDialogoDuplicar(false)}
+                  disabled={duplicando}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={confirmarDuplicacao}
+                  disabled={duplicando || !nomeDupla.trim()}
+                >
+                  {duplicando ? "Duplicando…" : "Duplicar"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
