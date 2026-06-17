@@ -103,7 +103,11 @@ function LinhaSaida({
       </div>
       <div>
         <label className="mb-1 block text-[11px]" style={{ color: "#6B6880" }}>
-          {no.gate ? "Decisão (o que você responde)" : "Quando o resultado for…"}
+          {no.gate
+            ? "Decisão (o que você responde)"
+            : no.tipo === "roteador"
+              ? "Quando a tarefa que chega for…"
+              : "Quando o resultado for…"}
         </label>
         <input
           className={inputCls}
@@ -520,11 +524,20 @@ export function Inspector({
           </div>
         )}
 
-        {/* roteador: nome */}
+        {/* roteador: o que é + nome */}
         {no.tipo === "roteador" && (
-          <div className="mb-4">
+          <div className="mb-4 flex flex-col gap-3">
+            <p className="flex gap-2 rounded-[10px] border border-[#E8E6F0] bg-[#FAFAF7] p-3 text-[11.5px] leading-relaxed text-[#6B6880]">
+              <Layers size={14} color="#6D4AFF" className="mt-px flex-none" />
+              <span>
+                O roteador não tem agente: ele <b>lê a tarefa que chega</b> e a
+                encaminha por um dos caminhos abaixo, conforme a condição de cada
+                saída — sem produzir trabalho. Ligue um nó até ele (arraste da
+                bolinha da esquerda) para que algo chegue aqui.
+              </span>
+            </p>
             <label
-              className="mb-1.5 block text-[12px] font-medium"
+              className="block text-[12px] font-medium"
               style={{ color: "#6B6880" }}
             >
               Nome da decisão
@@ -577,7 +590,9 @@ export function Inspector({
                 <CircleHelp size={13} color="#A09DB8" className="mt-px flex-none" />
                 {no.gate
                   ? "Sua resposta no portão escolhe por qual saída o fluxo segue."
-                  : "O agente classifica o resultado e segue por uma das saídas."}
+                  : no.tipo === "roteador"
+                    ? "O roteador lê a tarefa que chega e segue pela saída cuja condição casar."
+                    : "O agente classifica o resultado e segue por uma das saídas."}
               </p>
             )}
           </div>

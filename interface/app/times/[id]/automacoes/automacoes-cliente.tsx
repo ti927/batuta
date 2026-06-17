@@ -16,6 +16,7 @@ import {
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { AutomacaoBuilder } from "@/components/automacao-builder/builder";
+import { sanearGatilho } from "@/components/automacao-builder/nucleo";
 import type { ConfigGatilho } from "@/components/automacao-builder/inspector";
 import { BotaoRodarAgora } from "@/components/botao-rodar-agora";
 import { Aviso } from "@/components/ui/aviso";
@@ -102,9 +103,11 @@ function EditorAutomacao({
     automacao ? (automacao.tipo_gatilho === "manual" ? true : automacao.ativa) : true,
   );
   const [cadeia, setCadeia] = useState<Cadeia>(() =>
-    automacao && (automacao.cadeia?.nos?.length ?? 0) > 0
-      ? automacao.cadeia!
-      : cadeiaInicial(gatilhoDe(automacao).tipo),
+    sanearGatilho(
+      automacao && (automacao.cadeia?.nos?.length ?? 0) > 0
+        ? automacao.cadeia!
+        : cadeiaInicial(gatilhoDe(automacao).tipo),
+    ),
   );
 
   const setGatilho = (patch: Partial<ConfigGatilho>) =>

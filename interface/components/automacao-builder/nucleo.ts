@@ -65,3 +65,31 @@ export function indexar(cadeia: Cadeia): Record<string, NoCadeia> {
   for (const n of cadeia.nos ?? []) idx[n.id] = n;
   return idx;
 }
+
+// A saída do gatilho é DERIVADA do `inicial` (espelha grafo.py no cérebro). Curar
+// na abertura garante que o cordão gatilho→início apareça mesmo se a cadeia salva
+// veio com a saída "velha" (destino inexistente, que o canvas descartaria) — sem
+// depender do tempo de redeploy do cérebro. Idempotente; só age se há um `inicial`
+// válido. Mexe apenas no nó gatilho.
+export function sanearGatilho(cadeia: Cadeia): Cadeia {
+  const inicial = cadeia.inicial;
+  if (!inicial || !(cadeia.nos ?? []).some((n) => n.id === inicial)) return cadeia;
+  return {
+    ...cadeia,
+    nos: (cadeia.nos ?? []).map((n) =>
+      n.tipo === "gatilho"
+        ? {
+            ...n,
+            saidas: [
+              {
+                id: n.saidas?.[0]?.id ?? novoIdSaida(),
+                rotulo: n.saidas?.[0]?.rotulo ?? "inicia o fluxo",
+                destino: inicial,
+                tone: "normal" as const,
+              },
+            ],
+          }
+        : n,
+    ),
+  };
+}

@@ -16,7 +16,7 @@ import {
   type Node,
   type NodeChange,
 } from "@xyflow/react";
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown, Layers, Plus } from "lucide-react";
 
 import type { Agente, Cadeia, Instrumento, NoCadeia, SaidaCadeia } from "@/lib/api";
 import { RobotFace } from "@/components/robot-face";
@@ -325,30 +325,49 @@ export function AutomacaoBuilder({
   );
 
   const addNode = useCallback(
-    (ref: string) => {
-      const id = novoIdNo("agente");
+    (kind: "agente" | "roteador", ref?: string) => {
+      const id = novoIdNo(kind);
       setCadeia((c) => {
         const fim = (c.nos ?? []).find((n) => n.tipo === "fim");
         const baseX = 360 + ((c.nos?.length ?? 0) % 4) * 40;
         // Primeiro agente do fluxo: vira o inicial e liga o gatilho a ele.
         const primeiroAgente =
-          !(c.nos ?? []).some((n) => n.tipo === "agente") && !c.inicial;
-        const novo: NoCadeia = {
-          id,
-          tipo: "agente",
-          ref,
-          x: baseX,
-          y: 360,
-          inicial: primeiroAgente || undefined,
-          saidas: [
-            {
-              id: novoIdSaida(),
-              rotulo: "resultado",
-              destino: fim?.id ?? "fim",
-              tone: "normal",
-            },
-          ],
-        };
+          kind === "agente" &&
+          !(c.nos ?? []).some((n) => n.tipo === "agente") &&
+          !c.inicial;
+        const novo: NoCadeia =
+          kind === "roteador"
+            ? {
+                id,
+                tipo: "roteador",
+                nome: "Nova decisão",
+                x: baseX,
+                y: 360,
+                saidas: [
+                  {
+                    id: novoIdSaida(),
+                    rotulo: "caso A",
+                    destino: fim?.id ?? "fim",
+                    tone: "normal",
+                  },
+                ],
+              }
+            : {
+                id,
+                tipo: "agente",
+                ref,
+                x: baseX,
+                y: 360,
+                inicial: primeiroAgente || undefined,
+                saidas: [
+                  {
+                    id: novoIdSaida(),
+                    rotulo: "resultado",
+                    destino: fim?.id ?? "fim",
+                    tone: "normal",
+                  },
+                ],
+              };
         const nos = [...(c.nos ?? []), novo].map((n) =>
           primeiroAgente && n.tipo === "gatilho"
             ? {
@@ -449,7 +468,7 @@ export function AutomacaoBuilder({
                       <button
                         key={a.id}
                         type="button"
-                        onClick={() => addNode(a.id)}
+                        onClick={() => addNode("agente", a.id)}
                         className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-foreground hover:bg-[#F4F1FE]"
                       >
                         <RobotFace size={22} indice={i} lider={a.papel === "lider"} />
@@ -461,6 +480,24 @@ export function AutomacaoBuilder({
                         Crie agentes no time primeiro.
                       </div>
                     )}
+                    <div className="my-1 h-px bg-[#E8E6F0]" />
+                    <button
+                      type="button"
+                      onClick={() => addNode("roteador")}
+                      className="flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-[#F4F1FE]"
+                    >
+                      <span className="mt-0.5 grid size-[22px] flex-none place-items-center rounded-md bg-[#EFEAFF]">
+                        <Layers size={13} color="#6D4AFF" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[13px] text-foreground">
+                          Roteador / condição
+                        </span>
+                        <span className="block text-[11px] leading-snug text-muted-foreground">
+                          Encaminha a tarefa sem rodar agente
+                        </span>
+                      </span>
+                    </button>
                   </div>
                 )}
               </div>
