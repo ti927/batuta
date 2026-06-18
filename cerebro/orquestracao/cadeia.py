@@ -226,6 +226,7 @@ def executar_cadeia(
         ordem += 1
 
         iniciado_em = datetime.now(timezone.utc)
+        mensagens_enviadas: dict[str, list[str]] = {}
         if tipo == "roteador":
             # Roteador: não roda agente nem produz conteúdo — só classifica a
             # entrada sobre as suas saídas e segue. A entrada passa adiante intacta.
@@ -247,12 +248,27 @@ def executar_cadeia(
             saida_texto = resultado["saida"]
             instrumentos = resultado["instrumentos_acionados"]
             uso_passo = list(resultado.get("uso") or [])
+            mensagens_enviadas = resultado.get("mensagens_enviadas") or {}
             agente_id_str = str(agente.id)
             agente_nome = agente.nome
         finalizado_em = datetime.now(timezone.utc)
 
         saidas = no.get("saidas") or []
         gate = bool(no.get("gate"))
+
+        # Portão de aprovação: o que segue adiante é o que foi APRESENTADO ao humano
+        # — a(s) mensagem(ns) que o agente enviou pelo canal de aprovação do nó (ou,
+        # na falta, qualquer canal usado no turno) — e NÃO o status que ele narrou
+        # depois ("enviei, aguardando"). Sem isto o conteúdo aprovado se perde (o
+        # artigo ficava só no Telegram). Portão só de tela (sem envio por canal):
+        # mantém o texto do agente, que é o que a pessoa vê na tela.
+        if gate and mensagens_enviadas:
+            canal_id = str((no.get("aprovacao") or {}).get("instrumento_id") or "")
+            apresentadas = mensagens_enviadas.get(canal_id) or [
+                t for textos in mensagens_enviadas.values() for t in textos
+            ]
+            if apresentadas:
+                saida_texto = "\n\n".join(apresentadas)
 
         # Roteamento automático só quando NÃO há gate. Com gate (portão de
         # aprovação, PRODUTO §14), quem escolhe a saída é a RESPOSTA DO HUMANO,
