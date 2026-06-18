@@ -101,6 +101,7 @@ class EnviarTelegram(TipoInstrumento):
     campos_secretos = ("token_bot",)
     tipos_credencial_aceitos = ("telegram_bot",)
     acao_irreversivel = True  # manda mensagem para fora
+    campo_mensagem = "mensagem"  # o texto que o humano lê (usado pelo portão)
 
     def executar(self, config: ConfigTelegram, args: ArgsTelegram) -> dict:
         if not config.token_bot:

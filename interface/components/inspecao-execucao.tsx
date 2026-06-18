@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   Check,
-  ChevronDown,
   CircleHelp,
   Clock,
   Gauge,
@@ -117,161 +116,230 @@ function Bloco({ rotulo, children }: { rotulo: string; children: React.ReactNode
   );
 }
 
-function PassoNo({
-  passo,
-  indice,
-  agente,
-  ultimo,
-  tom,
-}: {
-  passo: PassoExecucao;
-  indice: number;
-  agente: Agente | undefined;
-  ultimo: boolean;
-  tom: TomDot;
-}) {
-  const [aberto, setAberto] = useState(false);
-  const toks = tokensDoPasso(passo);
-  const dur = duracao(passo);
-  return (
-    <li className="relative flex gap-3 pb-4">
-      {!ultimo && (
-        <span className="absolute left-3.5 top-7 -ml-px h-full w-0.5 bg-[#EDEBF4]" />
-      )}
-      <Dot tom={tom} />
-      <div className="min-w-0 flex-1">
-        <button
-          onClick={() => setAberto((v) => !v)}
-          className="flex w-full items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2 text-left transition-colors hover:bg-accent/40"
-        >
-          <RobotFace size={26} indice={indice} lider={agente?.papel === "lider"} />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium text-foreground">
-              {passo.ordem}. {agente?.nome ?? "(agente removido)"}
-            </span>
-            <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-              {passo.saida?.saida_escolhida && (
-                <span className="text-[#3D2A99]">→ {passo.saida.saida_escolhida}</span>
-              )}
-              {dur && <span>{dur}</span>}
-              {toks > 0 && <span>{toks.toLocaleString("pt-BR")} tok</span>}
-            </span>
-          </span>
-          {(passo.saida?.instrumentos_acionados ?? []).length > 0 && (
-            <Wrench className="size-3.5 shrink-0 text-muted-foreground" />
-          )}
-          <ChevronDown
-            className={`size-4 shrink-0 text-muted-foreground/60 transition-transform ${aberto ? "" : "-rotate-90"}`}
-          />
-        </button>
+// ─────────────────────── Two-column: passos + detalhe ───────────────────────
+// Lista de passos à esquerda; ao clicar, o detalhe do passo aparece à direita
+// (igual à aba Conversas). O "passo final" entra como um item: concluída mostra a
+// entrega; FALHOU mostra o erro — assim a falha NÃO some da timeline (mesmo quando
+// o passo que quebrou não chegou a ser gravado).
 
-        {aberto && (
-          <div className="mt-1.5 flex flex-col gap-2.5 rounded-lg border border-border bg-background p-3 text-sm">
-            <Bloco rotulo="Recebeu">{passo.entrada?.texto || "—"}</Bloco>
-            {(passo.saida?.instrumentos_acionados ?? []).length > 0 && (
-              <div>
-                <p className="mb-1 text-xs font-medium text-muted-foreground">
-                  Usou instrumentos
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {passo.saida!.instrumentos_acionados!.map((n) => (
-                    <span
-                      key={n}
-                      className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground"
-                    >
-                      <Wrench className="size-3" />
-                      {n}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            <Bloco rotulo="Produziu">{passo.saida?.texto || "—"}</Bloco>
-          </div>
+type ItemPasso =
+  | {
+      tipo: "passo";
+      chave: string;
+      tom: TomDot;
+      indice: number;
+      agente: Agente | undefined;
+      passo: PassoExecucao;
+    }
+  | { tipo: "final"; chave: string; tom: TomDot; rotulo: string };
+
+function construirItens(
+  execucao: ExecucaoComPassos,
+  agentes: Agente[],
+): ItemPasso[] {
+  const pausado = execucao.estado === "aguardando_humano";
+  const itens: ItemPasso[] = execucao.passos.map((p, i) => {
+    const ehUltimo = i === execucao.passos.length - 1;
+    const idx = agentes.findIndex((a) => a.id === p.agente_id);
+    return {
+      tipo: "passo",
+      chave: p.id,
+      tom: (ehUltimo && pausado ? "espera" : "ok") as TomDot,
+      indice: idx >= 0 ? idx : i,
+      agente: agentes[idx],
+      passo: p,
+    };
+  });
+  const finalPorEstado: Record<string, { tom: TomDot; rotulo: string }> = {
+    em_andamento: { tom: "rodando", rotulo: "Rodando o próximo agente…" },
+    aguardando: { tom: "fila", rotulo: "Na fila…" },
+    concluida: { tom: "ok", rotulo: "Entrega concluída" },
+    falhou: { tom: "falha", rotulo: "Falhou" },
+  };
+  const f = finalPorEstado[execucao.estado];
+  if (f) itens.push({ tipo: "final", chave: "final", ...f });
+  return itens;
+}
+
+function LinhaPasso({
+  item,
+  selecionado,
+  onSelecionar,
+}: {
+  item: ItemPasso;
+  selecionado: boolean;
+  onSelecionar: () => void;
+}) {
+  const base =
+    "flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors";
+  const fundo = selecionado ? "bg-accent/60" : "hover:bg-accent/30";
+  if (item.tipo === "final") {
+    return (
+      <button onClick={onSelecionar} className={`${base} ${fundo}`}>
+        <Dot tom={item.tom} />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+          {item.rotulo}
+        </span>
+      </button>
+    );
+  }
+  const { passo, agente, indice, tom } = item;
+  const dur = duracao(passo);
+  const toks = tokensDoPasso(passo);
+  const usouInstrumento = (passo.saida?.instrumentos_acionados ?? []).length > 0;
+  return (
+    <button onClick={onSelecionar} className={`${base} ${fundo}`}>
+      <span className="relative">
+        <RobotFace size={28} indice={indice} lider={agente?.papel === "lider"} />
+        {tom === "espera" && (
+          <Clock className="absolute -right-1 -top-1 size-3.5 rounded-full bg-background text-[#E89638]" />
         )}
-      </div>
-    </li>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium text-foreground">
+          {passo.ordem}. {agente?.nome ?? "(agente removido)"}
+        </span>
+        <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+          {passo.saida?.saida_escolhida && (
+            <span className="text-[#3D2A99]">→ {passo.saida.saida_escolhida}</span>
+          )}
+          {dur && <span>{dur}</span>}
+          {toks > 0 && <span>{toks.toLocaleString("pt-BR")} tok</span>}
+        </span>
+      </span>
+      {usouInstrumento && (
+        <Wrench className="size-3.5 shrink-0 text-muted-foreground" />
+      )}
+    </button>
   );
 }
 
-function NoFinal({ execucao }: { execucao: ExecucaoComPassos }) {
-  const e = execucao.estado;
-  if (e === "em_andamento" || e === "aguardando") {
-    return (
-      <li className="flex items-center gap-3">
-        <Dot tom={e === "em_andamento" ? "rodando" : "fila"} />
-        <span className="text-sm text-muted-foreground">
-          {e === "em_andamento"
-            ? "Rodando o próximo agente…"
-            : "Na fila, aguardando um trabalhador…"}
-        </span>
-      </li>
-    );
-  }
-  if (e === "concluida") {
-    return (
-      <li className="flex items-start gap-3">
-        <Dot tom="ok" />
-        <div className="min-w-0 flex-1">
-          <p className="pt-1 text-sm font-medium text-foreground">Entrega concluída</p>
+function DetalheItem({
+  item,
+  execucao,
+}: {
+  item: ItemPasso;
+  execucao: ExecucaoComPassos;
+}) {
+  if (item.tipo === "final") {
+    if (item.tom === "falha") {
+      return (
+        <div>
+          <p className="text-sm font-medium text-[#C0353A]">Falhou</p>
+          <p className="mt-2 whitespace-pre-wrap rounded-lg border border-[#F3C6C8] bg-[#FDECEC] p-3 text-sm text-[#8A2B2F]">
+            {execucao.resultado?.erro ||
+              "O fluxo falhou. Nada foi entregue pela metade — o erro está registrado."}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            A falha aconteceu no passo seguinte ao último concluído acima — por isso
+            ele não aparece como um passo próprio.
+          </p>
+        </div>
+      );
+    }
+    if (item.tom === "ok") {
+      return (
+        <div>
+          <p className="text-sm font-medium text-foreground">Entrega concluída</p>
           {execucao.resultado?.texto && (
-            <p className="mt-1.5 whitespace-pre-wrap rounded-lg border border-border bg-card p-3 text-sm text-foreground">
+            <p className="mt-2 whitespace-pre-wrap rounded-lg border border-border bg-background p-3 text-sm text-foreground">
               {execucao.resultado.texto}
             </p>
           )}
         </div>
-      </li>
-    );
-  }
-  if (e === "falhou") {
+      );
+    }
     return (
-      <li className="flex items-start gap-3">
-        <Dot tom="falha" />
-        <div className="min-w-0 flex-1">
-          <p className="pt-1 text-sm font-medium text-[#C0353A]">Falhou</p>
-          <p className="mt-1.5 rounded-lg border border-[#F3C6C8] bg-[#FDECEC] p-3 text-sm text-[#8A2B2F]">
-            {execucao.resultado?.erro ||
-              "O fluxo falhou. Nada foi entregue pela metade — o erro está registrado."}
-          </p>
-        </div>
-      </li>
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        {item.tom === "rodando" && <Loader2 className="size-4 animate-spin" />}
+        {item.rotulo}
+      </p>
     );
   }
-  return null;
+
+  const { passo, agente } = item;
+  const dur = duracao(passo);
+  const toks = tokensDoPasso(passo);
+  const instrumentos = passo.saida?.instrumentos_acionados ?? [];
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <h3 className="text-sm font-medium text-foreground">
+          {passo.ordem}. {agente?.nome ?? "(agente removido)"}
+        </h3>
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+          {passo.saida?.saida_escolhida && (
+            <span className="text-[#3D2A99]">→ {passo.saida.saida_escolhida}</span>
+          )}
+          {dur && <span>{dur}</span>}
+          {toks > 0 && <span>{toks.toLocaleString("pt-BR")} tok</span>}
+        </p>
+      </div>
+      <Bloco rotulo="Recebeu">{passo.entrada?.texto || "—"}</Bloco>
+      {instrumentos.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">
+            Usou instrumentos
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {instrumentos.map((n, i) => (
+              <span
+                key={`${n}-${i}`}
+                className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground"
+              >
+                <Wrench className="size-3" />
+                {n}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      <Bloco rotulo="Produziu">{passo.saida?.texto || "—"}</Bloco>
+    </div>
+  );
 }
 
-function Timeline({
+function Passos({
   execucao,
   agentes,
 }: {
   execucao: ExecucaoComPassos;
   agentes: Agente[];
 }) {
-  const pausado = execucao.estado === "aguardando_humano";
+  const itens = construirItens(execucao, agentes);
+  // Começa no último item (o desfecho — entrega ou falha): é o que o usuário quer
+  // ver primeiro ao abrir uma execução encerrada.
+  const [sel, setSel] = useState<string | null>(null);
+  const selecionado =
+    itens.find((i) => i.chave === sel) ?? itens[itens.length - 1] ?? null;
+
+  if (itens.length === 0) {
+    return (
+      <p className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+        Esta execução ainda não tem passos.
+      </p>
+    );
+  }
+
   return (
-    <ol className="mt-1">
-      {execucao.passos.map((p, i) => {
-        const ehUltimo = i === execucao.passos.length - 1;
-        const tom: TomDot = ehUltimo && pausado ? "espera" : "ok";
-        const idx = agentes.findIndex((a) => a.id === p.agente_id);
-        return (
-          <PassoNo
-            key={p.id}
-            passo={p}
-            indice={idx >= 0 ? idx : i}
-            agente={agentes[idx]}
-            ultimo={
-              ehUltimo &&
-              !["em_andamento", "aguardando", "concluida", "falhou"].includes(
-                execucao.estado,
-              )
-            }
-            tom={tom}
-          />
-        );
-      })}
-      <NoFinal execucao={execucao} />
-    </ol>
+    <div className="grid gap-3 lg:h-[60vh] lg:grid-cols-[300px_1fr]">
+      <div className="overflow-y-auto rounded-lg border border-border bg-card">
+        <ul className="divide-y divide-border">
+          {itens.map((it) => (
+            <li key={it.chave}>
+              <LinhaPasso
+                item={it}
+                selecionado={selecionado?.chave === it.chave}
+                onSelecionar={() => setSel(it.chave)}
+              />
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="overflow-y-auto rounded-lg border border-border bg-card p-4">
+        {selecionado && <DetalheItem item={selecionado} execucao={execucao} />}
+      </div>
+    </div>
   );
 }
 
@@ -433,7 +501,7 @@ export function PainelExecucao({
       )}
 
       <div className="mt-4">
-        <Timeline execucao={execucao} agentes={agentes} />
+        <Passos execucao={execucao} agentes={agentes} />
       </div>
 
       {execucao.uso && execucao.uso.tokens_entrada + execucao.uso.tokens_saida > 0 && (

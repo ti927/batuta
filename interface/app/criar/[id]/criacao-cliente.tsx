@@ -2,21 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import {
-  Activity,
   AlertTriangle,
-  Brain,
   ChevronLeft,
   Clock,
   ExternalLink,
   GitBranch,
-  Layers,
-  Loader2,
   MessageSquare,
-  Power,
-  Send,
   Sparkles,
   Wrench,
   X,
@@ -28,21 +20,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { podeOperar } from "@/lib/permissoes";
 import {
-  api,
   URL_CEREBRO,
-  ErroDaApi,
   caminhoPrincipal,
   inicialDaCadeia,
   type AgenteTime,
   type Cadeia,
   type ConversaCriacao,
   type Execucao,
-  type MemoriaProjeto,
-  type MensagemConversa,
   type PapelAcesso,
   type SnapshotTime,
-  type RespostaTurno,
 } from "@/lib/api";
+import { ChatCriacao } from "@/components/conversa-ia/chat";
+import { PainelConhecimento } from "@/components/conversa-ia/painel-conhecimento";
+import { RotuloSecao, rotuloGatilho } from "@/components/conversa-ia/comum";
+import { useConversaCriacao } from "@/components/conversa-ia/usar-conversa";
+import { useState } from "react";
 
 export function CriacaoCliente({
   conversaInicial,
@@ -55,235 +47,40 @@ export function CriacaoCliente({
   primeiraMensagem?: string;
   execucoesRecentes: Execucao[];
 }) {
-  const [mensagens, setMensagens] = useState<MensagemConversa[]>(
-    conversaInicial.mensagens,
-  );
-  const [time, setTime] = useState<SnapshotTime | null>(conversaInicial.time);
-  const [memoria, setMemoria] = useState<MemoriaProjeto[]>(
-    conversaInicial.memoria ?? [],
-  );
-  const [texto, setTexto] = useState("");
-  const [enviando, setEnviando] = useState(false);
-  const [ativando, setAtivando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
+  const podeConversar = podeOperar(meuPapel); // a conversa nunca termina
   const [agenteAberto, setAgenteAberto] = useState<AgenteTime | null>(null);
 
-  // O campo de resposta cresce conforme as linhas (até um teto) e volta ao tamanho
-  // de uma linha ao enviar.
-  const campoRef = useRef<HTMLTextAreaElement>(null);
-  function ajustarAltura() {
-    const el = campoRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
-  }
-  function resetarAltura() {
-    if (campoRef.current) campoRef.current.style.height = "auto";
-  }
+  const conversa = useConversaCriacao({
+    conversaId: conversaInicial.id,
+    mensagensIniciais: conversaInicial.mensagens,
+    timeInicial: conversaInicial.time,
+    memoriaInicial: conversaInicial.memoria ?? [],
+    podeConversar,
+    primeiraMensagem,
+  });
 
-  const fimDoChat = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    fimDoChat.current?.scrollIntoView({ behavior: "smooth" });
-  }, [mensagens, enviando]);
-
-  // Primeira mensagem (vinda da tela de início via ?primeira=): enviada uma vez,
-  // já dentro do chat, para a abertura ser instantânea mesmo com o Opus lento.
-  const primeiraEnviada = useRef(false);
-  useEffect(() => {
-    if (
-      primeiraMensagem &&
-      !primeiraEnviada.current &&
-      conversaInicial.mensagens.length === 0 &&
-      podeOperar(meuPapel)
-    ) {
-      primeiraEnviada.current = true;
-      void enviar(primeiraMensagem);
-    }
-    // só na montagem
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const podeConversar = podeOperar(meuPapel); // a conversa nunca termina
+  const time = conversa.time;
   const agentes = time?.agentes ?? [];
   const instrumentos = time?.instrumentos ?? [];
   const automacao = time?.automacao ?? null;
   const ativo = automacao?.ativa ?? false;
   const montou = time != null;
   const pendentes = instrumentos.flatMap((i) => i.segredos_pendentes);
-  const ultimaIA = [...mensagens].reverse().find((m) => m.papel === "ia");
-  const chips = !enviando ? (ultimaIA?.chips ?? []) : [];
-
-  async function enviar(conteudo: string) {
-    const limpo = conteudo.trim();
-    if (!limpo || enviando || !podeConversar) return;
-    setTexto("");
-    resetarAltura();
-    setErro(null);
-    setMensagens((m) => [...m, { papel: "usuario", conteudo: limpo }]);
-    setEnviando(true);
-    try {
-      const r = await api.post<RespostaTurno>(
-        `/conversas-criacao/${conversaInicial.id}/mensagens`,
-        { mensagem: limpo },
-      );
-      setMensagens((m) => [...m, { papel: "ia", conteudo: r.resposta, chips: r.chips }]);
-      setTime(r.time);
-      setMemoria(r.memoria ?? []);
-    } catch (e) {
-      setErro(e instanceof ErroDaApi ? e.message : "Falha ao enviar a mensagem.");
-    } finally {
-      setEnviando(false);
-    }
-  }
-
-  async function alternarAtivacao() {
-    if (!automacao || ativando || !podeConversar) return;
-    setAtivando(true);
-    setErro(null);
-    try {
-      await api.put(`/automacoes/${automacao.id}`, {
-        nome: automacao.nome,
-        tipo_gatilho: automacao.tipo_gatilho,
-        configuracao_gatilho: automacao.configuracao_gatilho ?? {},
-        cadeia: automacao.cadeia,
-        ativa: !ativo,
-      });
-      setTime((t) =>
-        t && t.automacao
-          ? { ...t, automacao: { ...t.automacao, ativa: !ativo } }
-          : t,
-      );
-      toast.success(!ativo ? "Time ativado" : "Time em repouso");
-    } catch (e) {
-      setErro(traduzirErroParede(e));
-    } finally {
-      setAtivando(false);
-    }
-  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
       {/* ───────────── Esquerda: chat ───────────── */}
-      <section className="flex h-1/2 w-full flex-col border-b border-border bg-card md:h-full md:w-[440px] md:shrink-0 md:border-r md:border-b-0">
-        <header className="flex items-center gap-3 border-b border-border px-4 py-3">
-          <span
-            className="flex size-9 items-center justify-center rounded-md text-white"
-            style={{ background: "linear-gradient(135deg,#6D4AFF,#8A6BFF)" }}
-          >
-            <Sparkles className="size-4.5" />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-foreground">IA criadora</p>
-            <p className="truncate text-xs text-muted-foreground">
-              Monta e cuida do seu time por conversa
-            </p>
-          </div>
-        </header>
-
-        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-          {mensagens.length === 0 && !enviando && (
-            <p className="text-sm text-muted-foreground">
-              Conte o que você quer que esse time faça. Eu pergunto, monto do lado
-              direito, e fico por aqui para ajustar quando precisar.
-            </p>
-          )}
-          {mensagens.map((m, i) => (
-            <Bolha key={i} mensagem={m} />
-          ))}
-          {enviando && <Digitando />}
-
-          {erro && (
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {erro}
-            </p>
-          )}
-          <div ref={fimDoChat} />
-        </div>
-
-        {/* Ativar / desativar — só quando há automação montada */}
-        {podeConversar && automacao && (
-          <div
-            className="border-t border-[#E6DEFB] px-4 py-3"
-            style={{ background: "linear-gradient(135deg,#F4F1FE,#FBF7EF)" }}
-          >
-            <p className="text-sm text-[#2A2150]">
-              {ativo
-                ? "O time está ativo — a automação pode disparar. Você pode continuar ajustando aqui."
-                : "Tudo pronto e em repouso. Ative quando quiser que a automação comece a valer."}
-            </p>
-            <Button
-              className="mt-2.5 w-full"
-              variant={ativo ? "outline" : "default"}
-              onClick={alternarAtivacao}
-              disabled={ativando}
-            >
-              {ativando ? <Loader2 className="animate-spin" /> : <Power />}
-              {ativando
-                ? "Aplicando…"
-                : ativo
-                  ? "Desativar o time"
-                  : "Ativar o time"}
-            </Button>
-          </div>
-        )}
-
-        {/* Chips */}
-        {chips.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-4 pb-2">
-            {chips.map((c, i) => (
-              <button
-                key={i}
-                onClick={() => enviar(c)}
-                className="rounded-full border border-[#D6D3E8] bg-card px-3 py-1 text-xs text-[#3D2A99] transition-colors hover:border-primary hover:bg-[#F4F1FE]"
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Input */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            enviar(texto);
-          }}
-          className="flex items-end gap-2 border-t border-border px-3 py-3"
-        >
-          <textarea
-            ref={campoRef}
-            value={texto}
-            onChange={(e) => {
-              setTexto(e.target.value);
-              ajustarAltura();
-            }}
-            onKeyDown={(e) => {
-              // Enter envia; Shift+Enter quebra linha. (isComposing: não envia no
-              // meio de um acento/IME.)
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                enviar(texto);
-              }
-            }}
-            rows={1}
-            disabled={!podeConversar || enviando}
-            placeholder={
-              podeConversar
-                ? "Responder à IA criadora…  (Enter envia, Shift+Enter quebra linha)"
-                : "Somente leitura"
-            }
-            className="max-h-[200px] min-h-10 flex-1 resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-60"
-          />
-          <Button
-            type="submit"
-            size="icon"
-            className="size-9 shrink-0"
-            disabled={!podeConversar || enviando || !texto.trim()}
-            aria-label="Enviar"
-          >
-            <Send className="size-4" />
-          </Button>
-        </form>
+      <section className="flex h-1/2 w-full flex-col border-b border-border md:h-full md:w-[440px] md:shrink-0 md:border-r md:border-b-0">
+        <ChatCriacao
+          mensagens={conversa.mensagens}
+          enviando={conversa.enviando}
+          erro={conversa.erro}
+          time={time}
+          ativando={conversa.ativando}
+          podeConversar={podeConversar}
+          enviar={conversa.enviar}
+          alternarAtivacao={conversa.alternarAtivacao}
+        />
       </section>
 
       {/* ───────────── Direita: canvas do time ───────────── */}
@@ -314,11 +111,7 @@ export function CriacaoCliente({
               </p>
             </div>
           ) : (
-            <Canvas
-              time={time!}
-              ativo={ativo}
-              onAbrirAgente={setAgenteAberto}
-            />
+            <Canvas time={time!} ativo={ativo} onAbrirAgente={setAgenteAberto} />
           )}
 
           {montou && pendentes.length > 0 && (
@@ -349,7 +142,7 @@ export function CriacaoCliente({
             <PainelConhecimento
               time={time}
               execucoes={execucoesRecentes}
-              memoria={memoria}
+              memoria={conversa.memoria}
             />
           )}
         </div>
@@ -366,62 +159,7 @@ export function CriacaoCliente({
   );
 }
 
-// ───────────────────────── Chat ─────────────────────────
-
-function Bolha({ mensagem }: { mensagem: MensagemConversa }) {
-  const ehIA = mensagem.papel === "ia";
-  return (
-    <div className={ehIA ? "flex" : "flex justify-end"}>
-      <p
-        className="max-w-[88%] whitespace-pre-wrap px-3.5 py-2 text-sm leading-relaxed"
-        style={
-          ehIA
-            ? { background: "#F4F1FE", color: "#2A2150", borderRadius: "4px 14px 14px 14px" }
-            : { background: "#1A1730", color: "#fff", borderRadius: "14px 14px 4px 14px" }
-        }
-      >
-        {mensagem.conteudo}
-      </p>
-    </div>
-  );
-}
-
-function Digitando() {
-  return (
-    <div className="flex">
-      <span
-        className="flex items-center gap-1 px-3.5 py-3"
-        style={{ background: "#F4F1FE", borderRadius: "4px 14px 14px 14px" }}
-      >
-        {[0, 0.15, 0.3].map((d) => (
-          <span
-            key={d}
-            className="size-1.5 animate-bounce rounded-full"
-            style={{ background: "#B7A8F0", animationDelay: `${d}s` }}
-          />
-        ))}
-      </span>
-    </div>
-  );
-}
-
 // ───────────────────────── Canvas ─────────────────────────
-
-function RotuloSecao({
-  Icone,
-  children,
-}: {
-  Icone: typeof Clock;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="mt-7 mb-3 flex items-center gap-2">
-      <Icone className="size-4 text-primary" />
-      <span className="text-sm font-medium text-foreground">{children}</span>
-      <span className="h-px flex-1 bg-border" />
-    </div>
-  );
-}
 
 function Canvas({
   time,
@@ -546,7 +284,6 @@ function CadeiaVertical({
 }) {
   const nome = (id: string | null | undefined) =>
     agentes.find((a) => a.id === id)?.nome ?? "—";
-  // ordem simples: começa no inicial e segue a primeira saída até o fim/repetição.
   const ordem = caminhoPrincipal(cadeia);
 
   return (
@@ -580,174 +317,7 @@ function CadeiaVertical({
   );
 }
 
-// ──────────────── O que eu sei deste projeto (3 camadas) ────────────────
-// Painel de conhecimento da IA companheira (handoff §6.6): estado atual
-// (consultado ao vivo), últimas execuções (histórico) e decisões lembradas
-// (memória de longo prazo destilada).
-
-const ROTULO_CATEGORIA: Record<MemoriaProjeto["categoria"], string> = {
-  fato: "Fato",
-  decisao: "Decisão",
-  preferencia: "Preferência",
-};
-
-const ESTADO_EXEC: Record<string, string> = {
-  aguardando: "na fila",
-  em_andamento: "em andamento",
-  aguardando_humano: "aguardando você",
-  concluida: "concluída",
-  falhou: "falhou",
-  cancelada: "cancelada",
-};
-
-function dataCurta(iso: string | null): string {
-  if (!iso) return "";
-  try {
-    return new Date(iso).toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "short",
-    });
-  } catch {
-    return "";
-  }
-}
-
-function Bolinha() {
-  return (
-    <span
-      className="mt-1.5 size-1.5 shrink-0 rounded-full"
-      style={{ background: "#B19CD9" }}
-    />
-  );
-}
-
-function Camada({
-  Icone,
-  titulo,
-  origem,
-  vazio,
-  children,
-}: {
-  Icone: typeof Layers;
-  titulo: string;
-  origem: string;
-  vazio?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-card p-3.5">
-      <div className="flex items-center gap-2">
-        <Icone className="size-4 text-primary" />
-        <span className="text-sm font-medium text-foreground">{titulo}</span>
-      </div>
-      <p className="mb-2.5 mt-0.5 text-[11px] text-muted-foreground">{origem}</p>
-      {vazio ? (
-        <p className="text-sm text-muted-foreground/70">{children}</p>
-      ) : (
-        <ul className="space-y-2">{children}</ul>
-      )}
-    </div>
-  );
-}
-
-function PainelConhecimento({
-  time,
-  execucoes,
-  memoria,
-}: {
-  time: SnapshotTime;
-  execucoes: Execucao[];
-  memoria: MemoriaProjeto[];
-}) {
-  const automacao = time.automacao;
-  const fatos: string[] = [
-    `${time.agentes.length} agente(s)`,
-    `${time.instrumentos.length} instrumento(s)`,
-  ];
-  if (automacao) {
-    fatos.push(
-      automacao.ativa ? "automação ativa" : "automação em repouso",
-      `gatilho: ${rotuloGatilho(automacao.tipo_gatilho)}`,
-    );
-  } else {
-    fatos.push("sem automação ainda");
-  }
-
-  return (
-    <div className="mt-8">
-      <RotuloSecao Icone={Brain}>O que eu sei deste projeto</RotuloSecao>
-      <div className="flex flex-col gap-2.5">
-        {/* Estado atual */}
-        <Camada
-          Icone={Layers}
-          titulo="Estado atual"
-          origem="consultado ao vivo no banco"
-        >
-          {fatos.map((f) => (
-            <li key={f} className="flex items-start gap-2.5 text-sm">
-              <Bolinha />
-              <span className="min-w-0 text-foreground">{f}</span>
-            </li>
-          ))}
-        </Camada>
-
-        {/* Últimas execuções */}
-        <Camada
-          Icone={Activity}
-          titulo="Últimas execuções"
-          origem="histórico do projeto"
-          vazio={execucoes.length === 0}
-        >
-          {execucoes.length === 0
-            ? "Nenhuma execução ainda."
-            : execucoes.map((e) => (
-                <li key={e.id} className="flex items-start gap-2.5 text-sm">
-                  <Bolinha />
-                  <span className="min-w-0 flex-1 text-foreground">
-                    <span className="text-[#3D2A99]">
-                      {ESTADO_EXEC[e.estado] ?? e.estado}
-                    </span>
-                    {e.entrada?.texto && (
-                      <span className="text-muted-foreground">
-                        {" "}
-                        — {e.entrada.texto}
-                      </span>
-                    )}
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {dataCurta(e.criado_em)}
-                  </span>
-                </li>
-              ))}
-        </Camada>
-
-        {/* Decisões lembradas */}
-        <Camada
-          Icone={Sparkles}
-          titulo="Decisões lembradas"
-          origem="memória de longo prazo"
-          vazio={memoria.length === 0}
-        >
-          {memoria.length === 0
-            ? "Ainda não registrei nada — peça para eu lembrar de algo."
-            : memoria.map((m) => (
-                <li key={m.id} className="flex items-start gap-2.5 text-sm">
-                  <Bolinha />
-                  <span className="min-w-0 text-foreground">
-                    <span className="mr-1.5 text-xs font-medium text-[#3D2A99]">
-                      {ROTULO_CATEGORIA[m.categoria] ?? "Memória"}
-                    </span>
-                    {m.conteudo}
-                  </span>
-                </li>
-              ))}
-        </Camada>
-      </div>
-    </div>
-  );
-}
-
-// ───────────────────────── Drawer do agente ─────────────────────────
+// ───────────────────────── Drawer do agente (leitura) ─────────────────────────
 
 const MARKDOWNS: { campo: keyof AgenteTime; rotulo: string; arquivo: string }[] = [
   { campo: "agent_md", rotulo: "Quem é", arquivo: "agent.md" },
@@ -819,30 +389,4 @@ function DrawerAgente({
       </aside>
     </div>
   );
-}
-
-// ───────────────────────── utilidades ─────────────────────────
-
-function rotuloGatilho(tipo: string): string {
-  const mapa: Record<string, string> = {
-    manual: "Manual (você dispara quando quiser)",
-    agendamento: "Por horário (agendado)",
-    webhook: "Por webhook (chamada externa)",
-  };
-  return mapa[tipo] ?? tipo;
-}
-
-function traduzirErroParede(e: unknown): string {
-  if (e instanceof ErroDaApi) {
-    try {
-      const corpo = JSON.parse(e.message);
-      if (Array.isArray(corpo?.problemas)) {
-        return "Não dá para ativar ainda: " + corpo.problemas.join(" ");
-      }
-    } catch {
-      // mensagem não era JSON
-    }
-    return e.message;
-  }
-  return "Falha ao ativar o time.";
 }

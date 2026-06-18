@@ -95,6 +95,12 @@ class TipoInstrumento(ABC):
     # seletor "usar uma credencial da central" na UI. Vazio = o instrumento não
     # aceita credencial da central (usa segredo inline próprio / pool, como antes).
     tipos_credencial_aceitos: tuple[str, ...] = ()
+    # MENSAGEM APRESENTADA A UM HUMANO: o nome do campo do `Args` cujo valor é o
+    # texto que uma pessoa lê quando o agente aciona este instrumento (ex.: um
+    # canal de mensageria). Usado pelo portão de aprovação para carregar adiante
+    # EXATAMENTE o que foi apresentado ao humano (e não o status que o agente
+    # narra depois). None = o instrumento não apresenta mensagem a humano.
+    campo_mensagem: str | None = None
 
     def irreversivel_para(self, configuracao: dict) -> bool:
         """Se ESTA instância (com esta configuração) faz ação irreversível.

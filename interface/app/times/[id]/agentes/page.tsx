@@ -65,8 +65,20 @@ export default async function AgentesPage({
   const { id } = await params;
   const dados = await carregar(id);
   if (!dados) notFound();
+  // Versão dos dados: muda quando a IA (pelo painel) adiciona/remove/edita um agente
+  // ou mexe num cinto. Como `key`, remonta a aba com os dados frescos após o
+  // router.refresh (a lista vive em estado local). Ver automacoes/page.tsx.
+  const versao =
+    JSON.stringify(
+      dados.agentes.map((a) => [a.id, a.nome, a.papel, a.modelo_ia]),
+    ) +
+    "::" +
+    Object.entries(dados.cintos)
+      .map(([k, v]) => `${k}:${v.map((i) => i.id).join(",")}`)
+      .join("|");
   return (
     <AgentesCliente
+      key={versao}
       time={dados.time}
       inicial={dados.agentes}
       cintos={dados.cintos}

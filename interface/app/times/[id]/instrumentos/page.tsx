@@ -64,8 +64,14 @@ export default async function InstrumentosPage({
   const { id } = await params;
   const dados = await carregar(id);
   if (!dados) notFound();
+  // Versão dos dados: muda quando a IA (pelo painel) cria/edita/remove um instrumento.
+  // Como `key`, remonta a aba fresca após o router.refresh. Ver automacoes/page.tsx.
+  const versao = JSON.stringify(
+    dados.instrumentos.map((i) => [i.id, i.nome, i.configuracao]),
+  );
   return (
     <InstrumentosCliente
+      key={versao}
       time={dados.time}
       inicial={dados.instrumentos}
       tipos={dados.tipos}

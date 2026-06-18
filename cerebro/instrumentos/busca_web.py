@@ -24,6 +24,19 @@ URL_TAVILY = "https://api.tavily.com/search"
 MAX_CONSULTA = 400
 
 
+def _detalhe_erro(resposta: httpx.Response) -> str:
+    """O motivo que a Tavily devolveu (corpo do erro), para a mensagem ser útil em
+    vez de só 'HTTP 400'. Cai no texto cru se não for JSON."""
+    try:
+        dados = resposta.json()
+        if isinstance(dados, dict):
+            motivo = dados.get("detail") or dados.get("error") or dados.get("message")
+            return str(motivo or dados)[:200]
+    except Exception:
+        pass
+    return (resposta.text or "sem detalhe").strip()[:200]
+
+
 class ConfigBuscaWeb(BaseModel):
     """Configuração fixa. `chave_api` é SEGREDO (cofre, Fase 7-B); se vazia, cai
     na TAVILY_API_KEY do .env (fallback legado)."""
@@ -67,9 +80,19 @@ class BuscaWeb(TipoInstrumento):
                 retentavel=False,
             )
 
+        # A Tavily recusa (HTTP 400) consulta vazia. Acontecia quando o agente
+        # acionava a busca sem texto útil — o erro voltava como "HTTP 400" opaco.
+        # Barramos antes, com mensagem clara que o agente entende e pode corrigir.
+        consulta = args.consulta.strip()[:MAX_CONSULTA]
+        if not consulta:
+            raise FalhaInstrumento(
+                "a consulta de busca veio vazia — diga em poucas palavras o que buscar.",
+                retentavel=False,
+            )
+
         corpo = {
             "api_key": chave,
-            "query": args.consulta.strip()[:MAX_CONSULTA],
+            "query": consulta,
             "max_results": config.max_resultados,
             "search_depth": "basic",
         }
@@ -93,7 +116,8 @@ class BuscaWeb(TipoInstrumento):
             )
         if not resposta.is_success:
             raise FalhaInstrumento(
-                f"a busca falhou (HTTP {status}).", retentavel=False
+                f"a busca falhou (HTTP {status}): {_detalhe_erro(resposta)}",
+                retentavel=False,
             )
 
         dados: dict[str, Any] = resposta.json()
