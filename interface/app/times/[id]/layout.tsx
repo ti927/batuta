@@ -1,6 +1,4 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Sparkles } from "lucide-react";
 
 import {
   type ConversaCriacaoResumo,
@@ -11,8 +9,12 @@ import {
 import { buscarCerebro, buscarMeuAcesso } from "@/lib/cerebro-servidor";
 import { podeOperar } from "@/lib/permissoes";
 import { BarraAbasTime } from "@/components/barra-abas-time";
+import {
+  AreaConversa,
+  BotaoConversarIA,
+  ProvedorConversaTime,
+} from "@/components/conversa-ia/painel-time";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
 
 async function jsonOu<T>(resp: Response, padrao: T): Promise<T> {
   return resp.ok ? ((await resp.json()) as T) : padrao;
@@ -62,56 +64,54 @@ export default async function TimeLayout({
   const ativo = resumo?.ativo ?? false;
 
   return (
-    <>
-      {/* Cabeçalho persistente + barra de abas: ficam fixos no topo enquanto o
-          conteúdo da aba rola por baixo. O usuário nunca "sai" do time. */}
-      <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto w-full max-w-[1000px] px-5 pt-6 sm:px-8">
-          <div className="flex flex-wrap items-start gap-4">
-            <div className="min-w-60 flex-1">
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="font-heading text-[23px] font-medium leading-tight text-foreground">
-                  {time.nome}
-                </h1>
-                <Badge variant={ativo ? "success" : "neutral"}>
-                  {ativo ? "ativo" : "em repouso"}
-                </Badge>
+    <ProvedorConversaTime
+      conversaId={conversaId}
+      timeId={time.id}
+      podeConversar={souOperador}
+    >
+      <AreaConversa>
+        {/* Cabeçalho persistente + barra de abas: ficam fixos no topo enquanto o
+            conteúdo da aba rola por baixo. O usuário nunca "sai" do time. */}
+        <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
+          <div className="mx-auto w-full max-w-[1000px] px-5 pt-6 sm:px-8">
+            <div className="flex flex-wrap items-start gap-4">
+              <div className="min-w-60 flex-1">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="font-heading text-[23px] font-medium leading-tight text-foreground">
+                    {time.nome}
+                  </h1>
+                  <Badge variant={ativo ? "success" : "neutral"}>
+                    {ativo ? "ativo" : "em repouso"}
+                  </Badge>
+                </div>
+                {time.descricao && (
+                  <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
+                    {time.descricao}
+                  </p>
+                )}
               </div>
-              {time.descricao && (
-                <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
-                  {time.descricao}
-                </p>
-              )}
+              <BotaoConversarIA />
             </div>
-            {souOperador && (
-              <Link
-                href={conversaId ? `/criar/${conversaId}` : "/criar"}
-                className={buttonVariants({ variant: "outline" })}
-              >
-                <Sparkles className="size-4 text-primary" />
-                Conversar sobre o projeto
-              </Link>
-            )}
-          </div>
 
-          <div className="mt-4">
-            <BarraAbasTime
-              timeId={time.id}
-              contagens={{
-                agentes: resumo?.agentes ?? 0,
-                instrumentos: resumo?.instrumentos ?? 0,
-                automacoes: resumo?.automacoes ?? 0,
-                execucoes: resumo?.execucoes ?? 0,
-                conversas: resumo?.conversas ?? 0,
-              }}
-              alertaConversas={(resumo?.conversas_em_andamento ?? 0) > 0}
-              alertaExecucoes={(resumo?.pendencias ?? 0) > 0}
-            />
+            <div className="mt-4">
+              <BarraAbasTime
+                timeId={time.id}
+                contagens={{
+                  agentes: resumo?.agentes ?? 0,
+                  instrumentos: resumo?.instrumentos ?? 0,
+                  automacoes: resumo?.automacoes ?? 0,
+                  execucoes: resumo?.execucoes ?? 0,
+                  conversas: resumo?.conversas ?? 0,
+                }}
+                alertaConversas={(resumo?.conversas_em_andamento ?? 0) > 0}
+                alertaExecucoes={(resumo?.pendencias ?? 0) > 0}
+              />
+            </div>
           </div>
         </div>
-      </div>
 
-      {children}
-    </>
+        {children}
+      </AreaConversa>
+    </ProvedorConversaTime>
   );
 }

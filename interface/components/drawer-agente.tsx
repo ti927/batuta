@@ -15,6 +15,7 @@ import {
   type Time,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
+import { useConversaTime } from "@/components/conversa-ia/painel-time";
 import { FormularioAgente } from "@/components/formulario-agente";
 import { IconeInstrumento } from "@/components/icone-instrumento";
 import { RobotFace } from "@/components/robot-face";
@@ -55,6 +56,8 @@ export function DrawerAgente({
   onFechar: () => void;
 }) {
   const router = useRouter();
+  const { timeId: timeDoPainel, abrir: abrirConversa } = useConversaTime();
+  const temPainelDeConversa = timeDoPainel !== "";
   const souOperador = podeOperar(meuPapel);
   const souAdmin = podeAdmin(meuPapel);
   const criando = agente === null;
@@ -299,15 +302,30 @@ export function DrawerAgente({
 
             {souOperador && (
               <div className="flex-none border-t border-border p-4">
-                <Link
-                  href={conversaId ? `/criar/${conversaId}` : "/criar"}
-                  className={buttonVariants({
-                    variant: "outline",
-                    className: "w-full",
-                  })}
-                >
-                  <Sparkles className="size-4 text-primary" /> Ajustar com a IA
-                </Link>
+                {temPainelDeConversa ? (
+                  // Dentro do time: abre o painel da IA à esquerda (sem sair da aba).
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      onFechar();
+                      abrirConversa();
+                    }}
+                  >
+                    <Sparkles className="size-4 text-primary" /> Ajustar com a IA
+                  </Button>
+                ) : (
+                  // Fallback (fora do time): leva à conversa em /criar.
+                  <Link
+                    href={conversaId ? `/criar/${conversaId}` : "/criar"}
+                    className={buttonVariants({
+                      variant: "outline",
+                      className: "w-full",
+                    })}
+                  >
+                    <Sparkles className="size-4 text-primary" /> Ajustar com a IA
+                  </Link>
+                )}
               </div>
             )}
           </>

@@ -46,8 +46,18 @@ export default async function AutomacoesPage({
   const { id } = await params;
   const dados = await carregar(id);
   if (!dados) notFound();
+  // Versão dos dados: muda quando a cadeia/ativa ou a lista de agentes mudam (ex.:
+  // a IA edita o time pelo painel lateral). Como `key`, força o editor (que guarda a
+  // cadeia em estado local) a remontar com os dados frescos após o router.refresh —
+  // some o "nó órfão fantasma" de uma view desatualizada. Só remonta quando o dado
+  // PERSISTIDO muda, então não descarta uma edição manual em andamento.
+  const versao =
+    JSON.stringify(dados.automacoes.map((a) => [a.id, a.ativa, a.cadeia])) +
+    "::" +
+    dados.agentes.map((a) => a.id).join(",");
   return (
     <AutomacoesCliente
+      key={versao}
       time={dados.time}
       inicial={dados.automacoes}
       agentes={dados.agentes}

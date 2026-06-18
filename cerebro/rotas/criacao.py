@@ -31,7 +31,11 @@ from esquemas import (
 )
 from modelos import Automacao, ConversaCriacao, Organizacao, Time, Usuario
 from orquestracao.modelos_ia import provedor_do_modelo
-from rotas._comum import conversa_criacao_acessivel, organizacao_acessivel
+from rotas._comum import (
+    conversa_criacao_acessivel,
+    organizacao_acessivel,
+    time_acessivel,
+)
 from sessao import obter_sessao
 
 rotas = APIRouter(tags=["criacao"])
@@ -104,6 +108,46 @@ def iniciar(
     else:
         sessao.commit()
     sessao.refresh(conversa)
+    return _ler(sessao, conversa)
+
+
+@rotas.post(
+    "/times/{time_id}/conversa",
+    response_model=ConversaCriacaoLer,
+    status_code=status.HTTP_201_CREATED,
+)
+def obter_ou_criar_conversa_do_time(
+    time_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """A conversa eterna deste time, para o painel da IA dentro de `/times/[id]`.
+    Devolve a conversa existente (a mais recente que aponta para o time) ou cria
+    uma já amarrada ao time — caminho de borda para times criados sem a IA (pelo
+    CRUD manual). A conversa criada pela IA já nasce com `time_id`; aqui só
+    garantimos que sempre exista uma. Acesso: operador."""
+    time = time_acessivel(sessao, usuario, time_id, minimo="operador")
+    conversa = sessao.scalars(
+        select(ConversaCriacao)
+        .where(ConversaCriacao.time_id == time_id)
+        .order_by(ConversaCriacao.atualizado_em.desc())
+    ).first()
+    if conversa is None:
+        conversa = ConversaCriacao(
+            organizacao_id=time.organizacao_id,
+            criada_por_id=usuario.id,
+            titulo=time.nome,
+            time_id=time_id,
+        )
+        sessao.add(conversa)
+        sessao.flush()
+        auditoria.registrar(
+            sessao, usuario=usuario, acao="criacao.conversa_iniciada",
+            recurso_tipo="conversa_criacao", recurso_id=conversa.id,
+            organizacao_id=time.organizacao_id,
+        )
+        sessao.commit()
+        sessao.refresh(conversa)
     return _ler(sessao, conversa)
 
 

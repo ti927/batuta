@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import {
   type ConversaCriacao,
@@ -50,6 +50,12 @@ export default async function ConversaCriacaoPage({
   const primeira = typeof sp.primeira === "string" ? sp.primeira : undefined;
   const dados = await carregar(id);
   if (!dados) notFound();
+  // Centralização: depois que o time existe, a conversa vive dentro de /times/[id]
+  // (painel da IA). O berço (/criar/[id]) só atende a conversa enquanto o time não
+  // nasceu. ?ia=1 faz o painel abrir já mostrando a conversa.
+  if (dados.conversa.time_id) {
+    redirect(`/times/${dados.conversa.time_id}?ia=1`);
+  }
   return (
     <CriacaoCliente
       conversaInicial={dados.conversa}
