@@ -1188,6 +1188,13 @@ O `PRODUTO.md` §9 prevê a **Biblioteca** ("segundo cérebro") — mas ela **ca
 
 ---
 
+## FASE — Instrumento "Ler site" (extração de página)  📋 BACKLOG (ideia registrada, não iniciada — 2026-06-18)
+Hoje o agente **acha** páginas (`busca_web`/Tavily → título + link + **trecho** ~500 chars) mas **não consegue abrir uma URL e ler o ARTIGO completo** de forma limpa: `busca_web` só devolve o trecho, e o instrumento genérico `rest` devolve o **HTML cru** (bom para APIs, não para ler um artigo). Falta um instrumento de **leitura de site**: dada uma **URL**, devolver o **conteúdo limpo** daquela página. É capacidade distinta da busca (descoberta × leitura).
+
+**Caminho técnico (a confirmar na execução):** a Tavily oferece o endpoint **`/extract`** (recebe URL(s) → devolve o conteúdo extraído) — molde igual ao `cerebro/instrumentos/busca_web.py`, **reusando a mesma chave compartilhada `tavily`** (pool da org → consultoria → `.env`), `acao_irreversivel=False` (só leitura), **sem migração, núcleo intocado**. Alternativa mais simples: ligar `include_raw_content` na própria `busca_web` (traz o texto cheio dos resultados) — útil quando a busca já acha a página certa. A escolha (instrumento novo `ler_site` × flag na busca) fica para quando o maestro priorizar. **Não iniciar sem o sinal do maestro.**
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
