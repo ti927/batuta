@@ -7,7 +7,9 @@ import precos
 from modelos import Agente, AgenteInstrumento, Instrumento
 
 
-def _agente_com_imagem(sessao, dados, modelo="dall-e-3", tamanho="1024x1024"):
+def _agente_com_imagem(
+    sessao, dados, modelo="gpt-image-1", tamanho="1024x1024", qualidade="medium"
+):
     ag = Agente(time_id=dados["timeA"].id, nome="Artista", papel="agente")
     sessao.add(ag)
     sessao.flush()
@@ -15,7 +17,7 @@ def _agente_com_imagem(sessao, dados, modelo="dall-e-3", tamanho="1024x1024"):
         time_id=dados["timeA"].id,
         nome="capa",
         tipo="gerar_imagem",
-        configuracao={"modelo": modelo, "tamanho": tamanho},
+        configuracao={"modelo": modelo, "tamanho": tamanho, "qualidade": qualidade},
     )
     sessao.add(inst)
     sessao.flush()
@@ -34,7 +36,9 @@ def test_conta_uma_entrada_por_imagem_gerada(sessao, dados):
     assert e["categoria"] == "instrumento"
     assert e["origem"] == "organizacao"  # chave do próprio instrumento, não a chave-mãe
     assert e["imagens"] == 1
-    assert e["custo_usd"] == round(precos.custo_por_imagem("dall-e-3", "1024x1024"), 6)
+    assert e["custo_usd"] == round(
+        precos.custo_por_imagem("gpt-image-1", "1024x1024", "medium"), 6
+    )
 
 
 def test_ignora_ferramenta_nao_paga(sessao, dados):
@@ -49,13 +53,17 @@ def test_vazio_sem_acionados(sessao, dados):
     assert mi.uso_de_instrumentos_pagos(sessao, ag.id, None) == []
 
 
-def test_respeita_tamanho_da_config(sessao, dados):
-    ag, inst = _agente_com_imagem(sessao, dados, tamanho="1792x1024")
+def test_respeita_qualidade_da_config(sessao, dados):
+    # O preço da imagem varia sobretudo pela QUALIDADE (a maior alavanca de custo).
+    ag, inst = _agente_com_imagem(sessao, dados, qualidade="high")
     nome = f"capa_{inst.id.hex[:8]}"
     entradas = mi.uso_de_instrumentos_pagos(sessao, ag.id, [nome])
     assert entradas[0]["custo_usd"] == round(
-        precos.custo_por_imagem("dall-e-3", "1792x1024"), 6
+        precos.custo_por_imagem("gpt-image-1", "1024x1024", "high"), 6
     )
+    assert precos.custo_por_imagem(
+        "gpt-image-1", "", "high"
+    ) > precos.custo_por_imagem("gpt-image-1", "", "medium")
 
 
 def test_origem_segue_o_pool_quando_sem_chave_propria(sessao, dados):

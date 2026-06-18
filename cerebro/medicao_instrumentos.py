@@ -37,12 +37,13 @@ def _id8(nome_ferramenta: str) -> str:
 
 def _custo_imagem(cfg: dict) -> dict:
     """Entrada de uso de UMA imagem gerada, a partir da config do instrumento."""
-    modelo = cfg.get("modelo") or "dall-e-3"
+    modelo = cfg.get("modelo") or "gpt-image-1"
     tamanho = cfg.get("tamanho") or "1024x1024"
+    qualidade = cfg.get("qualidade") or "medium"
     return {
         "modelo": modelo,
         "imagens": 1,
-        "custo_usd": round(precos.custo_por_imagem(modelo, tamanho), 6),
+        "custo_usd": round(precos.custo_por_imagem(modelo, tamanho, qualidade), 6),
     }
 
 

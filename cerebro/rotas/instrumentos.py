@@ -91,6 +91,7 @@ def listar_tipos(usuario: Usuario = Depends(usuario_atual)):
             ),
             tipos_credencial_aceitos=list(t.tipos_credencial_aceitos),
             acao_irreversivel=t.acao_irreversivel,
+            dependencias=t.dependencias_ui(),
         )
         for t in encaixe.tipos_disponiveis()
     ]

@@ -244,6 +244,10 @@ class TipoInstrumentoLer(BaseModel):
     # Ação irreversível (publicar/enviar/gravar externo): o front mostra um aviso
     # e a parede de ativação exige portão humano antes de um agente que a use.
     acao_irreversivel: bool = False
+    # Campos com OPÇÕES dependentes de outro campo (dropdown dependente): o front
+    # filtra as opções conforme o controlador (ex.: gerar_imagem filtra tamanho/
+    # qualidade pelo modelo). None = sem dependências. Ver TipoInstrumento.dependencias_ui.
+    dependencias: dict | None = None
 
 
 class AcionarInstrumento(BaseModel):

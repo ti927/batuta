@@ -61,33 +61,51 @@ class ContextoCriacao:
         return self.sessao.get(Time, self.conversa.time_id)
 
 
+def _opcoes_do_campo(prop: dict) -> list | None:
+    """Valores fixos de um campo (enum/Literal), inclusive dentro de anyOf
+    (Optional). Espelha o `opcoesDoCampo` da interface."""
+    if isinstance(prop.get("enum"), list):
+        return prop["enum"]
+    for p in prop.get("anyOf") or []:
+        if isinstance(p.get("enum"), list):
+            return p["enum"]
+    return None
+
+
 def catalogo_de_instrumentos() -> list[dict]:
     """O catálogo de tipos de instrumento COM os campos de configuração de cada um.
 
     É o que destrava a IA criadora: sem saber que o WordPress precisa de `site_url`
     e `usuario`, ela não tem como PERGUNTAR ao consultor por eles. Para cada tipo,
-    lista os campos da `Config` marcando `obrigatorio` e `secreto`, e se o tipo faz
-    `acao_irreversivel` (a IA precisa pôr portão humano antes na cadeia)."""
+    lista os campos da `Config` marcando `obrigatorio`, `secreto` e — quando o campo
+    é um conjunto fechado — as `opcoes` válidas; e, no nível do tipo, as
+    `dependencias` (campos cujas opções dependem de outro, ex.: gerar_imagem filtra
+    tamanho/qualidade pelo modelo) e se o tipo faz `acao_irreversivel` (a IA precisa
+    pôr portão humano antes na cadeia)."""
     catalogo: list[dict] = []
     for tipo in encaixe.tipos_disponiveis():
         esquema = tipo.Config.model_json_schema()
         obrigatorios = set(esquema.get("required", []))
         secretos = set(tipo.campos_secretos)
-        campos = [
-            {
+        campos = []
+        for nome, prop in (esquema.get("properties") or {}).items():
+            campo = {
                 "nome": nome,
                 "descricao": prop.get("description", ""),
                 "obrigatorio": nome in obrigatorios,
                 "secreto": nome in secretos,
             }
-            for nome, prop in (esquema.get("properties") or {}).items()
-        ]
+            opcoes = _opcoes_do_campo(prop)
+            if opcoes is not None:
+                campo["opcoes"] = opcoes
+            campos.append(campo)
         catalogo.append(
             {
                 "tipo": tipo.tipo,
                 "nome": tipo.nome_exibicao,
                 "descricao": tipo.descricao,
                 "campos": campos,
+                "dependencias": tipo.dependencias_ui(),
                 "acao_irreversivel": tipo.acao_irreversivel,
             }
         )
