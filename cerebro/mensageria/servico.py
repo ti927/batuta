@@ -397,6 +397,19 @@ def _ack_aprovacao(execucao: Execucao) -> str:
     return "⚠️ Recebi sua resposta, mas houve uma falha ao seguir o fluxo."
 
 
+def _agente_falou_por_ultimo(sessao: Session, conversa_id: uuid.UUID) -> bool:
+    """Se a última mensagem da thread é do agente — no portão conversacional, o
+    agente fez sua própria pergunta/pedido pelo canal (já registrada), então o ack
+    genérico ('Recebido, ainda aguardando') seria ruído redundante."""
+    m = sessao.scalars(
+        select(MensagemConversa)
+        .where(MensagemConversa.conversa_id == conversa_id)
+        .order_by(MensagemConversa.criado_em.desc())
+        .limit(1)
+    ).first()
+    return bool(m and m.papel == "agente")
+
+
 def _processar_aprovacao(
     sessao: Session, conversa: Conversa, execucao: Execucao, token: str
 ) -> None:
@@ -426,7 +439,12 @@ def _processar_aprovacao(
     # (a conversa volta ao modo conversacional, se houver agente atendente).
     if execucao.estado != "aguardando_humano":
         conversa.execucao_id = None
-    _enviar_e_registrar(sessao, conversa, token, _ack_aprovacao(execucao))
+        _enviar_e_registrar(sessao, conversa, token, _ack_aprovacao(execucao))
+    elif not _agente_falou_por_ultimo(sessao, conversa.id):
+        # Pausou de novo SEM o agente ter falado (ex.: portão mecânico) → ack
+        # genérico para não calar. No portão conversacional o agente já perguntou
+        # pelo canal, então não duplicamos.
+        _enviar_e_registrar(sessao, conversa, token, _ack_aprovacao(execucao))
     conversa.estado = "aguardando_resposta"
     sessao.commit()
 

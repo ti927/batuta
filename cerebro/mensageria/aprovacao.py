@@ -27,6 +27,7 @@ from modelos import (
     Conversa,
     Execucao,
     Instrumento,
+    MensagemConversa,
     PassoExecucao,
 )
 from orquestracao import grafo
@@ -117,6 +118,47 @@ def vincular_pausa(sessao: Session, execucao: Execucao) -> None:
         conversa.execucao_id = execucao.id
         if conversa.estado not in ("humano_assumiu", "fechada"):
             conversa.estado = "aguardando_resposta"
+    sessao.flush()
+
+    _registrar_apresentado(sessao, conversa, execucao)
+
+
+def _registrar_apresentado(
+    sessao: Session, conversa: Conversa, execucao: Execucao
+) -> None:
+    """Grava na thread da conversa o que o agente APRESENTOU ao humano nesta pausa
+    (o pedido de aprovação). Sem isto a conversa fica pela metade: o que o agente
+    envia por canal durante a execução só vive em memória e nunca aparecia nas
+    Conversas (só a resposta do humano e os acks). É o passo pausado que carrega o
+    apresentado (`cadeia.py` sobrescreve a saída com a mensagem que a pessoa viu).
+    Idempotente por passo (carimba `midia.passo_id`), pois `vincular_pausa` pode ser
+    chamada mais de uma vez para a mesma pausa."""
+    ultimo = sessao.scalars(
+        select(PassoExecucao)
+        .where(PassoExecucao.execucao_id == execucao.id)
+        .order_by(PassoExecucao.ordem.desc())
+    ).first()
+    if ultimo is None:
+        return
+    texto = ((ultimo.saida or {}).get("texto") or "").strip()
+    if not texto:
+        return
+    ja_gravado = sessao.scalars(
+        select(MensagemConversa.id)
+        .where(MensagemConversa.conversa_id == conversa.id)
+        .where(MensagemConversa.midia["passo_id"].astext == str(ultimo.id))
+    ).first()
+    if ja_gravado:
+        return
+    sessao.add(
+        MensagemConversa(
+            conversa_id=conversa.id,
+            papel="agente",
+            conteudo=texto,
+            midia={"origem": "execucao", "passo_id": str(ultimo.id)},
+            entregue=True,
+        )
+    )
     sessao.flush()
 
 

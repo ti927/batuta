@@ -70,12 +70,13 @@ def _ag(sessao, dados, nome):
 
 
 def _mock_executar(monkeypatch, *, saida, mensagens_enviadas):
-    def fake(agente, cinto, entrada):
+    def fake(agente, cinto, entrada, **kwargs):
         return {
             "saida": saida,
             "instrumentos_acionados": [],
             "uso": [],
             "mensagens_enviadas": mensagens_enviadas,
+            "ramo_escolhido": None,
         }
     monkeypatch.setattr(motor, "executar_agente", fake)
 

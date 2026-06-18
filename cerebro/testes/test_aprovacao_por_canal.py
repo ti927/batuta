@@ -20,6 +20,7 @@ from modelos import (
     Conversa,
     Execucao,
     Instrumento,
+    MensagemConversa,
     PassoExecucao,
 )
 
@@ -138,6 +139,54 @@ def test_vincular_pausa_amarra_conversa_do_aprovador(sessao, dados):
     assert conv is not None
     assert conv.contato_chave == "555"
     assert conv.execucao_id == execucao.id
+
+
+def _msgs_agente(sessao, conversa_id):
+    return sessao.scalars(
+        select(MensagemConversa)
+        .where(MensagemConversa.conversa_id == conversa_id)
+        .where(MensagemConversa.papel == "agente")
+    ).all()
+
+
+def test_vincular_pausa_registra_o_apresentado_na_thread(sessao, dados):
+    """O que o agente apresentou ao humano (o pedido de aprovação) passa a aparecer
+    na thread de Conversas — antes só vivia em memória e sumia."""
+    canal = _canal(sessao, dados, destinatario="555")
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal=canal)
+    execucao = _exec_pausada(sessao, auto, ag, texto="Artigo para aprovar")
+
+    aprovacao.vincular_pausa(sessao, execucao)
+
+    conv = _conversa_da_execucao(sessao, execucao.id)
+    msgs = _msgs_agente(sessao, conv.id)
+    assert len(msgs) == 1
+    assert msgs[0].conteudo == "Artigo para aprovar"
+
+
+def test_vincular_pausa_nao_duplica_o_apresentado(sessao, dados):
+    canal = _canal(sessao, dados, destinatario="555")
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal=canal)
+    execucao = _exec_pausada(sessao, auto, ag)
+
+    aprovacao.vincular_pausa(sessao, execucao)
+    aprovacao.vincular_pausa(sessao, execucao)  # 2ª chamada (mesma pausa) não duplica
+
+    conv = _conversa_da_execucao(sessao, execucao.id)
+    assert len(_msgs_agente(sessao, conv.id)) == 1
+
+
+def test_vincular_pausa_sem_canal_nao_grava_mensagem(sessao, dados):
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal=None)  # só tela
+    execucao = _exec_pausada(sessao, auto, ag)
+
+    aprovacao.vincular_pausa(sessao, execucao)
+
+    # sem canal não há conversa, logo nada a gravar
+    assert _conversa_da_execucao(sessao, execucao.id) is None
 
 
 def test_vincular_pausa_sem_destinatario_nao_amarra(sessao, dados):

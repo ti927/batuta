@@ -9,10 +9,12 @@ vira uma ferramenta da IA pelo encaixe (instrumentos/base.py).
 import json
 import re
 import unicodedata
+from typing import Literal
 
 from langchain_core.messages import AIMessage
 from langchain_core.tools import StructuredTool
 from langgraph.prebuilt import create_react_agent
+from pydantic import Field, create_model
 
 import instrumentos as encaixe
 from instrumentos.base import (
@@ -131,11 +133,78 @@ def _ferramentas_de_instrumento(
     return [_ferramenta_unica(inst, tipo, config, falhas, mensagens_enviadas)]
 
 
+def _opcoes_das_saidas(saidas: list[dict]) -> str:
+    """As saídas do nó como uma lista legível 'rótulo: quando' (para a IA escolher)."""
+    return "\n".join(
+        f'- "{s["rotulo"]}": {s.get("quando") or "(sem descrição)"}'
+        for s in saidas
+        if s.get("rotulo")
+    )
+
+
+def _ferramenta_seguir_para(saidas: list[dict], escolha: dict) -> StructuredTool:
+    """Ferramenta de DECISÃO DE FLUXO: o PRÓPRIO agente declara por qual saída do nó
+    o fluxo segue — em vez de uma LLM roteadora separada adivinhar pela prosa. O
+    `rotulo` é um enum dos rótulos das saídas (a IA não inventa caminho); a escolha
+    é registrada no dict `escolha` do closure (mesmo padrão de `mensagens_enviadas`)."""
+    rotulos = [s["rotulo"] for s in saidas if s.get("rotulo")]
+    Args = create_model(
+        "SeguirParaArgs",
+        rotulo=(
+            Literal[tuple(rotulos)],  # type: ignore[valid-type]
+            Field(description="O rótulo exato do caminho a seguir."),
+        ),
+    )
+    descricao = (
+        "Decide por qual caminho o fluxo segue depois deste passo. Chame UMA vez, ao "
+        f"concluir, com o rótulo do caminho escolhido.\nCaminhos:\n{_opcoes_das_saidas(saidas)}"
+    )
+
+    def seguir(**kwargs) -> str:
+        args = Args.model_validate(kwargs)
+        escolha["rotulo"] = args.rotulo
+        return json.dumps({"ok": True, "rotulo": args.rotulo}, ensure_ascii=False)
+
+    return StructuredTool.from_function(
+        func=seguir, name="seguir_para", description=descricao, args_schema=Args
+    )
+
+
+def _instrucao_de_fluxo(saidas: list[dict], gate: bool) -> str:
+    """Apêndice mecânico (não comportamental) que diz ao agente quais saídas o nó
+    tem e como declarar a escolha. É a topologia que antes ficava ESCONDIDA dele."""
+    opcoes = _opcoes_das_saidas(saidas)
+    if gate:
+        return (
+            "## Caminhos do fluxo (este passo aguarda uma pessoa)\n"
+            "Quando você tiver a decisão da pessoa, chame a ferramenta `seguir_para` "
+            "com o rótulo do caminho escolhido. Se ainda precisar de algo dela "
+            "(perguntar, esclarecer), apenas responda normalmente, SEM chamar "
+            "`seguir_para` — o fluxo segue aguardando a resposta dela.\n"
+            f"Caminhos:\n{opcoes}"
+        )
+    return (
+        "## Caminhos do fluxo\n"
+        "Ao terminar este passo, escolha por qual caminho o fluxo segue: chame a "
+        "ferramenta `seguir_para` com o rótulo do caminho.\n"
+        f"Caminhos:\n{opcoes}"
+    )
+
+
 def executar_agente(
-    agente: Agente, cinto: list[Instrumento], entrada: str
+    agente: Agente,
+    cinto: list[Instrumento],
+    entrada: str,
+    *,
+    saidas: list[dict] | None = None,
+    gate: bool = False,
 ) -> dict:
     """Roda um agente sozinho sobre uma entrada. Devolve a saída em texto e a
     lista de instrumentos que ele acionou (para inspeção).
+
+    Quando o nó tem 2+ saídas, o agente recebe a ferramenta `seguir_para` e o
+    apêndice de caminhos: é ELE quem declara o ramo (devolvido em `ramo_escolhido`),
+    em vez de uma LLM roteadora adivinhar pela prosa. Nó de 1 saída segue direto.
 
     Se um instrumento de AÇÃO IRREVERSÍVEL falhar de vez, levanta
     `FalhaInstrumento` ao fim do laço — a execução fica num estado de falha claro
@@ -147,12 +216,18 @@ def executar_agente(
     # neste turno. O portão de aprovação usa isto para carregar adiante o que a
     # pessoa viu, em vez do status que o agente narra depois.
     mensagens_enviadas: dict[str, list[str]] = {}
+    escolha: dict[str, str] = {}  # o ramo que o agente declarar via `seguir_para`
     ferramentas = [
         f
         for i in cinto
         for f in _ferramentas_de_instrumento(i, falhas, mensagens_enviadas)
     ]
-    app = create_react_agent(modelo, ferramentas, prompt=montar_instrucoes(agente))
+    saidas = saidas or []
+    instrucoes = montar_instrucoes(agente)
+    if len(saidas) >= 2:
+        ferramentas.append(_ferramenta_seguir_para(saidas, escolha))
+        instrucoes += "\n\n" + _instrucao_de_fluxo(saidas, gate)
+    app = create_react_agent(modelo, ferramentas, prompt=instrucoes)
     resultado = app.invoke({"messages": [{"role": "user", "content": entrada}]})
 
     # Não confiamos na narração do agente: se uma ação IRREVERSÍVEL falhou,
@@ -182,6 +257,7 @@ def executar_agente(
         "saida": texto_da_resposta(mensagens[-1]),
         "instrumentos_acionados": acionados,
         "mensagens_enviadas": mensagens_enviadas,
+        "ramo_escolhido": escolha.get("rotulo"),
         "uso": [
             {
                 "modelo": modelo_usado,
