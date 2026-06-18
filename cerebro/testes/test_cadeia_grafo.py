@@ -27,13 +27,16 @@ def ag(sessao, dados):
     return criar
 
 
-def _mock_agentes(monkeypatch, saidas_por_nome):
-    """Mocka `executar_agente`: devolve a saída configurada por nome do agente."""
-    def fake(agente, cinto, entrada):
+def _mock_agentes(monkeypatch, saidas_por_nome, ramos_por_nome=None):
+    """Mocka `executar_agente`: devolve a saída (e, opcionalmente, o ramo declarado)
+    configurada por nome do agente. Aceita `saidas`/`gate` (kwargs do motor)."""
+    ramos_por_nome = ramos_por_nome or {}
+    def fake(agente, cinto, entrada, **kwargs):
         return {
             "saida": saidas_por_nome.get(agente.nome, "ok"),
             "instrumentos_acionados": [],
             "uso": [],
+            "ramo_escolhido": ramos_por_nome.get(agente.nome),
         }
     monkeypatch.setattr(motor, "executar_agente", fake)
 
@@ -94,6 +97,87 @@ def test_bifurcacao_segue_ramo_certo(sessao, dados, ag, monkeypatch):
     assert r["estado"] == "concluida"
     nos_visitados = [p["no_id"] for p in r["passos"]]
     assert nos_visitados == ["cacador", "validador", "publicador"]
+
+
+def _mock_roteador_explode(monkeypatch):
+    """`_escolher_saida` que estoura se for chamado — prova que o agente declarou e
+    o roteador-adivinhador NÃO foi acionado."""
+    def fake(saida_texto, saidas):
+        raise AssertionError("o roteador não devia ser chamado: o agente declarou")
+    monkeypatch.setattr(motor, "_escolher_saida", fake)
+
+
+def test_ramo_declarado_pelo_agente_dispensa_o_roteador(sessao, dados, ag, monkeypatch):
+    val = ag("Validador")
+    pub = ag("Publicador")
+    _mock_roteador_explode(monkeypatch)  # se chamado, falha
+    _mock_agentes(
+        monkeypatch,
+        {"Validador": "texto qualquer", "Publicador": "pub"},
+        ramos_por_nome={"Validador": "refazer"},  # agente declara "refazer"
+    )
+    cadeia = {
+        "inicial": "validador",
+        "nos": [
+            {"id": "validador", "tipo": "agente", "ref": str(val.id),
+             "saidas": [
+                 {"rotulo": "ok", "destino": "publicador"},
+                 {"rotulo": "refazer", "destino": "fim"},
+             ]},
+            {"id": "publicador", "tipo": "agente", "ref": str(pub.id),
+             "saidas": [{"rotulo": "pub", "destino": "fim"}]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    r = motor.executar_cadeia(sessao, cadeia, "vai")
+    assert r["estado"] == "concluida"  # "refazer" → fim
+    assert [p["no_id"] for p in r["passos"]] == ["validador"]
+    assert r["passos"][-1]["saida_escolhida"] == "refazer"
+
+
+def test_rotulo_inexistente_cai_no_roteador(sessao, dados, ag, monkeypatch):
+    val = ag("Validador")
+    _mock_roteador(monkeypatch)  # fallback ativo
+    _mock_agentes(
+        monkeypatch,
+        {"Validador": "ok"},
+        ramos_por_nome={"Validador": "fantasma"},  # rótulo que não existe no nó
+    )
+    cadeia = {
+        "inicial": "validador",
+        "nos": [
+            {"id": "validador", "tipo": "agente", "ref": str(val.id),
+             "saidas": [
+                 {"rotulo": "ok", "destino": "fim"},
+                 {"rotulo": "refazer", "destino": "validador"},
+             ]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    r = motor.executar_cadeia(sessao, cadeia, "vai")
+    # roteador (mock: rótulo == texto "ok") escolhe "ok" → conclui
+    assert r["estado"] == "concluida"
+    assert r["passos"][-1]["saida_escolhida"] == "ok"
+
+
+def test_sem_declaracao_usa_o_roteador(sessao, dados, ag, monkeypatch):
+    val = ag("Validador")
+    _mock_roteador(monkeypatch)
+    _mock_agentes(monkeypatch, {"Validador": "ok"})  # não declara ramo
+    cadeia = {
+        "inicial": "validador",
+        "nos": [
+            {"id": "validador", "tipo": "agente", "ref": str(val.id),
+             "saidas": [
+                 {"rotulo": "ok", "destino": "fim"},
+                 {"rotulo": "refazer", "destino": "validador"},
+             ]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    r = motor.executar_cadeia(sessao, cadeia, "vai")
+    assert r["estado"] == "concluida"
+    assert r["passos"][-1]["saida_escolhida"] == "ok"
 
 
 def test_loop_com_guarda_de_passos(sessao, dados, ag, monkeypatch):

@@ -227,6 +227,9 @@ def executar_cadeia(
 
         iniciado_em = datetime.now(timezone.utc)
         mensagens_enviadas: dict[str, list[str]] = {}
+        saidas = no.get("saidas") or []
+        gate = bool(no.get("gate"))
+        ramo_declarado: str | None = None
         if tipo == "roteador":
             # Roteador: não roda agente nem produz conteúdo — só classifica a
             # entrada sobre as suas saídas e segue. A entrada passa adiante intacta.
@@ -244,17 +247,19 @@ def executar_cadeia(
                     f"(ref {ref}). Edite a automação e troque ou remova esse passo."
                 )
             cinto = _carregar_cinto(sessao, agente.id)
-            resultado = executar_agente(agente, cinto, entrada_atual)
+            # O agente enxerga as saídas e DECLARA o ramo (em vez de o roteador
+            # adivinhar pela prosa). Passar gate dá a ele a instrução certa.
+            resultado = executar_agente(
+                agente, cinto, entrada_atual, saidas=saidas, gate=gate
+            )
             saida_texto = resultado["saida"]
             instrumentos = resultado["instrumentos_acionados"]
             uso_passo = list(resultado.get("uso") or [])
             mensagens_enviadas = resultado.get("mensagens_enviadas") or {}
+            ramo_declarado = resultado.get("ramo_escolhido")
             agente_id_str = str(agente.id)
             agente_nome = agente.nome
         finalizado_em = datetime.now(timezone.utc)
-
-        saidas = no.get("saidas") or []
-        gate = bool(no.get("gate"))
 
         # Portão de aprovação: o que segue adiante é o que foi APRESENTADO ao humano
         # — a(s) mensagem(ns) que o agente enviou pelo canal de aprovação do nó (ou,
@@ -270,16 +275,21 @@ def executar_cadeia(
             if apresentadas:
                 saida_texto = "\n\n".join(apresentadas)
 
-        # Roteamento automático só quando NÃO há gate. Com gate (portão de
-        # aprovação, PRODUTO §14), quem escolhe a saída é a RESPOSTA DO HUMANO,
-        # decidida no resume — por isso aqui não roteia (e não gasta a chamada).
+        # Roteamento só quando NÃO há gate (com gate, quem escolhe é a pessoa, na
+        # retoma — PRODUTO §14). Com 2+ saídas vale a escolha que o PRÓPRIO agente
+        # DECLAROU (`seguir_para`); o roteador-adivinhador entra só de fallback —
+        # agente não declarou, rótulo inexistente, ou automação antiga.
         escolhida = None
         if not gate:
+            por_rotulo = {s["rotulo"]: s for s in saidas if s.get("rotulo")}
             if len(saidas) == 1:
                 escolhida = saidas[0]
             elif len(saidas) >= 2:
-                escolhida, uso_roteamento = _escolher_saida(saida_texto, saidas)
-                uso_passo.append(uso_roteamento)
+                if ramo_declarado and ramo_declarado in por_rotulo:
+                    escolhida = por_rotulo[ramo_declarado]
+                else:
+                    escolhida, uso_roteamento = _escolher_saida(saida_texto, saidas)
+                    uso_passo.append(uso_roteamento)
 
         passo = {
             "no_id": no_atual,
