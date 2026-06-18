@@ -20,9 +20,19 @@ from typing import Literal
 import httpx
 from pydantic import BaseModel, Field
 
+from arquivos import BASE_PUBLICA, DIRETORIO_ARQUIVOS
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 
 TIMEOUT_S = 20.0
+
+# MIME por extensão, para o cabeçalho do upload de mídia ao WordPress.
+_MIMES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+}
 
 
 class ConfigWordpress(BaseModel):
@@ -62,6 +72,14 @@ class ArgsWordpress(BaseModel):
     resumo: str = Field(
         default="",
         description="Resumo curto do artigo (excerpt), 1-2 frases. Opcional.",
+    )
+    imagem_url: str = Field(
+        default="",
+        description=(
+            "Opcional: imagem para usar como DESTAQUE (featured) do post. Passe aqui "
+            "o link da imagem gerada no passo anterior (o que o instrumento de gerar "
+            "imagem devolveu). Em branco = publica sem imagem destacada."
+        ),
     )
 
 
@@ -120,6 +138,85 @@ def _tags_para_ids(cliente: httpx.Client, base: str, nomes: list[str]) -> list[i
     return ids
 
 
+def _bytes_da_imagem(fonte: str) -> tuple[bytes, str]:
+    """Resolve os BYTES de uma referência de imagem + um nome de arquivo.
+
+    Imagem do `gerar_imagem` (nosso storage local, servido em /arquivos): lê do
+    DISCO — confiável, mesma réplica do cérebro. Caso contrário (URL externa):
+    baixa. Devolve (conteudo, nome)."""
+    fonte = (fonte or "").strip()
+    if not fonte:
+        raise FalhaInstrumento("imagem não informada.", retentavel=False)
+    nome = fonte.rsplit("/", 1)[-1].split("?")[0] or "imagem.png"
+
+    # Nossa imagem (gerar_imagem) está no disco local — caminho confiável.
+    parece_nossa = (
+        "://" not in fonte
+        or fonte.startswith(f"{BASE_PUBLICA}/arquivos/")
+        or "/arquivos/" in fonte
+    )
+    local = DIRETORIO_ARQUIVOS / nome
+    if parece_nossa and local.exists():
+        return local.read_bytes(), nome
+
+    if "://" in fonte:
+        try:
+            r = httpx.get(fonte, timeout=TIMEOUT_S, follow_redirects=True)
+            r.raise_for_status()
+        except httpx.HTTPError as e:
+            raise FalhaInstrumento(
+                f"não foi possível baixar a imagem: {e}", retentavel=True
+            )
+        return r.content, nome
+
+    raise FalhaInstrumento(
+        f"a imagem '{nome}' não está disponível no servidor (pode ter expirado, "
+        "ou o link/nome está errado).",
+        retentavel=False,
+    )
+
+
+def _subir_midia(cliente: httpx.Client, base: str, fonte: str) -> int:
+    """Sobe a imagem para a biblioteca de mídia do WordPress e devolve o id da
+    mídia (para usar em `featured_media`). É o 1º dos dois passos do WordPress: a
+    imagem destacada de um post só aceita o ID de uma mídia que JÁ existe."""
+    conteudo, nome = _bytes_da_imagem(fonte)
+    ext = ("." + nome.rsplit(".", 1)[-1].lower()) if "." in nome else ""
+    headers = {
+        "Content-Disposition": f'attachment; filename="{nome}"',
+        "Content-Type": _MIMES.get(ext, "image/png"),
+    }
+    try:
+        r = cliente.post(f"{base}/media", content=conteudo, headers=headers)
+    except httpx.HTTPError as e:
+        raise FalhaInstrumento(
+            f"não foi possível subir a imagem ao WordPress: {e}", retentavel=True
+        )
+    status = r.status_code
+    if status in (401, 403):
+        raise FalhaInstrumento(
+            "o WordPress recusou o upload da imagem — verifique se o usuário tem "
+            "permissão de enviar arquivos (papel Autor ou superior).",
+            retentavel=False,
+        )
+    if status == 429 or 500 <= status < 600:
+        raise FalhaInstrumento(
+            f"o WordPress respondeu HTTP {status} ao subir a imagem.", retentavel=True
+        )
+    if not r.is_success:
+        raise FalhaInstrumento(
+            f"o upload da imagem falhou (HTTP {status}): {r.text[:300]}",
+            retentavel=False,
+        )
+    media_id = (r.json() or {}).get("id")
+    if not media_id:
+        raise FalhaInstrumento(
+            "o WordPress aceitou a imagem mas não devolveu o id da mídia.",
+            retentavel=False,
+        )
+    return media_id
+
+
 class PublicarWordpress(TipoInstrumento):
     tipo = "publicar_wordpress"
     nome_exibicao = "Publicar no WordPress"
@@ -155,6 +252,15 @@ class PublicarWordpress(TipoInstrumento):
             cat_ids = _categorias_para_ids(cliente, base, config.categorias)
             tag_ids = _tags_para_ids(cliente, base, args.tags)
 
+            # Imagem destacada: sobe a mídia ANTES (passo 1) e usa o id no post
+            # (passo 2). Se a imagem foi pedida e o upload falha, não publica um
+            # post sem a imagem — a falha sobe clara.
+            media_id = (
+                _subir_midia(cliente, base, args.imagem_url)
+                if args.imagem_url.strip()
+                else None
+            )
+
             corpo: dict = {
                 "title": args.titulo,
                 "content": args.conteudo,
@@ -166,6 +272,8 @@ class PublicarWordpress(TipoInstrumento):
                 corpo["categories"] = cat_ids
             if tag_ids:
                 corpo["tags"] = tag_ids
+            if media_id:
+                corpo["featured_media"] = media_id
 
             try:
                 resposta = cliente.post(f"{base}/posts", json=corpo)
@@ -199,6 +307,7 @@ class PublicarWordpress(TipoInstrumento):
             "status": dados.get("status"),
             "categorias": cat_ids,
             "tags": tag_ids,
+            "featured_media": media_id,
         }
 
 
