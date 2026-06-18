@@ -1,18 +1,29 @@
 """Instrumento "Gerar imagem" (PRODUTO §13; Fase adicional).
 
 Gera uma imagem a partir de uma descrição (prompt) e devolve um link para vê-la.
-Usa a API de imagens da OpenAI; a chave é um SEGREDO (cofre da Fase 7-B). Como
-o `gerar_pdf`, o arquivo é salvo localmente e servido pelo cérebro em `/arquivos`
-(migra para o Supabase Storage na fase de produção).
+Usa a API de imagens da OpenAI (família gpt-image); a chave é um SEGREDO (cofre da
+Fase 7-B), reusada do pool da organização quando o instrumento não tem chave
+própria. O arquivo é salvo localmente e servido pelo cérebro em `/arquivos` (migra
+para o Supabase Storage na fase de produção).
+
+CATÁLOGO ÚNICO (`CATALOGO_IMAGEM`) é a fonte da verdade dos modelos e da
+parametrização válida de cada um. Dele saem, SEM listas paralelas mantidas à mão:
+as opções da tela, a validação do trio modelo×tamanho×qualidade, o payload por
+modelo e as dependências de UI (escolher o modelo → só aparecem os tamanhos/
+qualidades que funcionam). A OpenAI aposentou os DALL·E — só a família gpt-image é
+oferecida (decisão do maestro 2026-06-18); instrumentos antigos com DALL·E se
+auto-curam para o modelo padrão na execução, sem migração de banco.
+
+Como a OpenAI muda os parâmetros aceitos com o tempo, o `executar` traduz o erro da
+API num recado ACIONÁVEL (qual parâmetro/mensagem/código a OpenAI recusou) — é o
+que diz o que ajustar no catálogo quando algo parar de valer.
 
 Política de falha do encaixe (Tarefa 5.1): transporte/5xx/429 são retentáveis;
-chave recusada (401/403) e configuração ausente não. O campo `provedor` fica
-pronto para outros provedores; por ora, OpenAI.
+chave recusada (401/403), configuração ausente e parâmetro inválido (4xx) não.
 """
 
 import base64
 import uuid
-from typing import Literal
 
 import httpx
 from pydantic import BaseModel, Field, model_validator
@@ -24,42 +35,89 @@ from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 TIMEOUT_S = 120.0
 URL_OPENAI = "https://api.openai.com/v1/images/generations"
 
-# Tamanhos VÁLIDOS por modelo (fonte única da verdade da combinação modelo×tamanho).
-# Espelha os tamanhos de `precos.PRECOS_IMAGEM_USD`. O campo `modelo`/`tamanho` da
-# config é um `Literal` (vira dropdown na interface); este mapa valida o PAR — nem
-# todo tamanho vale para todo modelo. `1024x1024` vale para os três (é o default).
-TAMANHOS_POR_MODELO: dict[str, tuple[str, ...]] = {
-    "gpt-image-1": ("1024x1024", "1024x1536", "1536x1024"),
-    "dall-e-3": ("1024x1024", "1024x1792", "1792x1024"),
-    "dall-e-2": ("1024x1024", "512x512", "256x256"),
+# Tamanhos e qualidades comuns à família gpt-image (1024x1024 é o padrão e vale
+# para todos). gpt-image-2 aceita tamanhos livres; oferecemos presets confiáveis.
+_TAMANHOS_GPT = ("1024x1024", "1536x1024", "1024x1536")
+_QUALIDADES_GPT = ("low", "medium", "high")
+
+# ── FONTE ÚNICA DA VERDADE: modelos de imagem e a parametrização válida de cada um ──
+# Adicionar um modelo = uma entrada aqui (+ preço em precos.PRECOS_IMAGEM_USD; um
+# teste-guarda garante que todo modelo do catálogo tem preço).
+CATALOGO_IMAGEM: dict[str, dict] = {
+    "gpt-image-1": {
+        "rotulo": "GPT Image 1",
+        "tamanhos": _TAMANHOS_GPT,
+        "qualidades": _QUALIDADES_GPT,
+    },
+    "gpt-image-1-mini": {
+        "rotulo": "GPT Image 1 Mini (mais econômico)",
+        "tamanhos": _TAMANHOS_GPT,
+        "qualidades": _QUALIDADES_GPT,
+    },
+    "gpt-image-1.5": {
+        "rotulo": "GPT Image 1.5",
+        "tamanhos": _TAMANHOS_GPT,
+        "qualidades": _QUALIDADES_GPT,
+    },
+    "gpt-image-2": {
+        "rotulo": "GPT Image 2 (mais novo)",
+        # gpt-image-2 aceita tamanhos livres (múltiplos de 16, proporção 1:3..3:1);
+        # oferecemos presets confiáveis: os 3 padrão + 16:9 e 9:16 comuns.
+        "tamanhos": ("1024x1024", "1536x1024", "1024x1536", "1536x864", "864x1536"),
+        "qualidades": _QUALIDADES_GPT,
+    },
 }
+
+MODELO_PADRAO = "gpt-image-1"
+TAMANHO_PADRAO = "1024x1024"
+QUALIDADE_PADRAO = "medium"
+
+# Modelos APOSENTADOS pela OpenAI: instrumentos antigos configurados com eles se
+# auto-curam para o padrão na execução (sem migração de banco).
+MODELOS_LEGADOS = {"dall-e-2", "dall-e-3"}
+
+
+def _uniao_tamanhos() -> list[str]:
+    """A união (sem repetir, ordem estável) de todos os tamanhos do catálogo — é o
+    `enum` do campo `tamanho`; a UI o filtra por modelo via `dependencias_ui`."""
+    vistos: list[str] = []
+    for spec in CATALOGO_IMAGEM.values():
+        for t in spec["tamanhos"]:
+            if t not in vistos:
+                vistos.append(t)
+    return vistos
 
 
 class ConfigImagem(BaseModel):
     """Configuração fixa. `chave_api` é SEGREDO (cofre 7-B).
 
-    `modelo` e `tamanho` são conjuntos fechados (`Literal`) — a interface os mostra
-    como dropdown, em vez de texto livre. O par modelo×tamanho é validado abaixo
-    (cada modelo aceita só alguns tamanhos)."""
+    `modelo`, `tamanho` e `qualidade` são conjuntos fechados derivados do
+    `CATALOGO_IMAGEM` (a interface os mostra como dropdown, com tamanho/qualidade
+    DEPENDENTES do modelo). O trio é validado abaixo contra o catálogo."""
 
-    provedor: Literal["openai"] = Field(
+    provedor: str = Field(
         default="openai",
         title="Provedor",
         description="Provedor de geração de imagem (por ora, só OpenAI).",
+        json_schema_extra={"enum": ["openai"]},
     )
-    # Mantido em sincronia com TAMANHOS_POR_MODELO (Literal exige valores estáticos).
-    modelo: Literal["gpt-image-1", "dall-e-3", "dall-e-2"] = Field(
-        default="gpt-image-1",
+    modelo: str = Field(
+        default=MODELO_PADRAO,
         title="Modelo da imagem",
-        description="Modelo usado para gerar a imagem. gpt-image-1 é o mais novo da OpenAI.",
+        description="Modelo da família gpt-image da OpenAI.",
+        json_schema_extra={"enum": list(CATALOGO_IMAGEM)},
     )
-    # União dos tamanhos válidos (1024x1024 primeiro/padrão, vale para todos).
-    tamanho: Literal[
-        "1024x1024", "1024x1536", "1536x1024", "1024x1792", "1792x1024", "512x512", "256x256"
-    ] = Field(
-        default="1024x1024",
+    tamanho: str = Field(
+        default=TAMANHO_PADRAO,
         title="Tamanho",
-        description="Tamanho da imagem. Atenção: o tamanho válido depende do modelo.",
+        description="Resolução da imagem (as opções dependem do modelo).",
+        json_schema_extra={"enum": _uniao_tamanhos()},
+    )
+    qualidade: str = Field(
+        default=QUALIDADE_PADRAO,
+        title="Qualidade",
+        description="low = rascunho rápido e barato; high = melhor acabamento (mais caro).",
+        json_schema_extra={"enum": list(_QUALIDADES_GPT)},
     )
     chave_api: str = Field(
         default="",
@@ -67,15 +125,45 @@ class ConfigImagem(BaseModel):
         description="Chave da API de imagem (segredo).",
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _curar_modelo_legado(cls, dados):
+        """Instrumento antigo com modelo APOSENTADO (DALL·E) → cai no padrão, com
+        tamanho/qualidade ajustados para valores válidos do novo modelo. Assim os
+        instrumentos legados voltam a funcionar sem mexer no banco (a config no
+        banco continua a antiga; a cura acontece ao validar para usar)."""
+        if not isinstance(dados, dict):
+            return dados
+        if dados.get("modelo") in MODELOS_LEGADOS:
+            dados = dict(dados)
+            spec = CATALOGO_IMAGEM[MODELO_PADRAO]
+            dados["modelo"] = MODELO_PADRAO
+            if dados.get("tamanho") not in spec["tamanhos"]:
+                dados["tamanho"] = TAMANHO_PADRAO
+            if dados.get("qualidade") not in spec["qualidades"]:
+                dados["qualidade"] = QUALIDADE_PADRAO
+        return dados
+
     @model_validator(mode="after")
-    def _validar_tamanho_do_modelo(self) -> "ConfigImagem":
-        """O tamanho precisa ser válido para o modelo escolhido — senão a OpenAI
-        recusaria com um erro cru. Avisa claro já ao salvar o instrumento."""
-        validos = TAMANHOS_POR_MODELO.get(self.modelo, ())
-        if self.tamanho not in validos:
+    def _validar_combinacao(self) -> "ConfigImagem":
+        """O trio modelo×tamanho×qualidade precisa ser válido no catálogo — senão a
+        OpenAI recusaria com um erro cru. Avisa claro já ao salvar/usar (é também o
+        backstop para a IA criadora)."""
+        spec = CATALOGO_IMAGEM.get(self.modelo)
+        if spec is None:
+            raise ValueError(
+                f"Modelo de imagem desconhecido: '{self.modelo}'. "
+                f"Use um destes: {', '.join(CATALOGO_IMAGEM)}."
+            )
+        if self.tamanho not in spec["tamanhos"]:
             raise ValueError(
                 f"O tamanho '{self.tamanho}' não vale para o modelo '{self.modelo}'. "
-                f"Tamanhos válidos: {', '.join(validos)}."
+                f"Tamanhos válidos: {', '.join(spec['tamanhos'])}."
+            )
+        if self.qualidade not in spec["qualidades"]:
+            raise ValueError(
+                f"A qualidade '{self.qualidade}' não vale para o modelo '{self.modelo}'. "
+                f"Qualidades válidas: {', '.join(spec['qualidades'])}."
             )
         return self
 
@@ -86,9 +174,28 @@ class ArgsImagem(BaseModel):
     prompt: str = Field(min_length=1, description="Descrição da imagem a gerar.")
 
 
+def _erro_openai(status: int, resposta) -> str:
+    """Traduz o erro da OpenAI num recado ACIONÁVEL: qual parâmetro, mensagem e
+    código a API recusou. É o que diz o que ajustar no catálogo quando a OpenAI
+    mudar os parâmetros aceitos."""
+    try:
+        erro = (resposta.json() or {}).get("error") or {}
+    except ValueError:
+        erro = {}
+    mensagem = (erro.get("message") or (resposta.text or "")[:500] or "sem detalhes.").strip()
+    codigo = erro.get("code")
+    param = erro.get("param")
+    cabeca = f"a geração de imagem falhou (HTTP {status})"
+    if param:
+        cabeca += f" no parâmetro '{param}'"
+    if codigo:
+        mensagem = f"{mensagem} [{codigo}]"
+    return f"{cabeca}: {mensagem}"
+
+
 def _imagem_bytes(dados: dict) -> bytes:
-    """Extrai os bytes da imagem da resposta — seja em base64 (`b64_json`) ou por
-    download da `url` temporária que alguns modelos devolvem."""
+    """Bytes da imagem da resposta — base64 (`b64_json`, padrão da família
+    gpt-image) ou download da `url` temporária (modelos legados)."""
     b64 = dados.get("b64_json")
     if b64:
         return base64.b64decode(b64)
@@ -121,6 +228,21 @@ class GerarImagem(TipoInstrumento):
     # tem uma chave própria — a borda a injeta. Ver instrumentos/base.py.
     chave_compartilhada = ("chave_api", "openai")
 
+    def dependencias_ui(self) -> dict:
+        """Dependências da tela: ao escolher o `modelo`, só aparecem os tamanhos e
+        as qualidades válidos dele (do catálogo). Mecanismo genérico — ver
+        `TipoInstrumento.dependencias_ui`."""
+        return {
+            "tamanho": {
+                "controlado_por": "modelo",
+                "opcoes": {m: list(s["tamanhos"]) for m, s in CATALOGO_IMAGEM.items()},
+            },
+            "qualidade": {
+                "controlado_por": "modelo",
+                "opcoes": {m: list(s["qualidades"]) for m, s in CATALOGO_IMAGEM.items()},
+            },
+        }
+
     def executar(self, config: ConfigImagem, args: ArgsImagem) -> dict:
         if not config.chave_api:
             raise FalhaInstrumento(
@@ -128,10 +250,13 @@ class GerarImagem(TipoInstrumento):
                 "cadastre a chave OpenAI da organização em Chaves de IA.",
                 retentavel=False,
             )
+        # Payload por modelo, a partir do catálogo. NÃO enviamos `response_format`:
+        # a família gpt-image sempre devolve base64 (e o legado, url — ambos tratados).
         corpo = {
             "model": config.modelo,
             "prompt": args.prompt,
             "size": config.tamanho,
+            "quality": config.qualidade,
             "n": 1,
         }
         headers = {"Authorization": f"Bearer {config.chave_api}"}
@@ -154,10 +279,7 @@ class GerarImagem(TipoInstrumento):
                 f"o serviço de imagem respondeu HTTP {status}.", retentavel=True
             )
         if not resposta.is_success:
-            raise FalhaInstrumento(
-                f"a geração de imagem falhou (HTTP {status}): {resposta.text[:300]}",
-                retentavel=False,
-            )
+            raise FalhaInstrumento(_erro_openai(status, resposta), retentavel=False)
 
         dados = (resposta.json().get("data") or [{}])[0]
         conteudo = _imagem_bytes(dados)

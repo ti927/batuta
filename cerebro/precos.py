@@ -18,16 +18,18 @@ PRECO_PADRAO = (1.0, 5.0)
 # US$0,006/min). A entrada de uso traz `segundos` e um `custo_usd` pré-calculado.
 PRECO_WHISPER_MIN = 0.006
 
-# Geração de imagem é cobrada por IMAGEM (não por token), variando por modelo e
-# tamanho — aproximado, como todo este módulo (informativo, não cobrança). A
-# entrada de uso traz `imagens` e um `custo_usd` pré-calculado. Sem o campo de
-# qualidade na config do instrumento, assume-se o padrão de cada modelo.
+# Geração de imagem é cobrada por IMAGEM (não por token), variando sobretudo pela
+# QUALIDADE (low/medium/high) — aproximado, como todo este módulo (informativo, não
+# cobrança). A entrada de uso traz `imagens` e um `custo_usd` pré-calculado. Tabela
+# por modelo → qualidade (USD/imagem ~1024x1024). Mantida alinhada ao
+# `instrumentos.gerar_imagem.CATALOGO_IMAGEM` (um teste-guarda garante o par).
 PRECOS_IMAGEM_USD = {
-    "dall-e-3": {"1024x1024": 0.040, "1024x1792": 0.080, "1792x1024": 0.080, "_padrao": 0.040},
-    "dall-e-2": {"1024x1024": 0.020, "512x512": 0.018, "256x256": 0.016, "_padrao": 0.020},
-    "gpt-image-1": {"1024x1024": 0.042, "1024x1536": 0.063, "1536x1024": 0.063, "_padrao": 0.042},
+    "gpt-image-1": {"low": 0.011, "medium": 0.042, "high": 0.167},
+    "gpt-image-1-mini": {"low": 0.005, "medium": 0.015, "high": 0.060},
+    "gpt-image-1.5": {"low": 0.011, "medium": 0.042, "high": 0.167},
+    "gpt-image-2": {"low": 0.011, "medium": 0.042, "high": 0.167},
 }
-PRECO_IMAGEM_PADRAO = 0.040
+PRECO_IMAGEM_PADRAO = 0.042
 
 # Rótulos internos das categorias de uso (em que FUNÇÃO a IA paga foi gasta). A
 # interface dá o nome amigável (`interface/lib/uso.ts`). Carimbadas na borda:
@@ -55,14 +57,21 @@ def custo_whisper(segundos: float) -> float:
     return (max(0.0, segundos or 0) / 60.0) * PRECO_WHISPER_MIN
 
 
-def custo_por_imagem(modelo: str, tamanho: str = "") -> float:
-    """Custo aproximado de UMA imagem gerada, em USD, por modelo e tamanho. Modelo
-    desconhecido cai no padrão; tamanho desconhecido cai no padrão do modelo."""
-    m = (modelo or "").lower()
-    for familia, tabela in PRECOS_IMAGEM_USD.items():
-        if familia in m:
-            return tabela.get(tamanho, tabela["_padrao"])
-    return PRECO_IMAGEM_PADRAO
+def custo_por_imagem(modelo: str, tamanho: str = "", qualidade: str = "medium") -> float:
+    """Custo aproximado de UMA imagem gerada, em USD, por modelo e qualidade
+    (`tamanho` é mantido por compatibilidade, mas o preço varia por qualidade).
+    Modelo desconhecido cai no padrão; qualidade desconhecida cai em 'medium'."""
+    m = (modelo or "").strip()
+    tabela = PRECOS_IMAGEM_USD.get(m)
+    if tabela is None:
+        # Modelo não tabelado (ex.: legado/aposentado): tenta por família.
+        for familia, t in PRECOS_IMAGEM_USD.items():
+            if m.lower().startswith(familia):
+                tabela = t
+                break
+    if tabela is None:
+        return PRECO_IMAGEM_PADRAO
+    return tabela.get((qualidade or "medium").lower(), tabela.get("medium", PRECO_IMAGEM_PADRAO))
 
 
 def custo_de_entrada(e: dict) -> float:

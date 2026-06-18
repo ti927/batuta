@@ -33,6 +33,7 @@ type CampoConfig = {
   obrigatorio: boolean;
   secreto: boolean;
   opcoes?: string[]; // enum/Literal → vira Select
+  padrao?: string; // valor padrão do schema (semeia o formulário ao criar)
   // Se este campo reusa uma chave de serviço da organização (ex.: gerar_imagem→
   // openai): aí é opcional — em branco usa a chave da org.
   compartilhada?: boolean;
@@ -73,9 +74,50 @@ export function camposDoTipo(tipo: TipoInstrumento | undefined): CampoConfig[] {
     obrigatorio: obrigatorios.has(nome),
     secreto: secretos.has(nome),
     opcoes: opcoesDoCampo(prop),
+    padrao: prop.default !== undefined ? String(prop.default) : undefined,
     compartilhada: nome === campoCompart,
     servico: nome === campoCompart ? (servicoCompart ?? undefined) : undefined,
   }));
+}
+
+// Valores iniciais do formulário para um tipo: ao EDITAR usa o que está guardado
+// (secretos sempre em branco); ao CRIAR (sem instrumento) semeia os PADRÕES do
+// schema. Semear os padrões deixa os dropdowns dependentes (ex.: modelo→tamanho)
+// já com um controlador válido escolhido, e a tela nunca começa numa combinação
+// impossível.
+function valoresIniciais(
+  tipo: TipoInstrumento | undefined,
+  instrumento: Instrumento | null,
+): Record<string, string> {
+  const config = (instrumento?.configuracao ?? {}) as Record<string, unknown>;
+  const v: Record<string, string> = {};
+  for (const campo of camposDoTipo(tipo)) {
+    if (campo.secreto) {
+      v[campo.nome] = "";
+      continue;
+    }
+    const atual = instrumento ? config[campo.nome] : undefined;
+    if (atual !== undefined && atual !== null) {
+      v[campo.nome] =
+        typeof atual === "object" ? JSON.stringify(atual) : String(atual);
+    } else {
+      v[campo.nome] = campo.padrao ?? "";
+    }
+  }
+  return v;
+}
+
+// As opções ATIVAS de um campo: se ele depende de outro (controlado_por), só as
+// válidas para o valor atual do controlador; senão, as opções fixas do schema.
+function opcoesAtivas(
+  campo: CampoConfig,
+  deps: TipoInstrumento["dependencias"],
+  valores: Record<string, string>,
+): string[] | undefined {
+  const regra = deps?.[campo.nome];
+  if (!regra) return campo.opcoes;
+  const controlador = valores[regra.controlado_por] ?? "";
+  return regra.opcoes[controlador] ?? campo.opcoes ?? [];
 }
 
 // Um campo do formulário, desenhado conforme o tipo: senha p/ secretos, número
@@ -190,24 +232,14 @@ export function FormularioInstrumento({
     instrumento?.tipo ?? tipos[0]?.tipo ?? "",
   );
   // Valor (texto) de cada campo. Secretos começam vazios — nunca reexibidos;
-  // em branco = manter o que já está guardado.
-  const [valores, setValores] = useState<Record<string, string>>(() => {
-    if (!instrumento) return {};
-    const tipo = tipos.find((t) => t.tipo === instrumento.tipo);
-    const config = (instrumento.configuracao ?? {}) as Record<string, unknown>;
-    const v: Record<string, string> = {};
-    for (const campo of camposDoTipo(tipo)) {
-      if (campo.secreto) {
-        v[campo.nome] = "";
-        continue;
-      }
-      const atual = config[campo.nome];
-      if (atual === undefined || atual === null) v[campo.nome] = "";
-      else if (typeof atual === "object") v[campo.nome] = JSON.stringify(atual);
-      else v[campo.nome] = String(atual);
-    }
-    return v;
-  });
+  // em branco = manter o que já está guardado. Ao criar, semeia os padrões do
+  // schema (ver `valoresIniciais`).
+  const [valores, setValores] = useState<Record<string, string>>(() =>
+    valoresIniciais(
+      tipos.find((t) => t.tipo === (instrumento?.tipo ?? tipos[0]?.tipo)),
+      instrumento,
+    ),
+  );
   const [aprovacao, setAprovacao] = useState<"auto" | "sim" | "nao">(
     instrumento?.exige_aprovacao == null
       ? "auto"
@@ -252,6 +284,7 @@ export function FormularioInstrumento({
   }, [time.organizacao_id]);
 
   const tipoAtual = tipos.find((t) => t.tipo === tipoSel);
+  const deps = tipoAtual?.dependencias ?? null;
   const aceitos = tipoAtual?.tipos_credencial_aceitos ?? [];
   const aceitaCredencial = aceitos.length > 0;
   const credenciaisCompat = credenciais.filter((c) => aceitos.includes(c.tipo));
@@ -363,8 +396,11 @@ export function FormularioInstrumento({
         <Select
           value={tipoSel}
           onChange={(e) => {
-            setTipoSel(e.target.value);
+            const novo = e.target.value;
+            setTipoSel(novo);
             setCredencialId(null); // credencial pode não servir ao novo tipo
+            // Tipo novo → semeia os padrões dele (some o estado do tipo anterior).
+            setValores(valoresIniciais(tipos.find((t) => t.tipo === novo), null));
           }}
           disabled={!criando}
         >
@@ -417,11 +453,25 @@ export function FormularioInstrumento({
         .map((campo) => (
           <CampoConfigInput
             key={campo.nome}
-            campo={campo}
+            campo={{ ...campo, opcoes: opcoesAtivas(campo, deps, valores) }}
             valor={valores[campo.nome] ?? ""}
             jaGuardado={instrumento?.segredos?.[campo.nome]}
             onChange={(v) =>
-              setValores((atual) => ({ ...atual, [campo.nome]: v }))
+              setValores((atual) => {
+                const proximo = { ...atual, [campo.nome]: v };
+                // Se este campo CONTROLA outros (dropdown dependente), reseta os
+                // dependentes para a 1ª opção válida do novo valor — o estado
+                // nunca guarda uma combinação impossível.
+                for (const [dep, regra] of Object.entries(deps ?? {})) {
+                  if (regra.controlado_por === campo.nome) {
+                    const ops = regra.opcoes[v] ?? [];
+                    if (ops.length && !ops.includes(proximo[dep] ?? "")) {
+                      proximo[dep] = ops[0];
+                    }
+                  }
+                }
+                return proximo;
+              })
             }
           />
         ))}

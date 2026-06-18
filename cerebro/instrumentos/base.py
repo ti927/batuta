@@ -141,6 +141,20 @@ class TipoInstrumento(ABC):
         e a orquestração segue pelo `executar`."""
         return None
 
+    def dependencias_ui(self) -> dict | None:
+        """Campos do formulário cujas OPÇÕES dependem do valor de outro campo
+        (dropdown dependente), para a UI nunca oferecer uma combinação que a API
+        recusaria. Formato:
+
+            {campo_dependente: {"controlado_por": <campo>,
+                                "opcoes": {<valor do controlador>: [opções...]}}}
+
+        O `enum` do campo (no `esquema_config`) continua sendo a UNIÃO de todas as
+        opções (validação no backend); este mapa só FILTRA o que a tela mostra
+        conforme o controlador. `None` = o tipo não tem campos dependentes (padrão).
+        Ex.: `gerar_imagem` filtra tamanho/qualidade pelo modelo escolhido."""
+        return None
+
 
 _REGISTRO: dict[str, TipoInstrumento] = {}
 

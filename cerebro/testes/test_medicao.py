@@ -79,13 +79,19 @@ def test_resumir_uso_separa_por_categoria_e_inclui_mensageria():
 
 
 def test_custo_por_imagem():
-    assert precos.custo_por_imagem("dall-e-3", "1024x1024") == 0.040
-    assert precos.custo_por_imagem("dall-e-3", "1792x1024") == 0.080
-    assert precos.custo_por_imagem("dall-e-2", "256x256") == 0.016
-    assert precos.custo_por_imagem("gpt-image-1", "1024x1536") == 0.063
-    # tamanho desconhecido → padrão do modelo; modelo desconhecido → padrão global.
-    assert precos.custo_por_imagem("dall-e-3", "9x9") == 0.040
-    assert precos.custo_por_imagem("zzz", "1024x1024") == precos.PRECO_IMAGEM_PADRAO
+    # Preço por modelo × QUALIDADE (a qualidade é a maior alavanca de custo).
+    assert precos.custo_por_imagem("gpt-image-1", qualidade="low") == 0.011
+    assert precos.custo_por_imagem("gpt-image-1", qualidade="medium") == 0.042
+    assert precos.custo_por_imagem("gpt-image-1", qualidade="high") == 0.167
+    # Sem qualidade explícita → medium (o padrão do instrumento).
+    assert precos.custo_por_imagem("gpt-image-1") == 0.042
+    # Qualidade desconhecida → medium; modelo desconhecido → padrão global.
+    assert precos.custo_por_imagem("gpt-image-1", qualidade="ultra") == 0.042
+    assert precos.custo_por_imagem("zzz") == precos.PRECO_IMAGEM_PADRAO
+    # O mini é mais barato que o base na mesma qualidade.
+    assert precos.custo_por_imagem(
+        "gpt-image-1-mini", qualidade="high"
+    ) < precos.custo_por_imagem("gpt-image-1", qualidade="high")
 
 
 def test_resumir_uso_agrega_categoria_instrumento():

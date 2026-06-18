@@ -181,6 +181,13 @@ export type TipoInstrumento = {
   // Baseline do tipo: este tipo PODE escrever/agir de forma irreversível? (a
   // irreversibilidade real da instância depende da config — método, somente_leitura).
   acao_irreversivel: boolean;
+  // Campos com opções DEPENDENTES de outro campo (dropdown dependente): o
+  // formulário filtra as opções conforme o controlador (ex.: gerar_imagem filtra
+  // tamanho/qualidade pelo modelo). null/ausente = sem dependências.
+  dependencias?: Record<
+    string,
+    { controlado_por: string; opcoes: Record<string, string[]> }
+  > | null;
 };
 
 // Caixa-forte de credenciais nomeadas (docs/CAIXA-FORTE-PLANO.md).
