@@ -120,6 +120,67 @@ PERFIS_ROTULOS = {
     "personalizado": "Personalizado",
 }
 
+# Opções dos botões de escolha (valor → rótulo amigável).
+ESCOLHAS = {
+    "acao_ao_encerrar": [("cancelar", "Cancelar o fluxo"), ("estacionar", "Deixar pendente na tela")],
+    "acao_ao_estourar": [("passar_humano", "Passar para um humano"), ("encerrar", "Encerrar a conversa")],
+    "portao_forma": [
+        ("conversa", "O agente conversa (pode perguntar de volta)"),
+        ("direto", "Decisão direta (aprovar/reprovar)"),
+    ],
+    "portao_acao_abandono": [("cancelar", "Cancelar o fluxo"), ("estacionar", "Deixar pendente na tela")],
+}
+
+# Botões EXPOSTOS na UI, agrupados (fonte única — o front renderiza a partir daqui,
+# sem duplicar rótulos/opções). O que não está aqui fica interno (trilho de segurança
+# ou avançado-raro como max_passos/modelo_roteador).
+CAMPOS = [
+    {"grupo": "Espera e encerramento", "campos": [
+        {"chave": "timeout_min", "rotulo": "Tempo até cutucar quem some", "tipo": "int", "sufixo": "min"},
+        {"chave": "nudge_timeout_min", "rotulo": "Tempo após cutucar até encerrar", "tipo": "int", "sufixo": "min"},
+        {"chave": "encerrar_por_inatividade", "rotulo": "Encerrar conversas paradas", "tipo": "bool"},
+        {"chave": "acao_ao_encerrar", "rotulo": "Ao encerrar um portão sem resposta", "tipo": "escolha"},
+    ]},
+    {"grupo": "Limites da conversa", "campos": [
+        {"chave": "max_turnos", "rotulo": "Máx. de mensagens por conversa", "tipo": "int"},
+        {"chave": "teto_usd", "rotulo": "Teto de custo de IA por conversa", "tipo": "valor", "sufixo": "US$"},
+        {"chave": "acao_ao_estourar", "rotulo": "Ao estourar o limite", "tipo": "escolha"},
+    ]},
+    {"grupo": "Atendimento ao cliente", "campos": [
+        {"chave": "saudacao_abertura", "rotulo": "Saudação no 1º contato (vazio = desligada)", "tipo": "texto"},
+        {"chave": "horario_comercial_ativo", "rotulo": "Atender só em horário comercial", "tipo": "bool"},
+        {"chave": "horario_inicio", "rotulo": "Abre às", "tipo": "hora"},
+        {"chave": "horario_fim", "rotulo": "Fecha às", "tipo": "hora"},
+        {"chave": "dias_uteis_apenas", "rotulo": "Só em dias úteis", "tipo": "bool"},
+        {"chave": "mensagem_fora_horario", "rotulo": "Mensagem fora do horário", "tipo": "texto"},
+    ]},
+    {"grupo": "Portão de aprovação", "campos": [
+        {"chave": "portao_forma", "rotulo": "Como o agente conduz o portão", "tipo": "escolha"},
+        {"chave": "portao_acao_abandono", "rotulo": "Se o aprovador abandona a conversa", "tipo": "escolha"},
+    ]},
+]
+
+
+def painel_config() -> dict:
+    """Metadados para a UI montar 'Configurações do fluxo' a partir do backend (fonte
+    única): os perfis (com os defaults que cada um aplica), os grupos de botões e o
+    padrão global. O front não duplica rótulos/valores."""
+    perfis = [
+        {"id": pid, "rotulo": PERFIS_ROTULOS.get(pid, pid), "defaults": _mesclar(GLOBAL, PERFIS.get(pid))}
+        for pid in PERFIS
+    ]
+    grupos = []
+    for g in CAMPOS:
+        campos = []
+        for c in g["campos"]:
+            c = dict(c)
+            if c["tipo"] == "escolha":
+                c["opcoes"] = [{"valor": v, "rotulo": r} for v, r in ESCOLHAS[c["chave"]]]
+            c["padrao"] = GLOBAL.get(c["chave"])
+            campos.append(c)
+        grupos.append({"grupo": g["grupo"], "campos": campos})
+    return {"perfis": perfis, "grupos": grupos, "padrao_global": dict(GLOBAL)}
+
 
 def _mesclar(base: dict, extra: dict | None) -> dict:
     """Sobrepõe `base` com as chaves conhecidas de `extra` (ignora nulos e chaves

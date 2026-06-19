@@ -57,6 +57,7 @@ from chaves import (
 )
 from consultoria import exigir_admin_consultoria
 from mensageria import aprovacao, retoma
+from mensageria.config import painel_config
 from orquestracao import grafo
 from orquestracao.cadeia import validar_cadeia
 from orquestracao.disparo import criar_execucao
@@ -146,6 +147,14 @@ def criar(
     return _ler_automacao(auto)
 
 
+@rotas.get("/config/fluxo")
+def config_fluxo(usuario: Usuario = Depends(usuario_atual)):
+    """Metadados para a UI montar as 'Configurações do fluxo': os perfis (com os
+    defaults de cada um), os grupos de botões e o padrão global. Fonte única — o
+    front renderiza a partir daqui, sem duplicar rótulos/valores."""
+    return painel_config()
+
+
 @rotas.get("/automacoes/{automacao_id}", response_model=AutomacaoLer)
 def obter(
     automacao_id: uuid.UUID,
@@ -218,6 +227,7 @@ def duplicar(
     # afeta a outra), no formato canônico que o motor enxerga (cobre linha legada).
     cadeia = grafo.normalizar(copy.deepcopy(original.cadeia or {}))
     config = copy.deepcopy(original.configuracao_gatilho or {})
+    config_fluxo = copy.deepcopy(original.configuracao or {})
 
     # Mesma validação do criar (refs de agente do time). Não validamos o portão de
     # ativação: a cópia nasce inativa, a parede é checada quando o operador ligar.
@@ -230,6 +240,7 @@ def duplicar(
         configuracao_gatilho=config,
         cadeia=cadeia,
         ativa=False,
+        configuracao=config_fluxo,
     )
     sessao.add(copia)
     sessao.commit()

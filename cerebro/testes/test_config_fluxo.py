@@ -99,3 +99,30 @@ def test_config_da_automacao_sem_conversa(sessao, dados):
 def test_ajuste_do_no_e_o_mais_especifico():
     r = cfg.com_ajuste_do_no(dict(cfg.GLOBAL), {"config": {"portao_max_rodadas": 3}})
     assert r["portao_max_rodadas"] == 3
+
+
+def test_painel_config_tem_perfis_grupos_e_opcoes():
+    p = cfg.painel_config()
+    ids = {x["id"] for x in p["perfis"]}
+    assert {"interno", "atendimento", "disparo", "personalizado"} <= ids
+    interno = next(x for x in p["perfis"] if x["id"] == "interno")
+    assert interno["defaults"]["saudacao_abertura"] == ""  # perfil aplica o default
+    # campos de escolha trazem as opções (fonte única, sem duplicar no front)
+    forma = next(
+        c for g in p["grupos"] for c in g["campos"] if c["chave"] == "portao_forma"
+    )
+    assert {o["valor"] for o in forma["opcoes"]} == {"conversa", "direto"}
+
+
+def test_automacao_guarda_configuracao_de_fluxo(sessao, dados):
+    from modelos import Automacao
+    auto = Automacao(
+        time_id=dados["timeA"].id, nome="F", tipo_gatilho="manual",
+        configuracao_gatilho={}, cadeia={"inicial": "n", "nos": []}, ativa=False,
+        configuracao={"perfil": "interno", "ajustes": {"teto_usd": 0.3}},
+    )
+    sessao.add(auto)
+    sessao.flush()
+    sessao.refresh(auto)
+    assert auto.configuracao["perfil"] == "interno"
+    assert auto.configuracao["ajustes"]["teto_usd"] == 0.3
