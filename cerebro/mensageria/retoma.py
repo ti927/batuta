@@ -1,10 +1,15 @@
 """Miolo de retoma de uma execução pausada (espera-por-humano), reutilizável.
 
-Extraído de `rotas/automacoes.py::responder` para que a camada de mensageria
-(mão dupla) retome uma conversa sem depender do request/usuário HTTP. NÃO toca o
-núcleo (`cadeia.py`); só o usa. O chamador continua dono da autorização, do
-estado (409) e da auditoria; aqui fica a MECÂNICA: achar o ponto de pausa, rotear
-pela resposta e seguir a cadeia do próximo nó.
+Duas superfícies retomam um portão:
+- TELA (`rotas/automacoes.py::responder`): `retomar_execucao` (conversacional: re-roda
+  o agente, que pode perguntar de volta; a pergunta vira um passo na tela).
+- CANAL (`mensageria/servico.py`): o turno de portão roda pela BORDA (entrega +
+  ciclo de vida de mensageria) e usa `avancar_apos_gate` direto; quando o nó é
+  MECÂNICO (forma "direto", 1 saída, gate-roteador), chama `retomar_execucao` com
+  `permitir_conversa=False`.
+
+NÃO toca o núcleo (`cadeia.py`); só o usa. `avancar_apos_gate` e `_localizar_no_pausado`
+são o que tela e canal compartilham.
 """
 
 import uuid
@@ -20,9 +25,8 @@ from orquestracao.cadeia import _carregar_cinto, _escolher_saida, executar_cadei
 from orquestracao.disparo import _aplicar_resultado, _fazer_registrador
 from orquestracao.llm import usar_chaves
 
-# Portão conversacional: quantas RODADAS (turnos do agente) num mesmo nó de gate
-# antes de cair no roteamento mecânico. Trilho anti-loop — o agente não conversa
-# para sempre. Cada resposta da pessoa dispara uma rodada, então o limite é alto.
+# Anti-loop do portão NA TELA (a tela não tem teto de conversa). No CANAL, quem
+# limita as rodadas é o teto de turnos/custo da conversa (regra geral de mensageria).
 MAX_RODADAS_GATE = 8
 
 
@@ -32,68 +36,57 @@ def entrada_retomada(saida_pausada: str, resposta: str) -> str:
     return f"{saida_pausada}\n\n---\n[Resposta do humano]\n{resposta}"
 
 
-def retomar_execucao(
-    sessao: Session,
-    execucao: Execucao,
-    resposta: str,
-    *,
-    chaves: dict,
-    origens: dict,
-) -> Execucao:
-    """Retoma uma execução em `aguardando_humano`: a `resposta` escolhe a saída do
-    nó pausado (PRODUTO §14) e a cadeia segue do próximo nó. Muta e dá commit na
-    `execucao`; devolve-a atualizada.
-
-    Pré-condição: o chamador já garantiu `execucao.estado == 'aguardando_humano'`.
-    Levanta `ValueError` se não há passo de pausa para derivar o ponto de retomada.
-    """
+def localizar_no_pausado(sessao: Session, execucao: Execucao):
+    """Acha (último passo, nó do grafo, no_id, cadeia normalizada, índice) do ponto
+    onde a execução pausou. Levanta ValueError se não há passo de pausa."""
     auto = sessao.get(Automacao, execucao.automacao_id)
-
-    # O ponto de retomada é derivado do último passo (onde pausou) + a cadeia.
     ultimo = sessao.scalars(
         select(PassoExecucao)
         .where(PassoExecucao.execucao_id == execucao.id)
         .order_by(PassoExecucao.ordem.desc())
     ).first()
-    # O nó pausado é localizado por id de nó (`no_id`). Para execuções antigas (sem
-    # `no_id` gravado), cai no `agente_id` — que, na cadeia convertida, é o id do nó.
-    no_pausado = (ultimo.no_id if ultimo else None) or (
+    no_id = (ultimo.no_id if ultimo else None) or (
         str(ultimo.agente_id) if ultimo and ultimo.agente_id else None
     )
-    if no_pausado is None:
+    if no_id is None:
         raise ValueError("passo de pausa ausente")
-
-    cadeia = grafo.normalizar(auto.cadeia or {})
+    cadeia = grafo.normalizar((auto.cadeia if auto else None) or {})
     idx = grafo.indexar(cadeia)
-    no = idx.no(no_pausado) or {}
-    saidas = no.get("saidas") or []
+    no = idx.no(no_id) or {}
+    return ultimo, no, no_id, cadeia, idx
 
-    # Portão CONVERSACIONAL: nó-agente com 2+ saídas → quem decide o caminho é o
-    # PRÓPRIO agente, conversando (pode perguntar de volta), em vez de uma LLM
-    # roteadora casar a palavra. Trilho anti-loop: passado o teto de rodadas no
-    # mesmo nó, cai no roteamento mecânico (não conversa para sempre).
-    eh_gate_agente = bool(no.get("gate") and no.get("ref") and len(saidas) >= 2)
-    if eh_gate_agente and _rodadas_no_gate(sessao, execucao.id, no_pausado) < MAX_RODADAS_GATE:
-        return _retomar_conversando(
-            sessao, execucao, resposta,
-            ultimo=ultimo, cadeia=cadeia, idx=idx, no=no, saidas=saidas,
-            chaves=chaves, origens=origens,
+
+def rodadas_no_gate(sessao: Session, execucao_id, no_id: str) -> int:
+    """Quantos passos já rodaram neste nó de gate (apresentação inicial + cada
+    pergunta de volta na TELA). Base do anti-loop da tela."""
+    return (
+        sessao.scalar(
+            select(func.count(PassoExecucao.id))
+            .where(PassoExecucao.execucao_id == execucao_id)
+            .where(PassoExecucao.no_id == no_id)
         )
+        or 0
+    )
 
-    # Portão de aprovação (PRODUTO §14): a RESPOSTA escolhe o caminho.
-    if len(saidas) == 0:
-        escolhida = None
-    elif len(saidas) == 1:
-        escolhida = saidas[0]
-    else:
-        with usar_chaves(chaves):
-            escolhida, _ = _escolher_saida(resposta, saidas)
+
+def avancar_apos_gate(
+    sessao: Session,
+    execucao: Execucao,
+    *,
+    idx,
+    cadeia: dict,
+    escolhida: dict | None,
+    entrada_proxima: str,
+    ordem_inicial: int,
+    chaves: dict,
+    origens: dict,
+) -> Execucao:
+    """Decisão tomada: o fluxo ANDA pelo ramo `escolhida`. Destino fim (ou nenhum) →
+    conclui com o trabalho + a decisão; senão segue a cadeia do destino. Re-vincula
+    se pausar em outro portão. Compartilhado por TELA e CANAL."""
     destino = escolhida.get("destino") if escolhida else None
     proximo = None if (destino is None or idx.eh_fim(destino)) else destino
 
-    entrada_proxima = entrada_retomada((ultimo.saida or {}).get("texto", ""), resposta)
-
-    # Sem próximo agente (destino fim): encerra com o trabalho + a decisão.
     if proximo is None:
         execucao.estado = "concluida"
         execucao.resultado = {"texto": entrada_proxima}
@@ -111,13 +104,11 @@ def retomar_execucao(
                 cadeia,
                 entrada_proxima,
                 no_inicial=proximo,
-                ordem_inicial=ultimo.ordem,
+                ordem_inicial=ordem_inicial,
                 registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
             )
         _aplicar_resultado(execucao, r)
         if execucao.estado == "aguardando_humano":
-            # Pausou de novo (outro portão): re-amarra a conversa do aprovador para
-            # a próxima resposta também religar o fluxo (aprovação por canal).
             from mensageria import aprovacao
             aprovacao.vincular_pausa(sessao, execucao)
     except Exception as e:
@@ -129,20 +120,55 @@ def retomar_execucao(
     return execucao
 
 
-def _rodadas_no_gate(sessao: Session, execucao_id, no_id: str) -> int:
-    """Quantos passos já rodaram neste nó de gate (presentação inicial + cada
-    pergunta de volta do agente). Base do trilho anti-loop."""
-    return (
-        sessao.scalar(
-            select(func.count(PassoExecucao.id))
-            .where(PassoExecucao.execucao_id == execucao_id)
-            .where(PassoExecucao.no_id == no_id)
+def retomar_execucao(
+    sessao: Session,
+    execucao: Execucao,
+    resposta: str,
+    *,
+    chaves: dict,
+    origens: dict,
+    permitir_conversa: bool = True,
+) -> Execucao:
+    """Retoma uma execução em `aguardando_humano` (TELA, e CANAL mecânico).
+
+    `permitir_conversa=True` (tela): se o nó é gate-agente com 2+ saídas e dentro do
+    teto de rodadas, RE-RODA o agente (ele pode perguntar de volta). Senão (ou
+    `permitir_conversa=False`, usado pelo canal mecânico), a RESPOSTA escolhe a saída
+    (roteamento mecânico). Pré-condição: o chamador garantiu o estado
+    `aguardando_humano`. Levanta ValueError se não há passo de pausa.
+    """
+    ultimo, no, no_id, cadeia, idx = localizar_no_pausado(sessao, execucao)
+    saidas = no.get("saidas") or []
+
+    eh_gate_agente = bool(no.get("gate") and no.get("ref") and len(saidas) >= 2)
+    if (
+        permitir_conversa
+        and eh_gate_agente
+        and rodadas_no_gate(sessao, execucao.id, no_id) < MAX_RODADAS_GATE
+    ):
+        return _retomar_conversando_tela(
+            sessao, execucao, resposta,
+            ultimo=ultimo, cadeia=cadeia, idx=idx, no=no, saidas=saidas,
+            chaves=chaves, origens=origens,
         )
-        or 0
+
+    # Mecânico: a RESPOSTA escolhe a saída.
+    if len(saidas) == 0:
+        escolhida = None
+    elif len(saidas) == 1:
+        escolhida = saidas[0]
+    else:
+        with usar_chaves(chaves):
+            escolhida, _ = _escolher_saida(resposta, saidas)
+    entrada_proxima = entrada_retomada((ultimo.saida or {}).get("texto", ""), resposta)
+    return avancar_apos_gate(
+        sessao, execucao, idx=idx, cadeia=cadeia, escolhida=escolhida,
+        entrada_proxima=entrada_proxima, ordem_inicial=ultimo.ordem,
+        chaves=chaves, origens=origens,
     )
 
 
-def _retomar_conversando(
+def _retomar_conversando_tela(
     sessao: Session,
     execucao: Execucao,
     resposta: str,
@@ -155,17 +181,11 @@ def _retomar_conversando(
     chaves: dict,
     origens: dict,
 ) -> Execucao:
-    """Portão conversacional: re-roda o AGENTE do nó com a resposta da pessoa (e o
-    histórico do passo), reusando o mesmo `executar_agente` da orquestração. O
-    agente então DECIDE: se declarou um ramo (`seguir_para`), o fluxo anda; se não
-    (perguntou de volta, esclareceu), a execução segue `aguardando_humano` para a
-    próxima resposta. O agente fala pelo SEU canal (como faz na 1ª apresentação);
-    a borda só registra/entrega o ack — nunca duplica o envio."""
-    no_id = ultimo.no_id or (str(ultimo.agente_id) if ultimo.agente_id else None)
+    """Portão conversacional NA TELA: re-roda o agente do nó com a resposta da pessoa
+    (encadeando o histórico do passo). Declarou um ramo (`seguir_para`) → o fluxo
+    anda; não declarou (perguntou) → a pergunta vira um novo passo (visível na tela)
+    e a execução segue `aguardando_humano`."""
     agente = sessao.get(Agente, uuid.UUID(str(no.get("ref"))))
-
-    # A entrada do re-run encadeia o que o agente recebeu + o que apresentou + a
-    # resposta da pessoa, preservando o contexto entre rodadas.
     entrada_rerun = (
         f"{(ultimo.entrada or {}).get('texto', '')}\n\n"
         f"{(ultimo.saida or {}).get('texto', '')}\n\n"
@@ -175,13 +195,9 @@ def _retomar_conversando(
     iniciado = datetime.now(timezone.utc)
     with usar_chaves(chaves):
         cinto = _carregar_cinto(sessao, agente.id)
-        resultado = executar_agente(
-            agente, cinto, entrada_rerun, saidas=saidas, gate=True
-        )
+        resultado = executar_agente(agente, cinto, entrada_rerun, saidas=saidas, gate=True)
     finalizado = datetime.now(timezone.utc)
 
-    # O que segue/persiste é o que o agente APRESENTOU à pessoa (não o status que
-    # ele narra) — mesma regra do motor no portão.
     saida_texto = resultado["saida"]
     mensagens_enviadas = resultado.get("mensagens_enviadas") or {}
     if mensagens_enviadas:
@@ -198,7 +214,7 @@ def _retomar_conversando(
     ordem = ultimo.ordem + 1
 
     passo = {
-        "no_id": no_id,
+        "no_id": ultimo.no_id or (str(ultimo.agente_id) if ultimo.agente_id else None),
         "agente_id": str(agente.id),
         "agente_nome": agente.nome,
         "entrada": entrada_rerun,
@@ -211,7 +227,6 @@ def _retomar_conversando(
     }
     _fazer_registrador(sessao, execucao.id, origens)(passo, ordem)
 
-    # O agente NÃO decidiu (perguntou / esclareceu) → segue aguardando a pessoa.
     if escolhida is None:
         execucao.estado = "aguardando_humano"
         sessao.commit()
@@ -221,38 +236,8 @@ def _retomar_conversando(
         sessao.refresh(execucao)
         return execucao
 
-    # O agente DECIDIU → o fluxo anda pelo ramo escolhido.
-    destino = escolhida.get("destino")
-    proximo = None if (destino is None or idx.eh_fim(destino)) else destino
-    entrada_proxima = entrada_retomada(saida_texto, resposta)
-    if proximo is None:
-        execucao.estado = "concluida"
-        execucao.resultado = {"texto": entrada_proxima}
-        execucao.finalizada_em = datetime.now(timezone.utc)
-        sessao.commit()
-        sessao.refresh(execucao)
-        return execucao
-
-    execucao.estado = "em_andamento"
-    sessao.commit()
-    try:
-        with usar_chaves(chaves):
-            r = executar_cadeia(
-                sessao,
-                cadeia,
-                entrada_proxima,
-                no_inicial=proximo,
-                ordem_inicial=ordem,
-                registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
-            )
-        _aplicar_resultado(execucao, r)
-        if execucao.estado == "aguardando_humano":
-            from mensageria import aprovacao
-            aprovacao.vincular_pausa(sessao, execucao)
-    except Exception as e:
-        execucao.estado = "falhou"
-        execucao.resultado = {"erro": str(e)}
-        execucao.finalizada_em = datetime.now(timezone.utc)
-    sessao.commit()
-    sessao.refresh(execucao)
-    return execucao
+    return avancar_apos_gate(
+        sessao, execucao, idx=idx, cadeia=cadeia, escolhida=escolhida,
+        entrada_proxima=entrada_retomada(saida_texto, resposta), ordem_inicial=ordem,
+        chaves=chaves, origens=origens,
+    )

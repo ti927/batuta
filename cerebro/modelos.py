@@ -173,6 +173,14 @@ class Automacao(IdData, Base):
     ativa: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
     )
+    # Comportamento do fluxo (perfil + ajustes finos): `{perfil, ajustes:{...}}`. As
+    # regras do motor/mensageria (espera, teto, saudação, horário, portão,
+    # encerramento) cascateiam global < canal < ESTE perfil/ajustes < nó. Resolvido
+    # numa fonte única (`mensageria/config.py::resolver_config`). `{}` = usa o canal/
+    # padrão (comportamento de hoje, sem regressão).
+    configuracao: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
     # Canal de aprovação: NÃO é mais por automação. A config de aprovação por canal
     # vive no NÓ com portão da `cadeia` (`no.aprovacao = {instrumento_id, destinatario}`,
     # construtor visual). A coluna antiga `aprovacao_instrumento_id` foi aposentada

@@ -386,6 +386,13 @@ export function caminhoPrincipal(
   return ordem;
 }
 
+// Comportamento do fluxo (perfil + ajustes finos). Resolvido no backend na cascata
+// global < canal < perfil < ajustes < nó (mensageria/config.py).
+export type ConfiguracaoFluxo = {
+  perfil?: string;
+  ajustes?: Record<string, unknown>;
+};
+
 export type Automacao = {
   id: string;
   time_id: string;
@@ -394,8 +401,29 @@ export type Automacao = {
   configuracao_gatilho: Record<string, unknown> | null;
   cadeia: Cadeia | null;
   ativa: boolean;
+  configuracao: ConfiguracaoFluxo | null;
   criado_em: string;
   atualizado_em: string;
+};
+
+// Metadados de /config/fluxo (fonte única para a UI montar as Configurações do fluxo).
+export type CampoConfigFluxo = {
+  chave: string;
+  rotulo: string;
+  tipo: "int" | "valor" | "bool" | "texto" | "hora" | "escolha";
+  sufixo?: string;
+  opcoes?: { valor: string; rotulo: string }[];
+  padrao?: unknown;
+};
+export type PerfilFluxo = {
+  id: string;
+  rotulo: string;
+  defaults: Record<string, unknown>;
+};
+export type PainelConfigFluxo = {
+  perfis: PerfilFluxo[];
+  grupos: { grupo: string; campos: CampoConfigFluxo[] }[];
+  padrao_global: Record<string, unknown>;
 };
 
 export type UsoChamada = {

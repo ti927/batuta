@@ -14,20 +14,9 @@ from sqlalchemy.orm import Session
 
 import segredos_instrumento
 from mensageria import telegram
-from modelos import Conversa, Instrumento, MensagemConversa
+from mensageria.config import DESPEDIDA_MSG, NUDGE_MSG, resolver_config  # noqa: F401 (compat sweeper.X)
+from modelos import Conversa, Execucao, Instrumento, MensagemConversa
 from sessao import CriadorDeSessao
-
-NUDGE_MSG = "Ainda está por aí? Se precisar de algo, é só me escrever."
-DESPEDIDA_MSG = (
-    "Vou encerrar por aqui por enquanto. Quando precisar, é só mandar uma mensagem."
-)
-# Minutos após a cutucada até encerrar (sobreponível na config do instrumento).
-NUDGE_TIMEOUT_MIN_PADRAO = 30
-
-
-def _nudge_timeout_min(instrumento: Instrumento | None) -> int:
-    cfg = (instrumento.configuracao or {}) if instrumento else {}
-    return int(cfg.get("nudge_timeout_min") or NUDGE_TIMEOUT_MIN_PADRAO)
 
 
 def _enviar(token: str | None, chave: str, texto: str) -> bool:
@@ -64,17 +53,32 @@ def varrer(sessao: Session) -> int:
             if instrumento
             else None
         )
+        conf = resolver_config(sessao, conversa)  # fonte única (perfil do fluxo inclusive)
+        if not conf["encerrar_por_inatividade"]:
+            continue  # este fluxo não encerra por silêncio (ex.: deixa vivo de propósito)
         if not conversa.nudge_enviado:
-            entregue = _enviar(token, conversa.contato_chave, NUDGE_MSG)
-            _registrar(sessao, conversa, NUDGE_MSG, entregue)
+            entregue = _enviar(token, conversa.contato_chave, conf["mensagem_nudge"])
+            _registrar(sessao, conversa, conf["mensagem_nudge"], entregue)
             conversa.nudge_enviado = True
             conversa.aguardando_ate = agora + timedelta(
-                minutes=_nudge_timeout_min(instrumento)
+                minutes=int(conf["nudge_timeout_min"])
             )
         else:
-            entregue = _enviar(token, conversa.contato_chave, DESPEDIDA_MSG)
-            _registrar(sessao, conversa, DESPEDIDA_MSG, entregue)
+            entregue = _enviar(token, conversa.contato_chave, conf["mensagem_despedida"])
+            _registrar(sessao, conversa, conf["mensagem_despedida"], entregue)
             conversa.estado = "fechada"
+            # Portão por canal encerrado por inatividade: cancela ou estaciona a
+            # execução vinculada conforme o config (regra geral) e desvincula.
+            if conversa.execucao_id:
+                execucao = sessao.get(Execucao, conversa.execucao_id)
+                if (
+                    execucao is not None
+                    and execucao.estado == "aguardando_humano"
+                    and conf["acao_ao_encerrar"] == "cancelar"
+                ):
+                    execucao.estado = "cancelada"
+                    execucao.finalizada_em = agora
+                conversa.execucao_id = None
     if vencidas:
         sessao.commit()
     return len(vencidas)

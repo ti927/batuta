@@ -278,6 +278,9 @@ class AutomacaoCriar(BaseModel):
     # nó com portão (`no.aprovacao`), não mais por automação.
     cadeia: dict = Field(default_factory=dict)
     ativa: bool = False
+    # Comportamento do fluxo (perfil + ajustes finos): `{perfil, ajustes:{...}}`.
+    # Resolvido na cascata global<canal<perfil<ajustes<nó (mensageria/config.py).
+    configuracao: dict = Field(default_factory=dict)
 
 
 class AutomacaoEditar(BaseModel):
@@ -286,6 +289,7 @@ class AutomacaoEditar(BaseModel):
     configuracao_gatilho: dict = Field(default_factory=dict)
     cadeia: dict = Field(default_factory=dict)
     ativa: bool = False
+    configuracao: dict = Field(default_factory=dict)
 
 
 class DuplicarAutomacao(BaseModel):
@@ -305,6 +309,7 @@ class AutomacaoLer(BaseModel):
     configuracao_gatilho: dict | None
     cadeia: dict | None
     ativa: bool
+    configuracao: dict | None
     criado_em: datetime
     atualizado_em: datetime
 

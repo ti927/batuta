@@ -16,10 +16,12 @@ hoje (via `enviar_telegram`); esta camada só faz a CORRELAÇÃO da resposta. Bo
 """
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from mensageria.config import resolver_config
 from modelos import (
     Agente,
     AgenteInstrumento,
@@ -119,6 +121,19 @@ def vincular_pausa(sessao: Session, execucao: Execucao) -> None:
         if conversa.estado not in ("humano_assumiu", "fechada"):
             conversa.estado = "aguardando_resposta"
     sessao.flush()
+
+    # Relógio de inatividade: o portão por canal também é varrido pelo sweeper
+    # (regra geral de mensageria) — antes ficava "aberto para sempre". Cutuca e,
+    # persistindo o silêncio, encerra (cancelando/estacionando a execução).
+    conf = resolver_config(sessao, conversa)
+    if conf["encerrar_por_inatividade"] and conversa.estado not in (
+        "humano_assumiu", "fechada",
+    ):
+        conversa.aguardando_ate = datetime.now(timezone.utc) + timedelta(
+            minutes=int(conf["timeout_min"])
+        )
+        conversa.nudge_enviado = False
+        sessao.flush()
 
     _registrar_apresentado(sessao, conversa, execucao)
 
