@@ -1211,6 +1211,23 @@ Quatro etapas, **sem migração**, **338 testes verdes**:
 
 ---
 
+## FASE — Comportamento do fluxo CONFIGURÁVEL (perfil + avançado); portão obedece a mensageria  ✅ NO AR (2026-06-19, merge `582f6b1`)
+
+**Gatilho:** o maestro percebeu que as regras do motor/mensageria **mudam conforme a natureza do fluxo** (processo interno ≠ acionar cliente externo) e que elas viviam **fixas no código ou na config do CANAL** — então todo fluxo no mesmo bot herdava as mesmas regras, e o portão (que opera por mensageria) **furava** essas regras (a pergunta do agente não saía no Telegram; a conversa ficava aberta pra sempre). Regra-mãe (memória `feedback-corrigir-cobrindo-todos-cenarios`): **corrigir cobrindo TODOS os cenários; se a capacidade é por mensageria, as regras GERAIS prevalecem — uniformemente.**
+
+**Princípio:** o usuário configura o comportamento **por FLUXO**, com uma **fonte única** que resolve a cascata `global < canal < PERFIL do fluxo < ajustes do fluxo < nó`. As regras deixaram de ser fixas e o portão passou a ser uma conversa de mensageria de primeira classe.
+
+Cinco etapas, **sem tocar o núcleo de orquestração** (`agente.py`/`cadeia.py` intocados além de já receberem `saidas`):
+1. **Fonte única** — `Automacao.configuracao` (JSONB; migração ADITIVA `cfg00fluxo001`) + `mensageria/config.py` (`resolver_config` cascata, `PERFIS`, defaults globais, `CAMPOS`/`painel_config`).
+2. **Borda lê do resolver** — `servico.py`/`sweeper.py` trocam `instrumento.configuracao` por `resolver_config` (sem regressão).
+3. **Portão por canal obedece o ciclo** — `_rodar_turno`/`_turno_de_portao`: a borda entrega (corrige Telegram), `aguardando_ate` em `vincular_pausa` (corrige "aberto pra sempre"), teto = anti-loop, `portao_forma` conversa×direto, sweeper/`_passar_para_humano` cancela/estaciona a execução conforme o config; tela inalterada (retoma refatorado: `avancar_apos_gate`/`localizar_no_pausado`/`permitir_conversa`).
+4. **API + UI** — `GET /config/fluxo` (perfis/botões, fonte única) + `configuracao` no CRUD; botão **"Fluxo"** na aba Automações (Tipo de fluxo + Avançado, `interface/components/automacao-builder/config-fluxo.tsx`).
+5. Suíte (**352**) + tsc/eslint/build verdes → migração aditiva (aplicada antes do deploy) → deploy.
+
+**Botões expostos** (grupos): espera & encerramento; limites (turnos/teto); atendimento (saudação/horário); portão (forma/abandono). **Internos (trilhos):** tokens, fuso, temperatura, debounce, histórico, `max_passos`/`modelo_roteador`. **Perfis:** Processo interno, Atendimento ao cliente, Disparo externo, Personalizado.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
