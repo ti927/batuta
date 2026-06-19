@@ -155,7 +155,7 @@ Um fluxo precisa saber **pausar, fazer uma pergunta a um humano, e retomar de on
 - **Portão de aprovação** — um humano precisa autorizar antes de um passo importante ("posso publicar este artigo?").
 - **Confirmação de baixa confiança** — o agente não tem certeza do que entendeu e confirma antes de agir ("li 'R$ 1.500' no recibo — está correto?"), em vez de errar silenciosamente.
 
-> **Estado de implementação:** o motor de pausar/perguntar/retomar está pronto e validado, hoje respondido **na tela do Batuta**. O **canal WhatsApp do Líder** (§10) — onde essa pergunta sai e a resposta volta pelo WhatsApp — é entregue na **Fase de Mensageria** (ver `BUILD-PLAN.md`); é um adaptador de canal na borda, sem mexer neste motor.
+> **Estado de implementação:** o motor de pausar/perguntar/retomar está pronto e validado, respondido **na tela do Batuta** e também **pelo canal** (Telegram já no ar; o WhatsApp do Líder, §10, segue na fila da Mensageria). Quem conduz o portão é o **próprio agente**, não o motor: ao receber a resposta, ele roda de novo e decide conforme seus markdowns — pode **perguntar de volta antes de seguir** (ex.: pedir o porquê de uma reprovação) e só então escolher o caminho. O motor executa; o agente decide (sinergia, não um roteador decidindo na frente do agente).
 
 ### Bifurcação por intenção
 

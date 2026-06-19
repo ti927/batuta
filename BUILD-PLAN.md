@@ -1195,6 +1195,22 @@ Hoje o agente **acha** páginas (`busca_web`/Tavily → título + link + **trech
 
 ---
 
+## FASE — Agente dono do fluxo (sinergia motor × markdown)  ✅ NO AR (2026-06-18, merge `17cc55b`)
+
+**Gatilho (execução `8056ae5a`):** um agente Revisor cujo markdown manda "pedir o porquê ao reprovar" não perguntava nada — e a mensagem que ele enviava no portão **sumia das Conversas**. Diagnóstico: o agente rodava **cego** para a própria topologia (`executar_agente` não recebia as `saidas` do nó), então uma **LLM roteadora separada adivinhava** o ramo pela prosa; no portão, a resposta do humano ia direto pro roteador e **o agente não rodava de novo**. Em vários pontos o motor decidia o FLUXO no lugar do agente ("escravização de agentes", nas palavras do maestro). Decisão tomada: **o agente vira dono das decisões de fluxo; os trilhos de segurança/produto ficam intactos.**
+
+**Princípio:** o agente decide o fluxo; o motor executa e só mantém trilhos de segurança visíveis (teto de custo, anti-injeção, horário comercial, `MAX_PASSOS`, cancelamento, debounce). Onde o motor decidia o ramo/quando-anda, o agente passa a decidir — informado das saídas e declarando a escolha.
+
+Quatro etapas, **sem migração**, **338 testes verdes**:
+1. **Outbound nas Conversas** (`mensageria/aprovacao.py::vincular_pausa`): o que o agente apresenta no portão passa a ser gravado na thread (`papel="agente"`, idempotente por `passo_id`) — antes só vivia em memória e a conversa ficava pela metade.
+2. **Agente enxerga as saídas e DECLARA o ramo** (`orquestracao/agente.py`): com 2+ saídas, `executar_agente` injeta a ferramenta `seguir_para(rotulo)` (enum dos rótulos) + um apêndice de caminhos, e devolve `ramo_escolhido`. Nó de 1 saída segue direto.
+3. **Cadeia usa a declaração** (`orquestracao/cadeia.py`): segue o ramo que o agente declarou, **sem chamar a LLM roteadora**; `_escolher_saida` vira **fallback** (não declarou, rótulo inexistente, automação antiga).
+4. **Portão conversacional** (`mensageria/retoma.py` + `servico.py`): ao retomar um portão de nó-agente com 2+ saídas, **re-roda o agente** com a resposta da pessoa (em vez de casar a palavra). Declarou o ramo → o fluxo anda; não declarou (perguntou de volta) → segue `aguardando_humano`. Trilho anti-loop `MAX_RODADAS_GATE` (8) cai no roteador mecânico após o teto; a borda não duplica o ack quando o agente já falou pelo canal.
+
+**Compatibilidade:** 1 saída, gate-roteador, gate só-de-tela e execuções antigas seguem pelo caminho mecânico (fallback preservado). **Núcleo tocado sob autorização explícita do maestro.** QA real só em prod (fila compartilhada): reprovar pelo Telegram e o agente perguntar o porquê (caso `8056ae5a`).
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
