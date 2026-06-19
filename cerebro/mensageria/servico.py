@@ -24,6 +24,7 @@ import precos
 import segredos_instrumento
 from chaves import resolver_chaves_por_time
 from mensageria import retoma, telegram, transcricao
+from mensageria.config import MSG_LIMITE, resolver_config  # MSG_LIMITE: compat servico.X
 from modelos import (
     Agente,
     AgenteInstrumento,
@@ -51,28 +52,11 @@ LIMITE_HISTORICO = 20
 # da espera) realmente roda — os outros abortam.
 DEBOUNCE_S = 6
 
-# Limites por conversa (defaults; sobreponíveis na config do instrumento via
-# `max_turnos` / `teto_usd`). Ao estourar, a conversa PASSA PARA UM HUMANO
-# (decisão do maestro): o bot cala e ela cai na inbox.
-MAX_TURNOS_PADRAO = 40
-TETO_USD_PADRAO = 1.0
-MSG_LIMITE = "Vou te encaminhar para um atendente humano. Um instante."
-
-# Inatividade: minutos sem resposta do contato até o vigia (sweeper) cutucar.
-# Sobreponível na config do instrumento via `timeout_min`. O prazo do nudge até
-# encerrar vive no sweeper (`nudge_timeout_min`). Decisão do maestro: cutuca 1x
-# e depois encerra.
-TIMEOUT_RESPOSTA_MIN_PADRAO = 60
-
-# Atendimento (Fase K). Defaults usados quando o instrumento ainda NÃO tem o campo
-# salvo (config criada antes da Fase K): saudação nasce LIGADA (transparência);
-# horário comercial nasce DESLIGADO (não muda o comportamento de quem já está no
-# ar). O Brasil não usa horário de verão desde 2019 → fuso fixo UTC−3 (sem tzdata).
-SAUDACAO_PADRAO = "Olá! Você está falando com um assistente virtual. Como posso ajudar?"
-MSG_FORA_HORARIO_PADRAO = (
-    "Olá! No momento estamos fora do horário de atendimento. "
-    "Assim que possível retornaremos sua mensagem."
-)
+# Limites, espera, saudação e horário agora vivem na FONTE ÚNICA
+# `mensageria/config.py` (cascata global < canal < perfil/ajustes do fluxo), lida via
+# `resolver_config`. `MSG_LIMITE`/`SAUDACAO_PADRAO`/`MSG_FORA_HORARIO_PADRAO` são
+# reexportadas de lá (compatibilidade). Aqui ficam só o fuso e os fallbacks de
+# horário de `_fora_do_horario`. Brasil sem horário de verão desde 2019 → UTC−3 fixo.
 FUSO_BR = timezone(timedelta(hours=-3))
 HORARIO_INICIO_PADRAO = "09:00"
 HORARIO_FIM_PADRAO = "18:00"
@@ -201,16 +185,6 @@ def registrar_entrada(
         conversa.estado = "bot_respondendo"
     sessao.commit()
     return conversa, deve_processar
-
-
-def _limites(instrumento: Instrumento) -> tuple[int, float]:
-    """Máx. de turnos e teto de gasto (USD) por conversa — da config do
-    instrumento, com fallback nos defaults."""
-    cfg = instrumento.configuracao or {}
-    return (
-        int(cfg.get("max_turnos") or MAX_TURNOS_PADRAO),
-        float(cfg.get("teto_usd") or TETO_USD_PADRAO),
-    )
 
 
 def _carimbar_uso_agente(uso: list | None, origens: dict[str, str]) -> list:
@@ -496,14 +470,17 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
         if agente is None:
             return
 
+        # Config EFETIVA da conversa (cascata global < canal < perfil/ajustes do
+        # fluxo). Fonte única — nada de ler `instrumento.configuracao` direto.
+        conf = resolver_config(sessao, conversa)
+
         # Teto de gasto / máx. de turnos → passa para um humano (não roda a IA).
-        max_turnos, teto = _limites(instrumento)
-        if (conversa.turnos or 0) >= max_turnos or float(
+        if (conversa.turnos or 0) >= conf["max_turnos"] or float(
             conversa.custo_acumulado_usd or 0
-        ) >= teto:
+        ) >= conf["teto_usd"]:
             try:
                 if token:
-                    telegram.enviar(token, conversa.contato_chave, MSG_LIMITE)
+                    telegram.enviar(token, conversa.contato_chave, conf["mensagem_limite"])
             except Exception:
                 pass
             _passar_para_humano(
@@ -512,24 +489,17 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
             sessao.commit()
             return
 
-        cfg = instrumento.configuracao or {}
-
         # Horário comercial (Fase K): fora do horário, responde automático e NÃO
         # aciona a IA — não conta turno nem custo; deixa a conversa aberta.
-        if _fora_do_horario(cfg):
-            _enviar_e_registrar(
-                sessao,
-                conversa,
-                token,
-                cfg.get("mensagem_fora_horario") or MSG_FORA_HORARIO_PADRAO,
-            )
+        if _fora_do_horario(conf):
+            _enviar_e_registrar(sessao, conversa, token, conf["mensagem_fora_horario"])
             conversa.estado = "aberta"
             sessao.commit()
             return
 
         # Saudação de abertura (Fase K): uma única vez, no 1º contato da conversa,
         # antes da resposta da IA (transparência). Vazia = desligada.
-        saudacao = (cfg.get("saudacao_abertura", SAUDACAO_PADRAO) or "").strip()
+        saudacao = (conf["saudacao_abertura"] or "").strip()
         if saudacao and not _bot_ja_respondeu(sessao, conversa.id):
             _enviar_e_registrar(sessao, conversa, token, saudacao)
 
@@ -614,11 +584,9 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
         )
         conversa.estado = "aguardando_resposta"
         # Relógio da inatividade: o vigia cutuca/encerra se o contato sumir.
-        timeout_min = int(
-            (instrumento.configuracao or {}).get("timeout_min")
-            or TIMEOUT_RESPOSTA_MIN_PADRAO
+        conversa.aguardando_ate = datetime.now(timezone.utc) + timedelta(
+            minutes=int(conf["timeout_min"])
         )
-        conversa.aguardando_ate = datetime.now(timezone.utc) + timedelta(minutes=timeout_min)
         sessao.commit()
     finally:
         sessao.close()
