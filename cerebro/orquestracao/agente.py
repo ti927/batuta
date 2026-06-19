@@ -178,9 +178,11 @@ def _instrucao_de_fluxo(saidas: list[dict], gate: bool) -> str:
         return (
             "## Caminhos do fluxo (este passo aguarda uma pessoa)\n"
             "Quando você tiver a decisão da pessoa, chame a ferramenta `seguir_para` "
-            "com o rótulo do caminho escolhido. Se ainda precisar de algo dela "
-            "(perguntar, esclarecer), apenas responda normalmente, SEM chamar "
-            "`seguir_para` — o fluxo segue aguardando a resposta dela.\n"
+            "com o rótulo do caminho escolhido E escreva também uma frase curta para "
+            "ela, confirmando o que vai acontecer — essa frase será enviada a ela. Se "
+            "ainda precisar de algo dela (perguntar, esclarecer), apenas responda "
+            "normalmente, SEM chamar `seguir_para` — o fluxo segue aguardando a "
+            "resposta dela.\n"
             f"Caminhos:\n{opcoes}"
         )
     return (

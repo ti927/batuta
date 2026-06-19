@@ -488,7 +488,6 @@ def _rodar_turno(
     try:
         with usar_chaves(chaves):
             resultado = executar_agente(agente, cinto, entrada, saidas=saidas, gate=gate)
-        saida = (resultado.get("saida") or "").strip()
     except Exception as e:  # falha de LLM/instrumento — não morre em silêncio
         sessao.add(
             MensagemConversa(
@@ -500,24 +499,33 @@ def _rodar_turno(
         sessao.commit()
         return None
 
-    if not saida:
-        conversa.estado = "aberta"
-        sessao.commit()
-        return None
+    saida = (resultado.get("saida") or "").strip()
+    ramo = (resultado.get("ramo_escolhido") or "").strip()
 
-    # A BORDA entrega a resposta (não o agente) — vale para chat e para o portão.
+    # Turno SEM produto: nem fala, nem decisão de fluxo. Devolve ao chamador decidir
+    # o estado (chat → "aberta": a bola é nossa, não se cutuca o cliente; portão →
+    # "aguardando_resposta", o sweeper governa). Não conta turno nem grava mensagem —
+    # não houve consumo útil. (A premissa antiga "turno sem texto = nada aconteceu"
+    # era o bug: descartava a DECISÃO de fluxo do agente; ver `ramo` abaixo.)
+    if not saida and not ramo:
+        return resultado
+
+    # A BORDA entrega a resposta — SÓ quando há texto. Uma DECISÃO de fluxo pode vir
+    # SEM mensagem (o agente apenas roteou): não se inventa uma mensagem vazia ao
+    # contato; o turno conta e o chamador segue o fluxo (e dá um retorno curto).
     entregue = True
-    try:
-        envio = telegram.enviar(token, conversa.contato_chave, saida)
-        entregue = bool(envio.get("ok"))
-    except Exception as e:
-        entregue = False
-        sessao.add(
-            MensagemConversa(
-                conversa_id=conversa.id, papel="sistema",
-                conteudo=f"Falha ao enviar pelo Telegram: {e}", entregue=False,
+    if saida:
+        try:
+            envio = telegram.enviar(token, conversa.contato_chave, saida)
+            entregue = bool(envio.get("ok"))
+        except Exception as e:
+            entregue = False
+            sessao.add(
+                MensagemConversa(
+                    conversa_id=conversa.id, papel="sistema",
+                    conteudo=f"Falha ao enviar pelo Telegram: {e}", entregue=False,
+                )
             )
-        )
 
     uso_turno = (
         _carimbar_uso_agente(resultado.get("uso"), origens)
@@ -526,10 +534,16 @@ def _rodar_turno(
             sessao, agente.id, resultado.get("instrumentos_acionados"), origens=origens
         )
     )
+    # Com texto → mensagem do agente (entregue). Decisão sem texto → registra um
+    # lançamento interno (papel sistema, não enviado) que carrega o uso, para a
+    # contabilização não perder este turno e a thread mostrar que o fluxo andou.
     sessao.add(
         MensagemConversa(
-            conversa_id=conversa.id, papel="agente", conteudo=saida,
-            entregue=entregue, uso=uso_turno or None,
+            conversa_id=conversa.id,
+            papel="agente" if saida else "sistema",
+            conteudo=saida or "↪ Encaminhei o fluxo conforme a resposta.",
+            entregue=entregue if saida else False,
+            uso=uso_turno or None,
         )
     )
     conversa.turnos = (conversa.turnos or 0) + 1
@@ -594,8 +608,9 @@ def _turno_de_portao(
         saidas=saidas, gate=True, chaves=chaves, origens=origens,
     )
     if resultado is None:
-        return
+        return  # falha dura (já tratada: conversa "aberta") — a bola é nossa, retoma depois
 
+    falou = bool((resultado.get("saida") or "").strip())
     por_rotulo = {s["rotulo"]: s for s in saidas if s.get("rotulo")}
     ramo = resultado.get("ramo_escolhido")
     escolhida = por_rotulo.get(ramo) if ramo else None
@@ -609,7 +624,12 @@ def _turno_de_portao(
         sessao.refresh(execucao)
         if execucao.estado != "aguardando_humano":
             conversa.execucao_id = None
-    # Senão: o agente perguntou → segue aguardando (já entregue + relógio rearmado).
+        # Roteou SEM falar e o fluxo não se re-apresentou no canal → dá um retorno
+        # curto à pessoa (mesma regra do portão mecânico), p/ ela não ficar no vácuo.
+        if not falou and not _agente_falou_por_ultimo(sessao, conversa.id):
+            _enviar_e_registrar(sessao, conversa, token, _ack_aprovacao(execucao))
+    # Senão: o agente perguntou (ou não produziu nada) → segue aguardando; o sweeper
+    # governa o silêncio — a conversa NUNCA fica aberta para sempre.
     conversa.estado = "aguardando_resposta"
     sessao.commit()
 
@@ -703,7 +723,11 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
         )
         if resultado is None:
             return
-        conversa.estado = "aguardando_resposta"
+        # Agente sem resposta (turno vazio): a bola é nossa — deixa "aberta" (não
+        # entra no relógio de inatividade, para não cutucar o cliente que aguarda).
+        conversa.estado = (
+            "aguardando_resposta" if (resultado.get("saida") or "").strip() else "aberta"
+        )
         sessao.commit()
     finally:
         sessao.close()

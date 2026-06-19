@@ -249,6 +249,41 @@ def test_canal_agente_decide_e_conclui(sessao, dados, monkeypatch):
     assert execucao.estado == "concluida"  # aprovado → fim
 
 
+def test_canal_agente_decide_SEM_texto_o_fluxo_anda(sessao, dados, monkeypatch):
+    """O BUG do dia 19/06: o agente decidiu (chamou `seguir_para`) mas sem escrever
+    nada → a borda descartava a decisão e a execução ficava 'aguardando_humano' para
+    sempre. Agora a decisão é honrada mesmo sem texto, e a pessoa recebe um retorno."""
+    enviados = []
+    canal, ag, auto, execucao = _setup_canal(sessao, dados, monkeypatch, enviados)
+    _mock_servico_agente(monkeypatch, ramo="reprovado", saida="")  # decide, não fala
+
+    conv = _responder(sessao, canal, "esse tema já foi usado, busca outro")
+
+    sessao.refresh(execucao)
+    assert execucao.estado == "concluida"  # decisão honrada → o fluxo andou (reprovado → fim)
+    sessao.refresh(conv)
+    assert conv.execucao_id is None  # desvinculou ao concluir
+    assert conv.turnos == 1  # o turno de decisão CONTA (anti-loop uniforme)
+    # A pessoa não fica no vácuo: recebe um retorno curto pelo Telegram.
+    assert any("Decisão registrada" in t for t in enviados)
+
+
+def test_canal_turno_vazio_nao_fica_aberto_pra_sempre(sessao, dados, monkeypatch):
+    """Turno degenerado (agente não fala NEM decide): a conversa fica
+    'aguardando_resposta' (governada pelo sweeper), nunca 'aberta' para sempre."""
+    enviados = []
+    canal, ag, auto, execucao = _setup_canal(sessao, dados, monkeypatch, enviados)
+    _mock_servico_agente(monkeypatch, ramo=None, saida="")  # nada
+
+    conv = _responder(sessao, canal, "???")
+
+    sessao.refresh(execucao)
+    assert execucao.estado == "aguardando_humano"  # nada decidido → segue aguardando
+    sessao.refresh(conv)
+    assert conv.estado == "aguardando_resposta"  # entra no sweeper (não fica "aberta")
+    assert conv.aguardando_ate is not None
+
+
 def test_canal_teto_passa_humano_e_cancela_execucao(sessao, dados, monkeypatch):
     enviados = []
     # perfil interno → portao_acao_abandono = cancelar (default global tb é cancelar)
