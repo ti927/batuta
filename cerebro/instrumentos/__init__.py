@@ -20,10 +20,13 @@ from instrumentos.base import (
 )
 
 # Registra os tipos concretos ao importar o pacote.
+from instrumentos import busca_exa  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import busca_web  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import enviar_telegram  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import gerar_imagem  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import gerar_pdf  # noqa: E402, F401  (efeito colateral: registro)
+from instrumentos import ler_site  # noqa: E402, F401  (efeito colateral: registro)
+from instrumentos import ler_site_firecrawl  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import mcp  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import rest  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import sql  # noqa: E402, F401  (efeito colateral: registro)

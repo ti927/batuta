@@ -92,12 +92,17 @@ Como saber se um instrumento escreve ou só lê:
   POST/PUT/PATCH/DELETE = escrita → COM portão. Escolha o método certo na configuração.
 - banco_sql: marque `somente_leitura: true` na config quando o agente só consulta → SEM
   portão (o instrumento recusa escrita). Sem essa marca, é tratado como escrita → portão.
-- busca_web, gerar_imagem, gerar_pdf: leitura/geração local → SEM portão.
+- busca_web, busca_exa, ler_site, ler_site_firecrawl, gerar_imagem, gerar_pdf:
+  leitura/geração local → SEM portão.
 - disparar_webhook, publicar_wordpress: sempre escrevem/enviam → COM portão.
-CONFIGURE a busca_web conforme o trabalho do agente: se ele precisa de coisas ATUAIS
-(pauta, notícia, tendência), ponha `topico: "noticias"` e uma `recencia` (ex.: "semana"
-ou "mes") — sem isso a busca repete sempre os mesmos resultados antigos. Use
-`incluir_dominios`/`excluir_dominios` quando houver fontes preferidas a fixar.
+DESCOBRIR ≠ LER. Para ACHAR páginas use uma busca: `busca_web` (Tavily, palavra-chave) ou
+`busca_exa` (semântica, traz ângulos mais diversos — boa contra "sempre a mesma pauta").
+Para LER o conteúdo completo de uma URL que a busca achou, dê ao agente um instrumento de
+leitura: `ler_site` (Tavily) ou `ler_site_firecrawl` (lê até sites pesados de JavaScript).
+CONFIGURE a busca conforme o trabalho: se precisa de coisas ATUAIS (pauta, notícia,
+tendência), ponha `topico: "noticias"` (busca_web) / `categoria: "noticias"` (busca_exa) e
+uma `recencia` (ex.: "semana"/"mes") — sem isso a busca repete os mesmos resultados antigos.
+Use `incluir_dominios`/`excluir_dominios` quando houver fontes preferidas a fixar.
 A fotografia do time mostra, em cada instrumento, `acao_irreversivel` JÁ resolvido — use
 isso: só os instrumentos com `acao_irreversivel: true` exigem portão antes.
 

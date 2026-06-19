@@ -16,14 +16,23 @@ export const ROTULO_PROVEDOR: Record<Provedor, string> = {
 // provedores de modelo + serviços compartilháveis de instrumento (Tavily/busca).
 // Separado de PROVEDORES de propósito — Tavily NÃO é provedor de modelo (não entra
 // no seletor de modelo do agente). Espelha cerebro/chaves.py SERVICOS.
-export const SERVICOS = ["anthropic", "openai", "google", "tavily"] as const;
+export const SERVICOS = [
+  "anthropic",
+  "openai",
+  "google",
+  "tavily",
+  "exa",
+  "firecrawl",
+] as const;
 export type Servico = (typeof SERVICOS)[number];
 
 export const ROTULO_SERVICO: Record<Servico, string> = {
   anthropic: "Anthropic (Claude)",
   openai: "OpenAI (GPT / imagens)",
   google: "Google (Gemini)",
-  tavily: "Tavily (busca na web)",
+  tavily: "Tavily (busca e leitura na web)",
+  exa: "Exa (busca semântica)",
+  firecrawl: "Firecrawl (leitura de sites)",
 };
 
 // Em que funções cada serviço é usado — texto de ajuda na tela de chaves.
@@ -31,7 +40,9 @@ export const USADA_POR: Record<Servico, string> = {
   anthropic: "modelos dos agentes e IA de conversa",
   openai: "modelos, IA de conversa, transcrição de áudio e geração de imagem",
   google: "modelos dos agentes e IA de conversa",
-  tavily: "busca na web dos agentes",
+  tavily: "busca na web e leitura de sites dos agentes",
+  exa: "busca na web (semântica) dos agentes",
+  firecrawl: "leitura de sites dos agentes",
 };
 
 export const MODELOS_POR_PROVEDOR: Record<Provedor, string[]> = {

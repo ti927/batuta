@@ -53,6 +53,28 @@ def test_busca_web_reusa_tavily_do_pool(sessao, dados):
     assert inst.segredos_decifrados.get("chave_api") == "TVLY-POOL"
 
 
+def test_busca_exa_reusa_exa_do_pool(sessao, dados):
+    inst = _instrumento(sessao, dados, tipo="busca_exa")
+    with usar_chaves({"exa": "EXA-POOL"}):
+        si.anexar_aos_instrumentos(sessao, [inst])
+    assert inst.segredos_decifrados.get("chave_api") == "EXA-POOL"
+
+
+def test_ler_site_reusa_tavily_do_pool(sessao, dados):
+    # ler_site (Tavily /extract) reusa a MESMA chave Tavily do busca_web.
+    inst = _instrumento(sessao, dados, tipo="ler_site")
+    with usar_chaves({"tavily": "TVLY-POOL"}):
+        si.anexar_aos_instrumentos(sessao, [inst])
+    assert inst.segredos_decifrados.get("chave_api") == "TVLY-POOL"
+
+
+def test_ler_site_firecrawl_reusa_firecrawl_do_pool(sessao, dados):
+    inst = _instrumento(sessao, dados, tipo="ler_site_firecrawl")
+    with usar_chaves({"firecrawl": "FC-POOL"}):
+        si.anexar_aos_instrumentos(sessao, [inst])
+    assert inst.segredos_decifrados.get("chave_api") == "FC-POOL"
+
+
 def test_instrumento_sem_chave_compartilhada_nao_recebe_injecao(sessao, dados):
     # gerar_pdf não declara chave_compartilhada → nada é injetado.
     inst = _instrumento(sessao, dados, tipo="gerar_pdf")
@@ -85,3 +107,20 @@ def test_tavily_sem_chave_marca_legado(sessao, dados):
     chaves_map, origens = ch.resolver_chaves_por_organizacao(sessao, dados["orgB"].id)
     assert "tavily" not in chaves_map
     assert origens.get("tavily") == ch.ORIGEM_LEGADO
+
+
+def test_exa_e_firecrawl_no_pool_e_resolvem_do_cofre(sessao, dados):
+    # Exa/Firecrawl entram em SERVICOS (logo, são cadastráveis e resolvíveis); sem
+    # chave NÃO marcam legado (exigem cofre, diferente do Tavily/Anthropic).
+    assert "exa" in ch.SERVICOS and "firecrawl" in ch.SERVICOS
+    org = dados["orgA"].id
+    sessao.add(
+        ChaveApi(
+            organizacao_id=org, provedor="firecrawl",
+            valor_cifrado=cofre.cifrar("fc-123"), ultimos4="-123", ativa=True,
+        )
+    )
+    sessao.flush()
+    chaves_map, origens = ch.resolver_chaves_por_organizacao(sessao, org)
+    assert chaves_map.get("firecrawl") == "fc-123"
+    assert "exa" not in chaves_map and "exa" not in origens  # sem legado
