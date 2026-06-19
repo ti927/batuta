@@ -56,7 +56,7 @@ export default async function ExecucaoDetalhePage({
   const dados = await carregar(id, execId);
   if (!dados) notFound();
   return (
-    <main className="mx-auto w-full max-w-[820px] px-5 py-8 sm:px-8">
+    <main className="mx-auto w-full max-w-[1000px] px-5 py-8 sm:px-8">
       <Link
         href={`/times/${id}/execucoes`}
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"

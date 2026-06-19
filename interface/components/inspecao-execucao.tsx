@@ -33,13 +33,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
-// Estados em que a execução parou de avançar (não há mais o que acompanhar).
+// Estados terminais "de exibição": a execução não está avançando sozinha (encerrou
+// ou pausou no portão). Usado para avisar o pai (refresh de lista) numa transição.
 export const ESTADOS_TERMINAIS = [
   "concluida",
   "falhou",
   "aguardando_humano",
   "cancelada",
 ];
+
+// Estados FINAIS: a execução encerrou de vez — não há retomada possível. Diferente de
+// `aguardando_humano`, que é uma PAUSA: o portão pode ser resolvido POR FORA (ex.:
+// resposta pelo Telegram), então a tela CONTINUA acompanhando, para refletir a retomada
+// em tempo real — sem precisar de refresh manual.
+export const ESTADOS_FINAIS = ["concluida", "falhou", "cancelada"];
 
 type VarianteBadge = "neutral" | "info" | "success" | "warning" | "error";
 export const ESTADO: Record<string, { label: string; variante: VarianteBadge }> = {
@@ -561,6 +568,9 @@ export function InspecaoExecucao({
   const [resposta, setResposta] = useState("");
   const [respondendo, setRespondendo] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Último estado já comunicado ao pai — para avisar (refresh de lista) UMA vez por
+  // transição terminal (pausa/encerramento), sem repetir a cada ciclo de poll.
+  const ultimoEstadoRef = useRef<string | null>(null);
 
   function pararPoll() {
     if (pollRef.current) {
@@ -569,14 +579,24 @@ export function InspecaoExecucao({
     }
   }
 
+  function avisarPaiSeTransicao(estado: string) {
+    if (ESTADOS_TERMINAIS.includes(estado) && ultimoEstadoRef.current !== estado) {
+      onTerminal?.();
+    }
+    ultimoEstadoRef.current = estado;
+  }
+
   function acompanhar(id: string) {
+    pararPoll(); // garante um único laço de poll, venha de onde vier a chamada
     pollRef.current = setTimeout(async () => {
       try {
         const r = await api.get<ExecucaoComPassos>(`/execucoes/${id}`);
         setExecucao(r);
-        if (ESTADOS_TERMINAIS.includes(r.estado)) {
+        avisarPaiSeTransicao(r.estado);
+        // Para SÓ quando a execução encerra de vez. `aguardando_humano` é uma PAUSA
+        // (o portão pode ser resolvido por fora, ex.: Telegram) → segue acompanhando.
+        if (ESTADOS_FINAIS.includes(r.estado)) {
           pararPoll();
-          onTerminal?.();
           return;
         }
       } catch {
@@ -586,7 +606,8 @@ export function InspecaoExecucao({
     }, 1500);
   }
 
-  // (Re)carrega ao trocar de execução; inicia o poll se ainda estiver viva.
+  // (Re)carrega ao trocar de execução; acompanha enquanto não encerrar de vez (inclui
+  // a pausa no portão, que pode ser retomada por fora → atualiza em tempo real).
   useEffect(() => {
     let vivo = true;
     pararPoll();
@@ -596,7 +617,8 @@ export function InspecaoExecucao({
         if (!vivo) return;
         setExecucao(r);
         setErro(null);
-        if (!ESTADOS_TERMINAIS.includes(r.estado)) acompanhar(r.id);
+        ultimoEstadoRef.current = r.estado; // prime: abrir a tela não dispara refresh
+        if (!ESTADOS_FINAIS.includes(r.estado)) acompanhar(r.id);
       } catch (e) {
         if (vivo) setErro(e instanceof ErroDaApi ? e.message : "Falha ao carregar a execução");
       }
@@ -622,8 +644,8 @@ export function InspecaoExecucao({
       setExecucao(r);
       setResposta("");
       toast.success("Decisão enviada");
-      if (!ESTADOS_TERMINAIS.includes(r.estado)) acompanhar(r.id);
-      onTerminal?.();
+      avisarPaiSeTransicao(r.estado);
+      if (!ESTADOS_FINAIS.includes(r.estado)) acompanhar(r.id);
     } catch (e) {
       setErro(e instanceof ErroDaApi ? e.message : "Falha ao responder");
     } finally {
