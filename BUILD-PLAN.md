@@ -1188,10 +1188,24 @@ O `PRODUTO.md` §9 prevê a **Biblioteca** ("segundo cérebro") — mas ela **ca
 
 ---
 
-## FASE — Instrumento "Ler site" (extração de página)  📋 BACKLOG (ideia registrada, não iniciada — 2026-06-18)
-Hoje o agente **acha** páginas (`busca_web`/Tavily → título + link + **trecho** ~500 chars) mas **não consegue abrir uma URL e ler o ARTIGO completo** de forma limpa: `busca_web` só devolve o trecho, e o instrumento genérico `rest` devolve o **HTML cru** (bom para APIs, não para ler um artigo). Falta um instrumento de **leitura de site**: dada uma **URL**, devolver o **conteúdo limpo** daquela página. É capacidade distinta da busca (descoberta × leitura).
+## FASE — Busca/leitura na web (Exa + Tavily extract + Firecrawl)  ✅ NO AR (2026-06-19, merge `c8687e0`)
+A descoberta era rasa (`busca_web`/Tavily → título+link+**trecho**) e não havia como **ler o artigo completo** nem **buscar por significado**. Entregue como TRÊS instrumentos novos, todos no molde do `cerebro/instrumentos/busca_web.py` (Config com campos guiados `Literal`/`Field`, `executar` httpx, política de falha do encaixe, `acao_irreversivel=False` → sem portão), reusando o **pool de chaves** via `chave_compartilhada` e **sem migração, núcleo intocado**:
+- **`busca_exa`** — busca **semântica** (Exa, `POST /search`, auth `x-api-key`): traz ângulos mais diversos (ataca a "mesma pauta"). Config: tipo_busca/categoria/recência/domínios/qtd. Serviço de pool `exa`.
+- **`ler_site`** — leitura de página via **Tavily `/extract`** (auth Bearer), **reusando a MESMA chave `tavily`** do `busca_web`. Config: profundidade/formato/máx. caracteres. Não lê páginas de JavaScript.
+- **`ler_site_firecrawl`** — leitura robusta via **Firecrawl `/v2/scrape`** (auth Bearer): lê até sites de JavaScript. Config: só-conteúdo-principal/máx. caracteres. Serviço de pool `firecrawl`.
 
-**Caminho técnico (a confirmar na execução):** a Tavily oferece o endpoint **`/extract`** (recebe URL(s) → devolve o conteúdo extraído) — molde igual ao `cerebro/instrumentos/busca_web.py`, **reusando a mesma chave compartilhada `tavily`** (pool da org → consultoria → `.env`), `acao_irreversivel=False` (só leitura), **sem migração, núcleo intocado**. Alternativa mais simples: ligar `include_raw_content` na própria `busca_web` (traz o texto cheio dos resultados) — útil quando a busca já acha a página certa. A escolha (instrumento novo `ler_site` × flag na busca) fica para quando o maestro priorizar. **Não iniciar sem o sinal do maestro.**
+`chaves.SERVICOS` ganhou `exa` e `firecrawl` (cadastráveis em "Chaves e credenciais"; exigem chave do cofre, sem fallback de `.env`); o **formulário de instrumento é genérico** → os campos da Config aparecem sozinhos, **sem mexer no front**. `busca_web` renomeado para "Busca na web (Tavily)". A IA criadora aprendeu **descobrir (busca) × ler (site)**. Testes: +21 (suíte 381). **Pré-req operacional:** o maestro cadastra as chaves Exa e Firecrawl no cofre (contas externas).
+
+---
+
+## FASE — Capacidades avançadas de web (Firecrawl)  📋 BACKLOG (registrado 2026-06-19, não iniciar sem o sinal do maestro)
+O "skill" oficial da Firecrawl revela capacidades além da leitura simples (que já temos no `ler_site_firecrawl`). Cada uma vira um instrumento futuro plugável, no mesmo molde, reusando a chave `firecrawl` do pool, sem migração e sem tocar o núcleo. O pacote CLI/skills/workflows da Firecrawl é para **agente de terminal** e **não se aplica** ao runtime do Batuta (agentes LangGraph + instrumentos HTTP) — registramos só as capacidades de API:
+- **`interagir_site`** (Firecrawl `/interact`) — clicar, preencher formulário, navegar/logar numa página viva. Capacidade nova; "age" na página → trataria como **escrita** (com portão de aprovação).
+- **`varrer_site`** (Firecrawl `/crawl` + `/map`) — descobrir URLs e extrair um site inteiro. **Casa com a Biblioteca** (ingerir um site como base de conhecimento da organização).
+- **`ler_documento`** (Firecrawl `/parse`) — extrair texto de PDF/DOCX/XLSX. **Sobrepõe** o `extrair_texto` já previsto na Biblioteca (`docs/BIBLIOTECA-DECISAO.md`) — avaliar reuso antes de duplicar.
+- **Refino opcional do `ler_site_firecrawl`:** expor `waitFor` (esperar o JS) e `timeout` para páginas muito pesadas (hoje ficam no padrão).
+
+**Não iniciar sem o sinal do maestro.**
 
 ---
 
