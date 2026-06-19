@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 import segredos_instrumento
 from mensageria import telegram
 from mensageria.config import DESPEDIDA_MSG, NUDGE_MSG, resolver_config  # noqa: F401 (compat sweeper.X)
-from modelos import Conversa, Instrumento, MensagemConversa
+from modelos import Conversa, Execucao, Instrumento, MensagemConversa
 from sessao import CriadorDeSessao
 
 
@@ -54,6 +54,8 @@ def varrer(sessao: Session) -> int:
             else None
         )
         conf = resolver_config(sessao, conversa)  # fonte única (perfil do fluxo inclusive)
+        if not conf["encerrar_por_inatividade"]:
+            continue  # este fluxo não encerra por silêncio (ex.: deixa vivo de propósito)
         if not conversa.nudge_enviado:
             entregue = _enviar(token, conversa.contato_chave, conf["mensagem_nudge"])
             _registrar(sessao, conversa, conf["mensagem_nudge"], entregue)
@@ -65,6 +67,18 @@ def varrer(sessao: Session) -> int:
             entregue = _enviar(token, conversa.contato_chave, conf["mensagem_despedida"])
             _registrar(sessao, conversa, conf["mensagem_despedida"], entregue)
             conversa.estado = "fechada"
+            # Portão por canal encerrado por inatividade: cancela ou estaciona a
+            # execução vinculada conforme o config (regra geral) e desvincula.
+            if conversa.execucao_id:
+                execucao = sessao.get(Execucao, conversa.execucao_id)
+                if (
+                    execucao is not None
+                    and execucao.estado == "aguardando_humano"
+                    and conf["acao_ao_encerrar"] == "cancelar"
+                ):
+                    execucao.estado = "cancelada"
+                    execucao.finalizada_em = agora
+                conversa.execucao_id = None
     if vencidas:
         sessao.commit()
     return len(vencidas)

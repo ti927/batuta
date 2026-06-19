@@ -172,7 +172,7 @@ def test_processar_turno_envia_resposta_e_grava(sessao, dados, monkeypatch):
     monkeypatch.setattr(
         servico,
         "executar_agente",
-        lambda ag, cinto, entrada: {
+        lambda ag, cinto, entrada, **k: {
             "saida": "Custa R$10.",
             "uso": [{"modelo": "haiku", "tokens_entrada": 1000, "tokens_saida": 500}],
         },
@@ -214,7 +214,7 @@ def test_debounce_aborta_quando_chega_msg_mais_nova(sessao, dados, monkeypatch):
     monkeypatch.setattr(
         servico,
         "executar_agente",
-        lambda *a: rodou.__setitem__("agente", True) or {"saida": "x"},
+        lambda *a, **k: rodou.__setitem__("agente", True) or {"saida": "x"},
     )
     monkeypatch.setattr(servico.telegram, "enviar", lambda *a: {"ok": True})
 
@@ -299,7 +299,7 @@ def test_audio_transcrito_entra_no_turno(sessao, dados, monkeypatch):
     monkeypatch.setattr(
         servico,
         "executar_agente",
-        lambda ag, cinto, entrada: entradas.append(entrada) or {"saida": "São R$10."},
+        lambda ag, cinto, entrada, **k: entradas.append(entrada) or {"saida": "São R$10."},
     )
     monkeypatch.setattr(servico.telegram, "enviar", lambda *a: {"ok": True})
 
@@ -336,7 +336,7 @@ def test_processar_turno_grava_uso_com_origem_e_categoria(sessao, dados, monkeyp
     monkeypatch.setattr(
         servico,
         "executar_agente",
-        lambda ag, cinto, entrada: {
+        lambda ag, cinto, entrada, **k: {
             "saida": "Custa R$10.",
             "uso": [{"modelo": "claude-haiku-4-5", "tokens_entrada": 1000, "tokens_saida": 500}],
         },
@@ -379,7 +379,7 @@ def test_processar_turno_contabiliza_transcricao(sessao, dados, monkeypatch):
     monkeypatch.setattr(
         "mensageria.transcricao.transcrever", lambda audio, chave, **kw: "Quero o preço"
     )
-    monkeypatch.setattr(servico, "executar_agente", lambda *a: {"saida": "R$10.", "uso": []})
+    monkeypatch.setattr(servico, "executar_agente", lambda *a, **k: {"saida": "R$10.", "uso": []})
     monkeypatch.setattr(servico.telegram, "enviar", lambda *a: {"ok": True})
 
     servico.processar_turno(conversa.id)
@@ -632,7 +632,7 @@ def test_fora_do_horario_responde_sem_acionar_ia(sessao, dados, monkeypatch):
     monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
     monkeypatch.setattr(servico, "_fora_do_horario", lambda cfg: True)
     monkeypatch.setattr(
-        servico, "executar_agente", lambda *a: rodou.__setitem__("ia", True) or {"saida": "x"}
+        servico, "executar_agente", lambda *a, **k: rodou.__setitem__("ia", True) or {"saida": "x"}
     )
     monkeypatch.setattr(
         servico.telegram, "enviar", lambda t, c, x: enviados.append(x) or {"ok": True}
@@ -655,7 +655,7 @@ def test_saudacao_no_primeiro_contato_uma_unica_vez(sessao, dados, monkeypatch):
     enviados = []
     monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
     monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
-    monkeypatch.setattr(servico, "executar_agente", lambda *a: {"saida": "Custa R$10.", "uso": []})
+    monkeypatch.setattr(servico, "executar_agente", lambda *a, **k: {"saida": "Custa R$10.", "uso": []})
     monkeypatch.setattr(
         servico.telegram, "enviar", lambda t, c, x: enviados.append(x) or {"ok": True}
     )

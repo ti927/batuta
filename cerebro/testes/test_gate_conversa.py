@@ -1,11 +1,17 @@
-"""Portão CONVERSACIONAL: o agente conversa e decide (não um roteador de palavra).
+"""Portão CONVERSACIONAL e o ciclo de vida de mensageria.
 
-Quando uma execução pausa num portão de nó-agente com 2+ saídas e a pessoa
-responde, o motor RE-RODA o agente (não casa a palavra num roteador). O agente
-então: pergunta de volta (sem declarar saída) → segue aguardando; ou declara a
-saída via `seguir_para` → o fluxo anda. Trilho anti-loop: após o teto de rodadas,
-cai no roteamento mecânico. `executar_agente` é mockado — sem LLM.
+Duas superfícies:
+- TELA (`retoma.retomar_execucao` direto): re-roda o agente; pergunta → passo;
+  decide → anda. (Sem ciclo de mensageria.)
+- CANAL (`servico.processar_turno`): o turno do portão roda pela BORDA — entrega no
+  Telegram, conta turno, rearma o relógio de inatividade; o sweeper encerra e
+  cancela/estaciona a execução conforme o config. (Corrige o bug do dia 19/06: a
+  pergunta saía só na thread interna e a conversa ficava aberta pra sempre.)
+
+`executar_agente` é mockado — sem LLM.
 """
+
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
@@ -55,7 +61,7 @@ def _agente(sessao, dados):
     return ag
 
 
-def _automacao(sessao, dados, agente, canal):
+def _automacao(sessao, dados, agente, canal, configuracao=None):
     """Portão de nó-agente com DUAS saídas (gate conversacional) — ambas → fim para
     o teste exercitar a conversa sem rodar agentes a jusante."""
     no = {
@@ -68,8 +74,9 @@ def _automacao(sessao, dados, agente, canal):
     }
     auto = Automacao(
         time_id=dados["timeA"].id, nome="Fluxo", tipo_gatilho="manual",
-        configuracao_gatilho={}, cadeia={"inicial": NO_GATE, "nos": [no, {"id": "fim", "tipo": "fim", "saidas": []}]},
-        ativa=False,
+        configuracao_gatilho={},
+        cadeia={"inicial": NO_GATE, "nos": [no, {"id": "fim", "tipo": "fim", "saidas": []}]},
+        ativa=False, configuracao=configuracao or {},
     )
     sessao.add(auto)
     sessao.flush()
@@ -94,20 +101,6 @@ def _exec_pausada(sessao, auto, agente, texto="ARTIGO PARA APROVAR"):
     return execucao
 
 
-def _mock_rerun(monkeypatch, *, ramo=None, mensagens=None):
-    """Mocka `executar_agente` (visto pela retoma): declara um ramo ou não, e pode
-    devolver o que 'enviou' por canal (mensagens_enviadas)."""
-    def fake(agente, cinto, entrada, **kwargs):
-        return {
-            "saida": "(narração do agente)",
-            "instrumentos_acionados": [],
-            "uso": [],
-            "mensagens_enviadas": mensagens or {},
-            "ramo_escolhido": ramo,
-        }
-    monkeypatch.setattr(retoma, "executar_agente", fake)
-
-
 def _conv(sessao, execucao_id):
     return sessao.scalars(
         select(Conversa).where(Conversa.execucao_id == execucao_id)
@@ -122,57 +115,51 @@ def _passos(sessao, execucao_id):
     ).all()
 
 
-def test_agente_pergunta_de_volta_e_segue_aguardando(sessao, dados, monkeypatch):
+# ─────────────────────────── TELA (retoma direto) ───────────────────────────
+
+def _mock_rerun_tela(monkeypatch, *, ramo=None, mensagens=None):
+    def fake(agente, cinto, entrada, **kwargs):
+        return {
+            "saida": "(narração)", "instrumentos_acionados": [], "uso": [],
+            "mensagens_enviadas": mensagens or {}, "ramo_escolhido": ramo,
+        }
+    monkeypatch.setattr(retoma, "executar_agente", fake)
+
+
+def test_tela_agente_pergunta_vira_passo_e_segue_aguardando(sessao, dados, monkeypatch):
     canal = _canal(sessao, dados)
     ag = _agente(sessao, dados)
     auto = _automacao(sessao, dados, ag, canal)
     execucao = _exec_pausada(sessao, auto, ag)
-    aprovacao.vincular_pausa(sessao, execucao)  # registra o apresentado inicial
 
-    # o agente, ao ser reprovado, PERGUNTA o porquê (não declara saída)
-    _mock_rerun(monkeypatch, ramo=None, mensagens={str(canal.id): ["Por que você reprovou?"]})
+    _mock_rerun_tela(monkeypatch, ramo=None, mensagens={str(canal.id): ["Por que reprovou?"]})
     retoma.retomar_execucao(sessao, execucao, "reprovado", chaves={}, origens={})
 
     sessao.refresh(execucao)
-    assert execucao.estado == "aguardando_humano"  # continua aguardando a pessoa
-    passos = _passos(sessao, execucao.id)
-    assert len(passos) == 2  # rodada de pergunta virou novo passo
-    assert passos[-1].saida["texto"] == "Por que você reprovou?"
-    # a pergunta foi para a thread de Conversas (não só pro Telegram)
-    conv = _conv(sessao, execucao.id)
-    msgs = [
-        m.conteudo for m in sessao.scalars(
-            select(MensagemConversa)
-            .where(MensagemConversa.conversa_id == conv.id)
-            .where(MensagemConversa.papel == "agente")
-        )
-    ]
-    assert "Por que você reprovou?" in msgs
+    assert execucao.estado == "aguardando_humano"
+    assert _passos(sessao, execucao.id)[-1].saida["texto"] == "Por que reprovou?"
 
 
-def test_agente_decide_e_o_fluxo_anda(sessao, dados, monkeypatch):
+def test_tela_agente_decide_e_o_fluxo_anda(sessao, dados, monkeypatch):
     canal = _canal(sessao, dados)
     ag = _agente(sessao, dados)
     auto = _automacao(sessao, dados, ag, canal)
     execucao = _exec_pausada(sessao, auto, ag)
-    aprovacao.vincular_pausa(sessao, execucao)
 
-    # o agente DECIDE aprovar (declara o ramo) → "aprovado" → fim → conclui
-    _mock_rerun(monkeypatch, ramo="aprovado", mensagens={})
-    retoma.retomar_execucao(sessao, execucao, "ok, aprovo", chaves={}, origens={})
+    _mock_rerun_tela(monkeypatch, ramo="aprovado")
+    retoma.retomar_execucao(sessao, execucao, "ok", chaves={}, origens={})
 
     sessao.refresh(execucao)
     assert execucao.estado == "concluida"
-    assert _passos(sessao, execucao.id)[-1].saida["saida_escolhida"] == "aprovado"
 
 
-def test_teto_de_rodadas_cai_no_roteador_mecanico(sessao, dados, monkeypatch):
+def test_tela_teto_de_rodadas_cai_no_roteador(sessao, dados, monkeypatch):
     canal = _canal(sessao, dados)
     ag = _agente(sessao, dados)
     auto = _automacao(sessao, dados, ag, canal)
-    execucao = _exec_pausada(sessao, auto, ag)  # já há 1 passo no nó
+    execucao = _exec_pausada(sessao, auto, ag)
 
-    monkeypatch.setattr(retoma, "MAX_RODADAS_GATE", 1)  # teto baixo: 1 já estoura
+    monkeypatch.setattr(retoma, "MAX_RODADAS_GATE", 1)
 
     def explode(*a, **k):
         raise AssertionError("não devia re-rodar o agente após o teto")
@@ -184,11 +171,12 @@ def test_teto_de_rodadas_cai_no_roteador_mecanico(sessao, dados, monkeypatch):
     retoma.retomar_execucao(sessao, execucao, "aprovado", chaves={}, origens={})
 
     sessao.refresh(execucao)
-    assert execucao.estado == "concluida"  # roteador mecânico resolveu
+    assert execucao.estado == "concluida"
 
 
-def test_processar_turno_nao_duplica_ack_quando_agente_pergunta(sessao, dados, monkeypatch):
-    enviados = []
+# ─────────────────────────── CANAL (processar_turno) ───────────────────────────
+
+def _setup_canal(sessao, dados, monkeypatch, enviados, configuracao=None):
     monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
     monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
     monkeypatch.setattr(
@@ -196,19 +184,137 @@ def test_processar_turno_nao_duplica_ack_quando_agente_pergunta(sessao, dados, m
         lambda token, chat, texto: enviados.append(texto) or {"ok": True},
     )
     canal = _canal(sessao, dados)
-    si.salvar_segredos(sessao, canal.id, {"token_bot": "tok-x"})
+    si.salvar_segredos(sessao, canal.id, {"token_bot": "tok"})
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal, configuracao=configuracao)
+    execucao = _exec_pausada(sessao, auto, ag)
+    aprovacao.vincular_pausa(sessao, execucao)
+    return canal, ag, auto, execucao
+
+
+def _mock_servico_agente(monkeypatch, *, ramo=None, saida="(resposta)"):
+    def fake(agente, cinto, entrada, **k):
+        return {
+            "saida": saida, "instrumentos_acionados": [], "uso": [],
+            "mensagens_enviadas": {}, "ramo_escolhido": ramo,
+        }
+    monkeypatch.setattr(servico, "executar_agente", fake)
+
+
+def _responder(sessao, canal, texto):
+    conv, deve = servico.registrar_entrada(
+        sessao, canal,
+        telegram.MensagemEntrante(contato_chave="555", contato_nome="Chefe", texto=texto, midia=None),
+    )
+    assert deve
+    servico.processar_turno(conv.id)
+    return conv
+
+
+def test_canal_vincular_pausa_arma_relogio(sessao, dados):
+    canal = _canal(sessao, dados)
     ag = _agente(sessao, dados)
     auto = _automacao(sessao, dados, ag, canal)
     execucao = _exec_pausada(sessao, auto, ag)
     aprovacao.vincular_pausa(sessao, execucao)
+    conv = _conv(sessao, execucao.id)
+    assert conv.aguardando_ate is not None  # portão entra no sweeper (não fica aberto pra sempre)
 
-    _mock_rerun(monkeypatch, ramo=None, mensagens={str(canal.id): ["Por que você reprovou?"]})
-    msg = telegram.MensagemEntrante(
-        contato_chave="555", contato_nome="Chefe", texto="reprovado", midia=None
-    )
-    conv, deve = servico.registrar_entrada(sessao, canal, msg)
-    assert deve
-    servico.processar_turno(conv.id)
 
-    # o agente já perguntou pelo canal → NÃO sai o ack genérico "Recebido, ainda..."
+def test_canal_agente_pergunta_entrega_no_telegram_e_segue(sessao, dados, monkeypatch):
+    enviados = []
+    canal, ag, auto, execucao = _setup_canal(sessao, dados, monkeypatch, enviados)
+    _mock_servico_agente(monkeypatch, ramo=None, saida="Por que você reprovou?")
+
+    conv = _responder(sessao, canal, "reprovado")
+
+    sessao.refresh(execucao)
+    assert execucao.estado == "aguardando_humano"  # segue aguardando a pessoa
+    # A BORDA entregou a pergunta no Telegram (o bug era ficar só na thread interna).
+    assert any("Por que você reprovou?" in t for t in enviados)
+    # E não duplica o ack genérico ("ainda há etapa aguardando").
     assert not any("Ainda há uma etapa" in t for t in enviados)
+    sessao.refresh(conv)
+    assert conv.aguardando_ate is not None  # relógio rearmado
+
+
+def test_canal_agente_decide_e_conclui(sessao, dados, monkeypatch):
+    enviados = []
+    canal, ag, auto, execucao = _setup_canal(sessao, dados, monkeypatch, enviados)
+    _mock_servico_agente(monkeypatch, ramo="aprovado", saida="Aprovado, seguindo.")
+
+    _responder(sessao, canal, "pode aprovar")
+
+    sessao.refresh(execucao)
+    assert execucao.estado == "concluida"  # aprovado → fim
+
+
+def test_canal_teto_passa_humano_e_cancela_execucao(sessao, dados, monkeypatch):
+    enviados = []
+    # perfil interno → portao_acao_abandono = cancelar (default global tb é cancelar)
+    canal, ag, auto, execucao = _setup_canal(
+        sessao, dados, monkeypatch, enviados, configuracao={"perfil": "interno"}
+    )
+    conv = _conv(sessao, execucao.id)
+    conv.custo_acumulado_usd = 999  # estoura o teto
+    sessao.commit()
+
+    def explode(*a, **k):
+        raise AssertionError("não devia rodar o agente após o teto")
+    monkeypatch.setattr(servico, "executar_agente", explode)
+
+    _responder(sessao, canal, "reprovado")
+
+    sessao.refresh(conv)
+    sessao.refresh(execucao)
+    assert conv.estado == "humano_assumiu"
+    assert execucao.estado == "cancelada"  # abandono → cancelar (perfil interno)
+
+
+def test_canal_portao_direto_roteia_mecanico(sessao, dados, monkeypatch):
+    enviados = []
+    # perfil disparo → portao_forma = direto: a palavra escolhe a saída (sem re-rodar)
+    canal, ag, auto, execucao = _setup_canal(
+        sessao, dados, monkeypatch, enviados, configuracao={"perfil": "disparo"}
+    )
+
+    def explode(*a, **k):
+        raise AssertionError("portão direto não re-roda o agente")
+    monkeypatch.setattr(servico, "executar_agente", explode)
+    # roteador mecânico (mockado): a resposta "aprovado" casa a saída "aprovado"
+    monkeypatch.setattr(
+        "mensageria.retoma._escolher_saida",
+        lambda resp, saidas: ({"rotulo": "aprovado", "destino": "fim"}, {}),
+    )
+    _responder(sessao, canal, "aprovado")
+
+    sessao.refresh(execucao)
+    assert execucao.estado == "concluida"
+    assert any("Decisão registrada" in t for t in enviados)  # ack mecânico
+
+
+def test_sweeper_encerra_portao_e_cancela_execucao(sessao, dados, monkeypatch):
+    from mensageria import sweeper
+
+    enviados = []
+    monkeypatch.setattr(
+        "mensageria.telegram.enviar", lambda t, c, x: enviados.append(x) or {"ok": True}
+    )
+    canal = _canal(sessao, dados)
+    si.salvar_segredos(sessao, canal.id, {"token_bot": "tok"})
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal)  # sem perfil → global acao_ao_encerrar=cancelar
+    execucao = _exec_pausada(sessao, auto, ag)
+    aprovacao.vincular_pausa(sessao, execucao)
+    conv = _conv(sessao, execucao.id)
+    conv.nudge_enviado = True  # já cutucado → a varredura encerra
+    conv.aguardando_ate = datetime.now(timezone.utc) - timedelta(minutes=1)
+    sessao.commit()
+
+    sweeper.varrer(sessao)
+
+    sessao.refresh(conv)
+    sessao.refresh(execucao)
+    assert conv.estado == "fechada"
+    assert execucao.estado == "cancelada"  # portão abandonado por inatividade → cancela
+    assert conv.execucao_id is None
