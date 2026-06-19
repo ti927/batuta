@@ -1194,6 +1194,8 @@ A descoberta era rasa (`busca_web`/Tavily → título+link+**trecho**) e não ha
 - **`ler_site`** — leitura de página via **Tavily `/extract`** (auth Bearer), **reusando a MESMA chave `tavily`** do `busca_web`. Config: profundidade/formato/máx. caracteres. Não lê páginas de JavaScript.
 - **`ler_site_firecrawl`** — leitura robusta via **Firecrawl `/v2/scrape`** (auth Bearer): lê até sites de JavaScript. Config: só-conteúdo-principal/máx. caracteres. Serviço de pool `firecrawl`.
 
+**Antes dos três (merge `83436dc`):** o próprio `busca_web` (Tavily search) ganhou **controles configuráveis** na Config — `topico`/`recencia`/`profundidade`/`pais`/`incluir_dominios`/`excluir_dominios` (campos `Literal`/`Field` → dropdowns) — para o usuário **padronizar/otimizar** a busca e atacar a "mesma pauta" sem trocar de instrumento. Defaults = comportamento antigo (zero regressão); `executar` monta o corpo condicionalmente (ex.: `country` só no tópico geral). Gatilho confirmado no banco: o "Caçador de Pauta" repetia o mesmo cluster (Serasa/inadimplência) por falta de recência/tópico.
+
 `chaves.SERVICOS` ganhou `exa` e `firecrawl` (cadastráveis em "Chaves e credenciais"; exigem chave do cofre, sem fallback de `.env`); o **formulário de instrumento é genérico** → os campos da Config aparecem sozinhos, **sem mexer no front**. `busca_web` renomeado para "Busca na web (Tavily)". A IA criadora aprendeu **descobrir (busca) × ler (site)**. Testes: +21 (suíte 381). **Pré-req operacional:** o maestro cadastra as chaves Exa e Firecrawl no cofre (contas externas).
 
 ---
@@ -1239,6 +1241,10 @@ Cinco etapas, **sem tocar o núcleo de orquestração** (`agente.py`/`cadeia.py`
 5. Suíte (**352**) + tsc/eslint/build verdes → migração aditiva (aplicada antes do deploy) → deploy.
 
 **Botões expostos** (grupos): espera & encerramento; limites (turnos/teto); atendimento (saudação/horário); portão (forma/abandono). **Internos (trilhos):** tokens, fuso, temperatura, debounce, histórico, `max_passos`/`modelo_roteador`. **Perfis:** Processo interno, Atendimento ao cliente, Disparo externo, Personalizado.
+
+**Endurecimento pós-QA (2026-06-19), cobrindo TODOS os cenários do turno:**
+- **`fix(portão)` `355e948` — honrar a decisão do agente mesmo SEM texto de chat** (gatilho: execução `fbac8111`, "o motor entra no meio e o agente não faz porra nenhuma"). A borda **descartava o turno** quando o agente decidia o ramo (`seguir_para`) **sem** escrever resposta → o fluxo travava e a conversa ficava `"aberta"` (que o sweeper nunca varre). Correção geral em `_rodar_turno`/`_turno_de_portao`: entrega no canal **só se houver texto**, mas **honra o ramo mesmo sem texto** (conta o turno, avança o fluxo e dá um retorno curto de confirmação); turno totalmente vazio → `aguardando_resposta` (o sweeper governa). Cobre os **4 desfechos**: pergunta de volta / roteia-com-texto / roteia-sem-texto / nada. O prompt do agente também passou a pedir uma confirmação curta ao chamar `seguir_para`. Regra-mãe (memória `feedback-corrigir-cobrindo-todos-cenarios`).
+- **`fix(execuções)` `f8efa02` — inspeção em largura padrão + atualização AO VIVO após o portão.** A tabela de duas colunas agora ocupa a largura padrão (`max-w-[1000px]`) e a lista de passos **atualiza sozinha** depois do portão: o poll parava em `aguardando_humano` — que é uma **PAUSA** retomável por fora (Telegram), **não** um estado final — então só atualizava com refresh. Agora o poll só para nos estados **FINAIS** (`concluida`/`falhou`/`cancelada`); `aguardando_humano` continua sendo acompanhado.
 
 ---
 
