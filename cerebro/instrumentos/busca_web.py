@@ -1,16 +1,21 @@
 """Instrumento "Busca na web" (PRODUTO §13).
 
 Dá ao agente informação atualizada da internet. Usa a API da Tavily, feita para
-IA (resultados já resumidos). A chave vem do ambiente do cérebro
-(`TAVILY_API_KEY`) — nunca do banco (CLAUDE §8); na Etapa 2, a chave por-cliente
-passa para o cofre de segredos.
+IA (resultados já resumidos). A chave é segredo (cofre/pool da organização); o
+`TAVILY_API_KEY` do ambiente segue como queda de legado.
+
+Quem monta o instrumento PADRONIZA a busca pela `Config` (tipo, recência,
+profundidade, país, sites a incluir/excluir, quantidade) — é o que evita a "mesma
+pauta sempre" por falta de recência/tópico. Os rótulos ficam em português e são
+traduzidos para os parâmetros da Tavily no `executar` (mapas no topo do módulo).
+A IA só passa a `consulta`; os parâmetros são do usuário, não do agente.
 
 Segue a política de falha do encaixe (Tarefa 5.1): transporte/5xx/429 são
 retentáveis; chave ausente/ inválida não.
 """
 
 import os
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from pydantic import BaseModel, Field
@@ -22,6 +27,24 @@ URL_TAVILY = "https://api.tavily.com/search"
 # A Tavily recusa (HTTP 400) consultas acima de 400 caracteres. Truncamos para
 # não estourar — uma consulta de busca não precisa ser maior que isso.
 MAX_CONSULTA = 400
+
+# ── FONTE ÚNICA: rótulos em português (na config/tela) → valores da API Tavily ──
+# Os campos da config guardam o valor PT (dropdowns amigáveis); o `executar` traduz
+# para o que a Tavily entende. Vazio ("") = "sem preferência" → não vai no corpo.
+TOPICOS = {"geral": "general", "noticias": "news", "financas": "finance"}
+PROFUNDIDADES = {"rapida": "basic", "aprofundada": "advanced"}
+RECENCIAS = {"": None, "24h": "day", "semana": "week", "mes": "month", "ano": "year"}
+PAISES = {
+    "": None,
+    "brasil": "brazil",
+    "portugal": "portugal",
+    "estados unidos": "united states",
+    "reino unido": "united kingdom",
+    "espanha": "spain",
+}
+# Tetos da Tavily para as listas de domínios (recusa acima disso).
+MAX_DOMINIOS_INCLUIR = 300
+MAX_DOMINIOS_EXCLUIR = 150
 
 
 def _detalhe_erro(resposta: httpx.Response) -> str:
@@ -38,14 +61,58 @@ def _detalhe_erro(resposta: httpx.Response) -> str:
 
 
 class ConfigBuscaWeb(BaseModel):
-    """Configuração fixa. `chave_api` é SEGREDO (cofre, Fase 7-B); se vazia, cai
-    na TAVILY_API_KEY do .env (fallback legado)."""
+    """Configuração fixa da busca, definida por quem monta o instrumento (padroniza
+    e otimiza as buscas daquele instrumento). Os conjuntos fechados são `Literal`:
+    o Pydantic valida e a UI os mostra como dropdown automaticamente. Os DEFAULTS
+    reproduzem o comportamento de antes (geral, rápida, sem recência/país/domínios)
+    — instrumento existente não muda de comportamento. `chave_api` é SEGREDO (cofre,
+    Fase 7-B); se vazia, cai na chave Tavily da organização (pool) e, por fim, na
+    TAVILY_API_KEY do .env (fallback legado)."""
 
+    topico: Literal["geral", "noticias", "financas"] = Field(
+        default="geral",
+        title="Tipo de busca",
+        description="geral = web ampla; notícias = conteúdo recente/jornalístico; "
+        "finanças = fontes financeiras.",
+    )
+    recencia: Literal["", "24h", "semana", "mes", "ano"] = Field(
+        default="",
+        title="Recência",
+        description="Janela de tempo das fontes. Use para fugir de resultados "
+        "repetidos/antigos e trazer material atual (ex.: 'semana' ou 'mes').",
+    )
+    profundidade: Literal["rapida", "aprofundada"] = Field(
+        default="rapida",
+        title="Profundidade",
+        description="rápida = mais barata e direta; aprofundada = busca mais a fundo "
+        "(custa o dobro de créditos na Tavily).",
+    )
     max_resultados: int = Field(
-        default=5, ge=1, le=10, description="Quantos resultados trazer (1 a 10)."
+        default=5, ge=1, le=20, title="Qtd. de resultados",
+        description="Quantos resultados trazer (1 a 20).",
+    )
+    pais: Literal[
+        "", "brasil", "portugal", "estados unidos", "reino unido", "espanha"
+    ] = Field(
+        default="",
+        title="País",
+        description="Impulsiona resultados de um país. Só vale para o tipo 'geral'.",
+    )
+    incluir_dominios: list[str] = Field(
+        default_factory=list,
+        title="Sites a incluir",
+        description='Consultar SÓ estes sites (lista de domínios, ex.: '
+        '["g1.globo.com", "valor.globo.com"]). Vazio = sem restrição.',
+    )
+    excluir_dominios: list[str] = Field(
+        default_factory=list,
+        title="Sites a excluir",
+        description='Nunca usar estes sites (lista de domínios). Vazio = não exclui '
+        "nada.",
     )
     chave_api: str = Field(
-        default="", description="Chave da API de busca (Tavily) — segredo."
+        default="", title="Chave da API (opcional)",
+        description="Chave da API de busca (Tavily) — segredo.",
     )
 
 
@@ -90,12 +157,28 @@ class BuscaWeb(TipoInstrumento):
                 retentavel=False,
             )
 
-        corpo = {
-            "api_key": chave,
+        # Corpo montado a partir da config (rótulos PT → valores Tavily). Campos
+        # opcionais só entram quando fazem sentido — a Tavily recusa (HTTP 400)
+        # combinações inválidas (ex.: `country` fora do tópico geral).
+        corpo: dict[str, Any] = {
+            "api_key": chave,  # transporte atual comprovado; Bearer fica p/ depois
             "query": consulta,
             "max_results": config.max_resultados,
-            "search_depth": "basic",
+            "search_depth": PROFUNDIDADES.get(config.profundidade, "basic"),
+            "topic": TOPICOS.get(config.topico, "general"),
         }
+        recencia = RECENCIAS.get(config.recencia)
+        if recencia:
+            corpo["time_range"] = recencia
+        # `country` só vale para o tópico geral (regra da Tavily).
+        if config.topico == "geral":
+            pais = PAISES.get(config.pais)
+            if pais:
+                corpo["country"] = pais
+        if config.incluir_dominios:
+            corpo["include_domains"] = config.incluir_dominios[:MAX_DOMINIOS_INCLUIR]
+        if config.excluir_dominios:
+            corpo["exclude_domains"] = config.excluir_dominios[:MAX_DOMINIOS_EXCLUIR]
         try:
             with httpx.Client(timeout=TIMEOUT_S) as cliente:
                 resposta = cliente.post(URL_TAVILY, json=corpo)

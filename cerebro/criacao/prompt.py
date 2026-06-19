@@ -94,6 +94,10 @@ Como saber se um instrumento escreve ou só lê:
   portão (o instrumento recusa escrita). Sem essa marca, é tratado como escrita → portão.
 - busca_web, gerar_imagem, gerar_pdf: leitura/geração local → SEM portão.
 - disparar_webhook, publicar_wordpress: sempre escrevem/enviam → COM portão.
+CONFIGURE a busca_web conforme o trabalho do agente: se ele precisa de coisas ATUAIS
+(pauta, notícia, tendência), ponha `topico: "noticias"` e uma `recencia` (ex.: "semana"
+ou "mes") — sem isso a busca repete sempre os mesmos resultados antigos. Use
+`incluir_dominios`/`excluir_dominios` quando houver fontes preferidas a fixar.
 A fotografia do time mostra, em cada instrumento, `acao_irreversivel` JÁ resolvido — use
 isso: só os instrumentos com `acao_irreversivel: true` exigem portão antes.
 
