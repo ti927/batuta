@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Layers, Plus, Trash2, X, Zap } from "lucide-react";
+import { Copy, Layers, Plus, Sliders, Trash2, X, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -11,12 +11,14 @@ import {
   type Agente,
   type Automacao,
   type Cadeia,
+  type ConfiguracaoFluxo,
   type Instrumento,
   type PapelAcesso,
   type Time,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { AutomacaoBuilder } from "@/components/automacao-builder/builder";
+import { DialogoConfigFluxo } from "@/components/automacao-builder/config-fluxo";
 import { normalizarCadeia } from "@/components/automacao-builder/nucleo";
 import type { ConfigGatilho } from "@/components/automacao-builder/inspector";
 import { BotaoRodarAgora } from "@/components/botao-rodar-agora";
@@ -111,6 +113,11 @@ function EditorAutomacao({
         : cadeiaInicial(gatilhoDe(automacao).tipo),
     ),
   );
+  // Comportamento do fluxo (perfil + ajustes). {} = usa o padrão do canal/global.
+  const [configFluxo, setConfigFluxo] = useState<ConfiguracaoFluxo>(
+    () => automacao?.configuracao ?? {},
+  );
+  const [mostrarConfig, setMostrarConfig] = useState(false);
 
   // PONTO ÚNICO de normalização: toda escrita da cadeia (vinda do construtor — add,
   // remove, conectar, mover, escolher início, editar saída) passa por aqui. Assim a
@@ -202,6 +209,7 @@ function EditorAutomacao({
       configuracao_gatilho: montarConfigGatilho(),
       cadeia: normalizarCadeia(cadeia),
       ativa: gatilho.tipo === "manual" ? false : ativa,
+      configuracao: configFluxo,
     };
     setSalvando(true);
     try {
@@ -303,6 +311,16 @@ function EditorAutomacao({
           </Button>
         )}
         {souOperador && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setMostrarConfig(true)}
+            title="Como o motor conduz este fluxo (espera, teto, portão, atendimento)"
+          >
+            <Sliders /> Fluxo
+          </Button>
+        )}
+        {souOperador && (
           <Button size="sm" onClick={salvar} disabled={salvando}>
             {salvando ? "Salvando…" : "Salvar"}
           </Button>
@@ -337,6 +355,15 @@ function EditorAutomacao({
           webhookUrl={webhookSalvo ? "salvo" : null}
         />
       </div>
+
+      {mostrarConfig && (
+        <DialogoConfigFluxo
+          valor={configFluxo}
+          onChange={setConfigFluxo}
+          podeEditar={souOperador}
+          onClose={() => setMostrarConfig(false)}
+        />
+      )}
 
       {dialogoDuplicar && automacao && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
