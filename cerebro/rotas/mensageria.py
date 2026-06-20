@@ -26,7 +26,7 @@ from esquemas import (
     ResponderOperador,
 )
 from mensageria import servico, telegram
-from modelos import Conversa, Execucao, Instrumento, MensagemConversa, Usuario
+from modelos import Conversa, Execucao, Instrumento, MensagemConversa, Time, Usuario
 from rotas._comum import conversa_acessivel, instrumento_acessivel, time_acessivel
 from sessao import obter_sessao
 
@@ -93,6 +93,39 @@ def ativar_canal(
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "Configure o token do bot antes de conectar o canal.",
+        )
+    # Um bot do Telegram entrega para UM webhook só: dois canais com o MESMO bot
+    # brigam pela entrada e as respostas (inclusive aprovações de portão) caem no
+    # canal errado. Recusa conectar se outro instrumento já usa este mesmo token —
+    # cada canal precisa do seu próprio bot. (Cobre o caso do time DUPLICADO que
+    # reusou o bot do time original.)
+    def _token_de(outro: Instrumento) -> str | None:
+        # Um segredo corrompido de OUTRO canal não pode travar a conexão deste.
+        try:
+            return segredos_instrumento.decifrar(sessao, outro.id).get("token_bot")
+        except Exception:
+            return None
+
+    conflito = next(
+        (
+            outro
+            for outro in sessao.scalars(
+                select(Instrumento).where(
+                    Instrumento.tipo == inst.tipo, Instrumento.id != inst.id
+                )
+            )
+            if _token_de(outro) == token
+        ),
+        None,
+    )
+    if conflito is not None:
+        t = sessao.get(Time, conflito.time_id)
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Este bot já é usado pelo canal “{conflito.nome}”"
+            + (f" do time “{t.nome}”" if t else "")
+            + ". Um bot do Telegram entrega as mensagens para um único canal — crie "
+            "um bot novo no BotFather (um por canal) e use o token dele aqui.",
         )
     segredo = secrets.token_urlsafe(32)
     base = os.environ.get("CEREBRO_PUBLIC_URL", "http://localhost:8000").rstrip("/")

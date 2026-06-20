@@ -495,6 +495,45 @@ def test_ativar_canal_sem_token_recusa(cliente, entrar, dados, sessao):
     assert r.status_code == 422
 
 
+def test_ativar_canal_recusa_bot_ja_usado_por_outro_canal(
+    cliente, entrar, dados, sessao, monkeypatch
+):
+    """Dois canais com o MESMO bot brigam pelo webhook (as respostas — inclusive
+    aprovações de portão — caem no canal errado). Conectar o segundo é recusado com
+    recado claro, ANTES de tocar o Telegram. (Cobre o time duplicado que reusa o bot
+    do original.)"""
+    entrar(dados["admin"])
+    inst1 = _bot(sessao, dados, nome="Canal A")
+    si.salvar_segredos(sessao, inst1.id, {"token_bot": "MESMO-TOKEN"})
+    inst2 = _bot(sessao, dados, nome="Canal B")
+    si.salvar_segredos(sessao, inst2.id, {"token_bot": "MESMO-TOKEN"})
+    chamou = {"n": 0}
+    monkeypatch.setattr(
+        "mensageria.telegram.configurar_webhook",
+        lambda *a, **k: chamou.update(n=chamou["n"] + 1) or {"ok": True},
+    )
+    r = cliente.post(f"/mensageria/{inst2.id}/ativar-canal")
+    assert r.status_code == 409
+    assert "Canal A" in r.json()["detail"]
+    assert chamou["n"] == 0  # nem chega a chamar o Telegram
+
+
+def test_ativar_canal_tokens_distintos_conectam(
+    cliente, entrar, dados, sessao, monkeypatch
+):
+    """A trava não atrapalha o caso bom: bots distintos conectam normalmente."""
+    entrar(dados["admin"])
+    inst1 = _bot(sessao, dados, nome="Canal A")
+    si.salvar_segredos(sessao, inst1.id, {"token_bot": "TOKEN-A"})
+    inst2 = _bot(sessao, dados, nome="Canal B")
+    si.salvar_segredos(sessao, inst2.id, {"token_bot": "TOKEN-B"})
+    monkeypatch.setattr(
+        "mensageria.telegram.configurar_webhook", lambda *a, **k: {"ok": True}
+    )
+    assert cliente.post(f"/mensageria/{inst1.id}/ativar-canal").status_code == 200
+    assert cliente.post(f"/mensageria/{inst2.id}/ativar-canal").status_code == 200
+
+
 def test_entrada_valida_secret_token(cliente, dados, sessao, monkeypatch):
     inst = _bot(sessao, dados)
     _agente_com(sessao, dados, inst)
