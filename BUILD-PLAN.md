@@ -1273,7 +1273,7 @@ Cinco etapas, **sem tocar o núcleo de orquestração** (`agente.py`/`cadeia.py`
 
 **Desenho:** memória = capacidade ligada por agente (interruptor `agentes.memoria_ativa`), exposta como **duas ferramentas injetadas no runtime** (mesmo molde do `seguir_para`, [agente.py:222](cerebro/orquestracao/agente.py#L222), **sem tocar o motor de cadeia**): `pesquisar_memoria(assunto)` e `registrar_memoria(assunto, conteudo)` (upsert por (agente, assunto)). Não vira instrumento de cinto porque `executar(config,args)` não conhece o agente nem tem sessão; o `executar_agente` já tem o `agente` em mãos. Tabela nova **`memorias_agente`** (molde de `memorias_projeto`; FK `agente_id` CASCADE) + módulo `cerebro/memoria_agente.py` (funções puras reusadas por ferramentas/rotas/tela). **Migração aditiva, núcleo intocado.** A duplicação de time **não** copia as memórias (runtime/aprendizado), só o interruptor.
 
-**Fora da v1:** busca semântica/embeddings (começa por assunto, lógica "destilada"), memória de time/org, teto/expiração automática, portão de aprovação. **Plano detalhado (7 passos + verificação) em** `~/.claude/plans/temos-um-problema-pra-replicated-noodle.md`.
+**Fora da v1:** busca semântica/embeddings (começa por assunto, lógica "destilada"), memória de time/org, teto/expiração automática, portão de aprovação. **Decisões e desenho registrados na memória do projeto** (`project_memoria-do-agente-fase-futura`); ao retomar, reabrir o plano de 7 passos a partir daí.
 
 ---
 
