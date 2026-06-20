@@ -11,7 +11,7 @@ import { LoginCliente } from "./login-cliente";
 // mobile empilha: mostra logo + form e oculta o painel do mascote.
 export default function LoginPage() {
   return (
-    <main className="grid min-h-screen md:grid-cols-2">
+    <main className="grid min-h-dvh w-full flex-1 md:grid-cols-2">
       {/* Esquerda — logomarca + login */}
       <div className="flex flex-col items-center justify-center gap-8 bg-background p-8">
         <Image
