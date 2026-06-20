@@ -1265,6 +1265,18 @@ Cinco etapas, **sem tocar o núcleo de orquestração** (`agente.py`/`cadeia.py`
 
 ---
 
+## FASE — Memória do agente (fichas por assunto, governadas pelo markdown)  📋 APROVADA — FASE FUTURA (não iniciar sem o sinal do maestro; ideação 2026-06-20)
+
+**Dor:** os fluxos estão ficando complexos e surge a demanda de **agentes que lembram**. Hoje cada execução é **stateless** (comportamento 100% dos markdowns; nada de runs passados — [agente.py:196](cerebro/orquestracao/agente.py#L196)). O que existe é de outra natureza: `memorias_projeto` é da **IA criadora** (notas sobre o time para conversar com o consultor) e a **Biblioteca** são documentos da org que o agente *lê*. Falta: **o agente aprender com o próprio trabalho** (ex.: lembrar de um cliente já atendido, não repetir pauta).
+
+**Decisões (ideação com o maestro):** dor = **continuidade** ("não se repetir / lembrar do cliente"); **controle no MARKDOWN** (a política — quando pesquisar, criar vs. editar, o que é relevante — é escrita pelo consultor no markdown; sem portão de aprovação separado; coerente com [[feedback-sem-prompt-base-agentes]]); escopo **por agente**; formato **ficha por assunto** (upsert: cria ou edita, mantém enxuto); supervisão por **tela** (ver/editar/apagar) como rede de segurança.
+
+**Desenho:** memória = capacidade ligada por agente (interruptor `agentes.memoria_ativa`), exposta como **duas ferramentas injetadas no runtime** (mesmo molde do `seguir_para`, [agente.py:222](cerebro/orquestracao/agente.py#L222), **sem tocar o motor de cadeia**): `pesquisar_memoria(assunto)` e `registrar_memoria(assunto, conteudo)` (upsert por (agente, assunto)). Não vira instrumento de cinto porque `executar(config,args)` não conhece o agente nem tem sessão; o `executar_agente` já tem o `agente` em mãos. Tabela nova **`memorias_agente`** (molde de `memorias_projeto`; FK `agente_id` CASCADE) + módulo `cerebro/memoria_agente.py` (funções puras reusadas por ferramentas/rotas/tela). **Migração aditiva, núcleo intocado.** A duplicação de time **não** copia as memórias (runtime/aprendizado), só o interruptor.
+
+**Fora da v1:** busca semântica/embeddings (começa por assunto, lógica "destilada"), memória de time/org, teto/expiração automática, portão de aprovação. **Plano detalhado (7 passos + verificação) em** `~/.claude/plans/temos-um-problema-pra-replicated-noodle.md`.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
