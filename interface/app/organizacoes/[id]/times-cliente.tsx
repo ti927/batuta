@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ChevronLeft, KeyRound, Users, UsersRound } from "lucide-react";
+import { ChevronLeft, Copy, KeyRound, Users, UsersRound, X } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   api,
@@ -17,6 +18,7 @@ import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export function TimesCliente({
   organizacao,
@@ -38,8 +40,44 @@ export function TimesCliente({
   const [nomeEdicao, setNomeEdicao] = useState("");
   const [descEdicao, setDescEdicao] = useState("");
 
+  // Duplicar: copia o time inteiro (agentes, instrumentos, cinto, automações e a
+  // memória da IA) na mesma organização. As automações nascem pausadas e os canais
+  // desconectados. Pergunta só o nome.
+  const [duplicando, setDuplicando] = useState<Time | null>(null);
+  const [nomeDupla, setNomeDupla] = useState("");
+  const [erroDupla, setErroDupla] = useState<string | null>(null);
+  const [salvandoDupla, setSalvandoDupla] = useState(false);
+
   function tratar(e: unknown, padrao: string) {
     setErro(e instanceof ErroDaApi ? e.message : padrao);
+  }
+
+  function abrirDuplicar(time: Time) {
+    setNomeDupla(`Cópia de ${time.nome}`);
+    setErroDupla(null);
+    setDuplicando(time);
+  }
+
+  async function confirmarDuplicacao() {
+    if (!duplicando || salvandoDupla) return;
+    if (!nomeDupla.trim()) {
+      setErroDupla("Dê um nome à cópia.");
+      return;
+    }
+    setSalvandoDupla(true);
+    setErroDupla(null);
+    try {
+      const novo = await api.post<Time>(`/times/${duplicando.id}/duplicar`, {
+        nome: nomeDupla.trim(),
+      });
+      toast.success(`Time copiado: “${novo.nome}”.`);
+      router.push(`/times/${novo.id}`);
+    } catch (e) {
+      const msg = e instanceof ErroDaApi ? e.message : "Falha ao duplicar o time";
+      setErroDupla(msg);
+      toast.error(msg);
+      setSalvandoDupla(false);
+    }
   }
 
   async function criar() {
@@ -205,6 +243,16 @@ export function TimesCliente({
                   {souAdmin && (
                     <Button
                       size="sm"
+                      variant="outline"
+                      onClick={() => abrirDuplicar(time)}
+                      title="Duplicar este time (agentes, instrumentos, automações e a memória da IA)"
+                    >
+                      <Copy /> Duplicar
+                    </Button>
+                  )}
+                  {souAdmin && (
+                    <Button
+                      size="sm"
                       variant="destructive"
                       onClick={() => remover(time.id, time.nome)}
                     >
@@ -216,6 +264,75 @@ export function TimesCliente({
             </li>
           ))}
         </ul>
+      )}
+
+      {duplicando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            className="absolute inset-0 bg-foreground/20"
+            onClick={() => !salvandoDupla && setDuplicando(null)}
+            aria-label="Fechar"
+          />
+          <div className="relative w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-heading text-lg font-medium text-foreground">
+                Duplicar time
+              </h2>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setDuplicando(null)}
+                disabled={salvandoDupla}
+                aria-label="Fechar"
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+
+            {erroDupla && (
+              <div className="mb-3">
+                <Aviso>{erroDupla}</Aviso>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3">
+              <Label className="flex-col items-start gap-1">
+                Nome da cópia
+                <Input
+                  autoFocus
+                  value={nomeDupla}
+                  onChange={(e) => setNomeDupla(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") confirmarDuplicacao();
+                  }}
+                  placeholder="Nome do novo time"
+                  className="w-full"
+                />
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                A cópia leva os agentes, instrumentos, automações e a memória da IA.
+                As automações nascem <strong>pausadas</strong> e os canais
+                (Telegram/WhatsApp) <strong>desconectados</strong> — reconecte e
+                ative quando quiser.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setDuplicando(null)}
+                  disabled={salvandoDupla}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={confirmarDuplicacao}
+                  disabled={salvandoDupla || !nomeDupla.trim()}
+                >
+                  {salvandoDupla ? "Duplicando…" : "Duplicar"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

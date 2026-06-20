@@ -91,6 +91,14 @@ class TimeEditar(BaseModel):
     descricao: str | None = None
 
 
+class DuplicarTime(BaseModel):
+    """Duplica um time inteiro: só o nome da cópia. O resto (agentes, instrumentos,
+    cinto, automações e a memória da IA) é copiado do original, na mesma
+    organização; as automações nascem inativas e os canais, desconectados."""
+
+    nome: str = Field(min_length=1, max_length=200)
+
+
 class TimeLer(BaseModel):
     """Time como a API o devolve."""
 

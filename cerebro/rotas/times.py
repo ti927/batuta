@@ -6,14 +6,15 @@ apaga ou cria um time novo na organização (MIGRACAO §3.7: criar projetos/time
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 import auditoria
+import duplicacao_time
 import precos
 from auth import usuario_atual
-from esquemas import TimeCriar, TimeEditar, TimeLer, TimeResumoLer
+from esquemas import DuplicarTime, TimeCriar, TimeEditar, TimeLer, TimeResumoLer
 from modelos import (
     Agente,
     Automacao,
@@ -70,6 +71,38 @@ def criar(
     sessao.commit()
     sessao.refresh(time)
     return time
+
+
+@rotas.post(
+    "/times/{time_id}/duplicar",
+    response_model=TimeLer,
+    status_code=status.HTTP_201_CREATED,
+)
+def duplicar(
+    time_id: uuid.UUID,
+    dados: DuplicarTime,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Cria uma cópia independente de um time na MESMA organização (agentes,
+    instrumentos, cinto, automações e a memória da IA). As automações nascem
+    inativas e os canais, desconectados. Acesso: admin (duplicar cria um time)."""
+    original = time_acessivel(sessao, usuario, time_id, minimo="admin")
+    nome = dados.nome.strip()
+    if not nome:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Dê um nome à cópia.")
+    try:
+        novo = duplicacao_time.duplicar_time(sessao, original, nome, usuario.id)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="time.duplicado", recurso_tipo="time",
+        recurso_id=novo.id, organizacao_id=novo.organizacao_id,
+        detalhe={"origem_id": str(original.id)},
+    )
+    sessao.commit()
+    sessao.refresh(novo)
+    return novo
 
 
 @rotas.get("/times/{time_id}", response_model=TimeLer)
