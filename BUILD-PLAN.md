@@ -1261,6 +1261,8 @@ Cinco etapas, **sem tocar o núcleo de orquestração** (`agente.py`/`cadeia.py`
 
 **393 testes** (`test_duplicar_time.py`, 12: grafo completo, remapeamento novo+legado, segredo copiado, canal desconectado, memória herdada, runtime não copiado, deep-copy isolado, matriz de acesso). tsc/eslint/build verdes. QA ao vivo em prod: duplicar um time → conferir agentes/instrumentos/automação + "decisões lembradas" + canal "a conectar".
 
+**Pós-QA (merge `57b1b4e`, 395 testes):** o maestro duplicou um time e a aprovação do portão "travou". Diagnóstico (exec `4f913949`): NÃO foi a duplicação (remapeamento correto, portão no canal do próprio time) — foi **reuso do mesmo bot** do time original no canal da cópia. Um bot do Telegram entrega para UM webhook só, então a resposta "aprovado" caiu no canal do time ORIGINAL (tratada como conversa) e a execução copiada nunca retomou. **Correção de raiz (cobre todos os cenários):** `ativar-canal` ([rotas/mensageria.py](cerebro/rotas/mensageria.py)) agora **recusa (409)** conectar um canal cujo bot já é usado por outro instrumento, com recado para criar um bot próprio — um time duplicado é obrigado a ter o seu bot. Borda, sem migração.
+
 ---
 
 # Encerramento
