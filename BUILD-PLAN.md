@@ -1248,6 +1248,21 @@ Cinco etapas, **sem tocar o núcleo de orquestração** (`agente.py`/`cadeia.py`
 
 ---
 
+## FASE — Duplicar um time inteiro  ✅ NO AR (2026-06-20, merge `ce420fa`)
+
+**Pedido do maestro:** um "Duplicar time" análogo ao "Duplicar automação", para criar **variações** de um time que já funciona. Decisões de produto: **escopo = mesma organização** e **a cópia HERDA a memória da IA companheira**.
+
+`POST /times/{id}/duplicar` (schema `DuplicarTime {nome}`, **acesso admin** — duplicar cria um time) + módulo isolado [`cerebro/duplicacao_time.py`](cerebro/duplicacao_time.py), tudo numa transação atômica, **sem migração e sem tocar o núcleo** (reusa `grafo.normalizar`/`validar_cadeia`/`agendador`):
+- Recria o **grafo de propriedade** (agentes, instrumentos, cinto N:N, automações) com **ids NOVOS** e **REMAPEIA as referências internas** da `cadeia` — `ref` de agente e `aprovacao.instrumento_id` —, cobrindo o **formato legado** (em que o `id` do nó é o próprio agente_id, e `inicial`/`destino` também). Normaliza→remapeia→normaliza→valida contra o time NOVO.
+- **Segredos:** inline copiado direto (mesma `COFRE_CHAVE_MESTRA`); credencial nomeada mantém a referência (mesma org). **Canais (Telegram/WhatsApp) nascem DESCONECTADOS** — sem token, sem `webhook_secret`, sem credencial — para dois times nunca brigarem pelo mesmo bot (um webhook por bot).
+- **Memória da IA herdada:** cria uma `ConversaCriacao` nova amarrada ao time novo (copia o histórico) e duplica as `MemoriaProjeto` ("decisões lembradas").
+- **Automações nascem inativas** (não disparam em dobro); **runtime NÃO é copiado** (execuções, conversas de atendimento, uso) — cópia limpa por construção.
+- **Front:** botão+modal "Duplicar" na lista de times (`interface/app/organizacoes/[id]/times-cliente.tsx`), molde do duplicar-automação; no sucesso navega para o time novo.
+
+**393 testes** (`test_duplicar_time.py`, 12: grafo completo, remapeamento novo+legado, segredo copiado, canal desconectado, memória herdada, runtime não copiado, deep-copy isolado, matriz de acesso). tsc/eslint/build verdes. QA ao vivo em prod: duplicar um time → conferir agentes/instrumentos/automação + "decisões lembradas" + canal "a conectar".
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
