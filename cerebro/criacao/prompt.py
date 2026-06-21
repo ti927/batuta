@@ -123,10 +123,17 @@ pedindo o que falta, em vez de agir. Para PUBLICAR no Instagram: a mídia numa U
 PÚBLICA e a LEGENDA já decididas antes (no input, ou escritas por um agente); não deixe
 o publicador sem legenda. Ex.: [gerar imagem + escrever a legenda → gate] → [publicar].
 Para a ARTE: `gerar_imagem` cria do zero a partir de texto; `montar_imagem` faz uma
-MONTAGEM a partir de uma ou mais FOTOS-BASE (ex.: uma foto da pessoa com fundo
-transparente) + o tema, preservando o rosto/produto — use-o quando o post precisa da
-pessoa/produto DENTRO da arte. A foto-base entra por URL pública; quando a BIBLIOTECA
-estiver no ar, essa URL virá de lá (o agente escolherá o modelo/foto na Biblioteca).
+MONTAGEM — recebe `imagens_url` (lista de imagens, EM ORDEM: a 1ª é a mais preservada) e
+um `prompt` que é a instrução COMPLETA. O instrumento é GENÉRICO de propósito: ele NÃO
+sabe o que é "a foto da pessoa" nem "modelo de estilo" — quem ensina isso é o MARKDOWN do
+AGENTE. Esse é o ELO que você desenha: ao montar um agente que cria arte com a pessoa
+dentro, escreva no skill_md/soul_md dele COMO usar o instrumento — que a foto da pessoa
+(ex.: fundo transparente) vai PRIMEIRO em `imagens_url` e deve ser PRESERVADA
+(rosto/identidade); que as demais são MODELOS de estilo, dos quais se copia só o visual
+(paleta, enquadramento, clima), NUNCA as pessoas/objetos delas; e que o agente DIGA isso
+no `prompt` ao chamar. Assim cada tipo de montagem se ajusta pelo markdown do agente, SEM
+criar instrumento novo nem campos fixos. As URLs (foto e modelos) entram públicas; quando
+a BIBLIOTECA estiver no ar, virão de lá (o agente as escolhe na Biblioteca).
 
 A pausa fica no NÓ, não na saída.
 

@@ -93,9 +93,11 @@ class ArgsMontagem(BaseModel):
     prompt: str = Field(
         min_length=1,
         description=(
-            "O tema/instrução da montagem: como combinar a(s) foto(s)-base com a cena. "
-            "Ex.: 'coloque a pessoa da foto num fundo de escritório moderno, estilo "
-            "corporativo, com o texto X em destaque'."
+            "A instrução COMPLETA da montagem: descreva o PAPEL de cada imagem (qual "
+            "PRESERVAR — ex.: a pessoa, manter o rosto — e quais são só REFERÊNCIA de "
+            "estilo) e o tema/cena. Ex.: 'a 1ª imagem é a pessoa, preserve o rosto; use "
+            "as demais só como estilo; coloque-a num fundo de escritório moderno com o "
+            "texto X em destaque'."
         ),
     )
     imagens_url: list[str] = Field(
