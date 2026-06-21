@@ -25,8 +25,9 @@ from instrumentos.base import obter_tipo
 from modelos import AgenteInstrumento, Instrumento, SegredoInstrumento
 
 # Tipos de instrumento que consomem IA paga (cobrança própria, fora do LLM do
-# agente). Por ora só geração de imagem.
-TIPOS_PAGOS = {"gerar_imagem"}
+# agente). Por ora os de imagem (gerar do zero e montar a partir de fotos) — ambos
+# cobrados por imagem, com modelo/tamanho/qualidade na config.
+TIPOS_PAGOS = {"gerar_imagem", "montar_imagem"}
 
 
 def _id8(nome_ferramenta: str) -> str:

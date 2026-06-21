@@ -31,6 +31,7 @@ from instrumentos import instagram_responder_comentario  # noqa: E402, F401  (ef
 from instrumentos import ler_site  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import ler_site_firecrawl  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import mcp  # noqa: E402, F401  (efeito colateral: registro)
+from instrumentos import montar_imagem  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import publicar_instagram  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import rest  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import sql  # noqa: E402, F401  (efeito colateral: registro)

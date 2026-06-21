@@ -92,8 +92,8 @@ Como saber se um instrumento escreve ou só lê:
   POST/PUT/PATCH/DELETE = escrita → COM portão. Escolha o método certo na configuração.
 - banco_sql: marque `somente_leitura: true` na config quando o agente só consulta → SEM
   portão (o instrumento recusa escrita). Sem essa marca, é tratado como escrita → portão.
-- busca_web, busca_exa, ler_site, ler_site_firecrawl, gerar_imagem, gerar_pdf:
-  leitura/geração local → SEM portão.
+- busca_web, busca_exa, ler_site, ler_site_firecrawl, gerar_imagem, gerar_pdf,
+  montar_imagem: leitura/geração local → SEM portão.
 - disparar_webhook, publicar_wordpress, publicar_instagram,
   instagram_responder_comentario: sempre escrevem/enviam/publicam → COM portão.
 - instagram_insights, instagram_ler_comentarios: leitura → SEM portão.
@@ -122,6 +122,11 @@ O nó que executa precisa RECEBER tudo o que o instrumento exige — senão o ag
 pedindo o que falta, em vez de agir. Para PUBLICAR no Instagram: a mídia numa URL
 PÚBLICA e a LEGENDA já decididas antes (no input, ou escritas por um agente); não deixe
 o publicador sem legenda. Ex.: [gerar imagem + escrever a legenda → gate] → [publicar].
+Para a ARTE: `gerar_imagem` cria do zero a partir de texto; `montar_imagem` faz uma
+MONTAGEM a partir de uma ou mais FOTOS-BASE (ex.: uma foto da pessoa com fundo
+transparente) + o tema, preservando o rosto/produto — use-o quando o post precisa da
+pessoa/produto DENTRO da arte. A foto-base entra por URL pública; quando a BIBLIOTECA
+estiver no ar, essa URL virá de lá (o agente escolherá o modelo/foto na Biblioteca).
 
 A pausa fica no NÓ, não na saída.
 
