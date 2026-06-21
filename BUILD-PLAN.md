@@ -1277,6 +1277,14 @@ Cinco etapas, **sem tocar o núcleo de orquestração** (`agente.py`/`cadeia.py`
 
 ---
 
+## FASE — Redesenho da tela de login (split logo+form / mascote)  ✅ NO AR (2026-06-20, merges `8ca6e1e`+`2549593`)
+
+**Pedido do maestro (mockup):** a `/login` deixou de ser uma coluna central (símbolo SVG provisório + texto + form) e virou **duas colunas full-height** ([app/login/page.tsx](interface/app/login/page.tsx)): **esquerda** (`bg-background` = #fafaf7) com a logomarca `public/logo-lockup.png` + o formulário (`LoginCliente`, lógica de auth intocada); **direita** (`bg-card` = #ffffff) com o mascote `public/mascote-completo.png`. `next/image`; no mobile empilha (mostra logo+form, oculta o painel do mascote). Tokens de cor batem exatos com os hex pedidos (`globals.css:68,70`).
+
+**Fix pós-deploy (`2549593`):** as colunas encolhiam para o conteúdo — quando deslogado o `layout.tsx` põe o `children` direto no `<body>` que é `flex md:flex-row`, e o `<main>` (item flex) não crescia. `flex-1 w-full` no `<main>` faz as duas metades ocuparem 50/50 da largura total. Só frontend, sem migração, sem tocar auth. tsc/eslint/build verdes.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
