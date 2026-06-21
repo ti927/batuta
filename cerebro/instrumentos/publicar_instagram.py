@@ -217,7 +217,9 @@ class PublicarInstagram(TipoInstrumento):
     campos_secretos = ("token",)
     tipos_credencial_aceitos = ("instagram",)
     acao_irreversivel = True  # publica para fora — exige portão de aprovação
-    campo_mensagem = "legenda"
+    # Sem `campo_mensagem`: a legenda é conteúdo publicado, não uma mensagem de
+    # canal apresentada a um humano para aprovação (mesma escolha do WordPress).
+    # `campo_mensagem` fica para o canal de DM (Fase 4).
 
     def executar(
         self, config: ConfigPublicarInstagram, args: ArgsPublicarInstagram

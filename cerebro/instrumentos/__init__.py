@@ -26,6 +26,8 @@ from instrumentos import enviar_telegram  # noqa: E402, F401  (efeito colateral:
 from instrumentos import gerar_imagem  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import gerar_pdf  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import instagram_insights  # noqa: E402, F401  (efeito colateral: registro)
+from instrumentos import instagram_ler_comentarios  # noqa: E402, F401  (efeito colateral: registro)
+from instrumentos import instagram_responder_comentario  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import ler_site  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import ler_site_firecrawl  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import mcp  # noqa: E402, F401  (efeito colateral: registro)
