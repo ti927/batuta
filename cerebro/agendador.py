@@ -185,6 +185,15 @@ def iniciar() -> None:
         id="instagram_token_refresh",
         replace_existing=True,
     )
+    # Recuperação periódica de execuções presas em `em_andamento` (worker travado
+    # sem reinício do processo — que o boot já recuperaria). Complementa o
+    # `fila._recuperar_orfas` do boot; usa heartbeat (não mata cadeia em progresso).
+    _scheduler.add_job(
+        fila.varrer_presas_job,
+        trigger=IntervalTrigger(seconds=120),
+        id="execucao_sweeper",
+        replace_existing=True,
+    )
     if not _scheduler.running:
         _scheduler.start()
     logger.info("Agendador no ar com %d job(s).", len(_scheduler.get_jobs()))

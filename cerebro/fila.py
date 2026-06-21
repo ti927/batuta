@@ -13,11 +13,11 @@ nunca pegam a mesma execução, e nenhum fica esperando o outro.
 import logging
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
-from modelos import Execucao
+from modelos import Execucao, PassoExecucao
 from orquestracao.disparo import rodar_execucao
 from sessao import CriadorDeSessao
 
@@ -25,6 +25,12 @@ from sessao import CriadorDeSessao
 N_TRABALHADORES = 3
 # De quanto em quanto tempo um trabalhador ocioso reconfere a fila (s).
 INTERVALO_OCIOSO_S = 1.0
+# Teto de INATIVIDADE de uma execução em andamento: se ela passa tanto tempo SEM
+# concluir nenhum passo novo (heartbeat = início OU último passo concluído), o
+# worker que a roda travou (chamada externa pendurada, sem restart do processo —
+# que o boot já recuperaria). Generoso de propósito: um passo lento (geração de
+# imagem ~2min + rodadas do agente) jamais é morto; só o que travou de verdade.
+TETO_INATIVIDADE_EXEC_MIN = 15
 
 logger = logging.getLogger("batuta.fila")
 
@@ -116,6 +122,53 @@ def _recuperar_orfas() -> None:
             logger.warning(
                 "%d execução(ões) órfã(s) marcada(s) como falhou no boot.", r.rowcount
             )
+    finally:
+        sessao.close()
+
+
+def recuperar_execucoes_presas(sessao) -> int:
+    """Recuperação PERIÓDICA (roda no agendador): execução `em_andamento` cujo
+    worker travou SEM o processo reiniciar — o boot (`_recuperar_orfas`) não a
+    alcança. "Travada" = sem progresso (heartbeat) além de `TETO_INATIVIDADE_EXEC_MIN`.
+
+    O heartbeat é o instante MAIS RECENTE entre o início (`iniciada_em`) e o último
+    passo concluído — assim uma cadeia longa que vai concluindo passos NUNCA é morta;
+    só morre o que ficou pendurado dentro de um passo além do teto. Marca `falhou`
+    de forma visível. Devolve quantas recuperou."""
+    corte = datetime.now(timezone.utc) - timedelta(minutes=TETO_INATIVIDADE_EXEC_MIN)
+    ultimo_passo = (
+        select(func.max(PassoExecucao.finalizado_em))
+        .where(PassoExecucao.execucao_id == Execucao.id)
+        .correlate(Execucao)
+        .scalar_subquery()
+    )
+    heartbeat = func.coalesce(ultimo_passo, Execucao.iniciada_em)
+    presas = sessao.scalars(
+        select(Execucao).where(
+            Execucao.estado == "em_andamento",
+            heartbeat.is_not(None),
+            heartbeat < corte,
+        )
+    ).all()
+    agora = datetime.now(timezone.utc)
+    for ex in presas:
+        ex.estado = "falhou"
+        ex.resultado = {
+            "erro": "Execução travada (sem progresso além do tempo limite) — "
+            "interrompida automaticamente pelo Batuta."
+        }
+        ex.finalizada_em = agora
+    if presas:
+        sessao.commit()
+        logger.warning("%d execução(ões) presa(s) recuperada(s) (falhou).", len(presas))
+    return len(presas)
+
+
+def varrer_presas_job() -> None:
+    """Entrada do agendador: abre a própria sessão e recupera execuções presas."""
+    sessao = CriadorDeSessao()
+    try:
+        recuperar_execucoes_presas(sessao)
     finally:
         sessao.close()
 

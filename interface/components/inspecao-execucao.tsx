@@ -462,6 +462,9 @@ export function PainelExecucao({
   setResposta,
   respondendo,
   onResponder,
+  onCancelar,
+  cancelando,
+  podeCancelar,
 }: {
   execucao: ExecucaoComPassos;
   automacao: Automacao;
@@ -470,7 +473,13 @@ export function PainelExecucao({
   setResposta: (v: string) => void;
   respondendo: boolean;
   onResponder: (decisao?: string) => void;
+  onCancelar: () => void;
+  cancelando: boolean;
+  podeCancelar: boolean;
 }) {
+  // Só dá para cancelar enquanto a execução não encerrou de vez (a fila/portão
+  // ainda a tem viva). O backend recusa (409) se já encerrou.
+  const cancelavel = !ESTADOS_FINAIS.includes(execucao.estado);
   return (
     <div className="rounded-xl border border-border bg-card p-5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -483,6 +492,17 @@ export function PainelExecucao({
         <Badge variant={ESTADO[execucao.estado]?.variante ?? "neutral"}>
           {ESTADO[execucao.estado]?.label ?? execucao.estado}
         </Badge>
+        {podeCancelar && cancelavel && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto"
+            disabled={cancelando}
+            onClick={onCancelar}
+          >
+            {cancelando ? "Cancelando…" : "Cancelar execução"}
+          </Button>
+        )}
       </div>
       <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1">
@@ -560,13 +580,13 @@ export function InspecaoExecucao({
   inicial?: ExecucaoComPassos;
   onTerminal?: () => void;
 }) {
-  // souOperador não muda o portão (observador também responde), mas mantém a
-  // assinatura coerente caso uma futura ação peça operador.
-  void podeOperar(meuPapel);
+  // O portão (responder) está aberto a observador também; CANCELAR exige operador.
+  const podeCancelar = podeOperar(meuPapel);
   const [execucao, setExecucao] = useState<ExecucaoComPassos | null>(inicial ?? null);
   const [erro, setErro] = useState<string | null>(null);
   const [resposta, setResposta] = useState("");
   const [respondendo, setRespondendo] = useState(false);
+  const [cancelando, setCancelando] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Último estado já comunicado ao pai — para avisar (refresh de lista) UMA vez por
   // transição terminal (pausa/encerramento), sem repetir a cada ciclo de poll.
@@ -653,6 +673,26 @@ export function InspecaoExecucao({
     }
   }
 
+  async function cancelar() {
+    if (!execucao) return;
+    setCancelando(true);
+    setErro(null);
+    try {
+      const r = await api.post<ExecucaoComPassos>(
+        `/execucoes/${execucao.id}/cancelar`,
+        {},
+      );
+      setExecucao(r);
+      pararPoll(); // encerrou de vez — não precisa mais acompanhar
+      toast.success("Execução cancelada");
+      avisarPaiSeTransicao(r.estado);
+    } catch (e) {
+      setErro(e instanceof ErroDaApi ? e.message : "Falha ao cancelar");
+    } finally {
+      setCancelando(false);
+    }
+  }
+
   if (erro) return <Aviso>{erro}</Aviso>;
   if (!execucao)
     return (
@@ -670,6 +710,9 @@ export function InspecaoExecucao({
       setResposta={setResposta}
       respondendo={respondendo}
       onResponder={responder}
+      onCancelar={cancelar}
+      cancelando={cancelando}
+      podeCancelar={podeCancelar}
     />
   );
 }
