@@ -94,6 +94,7 @@ class ArgsResponderComentario(BaseModel):
 
 class InstagramResponderComentario(TipoInstrumento):
     tipo = "instagram_responder_comentario"
+    categoria = "Instagram"
     nome_exibicao = "Responder / moderar comentário no Instagram"
     descricao = (
         "Age sobre um comentário do Instagram: responde (publica uma resposta), "

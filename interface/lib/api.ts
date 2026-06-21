@@ -168,6 +168,9 @@ export type Instrumento = {
 export type TipoInstrumento = {
   tipo: string;
   nome_exibicao: string;
+  // Grupo do instrumento no catálogo (a UI agrupa o dropdown por isto, ex.:
+  // "Instagram", "Web (busca e leitura)"). Padrão "Outros".
+  categoria?: string;
   descricao: string;
   esquema_config: Record<string, unknown>;
   esquema_args: Record<string, unknown>;

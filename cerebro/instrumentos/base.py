@@ -68,6 +68,9 @@ class TipoInstrumento(ABC):
     tipo: str
     nome_exibicao: str
     descricao: str
+    # CATEGORIA: grupo do instrumento no catálogo (a UI agrupa o dropdown por isto,
+    # ex.: "Instagram", "Web (busca e leitura)"). Padrão "Outros".
+    categoria: str = "Outros"
     Config: type[BaseModel]
     Args: type[BaseModel]
     # Campos da Config que são SEGREDOS (Fase 7-B): em vez de irem para a

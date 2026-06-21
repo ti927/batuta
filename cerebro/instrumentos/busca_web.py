@@ -124,6 +124,7 @@ class ArgsBuscaWeb(BaseModel):
 
 class BuscaWeb(TipoInstrumento):
     tipo = "busca_web"
+    categoria = "Web (busca e leitura)"
     nome_exibicao = "Busca na web (Tavily)"
     descricao = (
         "Busca informação atualizada na internet e devolve uma lista de "

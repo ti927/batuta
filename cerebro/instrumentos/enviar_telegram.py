@@ -91,6 +91,7 @@ class ArgsTelegram(BaseModel):
 
 class EnviarTelegram(TipoInstrumento):
     tipo = "enviar_telegram"
+    categoria = "Mensageria"
     nome_exibicao = "Enviar mensagem no Telegram"
     descricao = (
         "Envia uma mensagem de texto pelo Telegram, usando um bot. Use para "

@@ -206,6 +206,7 @@ class ArgsPublicarInstagram(BaseModel):
 
 class PublicarInstagram(TipoInstrumento):
     tipo = "publicar_instagram"
+    categoria = "Instagram"
     nome_exibicao = "Publicar no Instagram"
     descricao = (
         "Publica no Instagram (foto, Reels, Stories ou carrossel) e devolve o id da "

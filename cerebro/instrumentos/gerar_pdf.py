@@ -33,6 +33,7 @@ def _latin1(texto: str) -> str:
 
 class GerarPdf(TipoInstrumento):
     tipo = "gerar_pdf"
+    categoria = "Conteúdo"
     nome_exibicao = "Gerar PDF/documento"
     descricao = (
         "Gera um documento PDF a partir de um título e um texto, e devolve um "

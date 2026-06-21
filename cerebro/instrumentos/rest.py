@@ -49,6 +49,7 @@ class ArgsRest(BaseModel):
 
 class ChamarApiRest(TipoInstrumento):
     tipo = "chamar_api_rest"
+    categoria = "Integrações e dados"
     nome_exibicao = "Chamar API REST"
     descricao = (
         "Faz uma requisição HTTP a uma API e devolve a resposta. Use para "

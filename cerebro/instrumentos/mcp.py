@@ -94,6 +94,7 @@ def _envolver_sync(ferramenta) -> StructuredTool:
 
 class ConectarMCP(TipoInstrumento):
     tipo = "conectar_mcp"
+    categoria = "Integrações e dados"
     nome_exibicao = "Conectar a servidor MCP"
     descricao = (
         "Conecta o agente a um servidor MCP, dando-lhe acesso a TODAS as "

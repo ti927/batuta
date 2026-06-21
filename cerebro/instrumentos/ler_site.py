@@ -57,6 +57,7 @@ class ArgsLerSite(BaseModel):
 
 class LerSite(TipoInstrumento):
     tipo = "ler_site"
+    categoria = "Web (busca e leitura)"
     nome_exibicao = "Ler site (Tavily)"
     descricao = (
         "Abre uma URL e devolve o conteúdo limpo da página (texto do artigo, sem o "

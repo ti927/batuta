@@ -82,6 +82,7 @@ def listar_tipos(usuario: Usuario = Depends(usuario_atual)):
         TipoInstrumentoLer(
             tipo=t.tipo,
             nome_exibicao=t.nome_exibicao,
+            categoria=t.categoria,
             descricao=t.descricao,
             esquema_config=t.Config.model_json_schema(),
             esquema_args=t.Args.model_json_schema(),

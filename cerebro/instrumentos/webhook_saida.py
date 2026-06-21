@@ -45,6 +45,7 @@ class ArgsWebhook(BaseModel):
 
 class DispararWebhook(TipoInstrumento):
     tipo = "disparar_webhook"
+    categoria = "Integrações e dados"
     nome_exibicao = "Disparar webhook de saída"
     descricao = (
         "Avisa um sistema externo enviando um POST com dados a uma URL "

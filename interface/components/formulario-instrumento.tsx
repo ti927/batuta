@@ -58,6 +58,45 @@ function opcoesDoCampo(prop: Record<string, unknown>): string[] | undefined {
 }
 
 // Campos da configuração de um tipo, com metadados para gerar o formulário.
+// Ordem dos grupos no dropdown de tipo de instrumento. Categorias não listadas
+// (instrumento novo, ou "Outros") caem no fim.
+const ORDEM_CATEGORIAS = [
+  "Instagram",
+  "Web (busca e leitura)",
+  "Conteúdo",
+  "Mensageria",
+  "Sites e blogs",
+  "Integrações e dados",
+];
+
+// Agrupa os tipos por categoria, na ORDEM_CATEGORIAS, alfabético dentro do grupo.
+function agruparTiposPorCategoria(
+  tipos: TipoInstrumento[],
+): [string, TipoInstrumento[]][] {
+  const porGrupo = new Map<string, TipoInstrumento[]>();
+  for (const t of tipos) {
+    const grupo = t.categoria || "Outros";
+    const lista = porGrupo.get(grupo) ?? [];
+    lista.push(t);
+    porGrupo.set(grupo, lista);
+  }
+  const ordem = (g: string) => {
+    const i = ORDEM_CATEGORIAS.indexOf(g);
+    return i === -1 ? ORDEM_CATEGORIAS.length : i; // desconhecidos por último
+  };
+  return [...porGrupo.entries()]
+    .sort((a, b) => ordem(a[0]) - ordem(b[0]) || a[0].localeCompare(b[0]))
+    .map(
+      ([grupo, lista]) =>
+        [
+          grupo,
+          [...lista].sort((a, b) =>
+            a.nome_exibicao.localeCompare(b.nome_exibicao),
+          ),
+        ] as [string, TipoInstrumento[]],
+    );
+}
+
 export function camposDoTipo(tipo: TipoInstrumento | undefined): CampoConfig[] {
   if (!tipo) return [];
   const esquema = (tipo.esquema_config ?? {}) as Record<string, unknown>;
@@ -404,10 +443,14 @@ export function FormularioInstrumento({
           }}
           disabled={!criando}
         >
-          {tipos.map((t) => (
-            <option key={t.tipo} value={t.tipo}>
-              {t.nome_exibicao}
-            </option>
+          {agruparTiposPorCategoria(tipos).map(([grupo, lista]) => (
+            <optgroup key={grupo} label={grupo}>
+              {lista.map((t) => (
+                <option key={t.tipo} value={t.tipo}>
+                  {t.nome_exibicao}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </Select>
       </Label>

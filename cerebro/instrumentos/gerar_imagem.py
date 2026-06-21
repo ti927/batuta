@@ -216,6 +216,7 @@ def _imagem_bytes(dados: dict) -> bytes:
 
 class GerarImagem(TipoInstrumento):
     tipo = "gerar_imagem"
+    categoria = "Conteúdo"
     nome_exibicao = "Gerar imagem"
     descricao = (
         "Gera uma imagem a partir de uma descrição (prompt) e devolve um link "

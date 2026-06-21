@@ -237,6 +237,7 @@ class TipoInstrumentoLer(BaseModel):
 
     tipo: str
     nome_exibicao: str
+    categoria: str = "Outros"
     descricao: str
     esquema_config: dict
     esquema_args: dict

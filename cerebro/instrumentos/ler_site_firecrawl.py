@@ -49,6 +49,7 @@ class ArgsLerSiteFirecrawl(BaseModel):
 
 class LerSiteFirecrawl(TipoInstrumento):
     tipo = "ler_site_firecrawl"
+    categoria = "Web (busca e leitura)"
     nome_exibicao = "Ler site (Firecrawl)"
     descricao = (
         "Abre uma URL e devolve o conteúdo limpo da página em markdown, inclusive de "

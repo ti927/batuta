@@ -93,6 +93,7 @@ class ArgsSQL(BaseModel):
 
 class BancoSQL(TipoInstrumento):
     tipo = "banco_sql"
+    categoria = "Integrações e dados"
     nome_exibicao = "Banco de dados direto (SQL)"
     descricao = (
         "Lê e escreve num banco de dados SQL pelo comando que você fornecer. Para "

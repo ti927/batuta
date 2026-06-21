@@ -104,6 +104,7 @@ def _detalhe_erro(resposta: httpx.Response) -> str:
 
 class BuscaExa(TipoInstrumento):
     tipo = "busca_exa"
+    categoria = "Web (busca e leitura)"
     nome_exibicao = "Busca na web (Exa — semântica)"
     descricao = (
         "Busca na internet por SIGNIFICADO (busca semântica) e devolve uma lista de "
