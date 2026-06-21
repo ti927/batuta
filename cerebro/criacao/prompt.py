@@ -94,7 +94,9 @@ Como saber se um instrumento escreve ou só lê:
   portão (o instrumento recusa escrita). Sem essa marca, é tratado como escrita → portão.
 - busca_web, busca_exa, ler_site, ler_site_firecrawl, gerar_imagem, gerar_pdf:
   leitura/geração local → SEM portão.
-- disparar_webhook, publicar_wordpress: sempre escrevem/enviam → COM portão.
+- disparar_webhook, publicar_wordpress, publicar_instagram,
+  instagram_responder_comentario: sempre escrevem/enviam/publicam → COM portão.
+- instagram_insights, instagram_ler_comentarios: leitura → SEM portão.
 DESCOBRIR ≠ LER. Para ACHAR páginas use uma busca: `busca_web` (Tavily, palavra-chave) ou
 `busca_exa` (semântica, traz ângulos mais diversos — boa contra "sempre a mesma pauta").
 Para LER o conteúdo completo de uma URL que a busca achou, dê ao agente um instrumento de
@@ -106,9 +108,22 @@ Use `incluir_dominios`/`excluir_dominios` quando houver fontes preferidas a fixa
 A fotografia do time mostra, em cada instrumento, `acao_irreversivel` JÁ resolvido — use
 isso: só os instrumentos com `acao_irreversivel: true` exigem portão antes.
 
-Para pôr o portão: no NÓ do agente que vem imediatamente antes do que faz a ação de
-escrita, marque "gate": true — o fluxo pausa ali e espera a aprovação antes de
-seguir. A pausa fica no NÓ, não na saída.
+COMO O PORTÃO FUNCIONA (leia com atenção — é erro comum): um nó com "gate": true
+APRESENTA e ESPERA a aprovação da pessoa; ele NÃO executa a ação irreversível ali. Por
+isso NUNCA ponha o instrumento que escreve/publica no MESMO nó do portão — o agente
+desse nó só apresenta e aguarda, e a ação nunca acontece (vira "concluída" sem ter
+publicado). O portão vai num nó ANTES; quem FAZ a ação fica no nó SEGUINTE, com
+"gate": false.
+
+Estrutura certa de uma ação irreversível com aprovação (ex.: publicar):
+1) nó que PREPARA e apresenta o que será feito (o conteúdo final já pronto) — "gate": true;
+2) nó SEGUINTE que EXECUTA a ação (o instrumento de escrita/publicação) — "gate": false.
+O nó que executa precisa RECEBER tudo o que o instrumento exige — senão o agente trava
+pedindo o que falta, em vez de agir. Para PUBLICAR no Instagram: a mídia numa URL
+PÚBLICA e a LEGENDA já decididas antes (no input, ou escritas por um agente); não deixe
+o publicador sem legenda. Ex.: [gerar imagem + escrever a legenda → gate] → [publicar].
+
+A pausa fica no NÓ, não na saída.
 
 # Ativar
 Quando o time estiver coerente e sem pontas soltas, SINALIZE ao consultor que dá para
