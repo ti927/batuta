@@ -1318,6 +1318,25 @@ QUALQUER instrumento com segredo, não só Instagram. Duas partes:
 
 ---
 
+## FASE — Instagram self-serve: OAuth "Conectar Instagram" + App Review  📋 FASE FUTURA (registrada 2026-06-21, não iniciar sem o sinal do maestro)
+
+Gatilho: o instrumento de Instagram hoje só serve contas adicionadas como **testador**, porque o app
+na Meta está em **modo de desenvolvimento** (só papéis admin/dev/testador usam a API). **Modelo atual
+(no ar):** cada conta vira testador (teto ~50) + token colado — serve **enquanto a consultoria
+gerencia as contas dos clientes** (Batuta = ferramenta interna). Para um **produto self-serve** (o
+cliente conecta a própria conta):
+1. **App Review da Meta** — Advanced Access `instagram_business_*`: verificação de empresa + vídeo
+   demo + gravações + política de privacidade + URLs de deauthorize/data-deletion; o app vai a
+   **Live**. Processo externo de semanas, tocado pelo maestro.
+2. **Fluxo "Conectar Instagram" (OAuth de redirecionamento / Business Login for Instagram):** rota de
+   redirect ao authorize da Meta + callback que troca `code`→token (curto→longo) e grava na credencial
+   `instagram` por org; **botão "Conectar Instagram"** na UI. **Reusa** o tipo de credencial
+   `instagram`, o `cerebro/instagram_tokens.py` (validar/renovar) e o job de refresh do agendador —
+   falta o redirect/callback + a UI + o app aprovado. (Mesma infra que a Fase 4 DM precisa do app
+   publicado.)
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
