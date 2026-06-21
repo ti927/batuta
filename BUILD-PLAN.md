@@ -1300,6 +1300,24 @@ Todos reusam a credencial `instagram` (Config com `token`+`ig_user_id`, casament
 
 ---
 
+## FASE — IA de conversa lida com credenciais nomeadas  📋 BACKLOG (anotado 2026-06-21, não iniciar sem o sinal do maestro)
+
+Gatilho: na entrega dos instrumentos de Instagram, a IA criadora **monta** o agente/automação e
+**aplica o portão certo** (deriva de `acao_irreversivel`, sem lista fixa), mas **não pluga o
+token** — por princípio, ela nunca toca em segredo. O token fica **"pendente"** e o humano finaliza
+na tela do instrumento (cola o token OU aponta para a credencial nomeada já criada). Vale para
+QUALQUER instrumento com segredo, não só Instagram. Duas partes:
+1. **Barato:** expor `tipos_credencial_aceitos` (e talvez `categoria`) no catálogo da criadora
+   (`criacao/ferramentas.py::catalogo_de_instrumentos`) → ela orienta "use uma credencial do tipo X".
+2. **Maior:** a criadora APONTAR o instrumento para uma credencial existente — `configurar_instrumento`/
+   `editar_instrumento` aceitarem `credencial_id`; `criacao/servicos.configurar_instrumento` validar
+   (reusar `rotas/instrumentos._validar_credencial`) e setar; dar à criadora visão das credenciais da
+   org (tool `listar_credenciais` ou no snapshot do `ver_time`); atualizar `criacao/prompt.py`.
+   **Só REFERENCIA por id — não viola a regra de a IA não tocar segredo.** Resultado: agente de
+   Instagram (ou WordPress/Telegram) sai 100% pronto, sem o passo manual de ligar a credencial.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
