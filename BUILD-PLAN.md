@@ -1285,6 +1285,21 @@ Cinco etapas, **sem tocar o núcleo de orquestração** (`agente.py`/`cadeia.py`
 
 ---
 
+## FASE — Instrumentos de Instagram (publicar, métricas, comentários)  ✅ NO AR (2026-06-21, merges `f2f7617`+`7d07ab8`+`4fe3794`)
+
+Pedido do maestro (passou na frente da fila). API = **"Instagram API with Instagram Login"** (`graph.instagram.com`): conta Profissional + app na Meta no fluxo de **casos de uso** → **"Gerenciar mensagens e conteúdo no Instagram"** → config ativa **"API com login do Instagram"** (NÃO usar "Outro", que a Meta vai descontinuar). Conexão por **token colado + renovação automática** (decisão do maestro), NÃO o OAuth de redirecionamento — o token do painel já nasce de 60 dias. Entregue em 4 fases, **sem migração** (o `expira_em` da caixa-forte já existia reservado), **núcleo intocado**, **434 testes**:
+
+- **F0 — Fundação:** novo tipo de credencial **`instagram`** (`tipos_credencial.py`): campos `token` (segredo) + `ig_user_id` (identidade, **auto-preenchido** via `/me`). `cerebro/instagram_tokens.py` (puro, httpx/`FalhaInstrumento`): `validar(token)` (GET /me → ig_user_id) e `renovar(token)` (GET /refresh_access_token, `ig_refresh_token`, **sem app secret**). `credenciais_cofre.gravar_com_validacao_ig` (valida no salvar, preenche o id, fixa `expira_em≈60d`) + `gravar_token_renovado` (escrita pelo SISTEMA). As 4 rotas de credencial traduzem token recusado em **422 claro**.
+- **F1 — Renovação automática:** `agendador.renovar_tokens_instagram` (job diário 03:30 BRT, `id=instagram_token_refresh`): renova as credenciais `instagram` com `expira_em` em ≤10 dias; commit por credencial (falha isolada). Reusa o `BackgroundScheduler` (1 réplica).
+- **F2 — Publicar + métricas:** `publicar_instagram` (foto/Reels/Stories/carrossel; 3 passos contêiner→FINISHED→media_publish; **acao_irreversivel** → portão; **toda falha NÃO-retentável** porque `media_publish` não é idempotente e a orquestração reexecuta em falha retentável). `instagram_insights` (leitura: conta + posts recentes com curtidas/comentários). **A legenda NÃO usa `campo_mensagem`** (é conteúdo publicado, não mensagem de canal — alinha ao WordPress).
+- **F3 — Comentários:** `instagram_ler_comentarios` (leitura) + `instagram_responder_comentario` (responder/ocultar/reexibir/apagar; irreversível → portão; falha não-retentável).
+
+Todos reusam a credencial `instagram` (Config com `token`+`ig_user_id`, casamento validado por `test_tipos_credencial`). **URL de mídia pública aceita pronta** (sem Supabase Storage no MVP). **Caveat (a própria Meta avisa):** rastrear **hashtags e insights avançados** (alcance/impressões) exige o setup **"API com login do Facebook"** (`graph.facebook.com`) — sub-fase futura. **Pré-reqs manuais do maestro:** permissões + conta como **Testador** (aba Funções) + **Gerar token** no painel; depois criar a credencial "Instagram" no Batuta e pôr os instrumentos no cinto do agente.
+
+**Fase 4 — DM mão dupla (canal como o Telegram): FORA DE ESCOPO por ora** (decisão do maestro 2026-06-21). É a mais cara (webhook da Meta + assinatura `X-Hub-Signature-256` + **app PUBLICADO** + integração da camada de mensageria + App Review para terceiros). Plano completo preservado em `~/.claude/plans/`.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
