@@ -28,7 +28,7 @@ import uuid
 import httpx
 from pydantic import BaseModel, Field, model_validator
 
-from arquivos import DIRETORIO_ARQUIVOS, url_do_arquivo
+import arquivos
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 
 # Geração de imagem pode demorar; damos folga no timeout.
@@ -285,8 +285,8 @@ class GerarImagem(TipoInstrumento):
         dados = (resposta.json().get("data") or [{}])[0]
         conteudo = _imagem_bytes(dados)
         nome = f"{uuid.uuid4().hex}.png"
-        (DIRETORIO_ARQUIVOS / nome).write_bytes(conteudo)
-        return {"ok": True, "arquivo": nome, "url": url_do_arquivo(nome)}
+        url = arquivos.salvar(nome, conteudo, "image/png")
+        return {"ok": True, "arquivo": nome, "url": url}
 
 
 registrar(GerarImagem())

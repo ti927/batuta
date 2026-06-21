@@ -48,8 +48,10 @@ def _mock_post(monkeypatch, resp, capt=None):
         def __exit__(self, *a):
             return False
 
-        def post(self, url, headers=None, json=None):
-            if capt is not None:
+        def post(self, url, headers=None, json=None, content=None):
+            # Captura só a chamada à API de imagem (tem 'model'); ignora as do
+            # Supabase Storage (criar bucket / upload), que reusam o mesmo httpx.
+            if capt is not None and isinstance(json, dict) and "model" in json:
                 capt["url"], capt["headers"], capt["json"] = url, headers, json
             return resp
 
@@ -166,6 +168,9 @@ def test_payload_tem_qualidade_e_nao_tem_response_format(monkeypatch):
 
 
 def test_gera_salva_arquivo_e_devolve_link(monkeypatch):
+    # Sem Storage (caminho de fallback de dev): o arquivo cai no disco local. O
+    # caminho do Supabase Storage é coberto em test_arquivos.
+    monkeypatch.setattr("arquivos.storage_configurado", lambda: False)
     _mock_post(monkeypatch, _resp_ok())
     r = GerarImagem().executar(
         ConfigImagem(chave_api="sk-fake"), ArgsImagem(prompt="um gato astronauta")

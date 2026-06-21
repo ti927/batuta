@@ -10,7 +10,7 @@ import uuid
 from fpdf import FPDF
 from pydantic import BaseModel, Field
 
-from arquivos import DIRETORIO_ARQUIVOS, url_do_arquivo
+import arquivos
 from instrumentos.base import TipoInstrumento, registrar
 
 
@@ -55,8 +55,8 @@ class GerarPdf(TipoInstrumento):
         pdf.multi_cell(0, 8, _latin1(args.conteudo))
 
         nome = f"{uuid.uuid4().hex}.pdf"
-        pdf.output(str(DIRETORIO_ARQUIVOS / nome))
-        return {"ok": True, "arquivo": nome, "url": url_do_arquivo(nome)}
+        url = arquivos.salvar(nome, bytes(pdf.output()), "application/pdf")
+        return {"ok": True, "arquivo": nome, "url": url}
 
 
 registrar(GerarPdf())
