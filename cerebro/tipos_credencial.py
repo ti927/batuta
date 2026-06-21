@@ -99,3 +99,22 @@ registrar(
         (CampoCredencial("token_bearer", "Token"),),
     )
 )
+# Instagram (API com login do Instagram). O maestro cola o token de longa duração
+# gerado no painel da Meta (Instagram → API setup → Gerar token); a borda valida,
+# descobre o `ig_user_id` sozinho (via /me) e o agendador o renova antes dos 60
+# dias. `ig_user_id` é identidade (não-secreto, preenchido automaticamente).
+registrar(
+    TipoCredencial(
+        "instagram",
+        "Instagram (token de acesso)",
+        (
+            CampoCredencial(
+                "token", "Token de acesso (gerado no painel da Meta)"
+            ),
+            CampoCredencial(
+                "ig_user_id", "ID da conta (preenchido automaticamente)",
+                secreto=False,
+            ),
+        ),
+    )
+)

@@ -11,6 +11,7 @@ O horário é interpretado no fuso de Brasília (os exemplos do PRODUTO — "tod
 
 import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -18,7 +19,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 
 import fila
-from modelos import Automacao
+from modelos import Automacao, Credencial
 from orquestracao.disparo import criar_execucao
 from sessao import CriadorDeSessao
 
@@ -99,6 +100,60 @@ def remover(automacao_id: uuid.UUID) -> None:
         _scheduler.remove_job(job_id)
 
 
+# ─────────────── Renovação dos tokens do Instagram (Fase 1) ───────────────
+# O token de longa duração do Instagram dura ~60 dias e precisa ser renovado
+# antes de expirar (a Meta só renova token com ≥24h e <60 dias de vida). Janela
+# de 10 dias: renova bem antes do fim, com folga para retentar nos dias seguintes
+# se um refresh oscilar.
+JANELA_REFRESH_IG_DIAS = 10
+
+
+def renovar_tokens_instagram(sessao) -> int:
+    """Renova as credenciais `instagram` cujo token está perto de expirar.
+
+    Commit por credencial (uma falha não derruba as outras). Devolve quantas
+    foram renovadas. É a única escrita pelo SISTEMA no cofre (via
+    `credenciais_cofre.gravar_token_renovado`)."""
+    import credenciais_cofre
+    import instagram_tokens
+
+    corte = datetime.now(timezone.utc) + timedelta(days=JANELA_REFRESH_IG_DIAS)
+    alvos = sessao.scalars(
+        select(Credencial).where(
+            Credencial.tipo == "instagram",
+            Credencial.expira_em.is_not(None),
+            Credencial.expira_em <= corte,
+        )
+    ).all()
+    renovadas = 0
+    for cred in alvos:
+        try:
+            atual = credenciais_cofre.decifrar(cred).get("token", "")
+            if not atual:
+                continue
+            res = instagram_tokens.renovar(atual)
+            credenciais_cofre.gravar_token_renovado(
+                cred, res["token"], res["expira_em"]
+            )
+            sessao.commit()
+            renovadas += 1
+        except Exception:
+            sessao.rollback()
+            logger.exception(
+                "Falha ao renovar token Instagram da credencial %s", cred.id
+            )
+    return renovadas
+
+
+def _refresh_instagram_job() -> None:
+    """Entrada do agendador: abre a própria sessão e renova os tokens vencendo."""
+    sessao = CriadorDeSessao()
+    try:
+        renovar_tokens_instagram(sessao)
+    finally:
+        sessao.close()
+
+
 def iniciar() -> None:
     """Sobe o relógio e reconstrói os jobs a partir do banco."""
     sessao = CriadorDeSessao()
@@ -120,6 +175,14 @@ def iniciar() -> None:
         sweeper.varrer_job,
         trigger=IntervalTrigger(seconds=60),
         id="mensageria_sweeper",
+        replace_existing=True,
+    )
+    # Renovação diária dos tokens de longa duração do Instagram (Fase 1), de
+    # madrugada (BRT) fora do horário comercial.
+    _scheduler.add_job(
+        _refresh_instagram_job,
+        trigger=CronTrigger(hour=3, minute=30),
+        id="instagram_token_refresh",
         replace_existing=True,
     )
     if not _scheduler.running:

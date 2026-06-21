@@ -12,6 +12,7 @@ checagem de acesso — isso é do Passo 5; este módulo é só a camada de cofre
 
 import json
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -19,6 +20,11 @@ from sqlalchemy.orm import Session
 import cofre
 import tipos_credencial as tc
 from modelos import Credencial, Instrumento
+
+# Validade assumida para o token de longa duração do Instagram recém-colado (o
+# painel não devolve `expires_in` no momento da colagem). O agendador corrige a
+# data com o `expires_in` real no primeiro refresh.
+_VALIDADE_IG_S = 60 * 24 * 3600
 
 
 def montar_resumo(tipo: str, dados: dict) -> dict:
@@ -64,6 +70,43 @@ def decifrar(credencial: Credencial) -> dict:
     if not credencial.dados_cifrado:
         return {}
     return json.loads(cofre.decifrar(credencial.dados_cifrado))
+
+
+def gravar_com_validacao_ig(credencial: Credencial, dados: dict) -> None:
+    """Como `gravar`, mas trata o tipo `instagram`: valida o token colado no
+    Instagram, descobre o `ig_user_id` (preenche sozinho) e fixa `expira_em` ≈ 60
+    dias (o token do painel nasce de longa duração; o agendador corrige a data no
+    primeiro refresh, com o `expires_in` real). Para os demais tipos, é o `gravar`
+    normal. Levanta `FalhaInstrumento` se o token for recusado — a rota traduz em 422.
+
+    Token em branco na EDIÇÃO de uma credencial instagram preserva o token atual
+    (igual a campo de senha): não revalida nem mexe em `expira_em`."""
+    token = str(dados.get("token", "") or "").strip()
+    if credencial.tipo != "instagram" or not token:
+        gravar(credencial, dados)
+        return
+    import instagram_tokens
+
+    info = instagram_tokens.validar(token)
+    # `ig_user_id` é DERIVADO (via /me), não colado: sobrescreve o que vier no form.
+    gravar(credencial, {**dados, "ig_user_id": info["ig_user_id"]})
+    credencial.expira_em = datetime.now(timezone.utc) + timedelta(seconds=_VALIDADE_IG_S)
+
+
+def gravar_token_renovado(
+    credencial: Credencial, token: str, expira_em: datetime
+) -> None:
+    """Escrita pelo SISTEMA (job de refresh): troca só o `token` no saco, recifra e
+    atualiza `expira_em`, preservando os demais campos (ex.: `ig_user_id`). Não
+    passa pela rota — quem persiste é o agendador."""
+    tcred = tc.obter_tipo(credencial.tipo)
+    nomes = tcred.nomes_campos if tcred else ()
+    base = decifrar(credencial)
+    base["token"] = token
+    base = {k: v for k, v in base.items() if k in nomes}
+    credencial.dados_cifrado = cofre.cifrar(json.dumps(base, ensure_ascii=False))
+    credencial.resumo = montar_resumo(credencial.tipo, base)
+    credencial.expira_em = expira_em
 
 
 def usado_por(sessao: Session, credencial_id: uuid.UUID) -> int:

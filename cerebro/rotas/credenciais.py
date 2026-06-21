@@ -24,6 +24,7 @@ import credenciais_cofre as cofre_cred
 import tipos_credencial as tc
 from auth import usuario_atual
 from consultoria import exigir_admin_consultoria
+from instrumentos.base import FalhaInstrumento
 from esquemas import (
     CampoCredencialLer,
     CredencialCriar,
@@ -69,6 +70,20 @@ def _exigir_nome_livre(
     if sessao.scalar(consulta) is not None:
         raise HTTPException(
             status.HTTP_409_CONFLICT, f"Já existe uma credencial chamada '{nome}'."
+        )
+
+
+def _gravar(cred: Credencial, dados: dict) -> None:
+    """Grava o saco da credencial. Para o tipo `instagram`, valida o token no
+    Instagram (descobre o `ig_user_id` e fixa a validade); um token recusado vira
+    422 claro. Para os demais tipos, é o gravar normal (não levanta FalhaInstrumento)."""
+    try:
+        cofre_cred.gravar_com_validacao_ig(cred, dados)
+    except FalhaInstrumento as e:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"O Instagram não aceitou o token: {e}. Gere um token novo no painel da "
+            "Meta (Instagram → API setup → Gerar token) e cole aqui.",
         )
 
 
@@ -152,7 +167,7 @@ def criar_org(
         organizacao_id=organizacao_id, nome=dados.nome, tipo=dados.tipo,
         compartilhavel=False,
     )
-    cofre_cred.gravar(cred, dados.dados)
+    _gravar(cred, dados.dados)
     sessao.add(cred)
     sessao.flush()
     auditoria.registrar(
@@ -190,7 +205,7 @@ def editar_org(
     if dados.nome != cred.nome:
         _exigir_nome_livre(sessao, cred.organizacao_id, dados.nome, exceto=cred.id)
     cred.nome = dados.nome
-    cofre_cred.gravar(cred, dados.dados)  # `compartilhavel` não vale p/ org
+    _gravar(cred, dados.dados)  # `compartilhavel` não vale p/ org
     auditoria.registrar(
         sessao, usuario=usuario, acao="credencial.editada",
         recurso_tipo="credencial", recurso_id=cred.id,
@@ -258,7 +273,7 @@ def criar_consultoria(
         organizacao_id=None, nome=dados.nome, tipo=dados.tipo,
         compartilhavel=dados.compartilhavel,
     )
-    cofre_cred.gravar(cred, dados.dados)
+    _gravar(cred, dados.dados)
     sessao.add(cred)
     sessao.flush()
     auditoria.registrar(
@@ -292,7 +307,7 @@ def editar_consultoria(
         _exigir_nome_livre(sessao, None, dados.nome, exceto=cred.id)
     cred.nome = dados.nome
     cred.compartilhavel = dados.compartilhavel
-    cofre_cred.gravar(cred, dados.dados)
+    _gravar(cred, dados.dados)
     auditoria.registrar(
         sessao, usuario=usuario, acao="credencial_consultoria.editada",
         recurso_tipo="credencial", recurso_id=cred.id, organizacao_id=None,
