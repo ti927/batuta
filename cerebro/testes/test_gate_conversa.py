@@ -174,6 +174,62 @@ def test_tela_teto_de_rodadas_cai_no_roteador(sessao, dados, monkeypatch):
     assert execucao.estado == "concluida"
 
 
+def test_tela_conversa_repassa_conteudo_aprovado_ao_proximo_no(sessao, dados, monkeypatch):
+    """Regressão (exec c52d7bdb): portão na TELA com 2 saídas, ao aprovar, deve
+    repassar ao nó SEGUINTE o conteúdo APRESENTADO (ex.: URL+legenda do post) — e não
+    o texto curto da rodada que só roteia ('aprovado!'). Sem isto o publicador recebia
+    'aprovado!' sem a URL/legenda e pedia de novo, e nada era publicado."""
+    canal = _canal(sessao, dados)
+    n1 = _agente(sessao, dados)  # gera e apresenta (o nó-portão)
+    pub = Agente(time_id=dados["timeA"].id, nome="Publicador", papel="agente")
+    sessao.add(pub)
+    sessao.flush()
+    cadeia = {
+        "inicial": NO_GATE,
+        "nos": [
+            {"id": NO_GATE, "tipo": "agente", "ref": str(n1.id), "gate": True,
+             "saidas": [
+                 {"rotulo": "aprovado", "quando": "ok", "destino": "pub"},
+                 {"rotulo": "reprovado", "quando": "ajustar", "destino": NO_GATE},
+             ]},
+            {"id": "pub", "tipo": "agente", "ref": str(pub.id), "gate": False,
+             "saidas": [{"rotulo": "publicado", "quando": "ok", "destino": "fim"}]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    auto = Automacao(
+        time_id=dados["timeA"].id, nome="Fluxo", tipo_gatilho="manual",
+        configuracao_gatilho={}, cadeia=cadeia, ativa=False, configuracao={},
+    )
+    sessao.add(auto)
+    sessao.flush()
+    execucao = _exec_pausada(
+        sessao, auto, n1, texto="URL: http://x/y.png | LEGENDA: gatinho fofinho"
+    )
+
+    capturado: dict = {}
+
+    def fake(agente, cinto, entrada, **kwargs):
+        if kwargs.get("gate"):  # re-rodada do nó-portão: só roteia, texto curto
+            return {"saida": "(aprovado!)", "instrumentos_acionados": [], "uso": [],
+                    "mensagens_enviadas": {}, "ramo_escolhido": "aprovado"}
+        capturado["entrada_pub"] = entrada  # o nó publicador, a jusante
+        return {"saida": "publiquei", "instrumentos_acionados": ["publicar_instagram"],
+                "uso": [], "mensagens_enviadas": {}, "ramo_escolhido": None}
+
+    import orquestracao.cadeia as motor
+    monkeypatch.setattr(retoma, "executar_agente", fake)
+    monkeypatch.setattr(motor, "executar_agente", fake)
+
+    retoma.retomar_execucao(sessao, execucao, "aprovado", chaves={}, origens={})
+
+    # O publicador recebeu o conteúdo apresentado (URL + legenda), não só "aprovado!".
+    assert "URL: http://x/y.png" in capturado["entrada_pub"]
+    assert "LEGENDA: gatinho fofinho" in capturado["entrada_pub"]
+    sessao.refresh(execucao)
+    assert execucao.estado == "concluida"
+
+
 # ─────────────────────────── CANAL (processar_turno) ───────────────────────────
 
 def _setup_canal(sessao, dados, monkeypatch, enviados, configuracao=None):
