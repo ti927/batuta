@@ -174,11 +174,24 @@ chave: própria/consultoria/legado); há `GET /uso/resumo` (por org/time) e `GET
 
 Padrão fixo: cada tela é um **Server Component** que busca no cérebro (`buscarCerebro`, `cache:
 no-store`) + uma **ilha cliente** (`"use client"`) que muta via `lib/api.ts` e dá `router.refresh()`.
-`proxy.ts` na raiz (no Next 16 substitui o middleware) cuida da sessão Supabase e protege rotas. O
-shell é uma **sidebar** escura com navegação por papel. Telas principais: organizações, time
-(dashboard rico: agentes, cadeia, execuções, custo), edição de agentes/instrumentos, automações,
-inspeção de execução, conversa da IA criadora (`/criar`), execuções, chaves, uso. **`/biblioteca`
-existe só como placeholder "em breve"** (`components/area-em-breve.tsx`).
+`proxy.ts` na raiz (no Next 16 substitui o middleware) cuida da sessão Supabase e protege rotas.
+
+O shell é uma **sidebar** escura, separada em **dois blocos**:
+- **Organização** (todo usuário da org): Início (`/`) com sub-links **Gerenciar Times**
+  (`/organizacoes/[id]`) e **Gerenciar Organizações** (`/organizacoes`); a lista de **Times**;
+  Biblioteca; Uso e custos; e — só para admin da org — Acesso e papéis, Chaves e credenciais,
+  Configurações da organização (`/configuracoes`).
+- **Consultoria** (visível **só ao `admin_consultoria`**): Chaves da consultoria, Uso da consultoria,
+  Configurações da consultoria (`/configuracoes-consultoria`).
+- Acima dos dois blocos, o botão de destaque **Criar com a IA** (`/criar`).
+
+**Tudo de um time vive em `/times/[id]`, em abas:** Início (dashboard), Agentes, Instrumentos,
+Automações, Execuções (com o detalhe em `/times/[id]/execucoes/[execId]`) e Conversas. **Não existem
+mais páginas soltas de execução nem de automação** — `/execucoes` (lista global) e `/automacoes/[id]`
+(detalhe avulso) foram removidas; execuções e automações se acessam pelas abas do time. A URL do
+**webhook** de uma automação aparece no drawer do nó **Gatilho** (aba Automações). `/biblioteca`,
+`/uso`, `/configuracoes` e `/configuracoes-consultoria` são placeholders "em breve"
+(`components/area-em-breve.tsx`).
 
 ---
 

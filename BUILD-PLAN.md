@@ -1341,6 +1341,38 @@ Gatilho: a IA companheira dava info errada sobre webhook (dizia gatilho "manual"
 
 ---
 
+## FASE — Consolidação da navegação: tudo do time em `/times/[id]` + sidebar em 2 blocos  ✅ NO AR (2026-06-22, merge `f33c8d1`, 100% frontend, sem migração)
+
+Gatilho: o maestro se confundia porque os mesmos dados de um time apareciam **tanto nas abas de
+`/times/[id]` quanto em páginas independentes de topo**. A URL do webhook, em particular, só vivia na
+página solta `/automacoes/[id]` — que ele não achava. Decisão: **tudo que diz respeito a um time vive
+nas abas de `/times/[id]`; páginas independentes com dados de time deixam de existir.**
+
+- **URL do webhook no lugar natural:** no drawer do nó **Gatilho** (aba Automações). `automacoes-cliente.tsx`
+  passa a URL real `{URL_CEREBRO}/webhooks/automacoes/{id}`; `automacao-builder/inspector.tsx` renderiza
+  com `UrlCopiavel` (botão copiar). Antes só vivia na página solta.
+- **Removidas as páginas independentes** `app/execucoes/` (lista global cross-time) e
+  `app/automacoes/[id]/` (detalhe avulso). Execuções e automações se acessam pelas abas do time
+  (`/times/[id]/execucoes`, `/times/[id]/execucoes/[execId]`, `/times/[id]/automacoes`). No editor da
+  automação, link **"Ver execuções"** → aba Execuções do time. (NÃO existe `/agentes` nem `/automacoes`
+  raiz.)
+- **Sidebar em DOIS BLOCOS** (`components/sidebar.tsx`): **Organização** (Início → sub-links *Gerenciar
+  Times* `/organizacoes/[id]` e *Gerenciar Organizações* `/organizacoes`; lista de Times; Biblioteca;
+  Uso e custos; e — só admin da org — Acesso e papéis, Chaves e credenciais, **Configurações da
+  organização**) e **Consultoria** (Chaves/Uso/**Configurações da consultoria**), bloco **visível só ao
+  `admin_consultoria`**. "Criar com a IA" mantido no topo; item "Execuções" global removido.
+- **Configurações split por escopo:** "da organização" reusa `/configuracoes` (relabel); "da
+  consultoria" é a nova `app/configuracoes-consultoria/page.tsx`. Ambas placeholders `AreaEmBreve`.
+- **`/criar`:** o formulário "Criar um time novo" agora vem **antes** da lista de conversas (não
+  precisa rolar até o fim).
+- **Breadcrumb** (`cabecalho-conteudo.tsx`): rótulos casados com a sidebar; corrigido bug pré-existente
+  (`/uso-consultoria` caía em "Uso e custos").
+- Endpoints do backend e dados intocados (só a casca de página saiu). `npm run build` + `eslint` verdes.
+- **Docs atualizados:** `docs/ARQUITETURA.md` §9 (telas/sidebar) e `PRODUTO.md` §8 (o time é um espaço
+  fechado — tudo dele se gerencia na própria área).
+
+---
+
 ## FASE — IA de conversa lida com credenciais nomeadas  📋 BACKLOG (anotado 2026-06-21, não iniciar sem o sinal do maestro)
 
 Gatilho: na entrega dos instrumentos de Instagram, a IA criadora **monta** o agente/automação e

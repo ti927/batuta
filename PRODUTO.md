@@ -72,6 +72,7 @@ Regras do time:
 - O usuário cria times ou é convidado para times.
 - **Isolamento por time:** quem não pertence a um time não enxerga aquele time, nem seus agentes, nem seus dados. Isso vale dentro da mesma organização — o time do RH não vê o time da Manutenção.
 - Cada time tem uma biblioteca, um Líder e quantos Agentes forem necessários.
+- **O time é um espaço fechado: tudo dele se gerencia dentro da área do próprio time.** Agentes, instrumentos, automações, execuções e a conversa com a IA vivem todos na área daquele time — não há telas soltas, espalhadas, mostrando dados de times por fora. Quem quer mexer num time entra no time.
 
 ## 9. Biblioteca (o segundo cérebro do time)
 
