@@ -20,7 +20,16 @@ import {
 } from "@xyflow/react";
 import { ChevronDown, Layers, Plus } from "lucide-react";
 
-import type { Agente, Cadeia, Instrumento, NoCadeia, SaidaCadeia } from "@/lib/api";
+import type {
+  Agente,
+  Cadeia,
+  Instrumento,
+  NoCadeia,
+  PapelAcesso,
+  SaidaCadeia,
+  Time,
+} from "@/lib/api";
+import { DrawerAgente } from "@/components/drawer-agente";
 import { RobotFace } from "@/components/robot-face";
 
 import { tiposDeAresta } from "./aresta";
@@ -50,6 +59,11 @@ type BuilderProps = {
   gatilho: ConfigGatilho;
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
   webhookUrl?: string | null;
+  // Para editar o agente de um nó pelo drawer flutuante (sem trocar de aba).
+  cintos: Record<string, Instrumento[]>;
+  instrumentosTime: Instrumento[];
+  time: Time;
+  meuPapel: PapelAcesso | null;
 };
 
 // `useUpdateNodeInternals` exige estar dentro de um ReactFlowProvider; por isso o
@@ -71,13 +85,26 @@ function BuilderInterno({
   gatilho,
   setGatilho,
   webhookUrl,
+  cintos,
+  instrumentosTime,
+  time,
+  meuPapel,
 }: BuilderProps) {
   const [selId, setSelId] = useState<string | null>(null);
   const updateNodeInternals = useUpdateNodeInternals();
   const [addAberto, setAddAberto] = useState(false);
+  // Agente cujo editor (drawer flutuante) está aberto, acionado pelo lápis do nó.
+  const [editAgenteId, setEditAgenteId] = useState<string | null>(null);
+  const editarAgente = useCallback(
+    (agenteId: string) => setEditAgenteId(agenteId),
+    [],
+  );
 
   const idx = useMemo(() => indexar(cadeia), [cadeia]);
   const sel = selId ? (idx[selId] ?? null) : null;
+  const agenteEdit = editAgenteId
+    ? (agentes.find((a) => a.id === editAgenteId) ?? null)
+    : null;
 
   // ── nós do React Flow ──
   // O React Flow precisa ser DONO do seu próprio array de nós: é nele que
@@ -96,12 +123,12 @@ function BuilderInterno({
         id: no.id,
         type: no.tipo,
         position: { x: no.x ?? 0, y: no.y ?? 0 },
-        data: { no: noView, agente, indice },
+        data: { no: noView, agente, indice, onEditarAgente: editarAgente },
         draggable: podeEditar,
         selected: no.id === selId,
       };
     },
-    [agentes, gatilho.tipo, podeEditar, selId],
+    [agentes, gatilho.tipo, podeEditar, selId, editarAgente],
   );
 
   // Assinatura do que afeta a PROJEÇÃO dos nós. Dispara a reconciliação
@@ -133,8 +160,11 @@ function BuilderInterno({
         gat: gatilho.tipo,
         e: podeEditar,
         sel: selId,
+        // identidade do agente: renomear/trocar modelo pelo drawer refaz o rótulo
+        // do nó (a reconciliação preserva posição/medição).
+        ag: agentes.map((a) => [a.id, a.nome, a.modelo_ia, a.papel]),
       }),
-    [cadeia, gatilho.tipo, podeEditar, selId],
+    [cadeia, gatilho.tipo, podeEditar, selId, agentes],
   );
 
   const [rfNodes, setRfNodes] = useState<Node[]>(() =>
@@ -525,6 +555,22 @@ function BuilderInterno({
           onDeleteNode={deleteNode}
         />
       </div>
+
+      {/* Editor do agente: drawer flutuante (o mesmo da aba Agentes), aberto pelo
+          lápis do nó. Fica sobre o canvas/inspetor — edições de nó são rápidas. */}
+      {agenteEdit && (
+        <DrawerAgente
+          key={agenteEdit.id}
+          agente={agenteEdit}
+          indice={agentes.findIndex((a) => a.id === agenteEdit.id)}
+          cinto={cintos[agenteEdit.id] ?? []}
+          instrumentosTime={instrumentosTime}
+          time={time}
+          meuPapel={meuPapel}
+          conversaId={null}
+          onFechar={() => setEditAgenteId(null)}
+        />
+      )}
     </div>
   );
 }

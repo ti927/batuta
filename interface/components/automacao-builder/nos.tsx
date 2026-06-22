@@ -2,7 +2,7 @@
 // Gatilho · Agente · Roteador · Fim — visual do handoff (SPEC §6), flat e marca Batuta.
 
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { CheckCircle2, Layers, Shield, Sparkles, Zap } from "lucide-react";
+import { CheckCircle2, Layers, Pencil, Shield, Sparkles, Zap } from "lucide-react";
 
 import type { Agente, NoCadeia } from "@/lib/api";
 import { RobotFace } from "@/components/robot-face";
@@ -13,6 +13,8 @@ export type DadosNo = {
   no: NoCadeia;
   agente?: Agente;
   indice?: number;
+  // Abre o editor do agente (drawer flutuante) direto do nó, sem trocar de aba.
+  onEditarAgente?: (agenteId: string) => void;
 };
 
 // Handles de saída (direita), um por saída, distribuídos na vertical.
@@ -155,7 +157,26 @@ export function AgenteNode({ data, selected }: NodeProps) {
   const ag = d.agente;
   const modelo = (ag?.modelo_ia ?? "").replace("claude-", "");
   return (
-    <div style={{ ...cartao(!!selected, "#fff", "#6D4AFF", "#E8E6F0"), height: 90 }}>
+    <div
+      className="relative"
+      style={{ ...cartao(!!selected, "#fff", "#6D4AFF", "#E8E6F0"), height: 90 }}
+    >
+      {/* Lápis na borda esquerda: abre o editor do agente sem sair do construtor.
+          `nodrag` para não arrastar o nó; stopPropagation para não roubar o clique. */}
+      {ag && d.onEditarAgente && (
+        <button
+          type="button"
+          className="nodrag absolute -left-2.5 -top-2.5 z-10 grid size-[26px] place-items-center rounded-full border border-[#E8E6F0] bg-white text-[#6D4AFF] shadow-sm transition-colors hover:bg-[#F4F1FE]"
+          title={`Editar o agente “${ag.nome}”`}
+          aria-label={`Editar o agente ${ag.nome}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            d.onEditarAgente!(ag.id);
+          }}
+        >
+          <Pencil size={13} />
+        </button>
+      )}
       <div className="flex h-full flex-col gap-1.5 p-[11px_13px]">
         <div className="flex items-center gap-2.5">
           <RobotFace size={28} indice={d.indice ?? 0} lider={ag?.papel === "lider"} />
