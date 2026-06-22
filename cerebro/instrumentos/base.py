@@ -206,6 +206,26 @@ def acao_irreversivel(tipo: str, configuracao: dict | None = None) -> bool:
     return bool(t.irreversivel_para(configuracao or {}))
 
 
+def validar_cabecalhos_ascii(cabecalhos: dict | None) -> None:
+    """Cabeçalhos HTTP só aceitam ASCII (o httpx os codifica em ascii). Um acento
+    num valor — ex.: alguém cola um título/legenda com 'í' num cabeçalho por engano,
+    achando que é o corpo — quebraria a chamada com um erro críptico
+    (`'ascii' codec can't encode...`) que NÃO é `httpx.HTTPError` e escaparia o
+    tratamento. Falha cedo, claro e não-retentável, apontando o caminho certo."""
+    for chave, valor in (cabecalhos or {}).items():
+        for rotulo, texto in (("nome", str(chave)), ("valor", str(valor))):
+            try:
+                texto.encode("ascii")
+            except UnicodeEncodeError:
+                raise FalhaInstrumento(
+                    f"o cabeçalho '{chave}' tem caractere não-ASCII (acento) no "
+                    f"{rotulo}. Cabeçalhos HTTP só aceitam ASCII — título, legenda "
+                    "ou qualquer texto com acento vão no CORPO (payload) da chamada, "
+                    "não nos cabeçalhos.",
+                    retentavel=False,
+                )
+
+
 def preparar_config(tipo: str, configuracao: dict | None) -> tuple[dict, dict]:
     """Valida a config e SEPARA os segredos (Fase 7-B). Devolve
     `(config_publica, segredos)`:

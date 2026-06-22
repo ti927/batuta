@@ -11,7 +11,12 @@ from typing import Any, Literal
 import httpx
 from pydantic import BaseModel, Field
 
-from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
+from instrumentos.base import (
+    FalhaInstrumento,
+    TipoInstrumento,
+    registrar,
+    validar_cabecalhos_ascii,
+)
 
 # Limites de segurança para uma resposta — evita estourar memória/contexto.
 TIMEOUT_S = 15.0
@@ -74,6 +79,7 @@ class ChamarApiRest(TipoInstrumento):
         cabecalhos = dict(config.cabecalhos or {})
         if config.token_bearer:
             cabecalhos["Authorization"] = f"Bearer {config.token_bearer}"
+        validar_cabecalhos_ascii(cabecalhos)
         try:
             with httpx.Client(timeout=TIMEOUT_S) as cliente:
                 resposta = cliente.request(

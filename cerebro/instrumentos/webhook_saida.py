@@ -13,7 +13,12 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, Field
 
-from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
+from instrumentos.base import (
+    FalhaInstrumento,
+    TipoInstrumento,
+    registrar,
+    validar_cabecalhos_ascii,
+)
 
 TIMEOUT_S = 15.0
 MAX_CORPO = 2_000
@@ -68,6 +73,7 @@ class DispararWebhook(TipoInstrumento):
         cabecalhos = dict(config.cabecalhos or {})
         if config.token_bearer:
             cabecalhos["Authorization"] = f"Bearer {config.token_bearer}"
+        validar_cabecalhos_ascii(cabecalhos)
         try:
             with httpx.Client(timeout=TIMEOUT_S) as cliente:
                 resposta = cliente.post(
