@@ -217,7 +217,10 @@ function LinhaPasso({
   const mostrados =
     cinto.length <= MAX_BADGES_PASSO ? cinto : cinto.slice(0, MAX_BADGES_PASSO - 1);
   const resto = cinto.length - mostrados.length;
-  // É um `div` (não `button`) para poder conter o botão do lápis; teclado preservado.
+  // Estrutura espelha o nó da automação: lápis redondo flutuando na borda
+  // esquerda (fora do fluxo, não empurra o conteúdo); avatar+nome numa linha;
+  // badges do cinto full-width embaixo. É um `div` (não `button`) p/ conter os
+  // botões; teclado preservado.
   return (
     <div
       role="button"
@@ -229,10 +232,10 @@ function LinhaPasso({
           onSelecionar();
         }
       }}
-      className={`${base} ${fundo} cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40`}
+      className={`relative flex flex-col gap-1.5 py-2.5 pl-9 pr-3 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${fundo}`}
     >
-      {/* Lápis: edita o agente deste passo sem sair da execução (flagrou erro,
-          corrige ali). Só para passos com agente resolvido. */}
+      {/* Lápis: redondo, na borda esquerda, alinhado ao avatar. Edita o agente
+          deste passo sem sair da execução. Só para passos com agente resolvido. */}
       {agente && onEditarAgente && (
         <button
           type="button"
@@ -242,68 +245,73 @@ function LinhaPasso({
             e.stopPropagation();
             onEditarAgente(agente.id);
           }}
-          className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+          className="absolute left-1 top-2.5 z-10 grid size-7 place-items-center rounded-full border border-[#E8E6F0] bg-card text-[#6D4AFF] shadow-sm transition-colors hover:bg-[#F4F1FE]"
         >
           <Pencil className="size-3.5" />
         </button>
       )}
-      <span className="relative">
-        <RobotFace size={28} indice={indice} lider={agente?.papel === "lider"} />
-        {tom === "espera" && (
-          <Clock className="absolute -right-1 -top-1 size-3.5 rounded-full bg-background text-[#E89638]" />
-        )}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-foreground">
-          {passo.ordem}. {agente?.nome ?? "(agente removido)"}
-        </span>
-        <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-          {passo.saida?.saida_escolhida && (
-            <span className="text-[#3D2A99]">→ {passo.saida.saida_escolhida}</span>
+
+      {/* avatar + nome/info, alinhados */}
+      <div className="flex items-center gap-2.5">
+        <span className="relative flex-none">
+          <RobotFace size={28} indice={indice} lider={agente?.papel === "lider"} />
+          {tom === "espera" && (
+            <Clock className="absolute -right-1 -top-1 size-3.5 rounded-full bg-background text-[#E89638]" />
           )}
-          {dur && <span>{dur}</span>}
-          {toks > 0 && <span>{toks.toLocaleString("pt-BR")} tok</span>}
         </span>
-        {/* Cinto do agente: badges clicáveis (corrige um instrumento sem sair da
-            execução), um por linha como no nó da automação. "+X mais" abre o
-            drawer do agente (cinto completo). */}
-        {cinto.length > 0 && onEditarInstrumento && (
-          <span className="mt-1.5 flex flex-col gap-1">
-            {mostrados.map((inst) => (
-              <button
-                key={inst.id}
-                type="button"
-                title={`Editar o instrumento “${inst.nome}”`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEditarInstrumento(inst.id);
-                }}
-                className="flex items-center gap-1.5 rounded-md border border-[#ECEAF4] bg-[#FAFAF7] px-1.5 py-1 text-left transition-colors hover:border-[#D9D2F7] hover:bg-[#F4F1FE]"
-              >
-                <IconeInstrumento
-                  icone={inst.icone}
-                  className="size-3 flex-none text-[#6D4AFF]"
-                />
-                <span className="truncate text-[11px] text-[#4A4860]">
-                  {inst.nome}
-                </span>
-              </button>
-            ))}
-            {resto > 0 && agente && onEditarAgente && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEditarAgente(agente.id);
-                }}
-                className="rounded-md px-1.5 py-0.5 text-left text-[11px] font-medium text-[#6D4AFF] hover:underline"
-              >
-                +{resto} mais…
-              </button>
-            )}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-foreground">
+            {passo.ordem}. {agente?.nome ?? "(agente removido)"}
           </span>
-        )}
-      </span>
+          <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+            {passo.saida?.saida_escolhida && (
+              <span className="text-[#3D2A99]">→ {passo.saida.saida_escolhida}</span>
+            )}
+            {dur && <span>{dur}</span>}
+            {toks > 0 && <span>{toks.toLocaleString("pt-BR")} tok</span>}
+          </span>
+        </span>
+      </div>
+
+      {/* Cinto do agente: badges clicáveis (corrige um instrumento sem sair da
+          execução), um por linha como no nó da automação, alinhados sob o card.
+          "+X mais" abre o drawer do agente (cinto completo). */}
+      {cinto.length > 0 && onEditarInstrumento && (
+        <div className="flex flex-col gap-1">
+          {mostrados.map((inst) => (
+            <button
+              key={inst.id}
+              type="button"
+              title={`Editar o instrumento “${inst.nome}”`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditarInstrumento(inst.id);
+              }}
+              className="flex items-center gap-1.5 rounded-md border border-[#ECEAF4] bg-[#FAFAF7] px-1.5 py-1 text-left transition-colors hover:border-[#D9D2F7] hover:bg-[#F4F1FE]"
+            >
+              <IconeInstrumento
+                icone={inst.icone}
+                className="size-3 flex-none text-[#6D4AFF]"
+              />
+              <span className="truncate text-[11px] text-[#4A4860]">
+                {inst.nome}
+              </span>
+            </button>
+          ))}
+          {resto > 0 && agente && onEditarAgente && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditarAgente(agente.id);
+              }}
+              className="rounded-md px-1.5 py-0.5 text-left text-[11px] font-medium text-[#6D4AFF] hover:underline"
+            >
+              +{resto} mais…
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
