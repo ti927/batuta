@@ -180,7 +180,7 @@ O shell é uma **sidebar** escura, separada em **dois blocos**:
 - **Organização** (todo usuário da org): Início (`/`) com sub-links **Gerenciar Times**
   (`/organizacoes/[id]`) e **Gerenciar Organizações** (`/organizacoes`); a lista de **Times**;
   Biblioteca; Uso e custos; e — só para admin da org — Acesso e papéis, Chaves e credenciais,
-  Configurações da organização (`/configuracoes`).
+  Configurações da organização (`/organizacoes/[id]/configuracoes`).
 - **Consultoria** (visível **só ao `admin_consultoria`**): Chaves da consultoria, Uso da consultoria,
   Configurações da consultoria (`/configuracoes-consultoria`).
 - Acima dos dois blocos, o botão de destaque **Criar com a IA** (`/criar`).
@@ -190,8 +190,16 @@ Automações, Execuções (com o detalhe em `/times/[id]/execucoes/[execId]`) e 
 mais páginas soltas de execução nem de automação** — `/execucoes` (lista global) e `/automacoes/[id]`
 (detalhe avulso) foram removidas; execuções e automações se acessam pelas abas do time. A URL do
 **webhook** de uma automação aparece no drawer do nó **Gatilho** (aba Automações). `/biblioteca`,
-`/uso`, `/configuracoes` e `/configuracoes-consultoria` são placeholders "em breve"
-(`components/area-em-breve.tsx`).
+`/uso` e `/configuracoes-consultoria` são placeholders "em breve" (`components/area-em-breve.tsx`).
+
+**Aprovação humana (portão).** Duas peças distintas: (1) o **portão do nó** na cadeia (`gate` no nó —
+`orquestracao/cadeia.py` lê `no.get("gate")` e pausa em `aguardando_humano`) é o que de fato pausa;
+(2) a **parede de ativação** (`portao_ativacao.validar`, ponto único usado pela rota de ativação e
+pela IA criadora) recusa ativar uma automação cujo agente faz ação irreversível sem um portão antes.
+A parede é uma **config GLOBAL da organização** (`organizacoes.parede_ativacao`, default TRUE; liga/
+desliga em **Configurações da organização**, rota `PUT /organizacoes/{id}/parede-ativacao`). A
+irreversibilidade é derivada do tipo+config do instrumento (`instrumentos.acao_irreversivel`) — **não
+há mais interruptor de aprovação por instrumento**.
 
 ---
 

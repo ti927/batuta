@@ -210,9 +210,12 @@ Picos são previsíveis: dia 15 todos os consultores enviam nota ao mesmo tempo;
 ## 19. Ações irreversíveis
 
 Alguns passos mexem no mundo real de forma que não dá para desfazer: lançar um valor financeiro num ERP, publicar um artigo, enviar um email, fazer um pagamento. O produto precisa de proteção contra erro e contra repetição:
-- Ações irreversíveis podem exigir confirmação humana antes de executar. O que define isso é se o passo **muda o mundo** (escrever/enviar/publicar/apagar) — uma **consulta** (ler dados) não exige aprovação, senão a automação fica inviável. Essa classificação é **por instrumento e configurável**: o sistema deriva o padrão (ex.: numa chamada de API, GET é leitura e dispensa portão; POST/PUT/DELETE escreve e exige; um acesso a banco pode ser marcado "somente leitura"), e quem monta o time pode ajustar com um interruptor por instrumento (com aviso ao liberar uma ação que escreve).
+- Há **duas peças** de aprovação, que não se confundem:
+  1. **O portão no fluxo** (no nó da automação) — é o que de fato **pausa** a execução e espera um humano aprovar antes de seguir. É o controle de verdade, definido por quem monta a automação, onde fizer sentido.
+  2. **A parede de ativação** — uma proteção que, ao **ativar** uma automação, exige que exista um portão antes de uma ação irreversível. O que conta como irreversível é se o passo **muda o mundo** (escrever/enviar/publicar/apagar) — uma **consulta** (ler dados) não exige aprovação. Essa classificação é derivada do **instrumento + configuração** (ex.: numa chamada de API, GET é leitura e dispensa; POST/PUT/DELETE escreve e exige; banco pode ser "somente leitura"); webhook de saída é gatilho de automação e não exige.
+- **A parede é uma configuração GLOBAL da organização (liga/desliga).** Quando ligada (padrão), protege; quando o admin a desliga, automações ativam sem essa exigência (com aviso de risco) — útil para automação em massa. Não há mais interruptor de aprovação por instrumento.
 - O sistema não pode executar a mesma ação duas vezes por engano (ex.: lançar o mesmo reembolso em duplicidade).
-- Toda ação irreversível fica registrada, para poder ser auditada depois — inclusive a mudança do interruptor de aprovação.
+- Toda ação irreversível fica registrada, para poder ser auditada depois — inclusive ligar/desligar a parede da organização.
 
 ## 20. Memória e contexto
 

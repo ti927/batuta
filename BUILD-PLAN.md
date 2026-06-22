@@ -1373,6 +1373,30 @@ nas abas de `/times/[id]`; páginas independentes com dados de time deixam de ex
 
 ---
 
+## FASE — Parede de aprovação vira config GLOBAL da org + fim do switch por instrumento  ✅ NO AR (2026-06-22, merge `4407e79`, migração aditiva `prd00parede01`)
+
+Gatilho: o maestro questionou a config de portão que aparecia em TODO instrumento ("Aprovação humana
+antes de agir"). Estudo confirmou DOIS portões que se confundiam: (A) o switch por instrumento — que
+NÃO pausava nada, só alimentava a parede de ativação — e (B) o portão do NÓ (o que realmente pausa,
+`cadeia.py` lê `no.get("gate")`). Decisão: remover (A) e tornar a parede uma config GLOBAL da org.
+
+- **Coluna `organizacoes.parede_ativacao`** (Boolean default TRUE; migração aditiva `prd00parede01`).
+  Default TRUE = comportamento atual preservado.
+- **`portao_ativacao.validar` = PONTO ÚNICO**: se a org desligou a parede → retorna `[]` (ativa sem
+  exigir nó-portão). Cobre a rota de ativação E a IA criadora numa só mudança.
+- **Fonte única de irreversibilidade** `instrumentos.acao_irreversivel(tipo, config)`; removido
+  `exige_portao` e o override `exige_aprovacao` do fluxo. Coluna `instrumentos.exige_aprovacao` FICA
+  no banco (ignorada) — rollback trivial, sem migração destrutiva. Webhook segue reversível.
+- **Rota** `PUT /organizacoes/{id}/parede-ativacao` (admin; auditada `organizacao.parede_ativacao`).
+- **Front:** instrumento sem o dropdown de aprovação; **nova página org-scoped**
+  `/organizacoes/[id]/configuracoes` (1ª config global da org) = switch da parede (com aviso de risco)
+  + **seletor de modelo de conversa MOVIDO de Chaves para cá** (pedido do maestro). Sidebar/breadcrumb
+  apontam pra ela; removida a `/configuracoes` plana.
+- O **portão do nó (B)** segue intacto para pausar manualmente onde quiser.
+- 465 testes verdes; build + eslint + ruff (arquivos tocados) limpos. **Docs:** PRODUTO §19 + ARQUITETURA §9.
+
+---
+
 ## FASE — IA de conversa lida com credenciais nomeadas  📋 BACKLOG (anotado 2026-06-21, não iniciar sem o sinal do maestro)
 
 Gatilho: na entrega dos instrumentos de Instagram, a IA criadora **monta** o agente/automação e
