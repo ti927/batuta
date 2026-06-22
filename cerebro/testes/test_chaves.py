@@ -156,6 +156,19 @@ def test_construir_modelo_sem_chave_do_provedor_falha(dados):
             construir_modelo("gpt-4o")
 
 
+def test_construir_modelo_aplica_timeout_finito():
+    """Toda chamada de IA tem timeout FINITO — uma conexão pendurada falha em vez de
+    travar o trabalhador da fila para sempre (causa raiz de execução órfã)."""
+    from orquestracao.llm import TIMEOUT_IA_S
+
+    with usar_chaves({"anthropic": "sk-x"}):
+        m = construir_modelo("claude-haiku-4-5")
+    assert getattr(m, "default_request_timeout", None) == TIMEOUT_IA_S
+    with usar_chaves({"openai": "sk-y"}):
+        o = construir_modelo("gpt-4o")
+    assert getattr(o, "request_timeout", None) == TIMEOUT_IA_S
+
+
 def test_resolver_chaves_por_time_mapa_por_provedor(sessao, dados):
     """A fronteira resolve um mapa {provedor: chave} para a org do time."""
     from chaves import resolver_chaves_por_time

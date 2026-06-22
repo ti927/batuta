@@ -34,6 +34,13 @@ MODELO_PADRAO = "claude-haiku-4-5"
 # (tabelas, vários candidatos, artigos) — 2048 cortava saídas ricas no meio.
 MAX_TOKENS = 8192
 
+# Timeout (s) de UMA chamada de IA. Generoso o bastante para cobrir uma geração
+# cheia (até MAX_TOKENS num modelo lento), mas FINITO: uma conexão pendurada FALHA
+# em vez de travar o trabalhador da fila para sempre — era a causa raiz de execução
+# órfã em `em_andamento`. O sweeper de execução é o backstop; este timeout faz a
+# falha acontecer já na chamada, sem esperar os 15 min do sweeper.
+TIMEOUT_IA_S = 300
+
 # Modelos que NÃO aceitam o parâmetro `temperature` (a API responde 400
 # "temperature is deprecated for this model"). Para eles, omitimos o parâmetro.
 # Centralizado aqui para valer tanto para a IA criadora quanto para qualquer
@@ -86,6 +93,7 @@ def construir_modelo(
         parametros: dict = {
             "model": modelo,
             "max_tokens": MAX_TOKENS,
+            "timeout": TIMEOUT_IA_S,
         }
         # Opus 4.8 (e afins) rejeitam `temperature`; só enviamos quando o modelo
         # aceita.
@@ -109,7 +117,11 @@ def construir_modelo(
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
-            model=modelo, api_key=chave, max_tokens=MAX_TOKENS, temperature=temperatura
+            model=modelo,
+            api_key=chave,
+            max_tokens=MAX_TOKENS,
+            temperature=temperatura,
+            timeout=TIMEOUT_IA_S,
         )
 
     if provedor == PROVEDOR_GOOGLE:
@@ -125,6 +137,7 @@ def construir_modelo(
             api_key=chave,
             max_output_tokens=MAX_TOKENS,
             temperature=temperatura,
+            timeout=TIMEOUT_IA_S,
         )
 
     raise ValueError(f"Provedor de IA não suportado: {provedor}")
