@@ -95,6 +95,9 @@ export type Organizacao = {
   modelo_criadora: string | null;
   // Logo da organização como data URI; null = sem logo (mostra a inicial).
   logo_url: string | null;
+  // Parede de aprovação ligada? Quando false, automações ativam sem exigir
+  // nó-portão antes de ações irreversíveis (config global da org).
+  parede_ativacao: boolean;
   criado_em: string;
   atualizado_em: string;
 };

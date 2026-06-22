@@ -79,6 +79,14 @@ class Organizacao(IdData, Base):
     # Logo/foto da organização, guardado como data URI (a imagem é encolhida no
     # navegador antes de salvar). Nulo = sem logo (a UI mostra a inicial do nome).
     logo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Parede de aprovação: quando True (padrão), a ativação de uma automação exige
+    # um nó-portão antes de uma ação irreversível (publicar/enviar/gravar). Quando
+    # o admin desliga (False), as automações ativam sem essa exigência — o portão
+    # do nó continua disponível para pausar manualmente. Primeira config global da
+    # organização.
+    parede_ativacao: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
 
 
 class Time(IdData, Base):

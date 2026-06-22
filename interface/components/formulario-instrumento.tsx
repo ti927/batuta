@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Lock, ShieldCheck } from "lucide-react";
+import { Lock } from "lucide-react";
 
 import {
   api,
@@ -279,13 +279,6 @@ export function FormularioInstrumento({
       instrumento,
     ),
   );
-  const [aprovacao, setAprovacao] = useState<"auto" | "sim" | "nao">(
-    instrumento?.exige_aprovacao == null
-      ? "auto"
-      : instrumento.exige_aprovacao
-        ? "sim"
-        : "nao",
-  );
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -385,7 +378,6 @@ export function FormularioInstrumento({
         config[campo.nome] = bruto;
       }
     }
-    const exige_aprovacao = aprovacao === "auto" ? null : aprovacao === "sim";
     setSalvando(true);
     try {
       const credencial_id = aceitaCredencial ? credencialId : null;
@@ -395,14 +387,12 @@ export function FormularioInstrumento({
             tipo: tipoSel,
             configuracao: config,
             icone,
-            exige_aprovacao,
             credencial_id,
           })
         : await api.put<Instrumento>(`/instrumentos/${instrumento.id}`, {
             nome: nome.trim(),
             configuracao: config,
             icone,
-            exige_aprovacao,
             credencial_id,
           });
       setErro(null);
@@ -524,36 +514,6 @@ export function FormularioInstrumento({
           Este tipo não precisa de configuração.
         </p>
       )}
-
-      <div className="mt-1 border-t border-border pt-3">
-        <Label className="flex-col items-start gap-1">
-          <span className="flex items-center gap-1.5">
-            <ShieldCheck className="size-3.5 text-muted-foreground" />
-            Aprovação humana antes de agir
-          </span>
-          <Select
-            value={aprovacao}
-            onChange={(e) =>
-              setAprovacao(e.target.value as "auto" | "sim" | "nao")
-            }
-          >
-            <option value="auto">Automático (recomendado)</option>
-            <option value="sim">Sempre exigir aprovação</option>
-            <option value="nao">Nunca exigir (rodar direto)</option>
-          </Select>
-          <span className="text-xs font-normal text-muted-foreground">
-            Automático: consultas (leitura) rodam direto; ações que escrevem ou
-            enviam exigem um humano aprovando antes.
-          </span>
-        </Label>
-        {aprovacao === "nao" && tipoAtual?.acao_irreversivel && (
-          <Aviso variant="atencao" className="mt-2 text-xs">
-            Este tipo pode alterar ou enviar dados de verdade. Desligar a aprovação
-            remove a checagem humana — use só se tiver certeza de que esta
-            configuração é segura (ex.: uma leitura).
-          </Aviso>
-        )}
-      </div>
 
       <div className="flex gap-2">
         <Button onClick={salvar} disabled={salvando}>

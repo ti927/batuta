@@ -64,12 +64,11 @@ def _validar_credencial(
 
 def _ler(sessao: Session, inst: Instrumento) -> Instrumento:
     """Anexa o resumo mascarado dos segredos (campo → 4 últimos dígitos) e o
-    `acao_irreversivel` JÁ RESOLVIDO (tipo+config+interruptor), para o
-    `InstrumentoLer` os devolver — segredos nunca expostos."""
+    `acao_irreversivel` JÁ RESOLVIDO (tipo+config), para o `InstrumentoLer` os
+    devolver — segredos nunca expostos. A UI usa `acao_irreversivel` para o badge
+    'exige aprovação'; a exigência real de portão liga/desliga por organização."""
     inst.segredos = segredos.resumo(sessao, inst.id)
-    inst.acao_irreversivel = encaixe.exige_portao(
-        inst.tipo, inst.configuracao, inst.exige_aprovacao
-    )
+    inst.acao_irreversivel = encaixe.acao_irreversivel(inst.tipo, inst.configuracao)
     return inst
 
 
@@ -139,7 +138,6 @@ def criar(
         tipo=dados.tipo,
         configuracao=config_limpa,
         icone=dados.icone,
-        exige_aprovacao=dados.exige_aprovacao,
         credencial_id=dados.credencial_id,
     )
     sessao.add(inst)
@@ -184,11 +182,9 @@ def editar(
         sessao, inst.tipo,
         auditoria.org_do_time(sessao, inst.time_id), dados.credencial_id,
     )
-    aprovacao_antes = inst.exige_aprovacao
     inst.nome = dados.nome
     inst.configuracao = config_limpa
     inst.icone = dados.icone
-    inst.exige_aprovacao = dados.exige_aprovacao
     inst.credencial_id = dados.credencial_id
     alterados = segredos.salvar_segredos(sessao, inst.id, segredos_novos)
     if alterados:
@@ -197,15 +193,6 @@ def editar(
             recurso_tipo="instrumento", recurso_id=inst.id,
             organizacao_id=auditoria.org_do_time(sessao, inst.time_id),
             detalhe={"segredos": alterados},
-        )
-    # Mudar o interruptor de aprovação afeta a segurança (pode liberar uma escrita
-    # sem portão) — fica auditado.
-    if dados.exige_aprovacao != aprovacao_antes:
-        auditoria.registrar(
-            sessao, usuario=usuario, acao="instrumento.aprovacao_alterada",
-            recurso_tipo="instrumento", recurso_id=inst.id,
-            organizacao_id=auditoria.org_do_time(sessao, inst.time_id),
-            detalhe={"de": aprovacao_antes, "para": dados.exige_aprovacao},
         )
     sessao.commit()
     sessao.refresh(inst)

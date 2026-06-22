@@ -23,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import instrumentos as encaixe
-from modelos import Agente, AgenteInstrumento, Instrumento
+from modelos import Agente, AgenteInstrumento, Instrumento, Organizacao, Time
 from orquestracao import grafo
 
 
@@ -41,20 +41,20 @@ def coletar_agentes(
         ).all()
     }
     irreversiveis: set[str] = set()
-    for aid, tipo, configuracao, exige in sessao.execute(
+    for aid, tipo, configuracao in sessao.execute(
         select(
             AgenteInstrumento.agente_id,
             Instrumento.tipo,
             Instrumento.configuracao,
-            Instrumento.exige_aprovacao,
         )
         .join(Instrumento, Instrumento.id == AgenteInstrumento.instrumento_id)
         .join(Agente, Agente.id == AgenteInstrumento.agente_id)
         .where(Agente.time_id == time_id)
     ).all():
-        # Resolve por INSTÂNCIA: o interruptor manda; senão deriva do tipo+config
-        # (REST pelo método, SQL pelo somente_leitura). Uma consulta não exige portão.
-        if encaixe.exige_portao(tipo, configuracao, exige):
+        # Irreversibilidade pelo TIPO + CONFIG (REST pelo método, SQL pelo
+        # somente_leitura). Uma consulta não exige portão. (Não há mais interruptor
+        # por instância — a parede liga/desliga por organização, ver `validar`.)
+        if encaixe.acao_irreversivel(tipo, configuracao):
             irreversiveis.add(str(aid))
     return nomes, irreversiveis
 
@@ -69,7 +69,6 @@ def problemas_de_portao(
     cadeia = grafo.normalizar(cadeia or {})
     nos = cadeia.get("nos") or []
     inicial = cadeia.get("inicial")
-    por_id = {n["id"]: n for n in nos}
 
     def nome_no(no: dict) -> str:
         # nó-agente: nome do agente; senão, nome do nó (roteador) ou o tipo.
@@ -120,6 +119,15 @@ def problemas_de_portao(
 
 def validar(sessao: Session, time_id: uuid.UUID, cadeia: dict) -> list[str]:
     """Conveniência: coleta os agentes do time e devolve os problemas de portão
-    para a `cadeia` dada (a que está sendo ativada). Vazia = pode ativar."""
+    para a `cadeia` dada (a que está sendo ativada). Vazia = pode ativar.
+
+    A parede é uma config GLOBAL da organização (`organizacoes.parede_ativacao`):
+    se a org a desligou, NÃO há exigência de portão — devolve vazio direto. É o
+    PONTO ÚNICO consultado pela rota de ativação e pela IA criadora."""
+    time = sessao.get(Time, time_id)
+    if time is not None:
+        org = sessao.get(Organizacao, time.organizacao_id)
+        if org is not None and not org.parede_ativacao:
+            return []  # parede desligada → ativa sem exigir portão
     nomes, irreversiveis = coletar_agentes(sessao, time_id)
     return problemas_de_portao(cadeia, nomes, irreversiveis)

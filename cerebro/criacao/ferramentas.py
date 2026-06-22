@@ -232,10 +232,11 @@ def _snapshot_time(ctx: ContextoCriacao) -> dict:
             {
                 "id": str(i.id), "nome": i.nome, "tipo": i.tipo,
                 "configuracao": i.configuracao,
-                # Resolvido por INSTÂNCIA (tipo+config+interruptor): diz se a IA
-                # precisa pôr portão antes deste instrumento. Consulta = False.
-                "acao_irreversivel": encaixe.exige_portao(
-                    i.tipo, i.configuracao, i.exige_aprovacao
+                # Resolvido por tipo+config: diz se a IA precisa pôr portão antes
+                # deste instrumento. Consulta = False. (A parede liga/desliga por
+                # organização; aqui é só a classificação do instrumento.)
+                "acao_irreversivel": encaixe.acao_irreversivel(
+                    i.tipo, i.configuracao
                 ),
                 "segredos_pendentes": segredos.pendentes(
                     i.tipo,

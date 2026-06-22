@@ -60,6 +60,12 @@ class ModeloCriadoraEditar(BaseModel):
     modelo: str | None = Field(default=None, max_length=100)
 
 
+class ParedeAtivacaoEditar(BaseModel):
+    """Liga/desliga a parede de aprovação da organização (config global da org)."""
+
+    ativada: bool
+
+
 class OrganizacaoLer(BaseModel):
     """Organização como a API a devolve."""
 
@@ -70,6 +76,7 @@ class OrganizacaoLer(BaseModel):
     dono_id: uuid.UUID
     modelo_criadora: str | None = None
     logo_url: str | None = None
+    parede_ativacao: bool = True
     criado_em: datetime
     atualizado_em: datetime
 
@@ -182,13 +189,13 @@ class AgenteLer(BaseModel):
 
 class InstrumentoCriar(BaseModel):
     """Dados para criar um instrumento. A configuração é validada contra o
-    esquema do tipo (o encaixe), não aqui. `exige_aprovacao` (interruptor de
-    portão humano): NULL = automático; True = sempre; False = nunca."""
+    esquema do tipo (o encaixe), não aqui. A exigência de portão de aprovação
+    deriva do tipo+config (ação irreversível) e liga/desliga por organização —
+    não há mais interruptor por instrumento."""
 
     nome: str = Field(min_length=1, max_length=200)
     tipo: str = Field(min_length=1, max_length=50)
     configuracao: dict = Field(default_factory=dict)
-    exige_aprovacao: bool | None = None
     # Ícone escolhido na UI (ex.: "fab:whatsapp"). NULL = ícone genérico.
     icone: str | None = Field(default=None, max_length=60)
     # Caixa-forte: se preenchido, o instrumento usa uma credencial nomeada da
@@ -198,11 +205,10 @@ class InstrumentoCriar(BaseModel):
 
 class InstrumentoEditar(BaseModel):
     """Edita um instrumento. O tipo é fixo após a criação; muda-se nome,
-    configuração e o interruptor de aprovação."""
+    configuração, ícone e a credencial."""
 
     nome: str = Field(min_length=1, max_length=200)
     configuracao: dict = Field(default_factory=dict)
-    exige_aprovacao: bool | None = None
     icone: str | None = Field(default=None, max_length=60)
     credencial_id: uuid.UUID | None = None
 
@@ -210,9 +216,9 @@ class InstrumentoEditar(BaseModel):
 class InstrumentoLer(BaseModel):
     """Instrumento como a API o devolve. `segredos` (Fase 7-B) traz, por campo
     secreto já guardado, só os 4 últimos dígitos — o valor nunca é reexibido.
-    `exige_aprovacao` é o interruptor (NULL/True/False); `acao_irreversivel` é o
-    valor JÁ RESOLVIDO (tipo+config+interruptor), que a UI usa para mostrar se
-    exige portão."""
+    `acao_irreversivel` é o valor JÁ RESOLVIDO (tipo+config), que a UI usa para o
+    badge 'ação irreversível'. (`exige_aprovacao` é legado: não há mais interruptor
+    por instrumento — a parede liga/desliga por organização.)"""
 
     model_config = ConfigDict(from_attributes=True)
 

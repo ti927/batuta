@@ -89,7 +89,6 @@ def test_registrado_com_chave_e_pool_openai():
 def test_nao_e_irreversivel_nao_exige_portao():
     # Gerar/montar imagem não age no mundo externo → SEM portão.
     assert encaixe.acao_irreversivel("montar_imagem", {}) is False
-    assert encaixe.exige_portao("montar_imagem", {}, None) is False
 
 
 def test_e_instrumento_pago():

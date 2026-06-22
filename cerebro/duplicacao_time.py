@@ -131,7 +131,6 @@ def duplicar_time(
             tipo=inst.tipo,
             configuracao=config,
             icone=inst.icone,
-            exige_aprovacao=inst.exige_aprovacao,
             # canal: zera a credencial p/ não resolver o mesmo bot; senão mantém.
             credencial_id=None if eh_canal else inst.credencial_id,
         )

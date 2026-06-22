@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import {
   type ChaveApiLer,
   type Credencial,
-  type ModelosDisponiveis,
   type Organizacao,
   type PapelAcesso,
   type TipoCredencial,
@@ -16,7 +15,6 @@ async function carregar(organizacaoId: string): Promise<{
   organizacao: Organizacao;
   meuPapel: PapelAcesso | null;
   chaves: ChaveApiLer[];
-  disponiveis: ModelosDisponiveis | null;
   credenciais: Credencial[];
   tiposCredencial: TipoCredencial[];
 } | null> {
@@ -32,23 +30,20 @@ async function carregar(organizacaoId: string): Promise<{
 
   // Só admin gere chaves e credenciais (o cérebro devolve 403 aos demais).
   let chaves: ChaveApiLer[] = [];
-  let disponiveis: ModelosDisponiveis | null = null;
   let credenciais: Credencial[] = [];
   let tiposCredencial: TipoCredencial[] = [];
   if (meuPapel === "admin") {
-    const [respChaves, respDisp, respCred, respTipos] = await Promise.all([
+    const [respChaves, respCred, respTipos] = await Promise.all([
       buscarCerebro(`/organizacoes/${organizacaoId}/chaves`),
-      buscarCerebro(`/organizacoes/${organizacaoId}/modelos-disponiveis`),
       buscarCerebro(`/organizacoes/${organizacaoId}/credenciais`),
       buscarCerebro(`/credenciais/tipos`),
     ]);
     if (respChaves.ok) chaves = await respChaves.json();
-    if (respDisp.ok) disponiveis = await respDisp.json();
     if (respCred.ok) credenciais = await respCred.json();
     if (respTipos.ok) tiposCredencial = await respTipos.json();
   }
 
-  return { organizacao, meuPapel, chaves, disponiveis, credenciais, tiposCredencial };
+  return { organizacao, meuPapel, chaves, credenciais, tiposCredencial };
 }
 
 export default async function ChavesOrgPage({
@@ -64,7 +59,6 @@ export default async function ChavesOrgPage({
       organizacao={dados.organizacao}
       meuPapel={dados.meuPapel}
       chaves={dados.chaves}
-      disponiveis={dados.disponiveis}
       credenciais={dados.credenciais}
       tiposCredencial={dados.tiposCredencial}
     />

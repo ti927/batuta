@@ -6,28 +6,24 @@ import { ChevronLeft } from "lucide-react";
 import {
   type ChaveApiLer,
   type Credencial,
-  type ModelosDisponiveis,
   type Organizacao,
   type PapelAcesso,
   type TipoCredencial,
 } from "@/lib/api";
 import { GestaoChaves } from "@/components/gestao-chaves";
 import { CofreCredenciais } from "@/components/cofre-credenciais";
-import { SeletorModeloConversa } from "@/components/seletor-modelo-conversa";
 import { Aviso } from "@/components/ui/aviso";
 
 export function ChavesCliente({
   organizacao,
   meuPapel,
   chaves,
-  disponiveis,
   credenciais,
   tiposCredencial,
 }: {
   organizacao: Organizacao;
   meuPapel: PapelAcesso | null;
   chaves: ChaveApiLer[];
-  disponiveis: ModelosDisponiveis | null;
   credenciais: Credencial[];
   tiposCredencial: TipoCredencial[];
 }) {
@@ -72,11 +68,6 @@ export function ChavesCliente({
             <GestaoChaves
               basePath={`/organizacoes/${organizacao.id}/chaves`}
               chavesIniciais={chaves}
-            />
-            <SeletorModeloConversa
-              organizacaoId={organizacao.id}
-              modeloAtual={organizacao.modelo_criadora}
-              disponiveis={disponiveis ?? {}}
             />
           </section>
 

@@ -196,24 +196,14 @@ def acao_irreversivel(tipo: str, configuracao: dict | None = None) -> bool:
     """Se um instrumento faz ação irreversível, JÁ considerando a configuração
     (tipo desconhecido = False). Sem `configuracao`, cai no baseline do tipo —
     mas o correto é sempre passar a config da instância (REST lê do método, SQL
-    do somente_leitura). Base da parede de ativação."""
+    do somente_leitura). É a FONTE ÚNICA da parede de ativação: um instrumento
+    exige portão antes se, e só se, sua ação for irreversível pelo tipo+config.
+    (Não há mais interruptor por instância: a parede liga/desliga por ORGANIZAÇÃO
+    em `organizacoes.parede_ativacao`.)"""
     t = obter_tipo(tipo)
     if t is None:
         return False
     return bool(t.irreversivel_para(configuracao or {}))
-
-
-def exige_portao(
-    tipo: str, configuracao: dict | None, exige_aprovacao: bool | None
-) -> bool:
-    """Resolução FINAL: este instrumento exige portão de aprovação humana antes?
-
-    O interruptor da instância manda: `True` força portão, `False` dispensa
-    (mesmo numa escrita — guard-rail é o aviso na UI + auditoria). `None` =
-    automático: deriva do tipo + config (`acao_irreversivel`)."""
-    if exige_aprovacao is not None:
-        return bool(exige_aprovacao)
-    return acao_irreversivel(tipo, configuracao)
 
 
 def preparar_config(tipo: str, configuracao: dict | None) -> tuple[dict, dict]:

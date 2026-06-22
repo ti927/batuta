@@ -1,9 +1,9 @@
-"""Irreversibilidade dos instrumentos — agora resolvida por (tipo + config + interruptor).
+"""Irreversibilidade dos instrumentos — resolvida por (tipo + config).
 
 Irreversível = age no mundo externo sem desfazer (publicar/enviar/gravar/apagar). É o
 que a parede de ativação usa para exigir portão humano. Mas uma CONSULTA (REST GET, SQL
-somente-leitura, busca) não muda nada e não exige portão. O interruptor por instância
-(`exige_aprovacao`) sobrepõe a derivação."""
+somente-leitura, busca) não muda nada e não exige portão. Não há mais interruptor por
+instrumento: a parede liga/desliga por ORGANIZAÇÃO (ver test_portao_ativacao)."""
 
 import instrumentos as encaixe
 from criacao.ferramentas import catalogo_de_instrumentos
@@ -48,12 +48,9 @@ def test_tipos_que_sempre_escrevem():
 
 
 def test_webhook_nao_exige_portao():
-    """Webhook de saída é gatilho de automação em massa: por padrão (automático)
-    NÃO gateia. O interruptor por nó ainda pode forçar ou dispensar."""
+    """Webhook de saída é gatilho de automação em massa: NÃO é irreversível para a
+    parede (não gateia)."""
     assert encaixe.acao_irreversivel("disparar_webhook", {}) is False
-    assert encaixe.exige_portao("disparar_webhook", {}, None) is False
-    # quem quiser barrar um webhook específico ainda força pelo interruptor:
-    assert encaixe.exige_portao("disparar_webhook", {}, True) is True
 
 
 def test_tipos_de_leitura():
@@ -63,13 +60,3 @@ def test_tipos_de_leitura():
 
 def test_tipo_desconhecido_e_reversivel():
     assert encaixe.acao_irreversivel("nao_existe") is False
-    assert encaixe.exige_portao("nao_existe", {}, None) is False
-
-
-def test_interruptor_sobrepoe_a_derivacao():
-    # None = automático (deriva)
-    assert encaixe.exige_portao("chamar_api_rest", {"metodo": "GET"}, None) is False
-    assert encaixe.exige_portao("chamar_api_rest", {"metodo": "POST"}, None) is True
-    # True força portão até num GET; False dispensa até numa escrita (guard-rail = UI)
-    assert encaixe.exige_portao("chamar_api_rest", {"metodo": "GET"}, True) is True
-    assert encaixe.exige_portao("disparar_webhook", {}, False) is False

@@ -178,9 +178,9 @@ export function Sidebar({
               Chaves e credenciais
             </ItemNav>
             <ItemNav
-              href="/configuracoes"
+              href={`/organizacoes/${org.id}/configuracoes`}
               Icone={Settings}
-              ativo={ativo("/configuracoes")}
+              ativo={ativo(`/organizacoes/${org.id}/configuracoes`)}
             >
               Configurações da organização
             </ItemNav>

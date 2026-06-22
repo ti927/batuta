@@ -127,17 +127,29 @@ def test_ativar_publicador_com_portao_passa(cliente, entrar, dados, sessao):
     assert resp.json()["ativa"] is True
 
 
-# ───── resolução POR INSTÂNCIA (config + interruptor) na rota ─────
+def test_parede_desligada_ativa_sem_portao(cliente, entrar, dados, sessao):
+    """Parede da organização DESLIGADA (config global): ativar uma ação irreversível
+    SEM nó-portão antes deixa de ser bloqueado."""
+    dados["orgA"].parede_ativacao = False
+    sessao.flush()
+    cadeia = _time_com_publicador(sessao, dados["timeA"], com_portao=False)
+    entrar(dados["operador"])
+    resp = cliente.post(
+        f"/times/{dados['timeA'].id}/automacoes", json=_payload(cadeia, ativa=True)
+    )
+    assert resp.status_code == 201 and resp.json()["ativa"] is True
 
-def _time_com_instrumento(sessao, time, *, tipo, configuracao, exige=None, portao=False):
+
+# ───── resolução por tipo + config na rota ─────
+
+def _time_com_instrumento(sessao, time, *, tipo, configuracao, portao=False):
     """Líder → Operador (com o instrumento dado). Devolve a cadeia."""
     lider = Agente(time_id=time.id, nome="Líder", papel="lider")
     operador = Agente(time_id=time.id, nome="Operador", papel="agente")
     sessao.add_all([lider, operador])
     sessao.flush()
     inst = Instrumento(
-        time_id=time.id, nome="Inst", tipo=tipo,
-        configuracao=configuracao, exige_aprovacao=exige,
+        time_id=time.id, nome="Inst", tipo=tipo, configuracao=configuracao,
     )
     sessao.add(inst)
     sessao.flush()
@@ -176,16 +188,6 @@ def test_rest_post_sem_portao_bloqueia(cliente, entrar, dados, sessao):
     entrar(dados["operador"])
     resp = _ativar(cliente, dados["timeA"].id, cadeia)
     assert resp.status_code == 422 and "Operador" in str(resp.json()["detail"])
-
-
-def test_rest_get_com_override_sempre_bloqueia(cliente, entrar, dados, sessao):
-    # interruptor "sempre" (True) força portão até num GET
-    cadeia = _time_com_instrumento(
-        sessao, dados["timeA"], tipo="chamar_api_rest",
-        configuracao={"url": "https://x", "metodo": "GET"}, exige=True,
-    )
-    entrar(dados["operador"])
-    assert _ativar(cliente, dados["timeA"].id, cadeia).status_code == 422
 
 
 def test_sql_somente_leitura_sem_portao_ativa(cliente, entrar, dados, sessao):
