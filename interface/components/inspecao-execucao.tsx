@@ -27,11 +27,17 @@ import {
   type PapelAcesso,
   type PassoExecucao,
   type Time,
+  type TipoInstrumento,
 } from "@/lib/api";
 import { podeOperar } from "@/lib/permissoes";
 import { rotuloOrigem } from "@/lib/uso";
 import { DrawerAgente } from "@/components/drawer-agente";
+import { DrawerInstrumento } from "@/components/drawer-instrumento";
+import { IconeInstrumento } from "@/components/icone-instrumento";
 import { RobotFace } from "@/components/robot-face";
+
+// Quantos instrumentos do cinto cabem na linha do passo antes de virar "+X mais".
+const MAX_BADGES_PASSO = 3;
 import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -140,6 +146,7 @@ type ItemPasso =
       tom: TomDot;
       indice: number;
       agente: Agente | undefined;
+      cinto: Instrumento[];
       passo: PassoExecucao;
     }
   | { tipo: "final"; chave: string; tom: TomDot; rotulo: string };
@@ -147,17 +154,20 @@ type ItemPasso =
 function construirItens(
   execucao: ExecucaoComPassos,
   agentes: Agente[],
+  cintos: Record<string, Instrumento[]>,
 ): ItemPasso[] {
   const pausado = execucao.estado === "aguardando_humano";
   const itens: ItemPasso[] = execucao.passos.map((p, i) => {
     const ehUltimo = i === execucao.passos.length - 1;
     const idx = agentes.findIndex((a) => a.id === p.agente_id);
+    const agente = agentes[idx];
     return {
       tipo: "passo",
       chave: p.id,
       tom: (ehUltimo && pausado ? "espera" : "ok") as TomDot,
       indice: idx >= 0 ? idx : i,
-      agente: agentes[idx],
+      agente,
+      cinto: agente ? (cintos[agente.id] ?? []) : [],
       passo: p,
     };
   });
@@ -177,11 +187,13 @@ function LinhaPasso({
   selecionado,
   onSelecionar,
   onEditarAgente,
+  onEditarInstrumento,
 }: {
   item: ItemPasso;
   selecionado: boolean;
   onSelecionar: () => void;
   onEditarAgente?: (agenteId: string) => void;
+  onEditarInstrumento?: (instrumentoId: string) => void;
 }) {
   const base =
     "flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors";
@@ -200,6 +212,12 @@ function LinhaPasso({
   const dur = duracao(passo);
   const toks = tokensDoPasso(passo);
   const usouInstrumento = (passo.saida?.instrumentos_acionados ?? []).length > 0;
+  // Cinto do agente deste passo, como badges (mesmo padrão do nó): até
+  // MAX_BADGES_PASSO; o excedente vira "+X mais" (abre o drawer do agente).
+  const cinto = item.cinto;
+  const mostrados =
+    cinto.length <= MAX_BADGES_PASSO ? cinto : cinto.slice(0, MAX_BADGES_PASSO - 1);
+  const resto = cinto.length - mostrados.length;
   // É um `div` (não `button`) para poder conter o botão do lápis; teclado preservado.
   return (
     <div
@@ -247,9 +265,42 @@ function LinhaPasso({
           {dur && <span>{dur}</span>}
           {toks > 0 && <span>{toks.toLocaleString("pt-BR")} tok</span>}
         </span>
+        {/* Cinto do agente: badges clicáveis (corrige um instrumento sem sair da
+            execução). "+X mais" abre o drawer do agente (cinto completo). */}
+        {cinto.length > 0 && onEditarInstrumento && (
+          <span className="mt-1 flex flex-wrap gap-1">
+            {mostrados.map((inst) => (
+              <button
+                key={inst.id}
+                type="button"
+                title={`Editar o instrumento “${inst.nome}”`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditarInstrumento(inst.id);
+                }}
+                className="inline-flex items-center gap-1 rounded-full bg-accent px-1.5 py-0.5 text-[10.5px] text-accent-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+              >
+                <IconeInstrumento icone={inst.icone} className="size-2.5" />
+                <span className="max-w-[120px] truncate">{inst.nome}</span>
+              </button>
+            ))}
+            {resto > 0 && agente && onEditarAgente && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditarAgente(agente.id);
+                }}
+                className="rounded-full px-1.5 py-0.5 text-[10.5px] font-medium text-primary hover:underline"
+              >
+                +{resto} mais
+              </button>
+            )}
+          </span>
+        )}
       </span>
       {usouInstrumento && (
-        <Wrench className="size-3.5 shrink-0 text-muted-foreground" />
+        <Wrench className="size-3.5 shrink-0 self-start text-muted-foreground" />
       )}
     </div>
   );
@@ -343,13 +394,17 @@ function DetalheItem({
 function Passos({
   execucao,
   agentes,
+  cintos,
   onEditarAgente,
+  onEditarInstrumento,
 }: {
   execucao: ExecucaoComPassos;
   agentes: Agente[];
+  cintos: Record<string, Instrumento[]>;
   onEditarAgente?: (agenteId: string) => void;
+  onEditarInstrumento?: (instrumentoId: string) => void;
 }) {
-  const itens = construirItens(execucao, agentes);
+  const itens = construirItens(execucao, agentes, cintos);
   // Começa no último item (o desfecho — entrega ou falha): é o que o usuário quer
   // ver primeiro ao abrir uma execução encerrada.
   const [sel, setSel] = useState<string | null>(null);
@@ -375,6 +430,7 @@ function Passos({
                 selecionado={selecionado?.chave === it.chave}
                 onSelecionar={() => setSel(it.chave)}
                 onEditarAgente={onEditarAgente}
+                onEditarInstrumento={onEditarInstrumento}
               />
             </li>
           ))}
@@ -502,7 +558,9 @@ export function PainelExecucao({
   onCancelar,
   cancelando,
   podeCancelar,
+  cintos,
   onEditarAgente,
+  onEditarInstrumento,
 }: {
   execucao: ExecucaoComPassos;
   automacao: Automacao;
@@ -514,7 +572,9 @@ export function PainelExecucao({
   onCancelar: () => void;
   cancelando: boolean;
   podeCancelar: boolean;
+  cintos?: Record<string, Instrumento[]>;
   onEditarAgente?: (agenteId: string) => void;
+  onEditarInstrumento?: (instrumentoId: string) => void;
 }) {
   // Só dá para cancelar enquanto a execução não encerrou de vez (a fila/portão
   // ainda a tem viva). O backend recusa (409) se já encerrou.
@@ -570,7 +630,9 @@ export function PainelExecucao({
         <Passos
           execucao={execucao}
           agentes={agentes}
+          cintos={cintos ?? {}}
           onEditarAgente={onEditarAgente}
+          onEditarInstrumento={onEditarInstrumento}
         />
       </div>
 
@@ -617,6 +679,7 @@ export function InspecaoExecucao({
   onTerminal,
   cintos,
   instrumentosTime,
+  tipos,
   time,
   conversaId,
 }: {
@@ -626,10 +689,11 @@ export function InspecaoExecucao({
   meuPapel: PapelAcesso | null;
   inicial?: ExecucaoComPassos;
   onTerminal?: () => void;
-  // Para editar o agente de um passo pelo lápis (drawer), sem sair da execução.
-  // Opcionais: sem eles, o lápis simplesmente não aparece.
+  // Para editar o agente/instrumento de um passo pelo lápis e pelos badges
+  // (drawers), sem sair da execução. Opcionais: sem eles, não aparecem.
   cintos?: Record<string, Instrumento[]>;
   instrumentosTime?: Instrumento[];
+  tipos?: TipoInstrumento[];
   time?: Time;
   conversaId?: string | null;
 }) {
@@ -637,9 +701,15 @@ export function InspecaoExecucao({
   const podeCancelar = podeOperar(meuPapel);
   // Lápis no passo: só quando temos os dados que o DrawerAgente exige.
   const podeEditarAgente = !!(time && cintos && instrumentosTime);
+  // Badge clicável: só quando temos o catálogo de tipos (DrawerInstrumento).
+  const podeEditarInstrumento = !!(time && tipos);
   const [editAgenteId, setEditAgenteId] = useState<string | null>(null);
+  const [editInstrumentoId, setEditInstrumentoId] = useState<string | null>(null);
   const agenteEdit = editAgenteId
     ? (agentes.find((a) => a.id === editAgenteId) ?? null)
+    : null;
+  const instrumentoEdit = editInstrumentoId
+    ? ((instrumentosTime ?? []).find((i) => i.id === editInstrumentoId) ?? null)
     : null;
   const [execucao, setExecucao] = useState<ExecucaoComPassos | null>(inicial ?? null);
   const [erro, setErro] = useState<string | null>(null);
@@ -773,8 +843,12 @@ export function InspecaoExecucao({
         onCancelar={cancelar}
         cancelando={cancelando}
         podeCancelar={podeCancelar}
+        cintos={cintos}
         onEditarAgente={
           podeEditarAgente ? (id) => setEditAgenteId(id) : undefined
+        }
+        onEditarInstrumento={
+          podeEditarInstrumento ? (id) => setEditInstrumentoId(id) : undefined
         }
       />
 
@@ -790,6 +864,19 @@ export function InspecaoExecucao({
           meuPapel={meuPapel}
           conversaId={conversaId ?? null}
           onFechar={() => setEditAgenteId(null)}
+        />
+      )}
+
+      {/* Editor do instrumento aberto por um badge — corrigir sem sair daqui. */}
+      {instrumentoEdit && time && tipos && (
+        <DrawerInstrumento
+          key={instrumentoEdit.id}
+          instrumento={instrumentoEdit}
+          tipos={tipos}
+          time={time}
+          meuPapel={meuPapel}
+          onFechar={() => setEditInstrumentoId(null)}
+          onSalvou={(salvo) => setEditInstrumentoId(salvo.id)}
         />
       )}
     </>

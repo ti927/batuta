@@ -10,6 +10,7 @@ import {
   type Instrumento,
   type PapelAcesso,
   type Time,
+  type TipoInstrumento,
 } from "@/lib/api";
 import { buscarCerebro, buscarMeuAcesso } from "@/lib/cerebro-servidor";
 import { InspecaoExecucao } from "@/components/inspecao-execucao";
@@ -27,6 +28,7 @@ async function carregar(
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
+  tipos: TipoInstrumento[];
   time: Time;
   meuPapel: PapelAcesso | null;
   conversaId: string | null;
@@ -36,11 +38,12 @@ async function carregar(
   if (!respExec.ok) throw new Error("Falha ao carregar a execução");
   const execucao: ExecucaoComPassos = await respExec.json();
 
-  const [respAuto, respAgentes, respTime, respInst, eu] = await Promise.all([
+  const [respAuto, respAgentes, respTime, respInst, respTipos, eu] = await Promise.all([
     buscarCerebro(`/automacoes/${execucao.automacao_id}`),
     buscarCerebro(`/times/${timeId}/agentes`),
     buscarCerebro(`/times/${timeId}`),
     buscarCerebro(`/times/${timeId}/instrumentos`),
+    buscarCerebro(`/instrumentos/tipos`),
     buscarMeuAcesso(),
   ]);
   if (!respAuto.ok || !respTime.ok) return null;
@@ -67,6 +70,7 @@ async function carregar(
     agentes,
     cintos: Object.fromEntries(cintosPares),
     instrumentos: await jsonOu<Instrumento[]>(respInst, []),
+    tipos: await jsonOu<TipoInstrumento[]>(respTipos, []),
     time,
     meuPapel: eu?.papeis[time.organizacao_id] ?? null,
     conversaId: conversas.find((c) => c.time_id === timeId)?.id ?? null,
@@ -99,6 +103,7 @@ export default async function ExecucaoDetalhePage({
           inicial={dados.execucao}
           cintos={dados.cintos}
           instrumentosTime={dados.instrumentos}
+          tipos={dados.tipos}
           time={dados.time}
           conversaId={dados.conversaId}
         />
