@@ -217,10 +217,10 @@ function LinhaPasso({
   const mostrados =
     cinto.length <= MAX_BADGES_PASSO ? cinto : cinto.slice(0, MAX_BADGES_PASSO - 1);
   const resto = cinto.length - mostrados.length;
-  // Estrutura espelha o nó da automação: lápis redondo flutuando na borda
-  // esquerda (fora do fluxo, não empurra o conteúdo); avatar+nome numa linha;
-  // badges do cinto full-width embaixo. É um `div` (não `button`) p/ conter os
-  // botões; teclado preservado.
+  // Estrutura espelha o nó da automação: avatar+nome numa linha (lápis discreto
+  // à direita, onde antes ficava o ícone de ferramenta); badges do cinto
+  // full-width embaixo. É um `div` (não `button`) p/ conter os botões; teclado
+  // preservado.
   return (
     <div
       role="button"
@@ -232,26 +232,10 @@ function LinhaPasso({
           onSelecionar();
         }
       }}
-      className={`relative flex flex-col gap-1.5 py-2.5 pl-9 pr-3 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${fundo}`}
+      className={`relative flex flex-col gap-1.5 px-3 py-2.5 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${fundo}`}
     >
-      {/* Lápis: redondo, na borda esquerda, alinhado ao avatar. Edita o agente
-          deste passo sem sair da execução. Só para passos com agente resolvido. */}
-      {agente && onEditarAgente && (
-        <button
-          type="button"
-          title={`Editar o agente “${agente.nome}”`}
-          aria-label={`Editar o agente ${agente.nome}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onEditarAgente(agente.id);
-          }}
-          className="absolute left-1 top-2.5 z-10 grid size-7 place-items-center rounded-full border border-[#E8E6F0] bg-card text-[#6D4AFF] shadow-sm transition-colors hover:bg-[#F4F1FE]"
-        >
-          <Pencil className="size-3.5" />
-        </button>
-      )}
-
-      {/* avatar + nome/info, alinhados */}
+      {/* avatar + nome/info, com o lápis no canto direito (onde ficava a
+          ferramenta). Edita o agente deste passo sem sair da execução. */}
       <div className="flex items-center gap-2.5">
         <span className="relative flex-none">
           <RobotFace size={28} indice={indice} lider={agente?.papel === "lider"} />
@@ -271,6 +255,20 @@ function LinhaPasso({
             {toks > 0 && <span>{toks.toLocaleString("pt-BR")} tok</span>}
           </span>
         </span>
+        {agente && onEditarAgente && (
+          <button
+            type="button"
+            title={`Editar o agente “${agente.nome}”`}
+            aria-label={`Editar o agente ${agente.nome}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditarAgente(agente.id);
+            }}
+            className="shrink-0 self-start p-0.5 text-muted-foreground transition-colors hover:text-primary"
+          >
+            <Pencil className="size-3.5" />
+          </button>
+        )}
       </div>
 
       {/* Cinto do agente: badges clicáveis (corrige um instrumento sem sair da
