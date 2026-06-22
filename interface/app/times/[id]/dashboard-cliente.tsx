@@ -104,6 +104,10 @@ export function DashboardCliente({
       : nAutomacoes === 1 && resumo?.gatilho
         ? (ROTULO_GATILHO[resumo.gatilho] ?? resumo.gatilho)
         : `${nAutomacoes} automações`;
+  // A URL do webhook é POR AUTOMAÇÃO (não do time). Quando há uma única automação e ela
+  // é webhook, o card leva direto à automação, onde a URL aparece pronta para copiar.
+  const automacaoUnica = automacoes.length === 1 ? automacoes[0] : undefined;
+  const gatilhoWebhook = automacaoUnica?.tipo_gatilho === "webhook";
 
   const pendencias = resumo?.pendencias ?? 0;
   const custo = resumo?.custo_acumulado_usd ?? 0;
@@ -120,7 +124,19 @@ export function DashboardCliente({
             tom={{ bg: "#EFEAFF", fg: "#6D4AFF" }}
             rotulo="Gatilho"
             valor={gatilhoLabel}
-            sub={ativo ? "disparando normalmente" : "ainda não ativado"}
+            sub={
+              gatilhoWebhook
+                ? "ver/copiar a URL do webhook →"
+                : ativo
+                  ? "disparando normalmente"
+                  : "ainda não ativado"
+            }
+            acento={gatilhoWebhook}
+            href={
+              gatilhoWebhook && automacaoUnica
+                ? `/automacoes/${automacaoUnica.id}`
+                : undefined
+            }
           />
           <StatCard
             Icone={MessageSquare}

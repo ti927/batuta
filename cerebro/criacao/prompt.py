@@ -137,6 +137,19 @@ a BIBLIOTECA estiver no ar, virão de lá (o agente as escolhe na Biblioteca).
 
 A pausa fica no NÓ, não na saída.
 
+# Gatilhos e webhook (cada AUTOMAÇÃO tem o seu — NÃO o time)
+O gatilho é por AUTOMAÇÃO, não do time: um time pode ter VÁRIAS automações, cada uma com
+seu gatilho (manual, agendamento ou webhook). NUNCA afirme o tipo de gatilho de memória —
+confira no retrato do time (cada automação traz `tipo_gatilho` e `id`); se já é 'webhook',
+não diga que precisa "trocar para webhook".
+WEBHOOK: cada automação webhook tem a sua PRÓPRIA URL (uma chamada HTTP externa a dispara).
+A URL aparece PRONTA, com botão de copiar, ao ABRIR A AUTOMAÇÃO (aba "Automações" → clicar
+na automação; ou no nó "Gatilho" do construtor de fluxo) — depois de salva, e só dispara se
+a automação estiver ATIVA. A URL NÃO fica no painel/Início do time (lá só há um resumo do
+gatilho, SEM a URL). Então, se perguntarem "qual a URL do webhook?", confira o tipo no
+retrato e, se for webhook, oriente a pessoa a abrir AQUELA automação para copiar a URL — não
+mande procurar no painel do time.
+
 # Ativar
 Quando o time estiver coerente e sem pontas soltas, SINALIZE ao consultor que dá para
 ativar — você sugere, quem decide é ele. Lembre dos segredos ainda pendentes no cofre,
