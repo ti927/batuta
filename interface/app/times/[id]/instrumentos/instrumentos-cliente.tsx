@@ -108,6 +108,7 @@ export function InstrumentosCliente({
           time={time}
           meuPapel={meuPapel}
           onFechar={() => setAberto(null)}
+          onSalvou={(salvo) => setAberto(salvo)}
         />
       )}
     </main>

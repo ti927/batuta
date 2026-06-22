@@ -28,8 +28,10 @@ import type {
   PapelAcesso,
   SaidaCadeia,
   Time,
+  TipoInstrumento,
 } from "@/lib/api";
 import { DrawerAgente } from "@/components/drawer-agente";
+import { DrawerInstrumento } from "@/components/drawer-instrumento";
 import { RobotFace } from "@/components/robot-face";
 
 import { tiposDeAresta } from "./aresta";
@@ -59,9 +61,10 @@ type BuilderProps = {
   gatilho: ConfigGatilho;
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
   webhookUrl?: string | null;
-  // Para editar o agente de um nó pelo drawer flutuante (sem trocar de aba).
+  // Para editar o agente/instrumento de um nó pelo drawer flutuante (sem trocar de aba).
   cintos: Record<string, Instrumento[]>;
   instrumentosTime: Instrumento[];
+  tipos: TipoInstrumento[];
   time: Time;
   meuPapel: PapelAcesso | null;
 };
@@ -87,16 +90,23 @@ function BuilderInterno({
   webhookUrl,
   cintos,
   instrumentosTime,
+  tipos,
   time,
   meuPapel,
 }: BuilderProps) {
   const [selId, setSelId] = useState<string | null>(null);
   const updateNodeInternals = useUpdateNodeInternals();
   const [addAberto, setAddAberto] = useState(false);
-  // Agente cujo editor (drawer flutuante) está aberto, acionado pelo lápis do nó.
+  // Agente/instrumento cujo editor (drawer flutuante) está aberto, acionado pelo
+  // lápis ou pelos badges do nó.
   const [editAgenteId, setEditAgenteId] = useState<string | null>(null);
+  const [editInstrumentoId, setEditInstrumentoId] = useState<string | null>(null);
   const editarAgente = useCallback(
     (agenteId: string) => setEditAgenteId(agenteId),
+    [],
+  );
+  const editarInstrumento = useCallback(
+    (instrumentoId: string) => setEditInstrumentoId(instrumentoId),
     [],
   );
 
@@ -104,6 +114,9 @@ function BuilderInterno({
   const sel = selId ? (idx[selId] ?? null) : null;
   const agenteEdit = editAgenteId
     ? (agentes.find((a) => a.id === editAgenteId) ?? null)
+    : null;
+  const instrumentoEdit = editInstrumentoId
+    ? (instrumentosTime.find((i) => i.id === editInstrumentoId) ?? null)
     : null;
 
   // ── nós do React Flow ──
@@ -116,6 +129,8 @@ function BuilderInterno({
       const agente =
         no.tipo === "agente" ? agentes.find((a) => a.id === no.ref) : undefined;
       const indice = agente ? agentes.findIndex((a) => a.id === agente.id) : 0;
+      const cinto =
+        no.tipo === "agente" ? (cintos[no.ref ?? ""] ?? []) : undefined;
       // o gatilho mostra o tipo escolhido no inspector (fonte: estado do gatilho)
       const noView =
         no.tipo === "gatilho" ? { ...no, gatilho: gatilho.tipo } : no;
@@ -123,12 +138,21 @@ function BuilderInterno({
         id: no.id,
         type: no.tipo,
         position: { x: no.x ?? 0, y: no.y ?? 0 },
-        data: { no: noView, agente, indice, onEditarAgente: editarAgente },
+        data: {
+          no: noView,
+          agente,
+          indice,
+          cinto,
+          onEditarAgente: editarAgente,
+          // editar instrumento é só para quem opera (a tela de Instrumentos
+          // também só abre o editor para operador).
+          onEditarInstrumento: podeEditar ? editarInstrumento : undefined,
+        },
         draggable: podeEditar,
         selected: no.id === selId,
       };
     },
-    [agentes, gatilho.tipo, podeEditar, selId, editarAgente],
+    [agentes, cintos, gatilho.tipo, podeEditar, selId, editarAgente, editarInstrumento],
   );
 
   // Assinatura do que afeta a PROJEÇÃO dos nós. Dispara a reconciliação
@@ -163,8 +187,18 @@ function BuilderInterno({
         // identidade do agente: renomear/trocar modelo pelo drawer refaz o rótulo
         // do nó (a reconciliação preserva posição/medição).
         ag: agentes.map((a) => [a.id, a.nome, a.modelo_ia, a.papel]),
+        // cinto de cada agente: pendurar/tirar/renomear instrumento refaz os
+        // badges do nó (e a altura, que o React Flow re-mede).
+        cin: (cadeia.nos ?? [])
+          .filter((n) => n.tipo === "agente")
+          .map((n) => [
+            n.ref,
+            (cintos[n.ref ?? ""] ?? [])
+              .map((i) => `${i.id}:${i.nome}:${i.icone ?? ""}`)
+              .join(","),
+          ]),
       }),
-    [cadeia, gatilho.tipo, podeEditar, selId, agentes],
+    [cadeia, gatilho.tipo, podeEditar, selId, agentes, cintos],
   );
 
   const [rfNodes, setRfNodes] = useState<Node[]>(() =>
@@ -569,6 +603,20 @@ function BuilderInterno({
           meuPapel={meuPapel}
           conversaId={null}
           onFechar={() => setEditAgenteId(null)}
+        />
+      )}
+
+      {/* Editor do instrumento: aberto pelos badges do nó. Fica aberto até fechar
+          manualmente (não fecha ao salvar/conectar canal). */}
+      {instrumentoEdit && (
+        <DrawerInstrumento
+          key={instrumentoEdit.id}
+          instrumento={instrumentoEdit}
+          tipos={tipos}
+          time={time}
+          meuPapel={meuPapel}
+          onFechar={() => setEditInstrumentoId(null)}
+          onSalvou={(salvo) => setEditInstrumentoId(salvo.id)}
         />
       )}
     </div>

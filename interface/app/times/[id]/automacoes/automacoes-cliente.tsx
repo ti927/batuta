@@ -16,6 +16,7 @@ import {
   type Instrumento,
   type PapelAcesso,
   type Time,
+  type TipoInstrumento,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { AutomacaoBuilder } from "@/components/automacao-builder/builder";
@@ -77,6 +78,7 @@ function EditorAutomacao({
   canais,
   cintos,
   instrumentos,
+  tipos,
   meuPapel,
   souOperador,
   souAdmin,
@@ -93,6 +95,7 @@ function EditorAutomacao({
   canais: Instrumento[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
+  tipos: TipoInstrumento[];
   meuPapel: PapelAcesso | null;
   souOperador: boolean;
   souAdmin: boolean;
@@ -375,6 +378,7 @@ function EditorAutomacao({
           }
           cintos={cintos}
           instrumentosTime={instrumentos}
+          tipos={tipos}
           time={time}
           meuPapel={meuPapel}
         />
@@ -467,6 +471,7 @@ export function AutomacoesCliente({
   agentes,
   cintos,
   instrumentos,
+  tipos,
   meuPapel,
 }: {
   time: Time;
@@ -474,6 +479,7 @@ export function AutomacoesCliente({
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
+  tipos: TipoInstrumento[];
   meuPapel: PapelAcesso | null;
 }) {
   const souOperador = podeOperar(meuPapel);
@@ -524,6 +530,7 @@ export function AutomacoesCliente({
       canais={canais}
       cintos={cintos}
       instrumentos={instrumentos}
+      tipos={tipos}
       meuPapel={meuPapel}
       souOperador={souOperador}
       souAdmin={souAdmin}

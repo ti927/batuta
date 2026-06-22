@@ -46,12 +46,17 @@ export function DrawerInstrumento({
   time,
   meuPapel,
   onFechar,
+  onSalvou,
 }: {
   instrumento: Instrumento | null;
   tipos: TipoInstrumento[];
   time: Time;
   meuPapel: PapelAcesso | null;
   onFechar: () => void;
+  // Avisa o pai do instrumento salvo. O drawer NÃO fecha sozinho ao salvar
+  // (decisão do maestro: fica aberto até fechar manualmente). Ao criar, o pai
+  // troca para o recém-criado e o drawer passa de "criar" para "editar".
+  onSalvou: (salvo: Instrumento) => void;
 }) {
   const router = useRouter();
   const souOperador = podeOperar(meuPapel);
@@ -167,9 +172,9 @@ export function DrawerInstrumento({
             time={time}
             instrumento={instrumento}
             tipos={tipos}
-            onSalvo={() => {
+            onSalvo={(salvo) => {
               toast.success(criando ? "Instrumento criado" : "Instrumento salvo");
-              onFechar();
+              onSalvou(salvo);
               router.refresh();
             }}
             onCancelar={onFechar}

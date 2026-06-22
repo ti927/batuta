@@ -6,6 +6,7 @@ import {
   type Instrumento,
   type PapelAcesso,
   type Time,
+  type TipoInstrumento,
 } from "@/lib/api";
 import { buscarCerebro, buscarMeuAcesso } from "@/lib/cerebro-servidor";
 
@@ -21,13 +22,15 @@ async function carregar(timeId: string): Promise<{
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
+  tipos: TipoInstrumento[];
   meuPapel: PapelAcesso | null;
 } | null> {
-  const [respTime, respAuto, respAg, respInst, eu] = await Promise.all([
+  const [respTime, respAuto, respAg, respInst, respTipos, eu] = await Promise.all([
     buscarCerebro(`/times/${timeId}`),
     buscarCerebro(`/times/${timeId}/automacoes`),
     buscarCerebro(`/times/${timeId}/agentes`),
     buscarCerebro(`/times/${timeId}/instrumentos`),
+    buscarCerebro(`/instrumentos/tipos`),
     buscarMeuAcesso(),
   ]);
   if (respTime.status === 404) return null;
@@ -49,6 +52,7 @@ async function carregar(timeId: string): Promise<{
     agentes,
     cintos: Object.fromEntries(cintosPares),
     instrumentos: await respInst.json(),
+    tipos: await jsonOu<TipoInstrumento[]>(respTipos, []),
     meuPapel: eu?.papeis[time.organizacao_id] ?? null,
   };
 }
@@ -78,6 +82,7 @@ export default async function AutomacoesPage({
       agentes={dados.agentes}
       cintos={dados.cintos}
       instrumentos={dados.instrumentos}
+      tipos={dados.tipos}
       meuPapel={dados.meuPapel}
     />
   );
