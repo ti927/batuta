@@ -211,7 +211,6 @@ function LinhaPasso({
   const { passo, agente, indice, tom } = item;
   const dur = duracao(passo);
   const toks = tokensDoPasso(passo);
-  const usouInstrumento = (passo.saida?.instrumentos_acionados ?? []).length > 0;
   // Cinto do agente deste passo, como badges (mesmo padrão do nó): até
   // MAX_BADGES_PASSO; o excedente vira "+X mais" (abre o drawer do agente).
   const cinto = item.cinto;
@@ -266,9 +265,10 @@ function LinhaPasso({
           {toks > 0 && <span>{toks.toLocaleString("pt-BR")} tok</span>}
         </span>
         {/* Cinto do agente: badges clicáveis (corrige um instrumento sem sair da
-            execução). "+X mais" abre o drawer do agente (cinto completo). */}
+            execução), um por linha como no nó da automação. "+X mais" abre o
+            drawer do agente (cinto completo). */}
         {cinto.length > 0 && onEditarInstrumento && (
-          <span className="mt-1 flex flex-wrap gap-1">
+          <span className="mt-1.5 flex flex-col gap-1">
             {mostrados.map((inst) => (
               <button
                 key={inst.id}
@@ -278,10 +278,15 @@ function LinhaPasso({
                   e.stopPropagation();
                   onEditarInstrumento(inst.id);
                 }}
-                className="inline-flex items-center gap-1 rounded-full bg-accent px-1.5 py-0.5 text-[10.5px] text-accent-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                className="flex items-center gap-1.5 rounded-md border border-[#ECEAF4] bg-[#FAFAF7] px-1.5 py-1 text-left transition-colors hover:border-[#D9D2F7] hover:bg-[#F4F1FE]"
               >
-                <IconeInstrumento icone={inst.icone} className="size-2.5" />
-                <span className="max-w-[120px] truncate">{inst.nome}</span>
+                <IconeInstrumento
+                  icone={inst.icone}
+                  className="size-3 flex-none text-[#6D4AFF]"
+                />
+                <span className="truncate text-[11px] text-[#4A4860]">
+                  {inst.nome}
+                </span>
               </button>
             ))}
             {resto > 0 && agente && onEditarAgente && (
@@ -291,17 +296,14 @@ function LinhaPasso({
                   e.stopPropagation();
                   onEditarAgente(agente.id);
                 }}
-                className="rounded-full px-1.5 py-0.5 text-[10.5px] font-medium text-primary hover:underline"
+                className="rounded-md px-1.5 py-0.5 text-left text-[11px] font-medium text-[#6D4AFF] hover:underline"
               >
-                +{resto} mais
+                +{resto} mais…
               </button>
             )}
           </span>
         )}
       </span>
-      {usouInstrumento && (
-        <Wrench className="size-3.5 shrink-0 self-start text-muted-foreground" />
-      )}
     </div>
   );
 }
