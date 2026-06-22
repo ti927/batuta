@@ -62,6 +62,13 @@ def _resp_ok():
     return _Resp(200, {"data": [{"b64_json": base64.b64encode(b"PNGDATA").decode()}]})
 
 
+@pytest.fixture(autouse=True)
+def _sem_vigia(monkeypatch):
+    # O vigia (diagnostico_imagem) grava no Storage; nos testes é no-op para não
+    # tocar a rede nem deixar artefato.
+    monkeypatch.setattr(gi.diagnostico_imagem, "registrar", lambda *a, **k: None)
+
+
 # ─────────────────────────── registro / chave ───────────────────────────
 
 

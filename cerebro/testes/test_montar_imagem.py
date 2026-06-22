@@ -49,6 +49,8 @@ def _foto_ok():
 def _instalar(monkeypatch, resp_post, capt=None, resp_get=None):
     """Intercepta o download da foto (httpx.get) e o POST de edição (httpx.Client)."""
     monkeypatch.setattr("arquivos.storage_configurado", lambda: False)  # cai no disco
+    # O vigia (diagnostico_imagem) grava no Storage; no-op nos testes.
+    monkeypatch.setattr(mi.diagnostico_imagem, "registrar", lambda *a, **k: None)
     monkeypatch.setattr(mi.httpx, "get", lambda url, **k: resp_get or _foto_ok())
 
     class _Client:

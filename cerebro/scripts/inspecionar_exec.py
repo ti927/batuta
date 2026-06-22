@@ -11,17 +11,17 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 # Permite rodar de scripts/ achando os módulos do cérebro.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from dotenv import load_dotenv
-from sqlalchemy import select
+from dotenv import load_dotenv  # noqa: E402
+from sqlalchemy import select  # noqa: E402
 
-from modelos import (
+from modelos import (  # noqa: E402
     Agente,
     AgenteInstrumento,
     Execucao,
     Instrumento,
     PassoExecucao,
 )
-from sessao import CriadorDeSessao
+from sessao import CriadorDeSessao  # noqa: E402
 
 load_dotenv()
 

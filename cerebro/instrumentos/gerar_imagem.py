@@ -29,6 +29,7 @@ import httpx
 from pydantic import BaseModel, Field, model_validator
 
 import arquivos
+import diagnostico_imagem
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 
 # Geração de imagem pode demorar; damos folga no timeout.
@@ -260,6 +261,21 @@ class GerarImagem(TipoInstrumento):
             "quality": config.qualidade,
             "n": 1,
         }
+        # VIGIA: registra o que SERÁ transmitido. Este instrumento é TEXTO→IMAGEM —
+        # NÃO envia imagem de entrada (não há anexo); o diagnóstico deixa isso claro.
+        diagnostico_imagem.registrar(
+            "gerar_imagem",
+            URL_OPENAI,
+            "POST application/json",
+            corpo,
+            [],
+            observacao=(
+                "Instrumento TEXTO→IMAGEM: cria do zero a partir do texto, NÃO envia "
+                "imagem de entrada (não existe anexo). Para montar com uma foto, use o "
+                "instrumento 'Montar imagem (a partir de fotos)'."
+            ),
+        )
+
         headers = {"Authorization": f"Bearer {config.chave_api}"}
         try:
             with httpx.Client(timeout=TIMEOUT_S) as cliente:

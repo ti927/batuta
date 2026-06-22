@@ -35,6 +35,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 import arquivos
+import diagnostico_imagem
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 from instrumentos.gerar_imagem import (
     CATALOGO_IMAGEM,
@@ -201,6 +202,27 @@ class MontarImagem(TipoInstrumento):
         }
         if config.modelo in MODELOS_COM_FIDELITY:
             data["input_fidelity"] = "high"
+
+        # VIGIA: registra o que SERÁ transmitido — prova que cada imagem vai como
+        # ANEXO (bytes no multipart), com o tamanho real, não como URL. Best-effort.
+        diagnostico_imagem.registrar(
+            "montar_imagem",
+            URL_EDITS,
+            "POST multipart/form-data",
+            data,
+            [
+                {
+                    "origem_url": urls[i],
+                    "campo_multipart": envio[i][0],
+                    "nome_arquivo": envio[i][1][0],
+                    "content_type": envio[i][1][2],
+                    "bytes_anexados": len(envio[i][1][1]),
+                    "enviado_como": "anexo (multipart image[])",
+                }
+                for i in range(len(envio))
+            ],
+        )
+
         headers = {"Authorization": f"Bearer {config.chave_api}"}
         try:
             with httpx.Client(timeout=TIMEOUT_S) as cliente:
