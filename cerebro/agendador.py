@@ -37,18 +37,24 @@ def _trigger_da_config(config: dict) -> CronTrigger:
 
     config = {frequencia: 'diaria'|'semanal'|'mensal', hora: 0-23,
               minuto: 0-59, dia_semana: 0-6 (0=segunda, só semanal),
-              dia_mes: 1-31 (só mensal)}. O fuso vem do scheduler.
+              dia_mes: 1-31 (só mensal)}.
+
+    O `timezone=FUSO` é OBRIGATÓRIO e explícito: um CronTrigger criado SEM fuso
+    NÃO herda o fuso do scheduler — ele cai no fuso do SISTEMA OPERACIONAL
+    (`get_localzone()`). No container do Railway o SO é UTC, então "8h" virava 8h
+    UTC = 5h BRT (a máquina de dev fica em BRT, por isso o bug não aparecia no QA
+    local). Com o fuso explícito, "8h" é sempre 8h de Brasília, em qualquer host.
     """
     frequencia = config.get("frequencia", "diaria")
     hora = int(config.get("hora", 0))
     minuto = int(config.get("minuto", 0))
     if frequencia == "semanal":
         dia = _DIAS[int(config.get("dia_semana", 0)) % 7]
-        return CronTrigger(day_of_week=dia, hour=hora, minute=minuto)
+        return CronTrigger(day_of_week=dia, hour=hora, minute=minuto, timezone=FUSO)
     if frequencia == "mensal":
         dia_mes = int(config.get("dia_mes", 1))
-        return CronTrigger(day=dia_mes, hour=hora, minute=minuto)
-    return CronTrigger(hour=hora, minute=minuto)  # diaria
+        return CronTrigger(day=dia_mes, hour=hora, minute=minuto, timezone=FUSO)
+    return CronTrigger(hour=hora, minute=minuto, timezone=FUSO)  # diaria
 
 
 def _rodar(automacao_id_str: str) -> None:
@@ -181,7 +187,7 @@ def iniciar() -> None:
     # madrugada (BRT) fora do horário comercial.
     _scheduler.add_job(
         _refresh_instagram_job,
-        trigger=CronTrigger(hour=3, minute=30),
+        trigger=CronTrigger(hour=3, minute=30, timezone=FUSO),
         id="instagram_token_refresh",
         replace_existing=True,
     )
