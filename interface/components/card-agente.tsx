@@ -11,22 +11,37 @@ import { Badge } from "@/components/ui/badge";
  * Card de agente (clique abre o editor em drawer). Mostra rosto, nome, badge de
  * líder, resumo (agent.md), modelo e os instrumentos do cinto. Reusado pela aba
  * Agentes e pela aba Início.
+ *
+ * Se `onEditarInstrumento` for passado, os badges do cinto viram clicáveis e
+ * abrem o editor do instrumento (sem trocar de aba) — o clique no badge não
+ * dispara a abertura do agente. É um `div` (não `button`) justamente para poder
+ * conter os botões dos badges; a acessibilidade de teclado é preservada.
  */
 export function CardAgente({
   agente,
   indice,
   cinto,
   onAbrir,
+  onEditarInstrumento,
 }: {
   agente: Agente;
   indice: number;
   cinto: Instrumento[];
   onAbrir: () => void;
+  onEditarInstrumento?: (instrumentoId: string) => void;
 }) {
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onAbrir}
-      className="flex w-full items-start gap-3 rounded-xl border border-border bg-card p-3.5 text-left transition-all hover:border-[#D6D3E8] hover:shadow-sm"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onAbrir();
+        }
+      }}
+      className="flex w-full cursor-pointer items-start gap-3 rounded-xl border border-border bg-card p-3.5 text-left transition-all hover:border-[#D6D3E8] hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
     >
       <RobotFace size={40} indice={indice} lider={agente.papel === "lider"} />
       <span className="min-w-0 flex-1">
@@ -50,17 +65,33 @@ export function CardAgente({
               {agente.modelo_ia}
             </span>
           )}
-          {cinto.map((i) => (
-            <span
-              key={i.id}
-              className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-accent-foreground"
-            >
-              <IconeInstrumento icone={i.icone} className="size-3" />
-              {i.nome}
-            </span>
-          ))}
+          {cinto.map((i) =>
+            onEditarInstrumento ? (
+              <button
+                key={i.id}
+                type="button"
+                title={`Editar o instrumento “${i.nome}”`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditarInstrumento(i.id);
+                }}
+                className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-accent-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+              >
+                <IconeInstrumento icone={i.icone} className="size-3" />
+                {i.nome}
+              </button>
+            ) : (
+              <span
+                key={i.id}
+                className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-accent-foreground"
+              >
+                <IconeInstrumento icone={i.icone} className="size-3" />
+                {i.nome}
+              </span>
+            ),
+          )}
         </span>
       </span>
-    </button>
+    </div>
   );
 }
