@@ -10,6 +10,7 @@ import {
   Gauge,
   Loader2,
   MessageSquare,
+  Pencil,
   ShieldCheck,
   Wrench,
   XCircle,
@@ -22,11 +23,14 @@ import {
   type Agente,
   type Automacao,
   type ExecucaoComPassos,
+  type Instrumento,
   type PapelAcesso,
   type PassoExecucao,
+  type Time,
 } from "@/lib/api";
 import { podeOperar } from "@/lib/permissoes";
 import { rotuloOrigem } from "@/lib/uso";
+import { DrawerAgente } from "@/components/drawer-agente";
 import { RobotFace } from "@/components/robot-face";
 import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
@@ -172,10 +176,12 @@ function LinhaPasso({
   item,
   selecionado,
   onSelecionar,
+  onEditarAgente,
 }: {
   item: ItemPasso;
   selecionado: boolean;
   onSelecionar: () => void;
+  onEditarAgente?: (agenteId: string) => void;
 }) {
   const base =
     "flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors";
@@ -194,8 +200,36 @@ function LinhaPasso({
   const dur = duracao(passo);
   const toks = tokensDoPasso(passo);
   const usouInstrumento = (passo.saida?.instrumentos_acionados ?? []).length > 0;
+  // É um `div` (não `button`) para poder conter o botão do lápis; teclado preservado.
   return (
-    <button onClick={onSelecionar} className={`${base} ${fundo}`}>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelecionar}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelecionar();
+        }
+      }}
+      className={`${base} ${fundo} cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40`}
+    >
+      {/* Lápis: edita o agente deste passo sem sair da execução (flagrou erro,
+          corrige ali). Só para passos com agente resolvido. */}
+      {agente && onEditarAgente && (
+        <button
+          type="button"
+          title={`Editar o agente “${agente.nome}”`}
+          aria-label={`Editar o agente ${agente.nome}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEditarAgente(agente.id);
+          }}
+          className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+        >
+          <Pencil className="size-3.5" />
+        </button>
+      )}
       <span className="relative">
         <RobotFace size={28} indice={indice} lider={agente?.papel === "lider"} />
         {tom === "espera" && (
@@ -217,7 +251,7 @@ function LinhaPasso({
       {usouInstrumento && (
         <Wrench className="size-3.5 shrink-0 text-muted-foreground" />
       )}
-    </button>
+    </div>
   );
 }
 
@@ -309,9 +343,11 @@ function DetalheItem({
 function Passos({
   execucao,
   agentes,
+  onEditarAgente,
 }: {
   execucao: ExecucaoComPassos;
   agentes: Agente[];
+  onEditarAgente?: (agenteId: string) => void;
 }) {
   const itens = construirItens(execucao, agentes);
   // Começa no último item (o desfecho — entrega ou falha): é o que o usuário quer
@@ -338,6 +374,7 @@ function Passos({
                 item={it}
                 selecionado={selecionado?.chave === it.chave}
                 onSelecionar={() => setSel(it.chave)}
+                onEditarAgente={onEditarAgente}
               />
             </li>
           ))}
@@ -465,6 +502,7 @@ export function PainelExecucao({
   onCancelar,
   cancelando,
   podeCancelar,
+  onEditarAgente,
 }: {
   execucao: ExecucaoComPassos;
   automacao: Automacao;
@@ -476,6 +514,7 @@ export function PainelExecucao({
   onCancelar: () => void;
   cancelando: boolean;
   podeCancelar: boolean;
+  onEditarAgente?: (agenteId: string) => void;
 }) {
   // Só dá para cancelar enquanto a execução não encerrou de vez (a fila/portão
   // ainda a tem viva). O backend recusa (409) se já encerrou.
@@ -528,7 +567,11 @@ export function PainelExecucao({
       )}
 
       <div className="mt-4">
-        <Passos execucao={execucao} agentes={agentes} />
+        <Passos
+          execucao={execucao}
+          agentes={agentes}
+          onEditarAgente={onEditarAgente}
+        />
       </div>
 
       {execucao.uso && execucao.uso.tokens_entrada + execucao.uso.tokens_saida > 0 && (
@@ -572,6 +615,10 @@ export function InspecaoExecucao({
   meuPapel,
   inicial,
   onTerminal,
+  cintos,
+  instrumentosTime,
+  time,
+  conversaId,
 }: {
   execucaoId: string;
   automacao: Automacao;
@@ -579,9 +626,21 @@ export function InspecaoExecucao({
   meuPapel: PapelAcesso | null;
   inicial?: ExecucaoComPassos;
   onTerminal?: () => void;
+  // Para editar o agente de um passo pelo lápis (drawer), sem sair da execução.
+  // Opcionais: sem eles, o lápis simplesmente não aparece.
+  cintos?: Record<string, Instrumento[]>;
+  instrumentosTime?: Instrumento[];
+  time?: Time;
+  conversaId?: string | null;
 }) {
   // O portão (responder) está aberto a observador também; CANCELAR exige operador.
   const podeCancelar = podeOperar(meuPapel);
+  // Lápis no passo: só quando temos os dados que o DrawerAgente exige.
+  const podeEditarAgente = !!(time && cintos && instrumentosTime);
+  const [editAgenteId, setEditAgenteId] = useState<string | null>(null);
+  const agenteEdit = editAgenteId
+    ? (agentes.find((a) => a.id === editAgenteId) ?? null)
+    : null;
   const [execucao, setExecucao] = useState<ExecucaoComPassos | null>(inicial ?? null);
   const [erro, setErro] = useState<string | null>(null);
   const [resposta, setResposta] = useState("");
@@ -702,17 +761,37 @@ export function InspecaoExecucao({
     );
 
   return (
-    <PainelExecucao
-      execucao={execucao}
-      automacao={automacao}
-      agentes={agentes}
-      resposta={resposta}
-      setResposta={setResposta}
-      respondendo={respondendo}
-      onResponder={responder}
-      onCancelar={cancelar}
-      cancelando={cancelando}
-      podeCancelar={podeCancelar}
-    />
+    <>
+      <PainelExecucao
+        execucao={execucao}
+        automacao={automacao}
+        agentes={agentes}
+        resposta={resposta}
+        setResposta={setResposta}
+        respondendo={respondendo}
+        onResponder={responder}
+        onCancelar={cancelar}
+        cancelando={cancelando}
+        podeCancelar={podeCancelar}
+        onEditarAgente={
+          podeEditarAgente ? (id) => setEditAgenteId(id) : undefined
+        }
+      />
+
+      {/* Editor do agente aberto pelo lápis de um passo — corrigir sem sair daqui. */}
+      {agenteEdit && time && (
+        <DrawerAgente
+          key={agenteEdit.id}
+          agente={agenteEdit}
+          indice={agentes.findIndex((a) => a.id === agenteEdit.id)}
+          cinto={cintos?.[agenteEdit.id] ?? []}
+          instrumentosTime={instrumentosTime ?? []}
+          time={time}
+          meuPapel={meuPapel}
+          conversaId={conversaId ?? null}
+          onFechar={() => setEditAgenteId(null)}
+        />
+      )}
+    </>
   );
 }
