@@ -63,8 +63,12 @@ CATALOGO_IMAGEM: dict[str, dict] = {
     "gpt-image-2": {
         "rotulo": "GPT Image 2 (mais novo)",
         # gpt-image-2 aceita tamanhos livres (múltiplos de 16, proporção 1:3..3:1);
-        # oferecemos presets confiáveis: os 3 padrão + 16:9 e 9:16 comuns.
-        "tamanhos": ("1024x1024", "1536x1024", "1024x1536", "1536x864", "864x1536"),
+        # oferecemos presets confiáveis: os 3 padrão + 16:9/9:16 + 4:5 (feed do
+        # Instagram, normal e alta-res) + 5:4 paisagem.
+        "tamanhos": (
+            "1024x1024", "1536x1024", "1024x1536", "1536x864", "864x1536",
+            "1024x1280", "1536x1920", "1280x1024",
+        ),
         "qualidades": _QUALIDADES_GPT,
     },
 }

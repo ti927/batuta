@@ -49,6 +49,11 @@ from instrumentos.gerar_imagem import (
 
 URL_EDITS = "https://api.openai.com/v1/images/edits"
 
+# Edição/montagem com VÁRIAS imagens em qualidade alta é PESADA e leva MINUTOS — o
+# padrão de 120s (do gerar_imagem, texto→imagem rápido) abortava toda tentativa. Damos
+# folga generosa só para o POST de edição; o download das fotos-base segue em TIMEOUT_S.
+TIMEOUT_EDICAO_S = 600
+
 # Modelos que aceitam `input_fidelity` (reforça a fidelidade à imagem de entrada —
 # essencial para preservar rosto). gpt-image-2 processa tudo em alta fidelidade
 # sozinho (o parâmetro é recusado); gpt-image-1-mini não suporta.
@@ -225,8 +230,16 @@ class MontarImagem(TipoInstrumento):
 
         headers = {"Authorization": f"Bearer {config.chave_api}"}
         try:
-            with httpx.Client(timeout=TIMEOUT_S) as cliente:
+            with httpx.Client(timeout=TIMEOUT_EDICAO_S) as cliente:
                 resposta = cliente.post(URL_EDITS, headers=headers, data=data, files=envio)
+        except httpx.TimeoutException:
+            # Estourou o tempo (geração pesada). NÃO é retentável: re-subir os MB e
+            # esperar de novo não ajuda e multiplica custo — falha clara numa só vez.
+            raise FalhaInstrumento(
+                f"a montagem excedeu o tempo limite ({int(TIMEOUT_EDICAO_S)}s) — geração "
+                "pesada (muitas imagens em qualidade alta). Não concluiu nesta chamada.",
+                retentavel=False,
+            )
         except httpx.HTTPError as e:
             raise FalhaInstrumento(
                 f"não foi possível montar a imagem: {e}", retentavel=True

@@ -184,6 +184,43 @@ def test_foto_base_inacessivel_da_erro_claro(monkeypatch):
         )
 
 
+def test_timeout_na_montagem_falha_clara_sem_retentar(monkeypatch):
+    # Geração pesada que estoura o tempo: falha NÃO retentável (não re-sobe os MB).
+    import httpx
+
+    monkeypatch.setattr("arquivos.storage_configurado", lambda: False)
+    monkeypatch.setattr(mi.diagnostico_imagem, "registrar", lambda *a, **k: None)
+    monkeypatch.setattr(mi.httpx, "get", lambda url, **k: _foto_ok())
+
+    class _ClientTimeout:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, *a, **k):
+            raise httpx.ReadTimeout("demorou demais")
+
+    monkeypatch.setattr(mi.httpx, "Client", _ClientTimeout)
+    with pytest.raises(FalhaInstrumento) as exc:
+        MontarImagem().executar(
+            ConfigMontagem(chave_api="sk-fake"),
+            ArgsMontagem(prompt="t", imagens_url=["http://x/f.png"]),
+        )
+    assert exc.value.retentavel is False
+    assert "tempo limite" in str(exc.value)
+
+
+def test_quatro_por_cinco_disponivel_no_gpt_image_2():
+    # 4:5 (feed do Instagram) válido no gpt-image-2; o config aceita sem erro.
+    cfg = ConfigMontagem(modelo="gpt-image-2", tamanho="1024x1280", qualidade="high")
+    assert cfg.tamanho == "1024x1280"
+
+
 def test_chave_recusada_401(monkeypatch):
     _instalar(monkeypatch, _Resp(401, {"error": {"message": "bad key"}}))
     with pytest.raises(FalhaInstrumento, match="recusada"):
