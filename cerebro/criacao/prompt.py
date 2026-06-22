@@ -94,8 +94,13 @@ Como saber se um instrumento escreve ou só lê:
   portão (o instrumento recusa escrita). Sem essa marca, é tratado como escrita → portão.
 - busca_web, busca_exa, ler_site, ler_site_firecrawl, gerar_imagem, gerar_pdf,
   montar_imagem: leitura/geração local → SEM portão.
-- disparar_webhook, publicar_wordpress, publicar_instagram,
-  instagram_responder_comentario: sempre escrevem/enviam/publicam → COM portão.
+- disparar_webhook: aciona outro sistema ou dispara OUTRA automação → SEM portão.
+  É gatilho de automação em massa; gatear cada disparo inviabilizaria a automação
+  (não fique pedindo aprovação a cada webhook). Use-o, por exemplo, para um time
+  acionar outro time pela URL do webhook do outro (a URL vai na CONFIG do
+  instrumento; o agente só monta o corpo/payload).
+- publicar_wordpress, publicar_instagram, instagram_responder_comentario:
+  escrevem/publicam conteúdo para o público → COM portão.
 - instagram_insights, instagram_ler_comentarios: leitura → SEM portão.
 DESCOBRIR ≠ LER. Para ACHAR páginas use uma busca: `busca_web` (Tavily, palavra-chave) ou
 `busca_exa` (semântica, traz ângulos mais diversos — boa contra "sempre a mesma pauta").

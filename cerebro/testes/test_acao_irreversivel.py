@@ -9,11 +9,13 @@ import instrumentos as encaixe
 from criacao.ferramentas import catalogo_de_instrumentos
 
 # Baseline por tipo (o que o catálogo expõe à IA): o tipo PODE escrever?
+# `disparar_webhook` é gatilho de automação em massa → NÃO exige portão (decisão
+# do maestro); por isso está no baseline FALSE, não no TRUE.
 _BASELINE_TRUE = {
-    "publicar_wordpress", "disparar_webhook", "chamar_api_rest", "banco_sql",
+    "publicar_wordpress", "chamar_api_rest", "banco_sql",
     "conectar_mcp",
 }
-_BASELINE_FALSE = {"busca_web", "gerar_pdf", "gerar_imagem"}
+_BASELINE_FALSE = {"busca_web", "gerar_pdf", "gerar_imagem", "disparar_webhook"}
 
 
 def test_catalogo_expoe_baseline_do_tipo():
@@ -41,8 +43,17 @@ def test_sql_deriva_do_somente_leitura():
 
 
 def test_tipos_que_sempre_escrevem():
-    for tipo in ("disparar_webhook", "publicar_wordpress", "conectar_mcp"):
+    for tipo in ("publicar_wordpress", "conectar_mcp"):
         assert encaixe.acao_irreversivel(tipo, {}) is True, tipo
+
+
+def test_webhook_nao_exige_portao():
+    """Webhook de saída é gatilho de automação em massa: por padrão (automático)
+    NÃO gateia. O interruptor por nó ainda pode forçar ou dispensar."""
+    assert encaixe.acao_irreversivel("disparar_webhook", {}) is False
+    assert encaixe.exige_portao("disparar_webhook", {}, None) is False
+    # quem quiser barrar um webhook específico ainda força pelo interruptor:
+    assert encaixe.exige_portao("disparar_webhook", {}, True) is True
 
 
 def test_tipos_de_leitura():

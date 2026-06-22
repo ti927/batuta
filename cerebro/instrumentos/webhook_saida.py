@@ -56,7 +56,13 @@ class DispararWebhook(TipoInstrumento):
     Args = ArgsWebhook
     campos_secretos = ("token_bearer",)
     tipos_credencial_aceitos = ("token_bearer",)
-    acao_irreversivel = True  # aciona sistema externo
+    # NÃO exige portão (decisão do maestro): webhook é GATILHO DE AUTOMAÇÃO EM
+    # MASSA — aciona outro sistema ou dispara outra automação. Gatear cada disparo
+    # inviabiliza a automação (imagine um fluxo que chama vários webhooks pedindo
+    # aprovação a cada um — aí era melhor fazer manual). Quem quiser barrar um
+    # webhook específico ainda pode ligar o interruptor `exige_aprovacao=True`
+    # naquele nó (escape para o caso raro).
+    acao_irreversivel = False
 
     def executar(self, config: ConfigWebhook, args: ArgsWebhook) -> dict:
         cabecalhos = dict(config.cabecalhos or {})
