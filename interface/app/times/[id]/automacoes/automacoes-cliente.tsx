@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Layers, Plus, Sliders, Trash2, X, Zap } from "lucide-react";
+import { Activity, Copy, Layers, Plus, Sliders, Trash2, X, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   api,
   ErroDaApi,
+  URL_CEREBRO,
   type Agente,
   type Automacao,
   type Cadeia,
@@ -241,7 +242,6 @@ function EditorAutomacao({
     }
   }
 
-  const webhookSalvo = !!automacao && gatilho.tipo === "webhook";
   const nAgentes = (cadeia.nos ?? []).filter((n) => n.tipo === "agente").length;
   const nBifurca = (cadeia.nos ?? []).filter(
     (n) => (n.saidas?.length ?? 0) > 1,
@@ -294,6 +294,16 @@ function EditorAutomacao({
             variant="outline"
             size="sm"
           />
+        )}
+        {automacao && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/times/${time.id}/execucoes`)}
+            title="Ver as execuções deste time"
+          >
+            <Activity /> Ver execuções
+          </Button>
         )}
         {souOperador && automacao && (
           <Button
@@ -352,7 +362,11 @@ function EditorAutomacao({
           podeEditar={souOperador}
           gatilho={gatilho}
           setGatilho={setGatilho}
-          webhookUrl={webhookSalvo ? "salvo" : null}
+          webhookUrl={
+            automacao && gatilho.tipo === "webhook"
+              ? `${URL_CEREBRO}/webhooks/automacoes/${automacao.id}`
+              : null
+          }
         />
       </div>
 

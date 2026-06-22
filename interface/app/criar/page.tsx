@@ -57,8 +57,10 @@ export default async function CriarPage() {
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-10 sm:px-6">
+      <IniciarCliente organizacoes={operaveis} compacto={temConversas} />
+
       {temConversas && (
-        <section className="mb-12">
+        <section className="mt-12">
           <h2 className="font-heading text-xl font-semibold text-foreground">
             Continuar um projeto
           </h2>
@@ -94,8 +96,6 @@ export default async function CriarPage() {
           </ul>
         </section>
       )}
-
-      <IniciarCliente organizacoes={operaveis} compacto={temConversas} />
     </main>
   );
 }

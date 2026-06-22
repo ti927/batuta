@@ -24,6 +24,7 @@ import type {
   ToneSaida,
 } from "@/lib/api";
 import { RobotFace } from "@/components/robot-face";
+import { UrlCopiavel } from "@/components/url-copiavel";
 
 import { TONE_KEYS, tone } from "./nucleo";
 
@@ -416,11 +417,24 @@ export function Inspector({
             )}
 
             {gatilho.tipo === "webhook" && (
-              <p className="text-[12px] leading-relaxed text-[#6B6880]">
-                {webhookUrl
-                  ? "Um sistema externo dispara este fluxo por uma URL (POST). O corpo enviado vira a entrada."
-                  : "Salve a automação para gerar a URL do webhook."}
-              </p>
+              <div className="flex flex-col gap-2 rounded-[9px] border border-[#E8E6F0] p-3">
+                {webhookUrl ? (
+                  <>
+                    <p className="text-[12px] leading-relaxed text-[#6B6880]">
+                      Um sistema externo dispara este fluxo por esta URL (POST). O
+                      corpo enviado vira a entrada.
+                    </p>
+                    <UrlCopiavel
+                      url={webhookUrl}
+                      aviso="O fluxo precisa estar ativo para o webhook disparar."
+                    />
+                  </>
+                ) : (
+                  <p className="text-[12px] leading-relaxed text-[#6B6880]">
+                    Salve a automação para gerar a URL do webhook.
+                  </p>
+                )}
+              </div>
             )}
           </div>
         )}

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
-  Activity,
   ChevronDown,
   Coins,
   Gauge,
@@ -101,11 +100,22 @@ export function Sidebar({
         Criar com a IA
       </Link>
 
-      {/* Nav primária */}
+      {/* Bloco da organização */}
       <nav className="flex flex-col gap-0.5">
         <ItemNav href="/" Icone={Home} ativo={pathname === "/"}>
           Início
         </ItemNav>
+        <div className="ml-3.5 flex flex-col gap-0.5 border-l border-white/10 pl-2.5">
+          <SubLink
+            href={orgAtiva ? `/organizacoes/${orgAtiva}` : "/organizacoes"}
+            ativo={!!orgAtiva && pathname === `/organizacoes/${orgAtiva}`}
+          >
+            Gerenciar Times
+          </SubLink>
+          <SubLink href="/organizacoes" ativo={pathname === "/organizacoes"}>
+            Gerenciar Organizações
+          </SubLink>
+        </div>
 
         <button
           type="button"
@@ -142,21 +152,13 @@ export function Sidebar({
           </div>
         )}
 
-        <ItemNav href="/execucoes" Icone={Activity} ativo={ativo("/execucoes")}>
-          Execuções
-        </ItemNav>
         <ItemNav href="/biblioteca" Icone={Library} ativo={ativo("/biblioteca")}>
           Biblioteca
         </ItemNav>
         <ItemNav href="/uso" Icone={Gauge} ativo={ativo("/uso")}>
           Uso e custos
         </ItemNav>
-      </nav>
 
-      <div className="my-3.5 h-px bg-white/[0.08]" />
-
-      {/* Nav da organização */}
-      <nav className="flex flex-col gap-0.5">
         {ehAdminOrg && org && (
           <>
             <ItemNav
@@ -173,10 +175,26 @@ export function Sidebar({
             >
               Chaves e credenciais
             </ItemNav>
+            <ItemNav
+              href="/configuracoes"
+              Icone={Settings}
+              ativo={ativo("/configuracoes")}
+            >
+              Configurações da organização
+            </ItemNav>
           </>
         )}
-        {adminConsultoria && (
-          <>
+      </nav>
+
+      {/* Bloco da consultoria — só o admin da consultoria vê (oculto para todos os
+          demais usuários). */}
+      {adminConsultoria && (
+        <>
+          <div className="my-3.5 h-px bg-white/[0.08]" />
+          <p className="mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-[#8A86A6]">
+            Consultoria
+          </p>
+          <nav className="flex flex-col gap-0.5">
             <ItemNav
               href="/chaves-consultoria"
               Icone={Key}
@@ -191,12 +209,16 @@ export function Sidebar({
             >
               Uso da consultoria
             </ItemNav>
-          </>
-        )}
-        <ItemNav href="/configuracoes" Icone={Settings} ativo={ativo("/configuracoes")}>
-          Configurações
-        </ItemNav>
-      </nav>
+            <ItemNav
+              href="/configuracoes-consultoria"
+              Icone={Settings}
+              ativo={ativo("/configuracoes-consultoria")}
+            >
+              Configurações da consultoria
+            </ItemNav>
+          </nav>
+        </>
+      )}
 
       {/* Rodapé: seletor de organização + usuário */}
       <div className="mt-auto flex flex-col gap-2 pt-3">
@@ -341,6 +363,28 @@ function ItemNav({
       }`}
     >
       <Icone className="size-4.5 shrink-0" />
+      {children}
+    </Link>
+  );
+}
+
+// Sub-link indentado (sob INÍCIO), no mesmo molde visual da lista de times.
+function SubLink({
+  href,
+  ativo,
+  children,
+}: {
+  href: string;
+  ativo: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`truncate rounded-md px-2.5 py-1.5 text-[13px] transition-colors ${
+        ativo ? "bg-[#6D4AFF] text-white" : "text-[#C9C6DE] hover:bg-white/[0.07]"
+      }`}
+    >
       {children}
     </Link>
   );

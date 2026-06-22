@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, ListChecks } from "lucide-react";
+import { Building2 } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { StatusCerebro } from "./status-cerebro";
@@ -10,12 +10,6 @@ const ATALHOS = [
     titulo: "Organizações",
     descricao: "Seus times, agentes e instrumentos.",
     Icone: Building2,
-  },
-  {
-    href: "/execucoes",
-    titulo: "Execuções",
-    descricao: "Acompanhe as automações que já rodaram.",
-    Icone: ListChecks,
   },
 ];
 

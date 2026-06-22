@@ -12,20 +12,19 @@ function tituloDaRota(pathname: string): string {
   const regras: [RegExp, string][] = [
     [/^\/$/, "Início"],
     [/^\/criar/, "Criar com a IA"],
-    [/^\/execucoes/, "Execuções"],
     [/^\/biblioteca/, "Biblioteca"],
+    [/^\/uso-consultoria/, "Uso da consultoria"],
     [/^\/uso/, "Uso e custos"],
     [/^\/chaves-consultoria/, "Chaves da consultoria"],
-    [/^\/configuracoes/, "Configurações"],
+    [/^\/configuracoes-consultoria/, "Configurações da consultoria"],
+    [/^\/configuracoes/, "Configurações da organização"],
     [/^\/organizacoes\/[^/]+\/acesso/, "Acesso e papéis"],
     [/^\/organizacoes\/[^/]+\/chaves/, "Chaves e credenciais"],
-    [/^\/organizacoes\/[^/]+$/, "Organização"],
-    [/^\/organizacoes/, "Organizações"],
+    [/^\/organizacoes\/[^/]+$/, "Gerenciar Times"],
+    [/^\/organizacoes/, "Gerenciar Organizações"],
     [/^\/times\/[^/]+\/automacoes/, "Automações"],
     [/^\/times\/[^/]+\/instrumentos/, "Instrumentos"],
     [/^\/times/, "Time"],
-    [/^\/automacoes/, "Execução"],
-    [/^\/agentes/, "Agente"],
   ];
   for (const [re, rotulo] of regras) if (re.test(p)) return rotulo;
   return "Batuta";
