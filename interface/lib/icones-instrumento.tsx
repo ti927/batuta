@@ -26,6 +26,7 @@ import {
   faCcMastercard,
   faCcVisa,
   faChrome,
+  faClaude,
   faCloudflare,
   faCodepen,
   faConfluence,
@@ -48,6 +49,7 @@ import {
   faGooglePlay,
   faHtml5,
   faHubspot,
+  faHuggingFace,
   faInstagram,
   faJava,
   faJira,
@@ -65,6 +67,7 @@ import {
   faNodeJs,
   faNotion,
   faNpm,
+  faOpenai,
   faPaypal,
   faPhp,
   faPinterest,
@@ -400,6 +403,11 @@ export type IconeCatalogo = {
 
 // Marcas (logos) — o motivo de usar Font Awesome aqui.
 const MARCAS: IconeCatalogo[] = [
+  // IA
+  { id: "fab:openai", nome: "OpenAI", icon: faOpenai, termos: "openai gpt chatgpt ia inteligencia" },
+  { id: "fab:claude", nome: "Claude", icon: faClaude, termos: "claude anthropic ia assistente" },
+  { id: "fab:hugging-face", nome: "Hugging Face", icon: faHuggingFace, termos: "hugging face ia modelos ml huggingface" },
+  // Mensageria e redes
   { id: "fab:whatsapp", nome: "WhatsApp", icon: faWhatsapp, termos: "whatsapp zap mensagem chat" },
   { id: "fab:telegram", nome: "Telegram", icon: faTelegram, termos: "telegram bot mensagem chat" },
   { id: "fab:google", nome: "Google", icon: faGoogle, termos: "google busca pesquisa" },

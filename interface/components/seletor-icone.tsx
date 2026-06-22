@@ -4,8 +4,15 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Wrench, X } from "lucide-react";
 
+import { buscarExterno, type IconeExterno } from "@/lib/icones-externos";
 import { CATALOGO_ICONES } from "@/lib/icones-instrumento";
 import { cn } from "@/lib/utils";
+
+// Chaves (prefix:iconName) dos curados — para não repetir, na seção "Mais da
+// biblioteca", um ícone que já aparece nos curados.
+const CHAVES_CURADAS = new Set(
+  CATALOGO_ICONES.map((c) => `${c.icon.prefix}:${c.icon.iconName}`),
+);
 
 function Celula({
   selecionada,
@@ -50,6 +57,8 @@ export function SeletorIcone({
 }) {
   const [aberto, setAberto] = useState(false);
   const [busca, setBusca] = useState("");
+  const [extras, setExtras] = useState<IconeExterno[]>([]);
+  const [buscandoExtras, setBuscandoExtras] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const termo = busca.trim().toLowerCase();
@@ -61,6 +70,27 @@ export function SeletorIcone({
   const selecionado = valor
     ? (CATALOGO_ICONES.find((i) => i.id === valor) ?? null)
     : null;
+
+  // Busca o RESTO da biblioteca (fora dos curados) sob demanda. Roda no onChange
+  // do input (handler de evento), não em efeito — a 1ª busca baixa o registro
+  // completo (chunk separado); depois é em memória. O ref descarta resultados de
+  // um termo já superado (digitação rápida).
+  const ultimoTermo = useRef("");
+  function buscarMais(texto: string) {
+    const t = texto.trim().toLowerCase();
+    ultimoTermo.current = t;
+    if (t.length < 2) {
+      setExtras([]);
+      setBuscandoExtras(false);
+      return;
+    }
+    setBuscandoExtras(true);
+    buscarExterno(t).then((achados) => {
+      if (ultimoTermo.current !== t) return; // termo já mudou — descarta
+      setExtras(achados.filter((e) => !CHAVES_CURADAS.has(e.id)));
+      setBuscandoExtras(false);
+    });
+  }
 
   // Fecha ao clicar fora ou apertar Esc (só enquanto aberto).
   useEffect(() => {
@@ -82,6 +112,9 @@ export function SeletorIcone({
   function escolher(id: string | null) {
     onChange(id);
     setBusca("");
+    setExtras([]);
+    setBuscandoExtras(false);
+    ultimoTermo.current = "";
     setAberto(false);
   }
 
@@ -106,8 +139,12 @@ export function SeletorIcone({
           onChange={(e) => {
             setBusca(e.target.value);
             setAberto(true);
+            buscarMais(e.target.value);
           }}
-          onFocus={() => setAberto(true)}
+          onFocus={() => {
+            setAberto(true);
+            if (busca) buscarMais(busca);
+          }}
           placeholder={
             selecionado ? selecionado.nome : "Buscar ícone (ex.: telegram, banco, busca)…"
           }
@@ -156,14 +193,40 @@ export function SeletorIcone({
                 <FontAwesomeIcon icon={i.icon} className="size-4" />
               </Celula>
             ))}
-            {lista.length === 0 && (
+
+            {/* Mais da biblioteca: o resto do Font Awesome, buscado sob demanda. */}
+            {termo.length >= 2 && (extras.length > 0 || buscandoExtras) && (
+              <div className="col-span-full mt-1 border-t border-border pt-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Mais da biblioteca
+              </div>
+            )}
+            {extras.map((e) => (
+              <Celula
+                key={e.id}
+                selecionada={valor === e.id}
+                titulo={e.nome}
+                onClick={() => escolher(e.id)}
+              >
+                <FontAwesomeIcon icon={e.icon} className="size-4" />
+              </Celula>
+            ))}
+            {buscandoExtras && extras.length === 0 && (
+              <p className="col-span-full py-2 text-center text-xs text-muted-foreground">
+                Procurando na biblioteca…
+              </p>
+            )}
+
+            {lista.length === 0 && extras.length === 0 && !buscandoExtras && (
               <p className="col-span-full py-3 text-center text-xs text-muted-foreground">
-                Nenhum ícone para “{busca}”.
+                {termo.length < 2
+                  ? `Nenhum ícone para “${busca}”.`
+                  : `Nenhum ícone para “${busca}” — nem nos curados nem na biblioteca.`}
               </p>
             )}
           </div>
           <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">
-            {CATALOGO_ICONES.length} ícones — digite para filtrar.
+            {CATALOGO_ICONES.length} ícones em destaque — digite para achar mais na
+            biblioteca inteira.
           </p>
         </div>
       )}
