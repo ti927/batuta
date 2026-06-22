@@ -46,12 +46,6 @@ const ESTADO: Record<string, { label: string; variante: VarianteBadge }> = {
   cancelada: { label: "cancelada", variante: "neutral" },
 };
 
-const ROTULO_GATILHO: Record<string, string> = {
-  manual: "Manual",
-  agendamento: "Por horário",
-  webhook: "Por webhook",
-};
-
 function formatarData(iso: string | null): string {
   if (!iso) return "—";
   try {
@@ -96,19 +90,6 @@ export function DashboardCliente({
     ? (agentes.find((a) => a.id === abertoId) ?? null)
     : null;
 
-  const nAutomacoes = resumo?.automacoes ?? automacoes.length;
-  const ativo = resumo?.ativo ?? false;
-  const gatilhoLabel =
-    nAutomacoes === 0
-      ? "Sem automação"
-      : nAutomacoes === 1 && resumo?.gatilho
-        ? (ROTULO_GATILHO[resumo.gatilho] ?? resumo.gatilho)
-        : `${nAutomacoes} automações`;
-  // A URL do webhook é POR AUTOMAÇÃO (não do time). Quando há uma única automação e ela
-  // é webhook, o card leva direto à automação, onde a URL aparece pronta para copiar.
-  const automacaoUnica = automacoes.length === 1 ? automacoes[0] : undefined;
-  const gatilhoWebhook = automacaoUnica?.tipo_gatilho === "webhook";
-
   const pendencias = resumo?.pendencias ?? 0;
   const custo = resumo?.custo_acumulado_usd ?? 0;
   const totalExec = resumo?.execucoes ?? recentes.length;
@@ -119,25 +100,6 @@ export function DashboardCliente({
       <Rise>
         {/* Stat cards — a visão de saúde do time (só leitura). */}
         <div className="flex flex-wrap gap-3.5">
-          <StatCard
-            Icone={Clock}
-            tom={{ bg: "#EFEAFF", fg: "#6D4AFF" }}
-            rotulo="Gatilho"
-            valor={gatilhoLabel}
-            sub={
-              gatilhoWebhook
-                ? "ver/copiar a URL do webhook →"
-                : ativo
-                  ? "disparando normalmente"
-                  : "ainda não ativado"
-            }
-            acento={gatilhoWebhook}
-            href={
-              gatilhoWebhook && automacaoUnica
-                ? `/automacoes/${automacaoUnica.id}`
-                : undefined
-            }
-          />
           <StatCard
             Icone={MessageSquare}
             tom={{ bg: "#FDF1E3", fg: "#E89638" }}
