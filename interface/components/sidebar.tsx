@@ -76,7 +76,9 @@ export function Sidebar({
   }
 
   const org = organizacoes.find((o) => o.id === orgAtiva);
-  const times = timesPorOrg[orgAtiva] ?? [];
+  const times = [...(timesPorOrg[orgAtiva] ?? [])].sort((a, b) =>
+    a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }),
+  );
   const ehAdminOrg = podeAdmin(papeis[orgAtiva]);
   const ativo = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
