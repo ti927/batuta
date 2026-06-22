@@ -64,14 +64,12 @@ export default async function InstrumentosPage({
   const { id } = await params;
   const dados = await carregar(id);
   if (!dados) notFound();
-  // Versão dos dados: muda quando a IA (pelo painel) cria/edita/remove um instrumento.
-  // Como `key`, remonta a aba fresca após o router.refresh. Ver automacoes/page.tsx.
-  const versao = JSON.stringify(
-    dados.instrumentos.map((i) => [i.id, i.nome, i.configuracao]),
-  );
+  // SEM `key` de versão aqui (de propósito): remontar a aba a cada save/connect
+  // zerava o estado local e FECHAVA o drawer no meio da edição. A lista é
+  // renderizada direto da prop `inicial`, então o router.refresh já a atualiza
+  // sem remontar — e o drawer (decisão do maestro) fica aberto até fechar à mão.
   return (
     <InstrumentosCliente
-      key={versao}
       time={dados.time}
       inicial={dados.instrumentos}
       tipos={dados.tipos}

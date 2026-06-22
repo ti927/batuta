@@ -16,6 +16,7 @@ import {
   type Instrumento,
   type PapelAcesso,
   type Time,
+  type TipoInstrumento,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { AutomacaoBuilder } from "@/components/automacao-builder/builder";
@@ -75,6 +76,10 @@ function EditorAutomacao({
   automacoes,
   agentes,
   canais,
+  cintos,
+  instrumentos,
+  tipos,
+  meuPapel,
   souOperador,
   souAdmin,
   onSelecionar,
@@ -88,6 +93,10 @@ function EditorAutomacao({
   automacoes: Automacao[];
   agentes: Agente[];
   canais: Instrumento[];
+  cintos: Record<string, Instrumento[]>;
+  instrumentos: Instrumento[];
+  tipos: TipoInstrumento[];
+  meuPapel: PapelAcesso | null;
   souOperador: boolean;
   souAdmin: boolean;
   onSelecionar: (id: string) => void;
@@ -367,6 +376,11 @@ function EditorAutomacao({
               ? `${URL_CEREBRO}/webhooks/automacoes/${automacao.id}`
               : null
           }
+          cintos={cintos}
+          instrumentosTime={instrumentos}
+          tipos={tipos}
+          time={time}
+          meuPapel={meuPapel}
         />
       </div>
 
@@ -455,13 +469,17 @@ export function AutomacoesCliente({
   time,
   inicial,
   agentes,
+  cintos,
   instrumentos,
+  tipos,
   meuPapel,
 }: {
   time: Time;
   inicial: Automacao[];
   agentes: Agente[];
+  cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
+  tipos: TipoInstrumento[];
   meuPapel: PapelAcesso | null;
 }) {
   const souOperador = podeOperar(meuPapel);
@@ -510,6 +528,10 @@ export function AutomacoesCliente({
       automacoes={automacoes}
       agentes={agentes}
       canais={canais}
+      cintos={cintos}
+      instrumentos={instrumentos}
+      tipos={tipos}
+      meuPapel={meuPapel}
       souOperador={souOperador}
       souAdmin={souAdmin}
       onSelecionar={(id) => setSelId(id)}

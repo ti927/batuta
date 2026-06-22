@@ -2,17 +2,27 @@
 // Gatilho · Agente · Roteador · Fim — visual do handoff (SPEC §6), flat e marca Batuta.
 
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { CheckCircle2, Layers, Shield, Sparkles, Zap } from "lucide-react";
+import { CheckCircle2, Layers, Pencil, Shield, Sparkles, Zap } from "lucide-react";
 
-import type { Agente, NoCadeia } from "@/lib/api";
+import type { Agente, Instrumento, NoCadeia } from "@/lib/api";
+import { IconeInstrumento } from "@/components/icone-instrumento";
 import { RobotFace } from "@/components/robot-face";
 
 import { NODE_W, tone } from "./nucleo";
+
+// Quantos instrumentos do cinto cabem no nó antes de virar "+X mais".
+const MAX_BADGES = 4;
 
 export type DadosNo = {
   no: NoCadeia;
   agente?: Agente;
   indice?: number;
+  // Cinto do agente: vira badges no corpo do nó (um por linha).
+  cinto?: Instrumento[];
+  // Abre o editor do agente (drawer flutuante) direto do nó, sem trocar de aba.
+  onEditarAgente?: (agenteId: string) => void;
+  // Abre o editor do instrumento ao clicar no badge.
+  onEditarInstrumento?: (instrumentoId: string) => void;
 };
 
 // Handles de saída (direita), um por saída, distribuídos na vertical.
@@ -154,8 +164,33 @@ export function AgenteNode({ data, selected }: NodeProps) {
   const no = d.no;
   const ag = d.agente;
   const modelo = (ag?.modelo_ia ?? "").replace("claude-", "");
+  // Cinto: mostra até MAX_BADGES; o excedente vira "+X mais" (abre o drawer do
+  // agente, onde o cinto inteiro é gerido). Se passar de MAX por só 1, ainda
+  // mostra todos (não esconde 1 só atrás de um "+1 mais").
+  const cinto = d.cinto ?? [];
+  const mostrados = cinto.length <= MAX_BADGES ? cinto : cinto.slice(0, MAX_BADGES - 1);
+  const resto = cinto.length - mostrados.length;
   return (
-    <div style={{ ...cartao(!!selected, "#fff", "#6D4AFF", "#E8E6F0"), height: 90 }}>
+    <div
+      className="relative"
+      style={{ ...cartao(!!selected, "#fff", "#6D4AFF", "#E8E6F0"), minHeight: 90 }}
+    >
+      {/* Lápis na borda esquerda: abre o editor do agente sem sair do construtor.
+          `nodrag` para não arrastar o nó; stopPropagation para não roubar o clique. */}
+      {ag && d.onEditarAgente && (
+        <button
+          type="button"
+          className="nodrag absolute -left-2.5 -top-2.5 z-10 grid size-[26px] place-items-center rounded-full border border-[#E8E6F0] bg-white text-[#6D4AFF] shadow-sm transition-colors hover:bg-[#F4F1FE]"
+          title={`Editar o agente “${ag.nome}”`}
+          aria-label={`Editar o agente ${ag.nome}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            d.onEditarAgente!(ag.id);
+          }}
+        >
+          <Pencil size={13} />
+        </button>
+      )}
       <div className="flex h-full flex-col gap-1.5 p-[11px_13px]">
         <div className="flex items-center gap-2.5">
           <RobotFace size={28} indice={d.indice ?? 0} lider={ag?.papel === "lider"} />
@@ -192,6 +227,45 @@ export function AgenteNode({ data, selected }: NodeProps) {
             </span>
           )}
         </div>
+
+        {/* Cinto do agente: um instrumento por linha. Clicar abre o drawer do
+            instrumento; "+X mais" abre o drawer do agente (cinto completo). */}
+        {cinto.length > 0 && (
+          <div className="mt-0.5 flex flex-col gap-1">
+            {mostrados.map((inst) => (
+              <button
+                key={inst.id}
+                type="button"
+                className="nodrag flex items-center gap-1.5 rounded-md border border-[#ECEAF4] bg-[#FAFAF7] px-1.5 py-1 text-left transition-colors hover:border-[#D9D2F7] hover:bg-[#F4F1FE]"
+                title={`Editar o instrumento “${inst.nome}”`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  d.onEditarInstrumento?.(inst.id);
+                }}
+              >
+                <IconeInstrumento
+                  icone={inst.icone}
+                  className="size-3 flex-none text-[#6D4AFF]"
+                />
+                <span className="truncate text-[11px] text-[#4A4860]">
+                  {inst.nome}
+                </span>
+              </button>
+            ))}
+            {resto > 0 && ag && (
+              <button
+                type="button"
+                className="nodrag rounded-md px-1.5 py-0.5 text-left text-[11px] font-medium text-[#6D4AFF] hover:underline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  d.onEditarAgente?.(ag.id);
+                }}
+              >
+                +{resto} mais…
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <HandleEntrada />
       <HandlesSaida no={no} />

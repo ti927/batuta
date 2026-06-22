@@ -8,10 +8,12 @@ import {
   type Instrumento,
   type PapelAcesso,
   type Time,
+  type TipoInstrumento,
 } from "@/lib/api";
 import { podeOperar } from "@/lib/permissoes";
 import { CardAgente } from "@/components/card-agente";
 import { DrawerAgente } from "@/components/drawer-agente";
+import { DrawerInstrumento } from "@/components/drawer-instrumento";
 import { Button } from "@/components/ui/button";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
 
@@ -20,6 +22,7 @@ export function AgentesCliente({
   inicial,
   cintos,
   instrumentos,
+  tipos,
   meuPapel,
   conversaId,
 }: {
@@ -27,6 +30,7 @@ export function AgentesCliente({
   inicial: Agente[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
+  tipos: TipoInstrumento[];
   meuPapel: PapelAcesso | null;
   conversaId: string | null;
 }) {
@@ -35,8 +39,15 @@ export function AgentesCliente({
   // o agente é re-derivado da prop recarregada. `criando` abre o drawer vazio.
   const [abertoId, setAbertoId] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
+  // Instrumento aberto pelo badge do card (editar sem trocar de aba).
+  const [instrumentoAbertoId, setInstrumentoAbertoId] = useState<string | null>(
+    null,
+  );
   const agenteAberto = abertoId
     ? (inicial.find((a) => a.id === abertoId) ?? null)
+    : null;
+  const instrumentoAberto = instrumentoAbertoId
+    ? (instrumentos.find((i) => i.id === instrumentoAbertoId) ?? null)
     : null;
 
   return (
@@ -71,6 +82,9 @@ export function AgentesCliente({
               indice={i}
               cinto={cintos[a.id] ?? []}
               onAbrir={() => setAbertoId(a.id)}
+              onEditarInstrumento={
+                souOperador ? (id) => setInstrumentoAbertoId(id) : undefined
+              }
             />
           ))}
         </div>
@@ -101,6 +115,19 @@ export function AgentesCliente({
           meuPapel={meuPapel}
           conversaId={conversaId}
           onFechar={() => setAbertoId(null)}
+        />
+      )}
+
+      {/* Instrumento aberto pelo badge de um card — editar sem trocar de aba. */}
+      {instrumentoAberto && (
+        <DrawerInstrumento
+          key={instrumentoAberto.id}
+          instrumento={instrumentoAberto}
+          tipos={tipos}
+          time={time}
+          meuPapel={meuPapel}
+          onFechar={() => setInstrumentoAbertoId(null)}
+          onSalvou={(salvo) => setInstrumentoAbertoId(salvo.id)}
         />
       )}
     </main>

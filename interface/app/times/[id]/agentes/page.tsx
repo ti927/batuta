@@ -6,6 +6,7 @@ import {
   type Instrumento,
   type PapelAcesso,
   type Time,
+  type TipoInstrumento,
 } from "@/lib/api";
 import { buscarCerebro, buscarMeuAcesso } from "@/lib/cerebro-servidor";
 
@@ -20,6 +21,7 @@ async function carregar(timeId: string): Promise<{
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
+  tipos: TipoInstrumento[];
   meuPapel: PapelAcesso | null;
   conversaId: string | null;
 } | null> {
@@ -33,9 +35,9 @@ async function carregar(timeId: string): Promise<{
   const time: Time = await respTime.json();
   const agentes = await jsonOu<Agente[]>(respAgentes, []);
 
-  // Cinto de cada agente, instrumentos do time e a conversa (eterna) — para os
-  // drawers de agente (gerir cinto, "Ajustar com a IA").
-  const [cintosPares, instrumentosResp, conversasResp] = await Promise.all([
+  // Cinto de cada agente, instrumentos do time, o catálogo de tipos (p/ o editor
+  // de instrumento aberto pelo badge) e a conversa (eterna) — para os drawers.
+  const [cintosPares, instrumentosResp, tiposResp, conversasResp] = await Promise.all([
     Promise.all(
       agentes.map(async (a) => {
         const r = await buscarCerebro(`/agentes/${a.id}/instrumentos`);
@@ -43,6 +45,7 @@ async function carregar(timeId: string): Promise<{
       }),
     ),
     buscarCerebro(`/times/${timeId}/instrumentos`),
+    buscarCerebro(`/instrumentos/tipos`),
     buscarCerebro(`/organizacoes/${time.organizacao_id}/conversas-criacao`),
   ]);
 
@@ -52,6 +55,7 @@ async function carregar(timeId: string): Promise<{
     agentes,
     cintos: Object.fromEntries(cintosPares),
     instrumentos: await jsonOu<Instrumento[]>(instrumentosResp, []),
+    tipos: await jsonOu<TipoInstrumento[]>(tiposResp, []),
     meuPapel: eu?.papeis[time.organizacao_id] ?? null,
     conversaId: conversas.find((c) => c.time_id === timeId)?.id ?? null,
   };
@@ -83,6 +87,7 @@ export default async function AgentesPage({
       inicial={dados.agentes}
       cintos={dados.cintos}
       instrumentos={dados.instrumentos}
+      tipos={dados.tipos}
       meuPapel={dados.meuPapel}
       conversaId={dados.conversaId}
     />

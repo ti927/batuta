@@ -1397,6 +1397,36 @@ NÃO pausava nada, só alimentava a parede de ativação — e (B) o portão do 
 
 ---
 
+## FASE — Edição in-place do time + seletor de ícone buscável  ✅ FEITA (2026-06-22, branch `lapis-editar-agente`)
+
+Objetivo do maestro: **editar o time inteiro navegando o mínimo possível entre abas** — flagrou um
+problema, corrige ali mesmo. 100% frontend; sem backend/banco/endpoint novo (reusa os drawers e
+endpoints existentes). Validado ao vivo.
+
+- **Lápis (agente) + badges do cinto (instrumentos), em 3 lugares:** o **nó da automação**, o **card
+  da aba Agentes** e a **linha do passo da inspeção de execução**. O lápis abre o `DrawerAgente`
+  flutuante; cada instrumento do cinto vira **badge clicável** que abre o `DrawerInstrumento` — tudo
+  sem trocar de aba. Badges com limite + "+X mais" (abre o agente = cinto completo). As páginas
+  dessas telas passaram a carregar o cinto de cada agente + o catálogo de tipos para alimentar os
+  drawers. Padrão visual unificado (linhas com borda, ícone na cor da marca); na execução o lápis é
+  um ícone discreto à direita (onde ficava o ícone de ferramenta, agora removido por redundância).
+- **UX do drawer de instrumento (compartilhado):** ao **Salvar** NÃO fecha mais sozinho (fica aberto
+  até fechar à mão); ao criar, passa de "criar" para "editar" o recém-criado (`onSalvou` devolve o
+  instrumento). **Conectar canal** também parou de fechar: a aba Instrumentos não remonta mais a si
+  mesma a cada edição (removida a `key` de versão que zerava o estado local; a lista atualiza pelas
+  props no `router.refresh`).
+- **Seletor de ícone do instrumento → dropdown buscável:** fechado ocupa 1 linha (mostra o ícone
+  atual); abre no clique/foco; filtra ao digitar; fecha no clique-fora/Esc. Catálogo curado ampliado
+  de **62 → 371** ícones. **A busca alcança a biblioteca INTEIRA do FA-free** (~2.500): seção "Mais
+  da biblioteca" carregada **sob demanda** (`lib/icones-completo` via `import()` dinâmico em
+  `lib/icones-externos`, singleton) → **chunk separado (~1,5 MB)** que só baixa quando se busca ou
+  renderiza um ícone fora dos curados. Bundle principal segue leve (tree-shaking dos curados);
+  `IconeInstrumento` resolve curado na hora e os demais sob demanda (Wrench enquanto carrega).
+  openai/claude/hugging-face entraram nos curados.
+- tsc + eslint + build verdes a cada passo.
+
+---
+
 ## FASE — IA de conversa lida com credenciais nomeadas  📋 BACKLOG (anotado 2026-06-21, não iniciar sem o sinal do maestro)
 
 Gatilho: na entrega dos instrumentos de Instagram, a IA criadora **monta** o agente/automação e
