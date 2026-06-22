@@ -1300,6 +1300,47 @@ Todos reusam a credencial `instagram` (Config com `token`+`ig_user_id`, casament
 
 ---
 
+## FASE — Pós-QA do Instagram + Supabase Storage  ✅ NO AR (2026-06-21, sem migração, núcleo intocado)
+
+QA ao vivo da publicação revelou e corrigiu (tudo no ar):
+- **Dropdown de instrumentos agrupado por categoria** (`categoria` em cada `TipoInstrumento` + `<optgroup>` no `formulario-instrumento`; grupos Instagram/Web/Conteúdo/Mensageria/Sites e blogs/Integrações e dados).
+- **IA criadora ensinada a rotina de ação irreversível com aprovação** (`criacao/prompt.py`): um nó-portão APRESENTA e ESPERA — nunca executa; jamais pôr o instrumento de escrita no MESMO nó do portão; estrutura `[preparar+apresentar → gate] → [executar sem gate]`; publicar exige URL pública + legenda decididas ANTES.
+- **Fix no motor** (`retoma._retomar_conversando_tela`): o portão-conversa repassava ao próximo nó o texto curto da rodada ("aprovado!") em vez do conteúdo APRESENTADO (URL+legenda) → o publicador ficava sem a mídia ("concluída" sem postar). Agora repassa o apresentado.
+- **Supabase Storage** (resolve a limitação conhecida da implantação): `gerar_imagem`/`gerar_pdf` sobem para um **bucket público `arquivos`** (`arquivos.salvar()`; cria o bucket sozinho; reusa `SUPABASE_URL`+`SUPABASE_SERVICE_ROLE_KEY`; fallback p/ disco em dev) → URL **pública e durável** (o `/arquivos` do Railway era efêmero → "Not Found" → a Meta não baixava a imagem).
+
+---
+
+## FASE — Montar imagem (composição a partir de fotos)  ✅ NO AR (2026-06-22, validada ao vivo — arte profissional em 211s)
+
+Pedido do maestro: gerar a arte de um post com a FOTO dele (fundo transparente) + modelos de estilo + tema. Novo instrumento **`montar_imagem`** (`cerebro/instrumentos/montar_imagem.py`), aditivo, **sem migração**, núcleo intocado:
+- Usa o endpoint de **EDIÇÃO/composição** da OpenAI (`/v1/images/edits`, **multipart**): baixa as URLs e **anexa os BYTES** em `image[]` (até 16; a 1ª é a mais preservada). gpt-image-2 / qualidade alta.
+- **GENÉRICO de propósito:** args = `prompt` + `imagens_url` (em ordem). O instrumento NÃO sabe o que é "foto da pessoa" vs "modelo" — **o elo vive no MARKDOWN do agente** (decisão do maestro: instrumento burro, inteligência no markdown; senão precisaria 1 instrumento por tipo de montagem). A IA criadora foi ensinada a escrever esse elo (`criacao/prompt.py`).
+- Catálogo (`gerar_imagem.CATALOGO_IMAGEM`) ganhou **4:5** (1024x1280 / 1536x1920, feed do Instagram) + 5:4.
+- **Timeout do edit = 600s** (`TIMEOUT_EDICAO_S`): montagem de 9 imagens em qualidade alta leva ~3,5 min; o teto de 120s herdado do `gerar_imagem` MATAVA toda tentativa (3 retentativas × 2 chamadas do agente ≈ 13 min sem arte). Timeout agora é falha **NÃO-retentável** (não re-sobe os MB).
+- Contabilizado como instrumento pago (`medicao_instrumentos.TIPOS_PAGOS`). Fotos por URL hoje; quando a **Biblioteca** existir, virão de lá.
+- **Vigia** `cerebro/diagnostico_imagem.py`: grava no Storage (nome fixo por instrumento) EXATAMENTE o que vai pra OpenAI + bytes anexados por imagem (prova anexo vs URL); leitura via `scripts/ler_diagnostico_imagem.py`. Ligado em `montar_imagem` + `gerar_imagem`.
+
+---
+
+## FASE — Robustez de execução: sweeper de presas + botão Cancelar  ✅ NO AR (2026-06-22, sem migração)
+
+Gatilho: uma execução ficou presa em `em_andamento` para sempre (worker travado SEM restart do processo; o `fila._recuperar_orfas` só roda no BOOT).
+- **Sweeper periódico** `fila.recuperar_execucoes_presas` (agendador `IntervalTrigger` 120s, `id=execucao_sweeper`): execução `em_andamento` sem progresso além de 15 min (**heartbeat** = `max(iniciada_em, último passo concluído)` — NÃO mata cadeia longa que progride) vira `falhou`. Complementa o `_recuperar_orfas` do boot.
+- **Botão "Cancelar execução"** na tela de DETALHE (`inspecao-execucao.tsx`; só estado não-final + `podeOperar`). O endpoint `POST /execucoes/{id}/cancelar` já existia — faltava expor onde o usuário acompanha (antes só na lista global).
+- `scripts/inspecionar_exec.py` = dump read-only de execução (passos + cinto), p/ diagnóstico.
+- **Pendência conhecida:** `construir_modelo` (`orquestracao/llm.py`) **sem timeout** no ChatAnthropic/ChatOpenAI → conexão pendurada trava a thread (causa raiz da execução órfã). Fix rápido aguardando o sinal (a chamada travada vira falha rápida em vez de esperar o sweeper).
+
+---
+
+## FASE — Webhook: criadora correta + URL por automação  ✅ NO AR (2026-06-22)
+
+Gatilho: a IA companheira dava info errada sobre webhook (dizia gatilho "manual" quando já era "webhook"; mandava procurar a URL no painel do time, onde ela NÃO fica). O webhook **já é por automação** no backend (`POST /webhooks/automacoes/{id}`) e a URL **já aparece na tela da automação** (nó Gatilho → drawer) — faltava a criadora saber e o conceito ficar claro:
+- `criacao/prompt.py`: seção **"Gatilhos e webhook"** — gatilho é **POR AUTOMAÇÃO** (não do time; um time tem várias); não afirmar o tipo de memória (conferir no retrato do time); a URL é por automação, aparece pronta ao abrir a automação (nó Gatilho), só dispara se ativa.
+- Dashboard do time: **removido o card "Gatilho"** do Início (com 2+ automações um card único não tem sentido — qual URL mostraria?). Gatilho/webhook vivem só na aba Automações → nó Gatilho → drawer.
+- **Lição registrada na memória:** PERGUNTAR ao maestro antes de criar/alterar UI (eu pus a URL num card da home por conta própria — erro). Backend/bug segue direto; UX/UI não.
+
+---
+
 ## FASE — IA de conversa lida com credenciais nomeadas  📋 BACKLOG (anotado 2026-06-21, não iniciar sem o sinal do maestro)
 
 Gatilho: na entrega dos instrumentos de Instagram, a IA criadora **monta** o agente/automação e
