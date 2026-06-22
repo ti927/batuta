@@ -1328,7 +1328,7 @@ Gatilho: uma execução ficou presa em `em_andamento` para sempre (worker travad
 - **Sweeper periódico** `fila.recuperar_execucoes_presas` (agendador `IntervalTrigger` 120s, `id=execucao_sweeper`): execução `em_andamento` sem progresso além de 15 min (**heartbeat** = `max(iniciada_em, último passo concluído)` — NÃO mata cadeia longa que progride) vira `falhou`. Complementa o `_recuperar_orfas` do boot.
 - **Botão "Cancelar execução"** na tela de DETALHE (`inspecao-execucao.tsx`; só estado não-final + `podeOperar`). O endpoint `POST /execucoes/{id}/cancelar` já existia — faltava expor onde o usuário acompanha (antes só na lista global).
 - `scripts/inspecionar_exec.py` = dump read-only de execução (passos + cinto), p/ diagnóstico.
-- **Pendência conhecida:** `construir_modelo` (`orquestracao/llm.py`) **sem timeout** no ChatAnthropic/ChatOpenAI → conexão pendurada trava a thread (causa raiz da execução órfã). Fix rápido aguardando o sinal (a chamada travada vira falha rápida em vez de esperar o sweeper).
+- **Causa raiz ✅ RESOLVIDA** (2026-06-22, merge `57df437`): `construir_modelo` (`orquestracao/llm.py`) agora põe **`timeout=TIMEOUT_IA_S` (300s)** no ChatAnthropic/ChatOpenAI/ChatGoogleGenerativeAI — generoso para uma geração cheia (até MAX_TOKENS num modelo lento), mas FINITO: a conexão pendurada vira falha rápida em vez de travar o trabalhador. O sweeper segue como backstop.
 
 ---
 
