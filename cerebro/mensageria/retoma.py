@@ -199,16 +199,19 @@ def _retomar_conversando_tela(
     finalizado = datetime.now(timezone.utc)
 
     saida_texto = resultado["saida"]
-    veio_de_canal = False
     mensagens_enviadas = resultado.get("mensagens_enviadas") or {}
     if mensagens_enviadas:
+        # No PASSO registrado mostramos o que a pessoa de fato viu nesta rodada (a
+        # mensagem enviada pelo canal), não o status que o agente narrou. Mesmo
+        # critério da pausa inicial (`cadeia.py`). Vale SÓ para o registro do passo
+        # (e, em rodadas conversacionais, para a `ultimo.saida` da próxima rodada) —
+        # NÃO para o que segue ao próximo nó depois de aprovado (ver abaixo).
         canal_id = str((no.get("aprovacao") or {}).get("instrumento_id") or "")
         apresentadas = mensagens_enviadas.get(canal_id) or [
             t for textos in mensagens_enviadas.values() for t in textos
         ]
         if apresentadas:
             saida_texto = "\n\n".join(apresentadas)
-            veio_de_canal = True
 
     ramo = resultado.get("ramo_escolhido")
     por_rotulo = {s["rotulo"]: s for s in saidas if s.get("rotulo")}
@@ -238,14 +241,17 @@ def _retomar_conversando_tela(
         sessao.refresh(execucao)
         return execucao
 
-    # O que segue ao próximo nó é o que foi APRESENTADO e aprovado — não o texto da
-    # rodada que só roteou ("aprovado!"), que perderia o conteúdo (ex.: a URL+legenda
-    # do post). Em canal, é o que foi enviado nesta rodada; na tela, é a apresentação
-    # do passo pausado (`ultimo`) — mesmo critério do caminho mecânico (acima) e do
-    # test_portao_carrega_apresentado.
-    apresentado_aprovado = (
-        saida_texto if veio_de_canal else (ultimo.saida or {}).get("texto", "")
-    )
+    # O que segue ao próximo nó é SEMPRE o conteúdo APRESENTADO no portão — o que a
+    # pessoa viu e aprovou (`ultimo.saida`, o passo pausado) — somado à resposta dela.
+    # NUNCA o texto que o agente narra DEPOIS de aprovar ("aprovado, seguindo…"), ainda
+    # que ele mande essa confirmação por um canal nesta rodada: a pessoa aprovou o que
+    # já estava na tela, não a confirmação. Unifica o critério com o caminho mecânico
+    # (acima) e o por canal (`servico._turno_de_portao`, que repassa o histórico — o
+    # apresentado está nele). Sem isto, aprovar pela TELA um agente que também confirma
+    # pelo Telegram perdia o conteúdo: descia "aprovado!" no lugar do artigo (a falha da
+    # execução 132bcaa6, 2026-06-23 — agente que aprova E tagarela no canal na mesma
+    # rodada).
+    apresentado_aprovado = (ultimo.saida or {}).get("texto", "")
     return avancar_apos_gate(
         sessao, execucao, idx=idx, cadeia=cadeia, escolhida=escolhida,
         entrada_proxima=entrada_retomada(apresentado_aprovado, resposta),

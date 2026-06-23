@@ -230,6 +230,70 @@ def test_tela_conversa_repassa_conteudo_aprovado_ao_proximo_no(sessao, dados, mo
     assert execucao.estado == "concluida"
 
 
+def test_tela_aprova_e_agente_confirma_no_canal_nao_perde_o_conteudo(
+    sessao, dados, monkeypatch
+):
+    """Regressão (exec 132bcaa6, 2026-06-23): aprovação pela TELA de um nó-portão cujo
+    agente, ao aprovar, TAMBÉM dispara uma confirmação curta pelo canal ("aprovado!").
+    Antes, o envio pelo canal ligava `veio_de_canal` e a falinha descia no lugar do
+    conteúdo apresentado — o artigo se perdia e o nó seguinte publicava 'aprovado!'.
+    O conteúdo apresentado (`ultimo.saida`) deve seguir adiante, não a confirmação."""
+    canal = _canal(sessao, dados)
+    n1 = _agente(sessao, dados)  # nó-portão: apresenta o artigo
+    pub = Agente(time_id=dados["timeA"].id, nome="Publicador", papel="agente")
+    sessao.add(pub)
+    sessao.flush()
+    cadeia = {
+        "inicial": NO_GATE,
+        "nos": [
+            {"id": NO_GATE, "tipo": "agente", "ref": str(n1.id), "gate": True,
+             "aprovacao": {"instrumento_id": str(canal.id), "destinatario": "555"},
+             "saidas": [
+                 {"rotulo": "aprovado", "quando": "ok", "destino": "pub"},
+                 {"rotulo": "reprovado", "quando": "ajustar", "destino": NO_GATE},
+             ]},
+            {"id": "pub", "tipo": "agente", "ref": str(pub.id), "gate": False,
+             "saidas": [{"rotulo": "publicado", "quando": "ok", "destino": "fim"}]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    auto = Automacao(
+        time_id=dados["timeA"].id, nome="Fluxo", tipo_gatilho="manual",
+        configuracao_gatilho={}, cadeia=cadeia, ativa=False, configuracao={},
+    )
+    sessao.add(auto)
+    sessao.flush()
+    execucao = _exec_pausada(sessao, auto, n1, texto="ARTIGO COMPLETO SOBRE CONCILIAÇÃO")
+
+    capturado: dict = {}
+
+    def fake(agente, cinto, entrada, **kwargs):
+        if kwargs.get("gate"):  # rodada do nó-portão: decide E confirma pelo canal
+            return {
+                "saida": "✅ Artigo aprovado! Seguindo para publicação agora.",
+                "instrumentos_acionados": ["enviar_telegram", "seguir_para"], "uso": [],
+                "mensagens_enviadas": {
+                    str(canal.id): ["✅ Artigo aprovado! Seguindo para publicação agora."]
+                },
+                "ramo_escolhido": "aprovado",
+            }
+        capturado["entrada_pub"] = entrada  # o nó publicador, a jusante
+        return {"saida": "publiquei", "instrumentos_acionados": ["publicar_wordpress"],
+                "uso": [], "mensagens_enviadas": {}, "ramo_escolhido": None}
+
+    import orquestracao.cadeia as motor
+    monkeypatch.setattr(retoma, "executar_agente", fake)
+    monkeypatch.setattr(motor, "executar_agente", fake)
+
+    retoma.retomar_execucao(sessao, execucao, "aprovado", chaves={}, origens={})
+
+    # O publicador recebe o ARTIGO apresentado, NÃO a confirmação "aprovado!".
+    assert "ARTIGO COMPLETO SOBRE CONCILIAÇÃO" in capturado["entrada_pub"]
+    assert "Seguindo para publicação agora" not in capturado["entrada_pub"]
+    sessao.refresh(execucao)
+    assert execucao.estado == "concluida"
+
+
 # ─────────────────────────── CANAL (processar_turno) ───────────────────────────
 
 def _setup_canal(sessao, dados, monkeypatch, enviados, configuracao=None):
