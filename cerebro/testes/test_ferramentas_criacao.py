@@ -12,7 +12,7 @@ from criacao.ferramentas import (
     catalogo_de_instrumentos,
     ferramenta_por_nome,
 )
-from modelos import ConversaCriacao
+from modelos import Automacao, ConversaCriacao, Execucao
 
 
 def _setup(sessao, dados):
@@ -240,3 +240,51 @@ def test_ver_time_sem_time(sessao, dados):
     _ctx, f = _setup(sessao, dados)
     r = json.loads(f["ver_time"].func())
     assert r.get("time") is None
+
+
+# ───────────────── diagnóstico de execução (escopo das tools) ─────────────────
+
+def _automacao_com_exec(sessao, time_id, estado, **kw):
+    auto = Automacao(
+        time_id=time_id, nome="A", tipo_gatilho="manual", configuracao_gatilho={},
+        cadeia={}, ativa=True,
+    )
+    sessao.add(auto)
+    sessao.flush()
+    ex = Execucao(automacao_id=auto.id, estado=estado, entrada={"texto": "x"}, **kw)
+    sessao.add(ex)
+    sessao.flush()
+    return ex
+
+
+def test_listar_execucoes_escopa_ao_time(sessao, dados):
+    ctx, f = _setup(sessao, dados)
+    _chamar(f, "definir_time", nome="T")
+    ex_meu = _automacao_com_exec(sessao, ctx.conversa.time_id, "falhou", resultado={"erro": "y"})
+    ex_outro = _automacao_com_exec(sessao, dados["timeA"].id, "falhou")  # outro time
+    r = _chamar(f, "listar_execucoes")
+    ids = {e["execucao_id"] for e in r["execucoes"]}
+    assert str(ex_meu.id) in ids
+    assert str(ex_outro.id) not in ids
+
+
+def test_diagnosticar_execucao_de_outro_time_recusa(sessao, dados):
+    ctx, f = _setup(sessao, dados)
+    _chamar(f, "definir_time", nome="T")
+    ex_outro = _automacao_com_exec(sessao, dados["timeA"].id, "falhou", resultado={"erro": "z"})
+    r = _chamar(f, "diagnosticar_execucao", execucao_id=str(ex_outro.id))
+    assert r["ok"] is False
+
+
+def test_diagnosticar_sem_id_pega_mais_recente_com_problema(sessao, dados):
+    ctx, f = _setup(sessao, dados)
+    _chamar(f, "definir_time", nome="T")
+    # uma concluída (ignorada por não ter problema) e uma falhada (a alvo)
+    _automacao_com_exec(sessao, ctx.conversa.time_id, "concluida", resultado={"texto": "ok"})
+    ex_falhou = _automacao_com_exec(
+        sessao, ctx.conversa.time_id, "falhou",
+        resultado={"erro": "Error code: 529 overloaded_error"},
+    )
+    r = _chamar(f, "diagnosticar_execucao")
+    assert r["ok"] and r["diagnostico"]["execucao_id"] == str(ex_falhou.id)
+    assert any(a["codigo"] == "ia_sobrecarregada" for a in r["diagnostico"]["avisos"])

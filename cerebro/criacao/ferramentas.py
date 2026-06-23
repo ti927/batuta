@@ -23,6 +23,7 @@ from langchain_core.tools import StructuredTool
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import diagnostico_execucao
 import instrumentos as encaixe
 import precos
 import segredos_instrumento as segredos
@@ -36,6 +37,7 @@ from modelos import (
     Automacao,
     ConversaCriacao,
     Credencial,
+    Execucao,
     Instrumento,
     SegredoInstrumento,
     Time,
@@ -290,6 +292,12 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
             .where(Automacao.time_id == ctx.conversa.time_id)
             .order_by(Automacao.criado_em)
         ).first()
+
+    def _execucao_do_time(ex: Execucao) -> bool:
+        auto = sess.get(Automacao, ex.automacao_id)
+        return auto is not None and auto.time_id == ctx.conversa.time_id
+
+    _ESTADOS_PROBLEMA = ("falhou", "aguardando_humano", "em_andamento", "aguardando")
 
     def definir_time(nome: str, descricao: str | None = None) -> str:
         """Define o nome e a descrição do time. Na PRIMEIRA vez cria o time (ainda
@@ -560,11 +568,82 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
             return _ok("Memória apagada.")
         return _erro(f"Não há memória com id {memoria_id} neste projeto.")
 
+    def listar_execucoes(
+        automacao_id: str | None = None, apenas_problemas: bool = False,
+        limite: int = 10,
+    ) -> str:
+        """Lista as execuções recentes deste time, para você ACHAR a que o consultor
+        relata como problema. Devolve, por execução, o `execucao_id`, a automação, o
+        estado, quando rodou e um resumo curto. Filtre por uma automação
+        (`automacao_id`) e/ou só as com problema (`apenas_problemas=true`: falhou,
+        parada esperando humano, presa ou na fila). Use isto ANTES de diagnosticar
+        quando o consultor não der o id da execução."""
+        if ctx.conversa.time_id is None:
+            return _erro("Este projeto ainda não tem time, então não há execuções.")
+        aid = _uuid(automacao_id) if automacao_id else None
+        if automacao_id and aid is None:
+            return _erro(f"Id de automação inválido: {automacao_id}.")
+        q = (
+            select(Execucao, Automacao.nome)
+            .join(Automacao, Automacao.id == Execucao.automacao_id)
+            .where(Automacao.time_id == ctx.conversa.time_id)
+        )
+        if aid is not None:
+            q = q.where(Execucao.automacao_id == aid)
+        if apenas_problemas:
+            q = q.where(Execucao.estado.in_(_ESTADOS_PROBLEMA))
+        q = q.order_by(Execucao.criado_em.desc()).limit(max(1, min(int(limite or 10), 30)))
+        itens = [
+            {
+                "execucao_id": str(ex.id),
+                "automacao": nome,
+                "estado": ex.estado,
+                "quando": ex.criado_em.isoformat() if ex.criado_em else None,
+                "resumo": diagnostico_execucao.resumo_estado(ex.estado, ex.resultado),
+            }
+            for ex, nome in sess.execute(q).all()
+        ]
+        return _ok(f"{len(itens)} execução(ões) encontrada(s).", execucoes=itens)
+
+    def diagnosticar_execucao(execucao_id: str | None = None) -> str:
+        """Investiga UMA execução a fundo e devolve o diagnóstico para você EXPLICAR
+        ao consultor por que ela falhou ou ficou parada. Sem `execucao_id`, pega a
+        execução com problema mais recente deste time. LIDERE pelos `avisos` (cada um
+        traz `titulo`, `detalhe` e `acao_sugerida`): traduza em linguagem simples,
+        conte a história na ordem (o que iniciou, rodou, onde parou e por quê) e
+        proponha o próximo passo. Se `webhook_alvo` vier preenchido, continue a
+        história nele — o webhook iniciou outra automação. Nunca exponha segredos (o
+        diagnóstico só diz se um canal 'tem token', nunca o valor)."""
+        if ctx.conversa.time_id is None:
+            return _erro("Este projeto ainda não tem time, então não há execuções.")
+        if execucao_id:
+            eid = _uuid(execucao_id)
+            if eid is None:
+                return _erro(f"Id de execução inválido: {execucao_id}.")
+            ex = sess.get(Execucao, eid)
+            if ex is None or not _execucao_do_time(ex):
+                return _erro(f"Não encontrei a execução {execucao_id} neste time.")
+        else:
+            ex = sess.scalars(
+                select(Execucao)
+                .join(Automacao, Automacao.id == Execucao.automacao_id)
+                .where(Automacao.time_id == ctx.conversa.time_id)
+                .where(Execucao.estado.in_(_ESTADOS_PROBLEMA))
+                .order_by(Execucao.criado_em.desc())
+            ).first()
+            if ex is None:
+                return _ok(
+                    "Nenhuma execução com problema neste time agora.", diagnostico=None
+                )
+        diag = diagnostico_execucao.diagnosticar(sess, ex.id)
+        return _ok("Diagnóstico pronto.", diagnostico=diag)
+
     funcoes = [
         definir_time, adicionar_agente, editar_agente, remover_agente,
         configurar_instrumento, editar_instrumento, encaixar_instrumento,
         desencaixar_instrumento, montar_cadeia, definir_gatilho, estimar_custo,
         ativar_time, desativar_time, ver_time, listar_tipos_instrumento,
+        listar_execucoes, diagnosticar_execucao,
         sugerir_proximos_passos, lembrar, recordar, esquecer,
     ]
 

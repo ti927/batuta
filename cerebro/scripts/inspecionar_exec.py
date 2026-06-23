@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv  # noqa: E402
 from sqlalchemy import select  # noqa: E402
 
+import diagnostico_execucao  # noqa: E402
 from modelos import (  # noqa: E402
     Agente,
     AgenteInstrumento,
@@ -77,6 +78,26 @@ def main(exec_id: str) -> None:
             print(f"\nagente: {nomes.get(aid, aid)}")
             for i in insts:
                 print(f"  - nome='{i.nome}' tipo={i.tipo} id8={i.id.hex[:8]} cfg={_txt(i.configuracao, 300)}")
+
+        # Diagnóstico determinístico (a MESMA lógica que a IA companheira usa).
+        diag = diagnostico_execucao.diagnosticar(s, ex.id)
+        print("\n=== AVISOS (diagnóstico) ===")
+        for a in diag.get("avisos") or []:
+            print(f"  [{a['severidade']}] {a['codigo']}: {a['titulo']} — {a['detalhe']}")
+            if a.get("acao_sugerida"):
+                print(f"      ação sugerida: {a['acao_sugerida']}")
+        alvo = diag.get("webhook_alvo")
+        if alvo:
+            print("\n=== WEBHOOK ALVO ===")
+            print(
+                f"  automacao={alvo.get('automacao_nome')} "
+                f"fora_de_alcance={alvo.get('fora_de_alcance')}"
+            )
+            ea = alvo.get("execucao_alvo")
+            if ea:
+                print(f"  execucao_alvo={ea['id']} estado={ea['estado']} — {ea.get('resumo')}")
+                for a in ea.get("avisos") or []:
+                    print(f"    [{a['severidade']}] {a['codigo']}: {a['titulo']}")
 
 
 if __name__ == "__main__":
