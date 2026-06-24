@@ -448,6 +448,25 @@ def test_canal_portao_direto_roteia_mecanico(sessao, dados, monkeypatch):
     assert any("Decisão registrada" in t for t in enviados)  # ack mecânico
 
 
+def test_canal_cancelar_nao_roda_o_agente_e_encerra(sessao, dados, monkeypatch):
+    """No portão CONVERSA, responder 'cancelar' encerra ANTES de ramificar — o agente
+    NÃO roda (a detecção é o 1º statement de _turno_de_portao)."""
+    enviados = []
+    canal, ag, auto, execucao = _setup_canal(sessao, dados, monkeypatch, enviados)
+
+    def explode(*a, **k):
+        raise AssertionError("o agente não deve rodar quando a pessoa cancela")
+    monkeypatch.setattr(servico, "executar_agente", explode)
+
+    conv = _responder(sessao, canal, "cancelar")
+
+    sessao.refresh(execucao)
+    assert execucao.estado == "cancelada"  # encerrada sem rodar o agente
+    sessao.refresh(conv)
+    assert conv.execucao_id is None  # desvinculada
+    assert any("encerrei" in t.lower() for t in enviados)  # ack "⛔"
+
+
 def test_sweeper_encerra_portao_e_cancela_execucao(sessao, dados, monkeypatch):
     from mensageria import sweeper
 

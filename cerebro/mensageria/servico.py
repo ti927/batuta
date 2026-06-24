@@ -23,7 +23,7 @@ import medicao_instrumentos
 import precos
 import segredos_instrumento
 from chaves import resolver_chaves_por_time
-from mensageria import retoma, telegram, transcricao
+from mensageria import aprovacao, retoma, telegram, transcricao
 from mensageria.config import (  # MSG_LIMITE: compat servico.X
     MSG_LIMITE,
     com_ajuste_do_no,
@@ -461,6 +461,30 @@ def _resolver_execucao_abandonada(conversa: Conversa, execucao: Execucao, acao: 
     conversa.execucao_id = None
 
 
+# Comando reservado para ENCERRAR um fluxo pelo canal, num portão de aprovação. Só é
+# reservado DENTRO de um portão (ver `_turno_de_portao`); em atendimento puro é texto
+# normal. Match de MENSAGEM INTEIRA — feedback como "cancela o 3º parágrafo" não dispara.
+COMANDOS_CANCELAR = {"cancelar", "/cancelar"}
+
+
+def _eh_comando_cancelar(mensagem: str) -> bool:
+    return (mensagem or "").strip().lower() in COMANDOS_CANCELAR
+
+
+def _cancelar_por_canal(
+    sessao: Session, conversa: Conversa, token: str, execucao: Execucao
+) -> None:
+    """O aprovador respondeu o comando de cancelar pelo canal: encerra a execução
+    (`cancelada`) pelo helper ÚNICO (mesma lógica da tela), confirma pelo canal e
+    devolve a conversa ao normal. Não roda o agente nem o roteador."""
+    aprovacao.cancelar_execucao(sessao, execucao, motivo="Cancelada pelo aprovador no portão.")
+    _enviar_e_registrar(sessao, conversa, token, _ack_aprovacao(execucao))
+    # O helper já desvinculou (execucao_id=None). A conversa volta ao normal, como após
+    # qualquer resolução de portão; o sweeper governa o silêncio.
+    conversa.estado = "aguardando_resposta"
+    sessao.commit()
+
+
 def _rodar_turno(
     sessao: Session,
     conversa: Conversa,
@@ -564,6 +588,12 @@ def _turno_de_portao(
     saídas): re-roda o agente pela BORDA (entrega + ciclo de vida); declarou um ramo
     → o fluxo anda; perguntou → segue aguardando. Forma 'direto'/mecânico: roteia
     pela palavra (`_processar_aprovacao`). Teto/inatividade = regra geral."""
+    # CANCELAR é uma ação RESERVADA da borda, decidida ANTES de ramificar conversa/
+    # direto: assim o comando nunca é engolido pelo agente conversacional (que o trataria
+    # como feedback) nem forçado pelo roteador a virar aprovado/reprovado. Encerra o fluxo.
+    if _eh_comando_cancelar(_ultima_msg_contato(sessao, conversa.id)):
+        _cancelar_por_canal(sessao, conversa, token, execucao)
+        return
     try:
         ultimo, no, no_id, cadeia, idx = retoma.localizar_no_pausado(sessao, execucao)
     except ValueError:

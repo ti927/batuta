@@ -186,3 +186,25 @@ def desvincular(sessao: Session, execucao_id: uuid.UUID) -> None:
         .values(execucao_id=None)
     )
     sessao.flush()
+
+
+# Estados em que uma execução já encerrou — não se cancela de novo.
+ESTADOS_ENCERRADOS = {"concluida", "falhou", "cancelada"}
+
+
+def cancelar_execucao(
+    sessao: Session, execucao: Execucao, *, motivo: str = "Cancelada pelo operador."
+) -> bool:
+    """Encerra uma execução como `cancelada` — FONTE ÚNICA usada pela TELA (rota
+    `/cancelar`) e pelo CANAL (comando reservado no portão): seta estado/finalização/
+    resultado e DESVINCULA a conversa de portão (se houver). Idempotente: se a execução
+    já encerrou, devolve False sem tocar em nada. NÃO comita — o chamador fecha a
+    transação junto com a sua auditoria (tela) ou ack + estado da conversa (canal)."""
+    if execucao.estado in ESTADOS_ENCERRADOS:
+        return False
+    execucao.estado = "cancelada"
+    if not execucao.resultado:
+        execucao.resultado = {"texto": motivo}
+    execucao.finalizada_em = datetime.now(timezone.utc)
+    desvincular(sessao, execucao.id)
+    return True

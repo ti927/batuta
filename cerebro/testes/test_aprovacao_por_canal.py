@@ -277,3 +277,68 @@ def test_aprovacao_pelo_canal_religa_e_conclui_o_fluxo(sessao, dados, monkeypatc
     assert enviados  # confirmação enviada ao aprovador
     sessao.refresh(conv)
     assert conv.execucao_id is None  # vínculo desfeito ao concluir
+
+
+# ──────────────────────── CANCELAR pelo canal ────────────────────────
+
+def _setup_e_responder(sessao, dados, monkeypatch, texto, *, destino="fim"):
+    """Monta um portão por canal e processa UMA resposta de entrada. Devolve
+    (execucao, conversa, mensagens enviadas)."""
+    enviados = []
+    monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
+    monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
+    monkeypatch.setattr(
+        servico.telegram, "enviar",
+        lambda token, chat, t: enviados.append(t) or {"ok": True},
+    )
+    canal = _canal(sessao, dados, destinatario="555")
+    si.salvar_segredos(sessao, canal.id, {"token_bot": "tok-x"})
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal=canal, destino=destino)
+    execucao = _exec_pausada(sessao, auto, ag)
+    aprovacao.vincular_pausa(sessao, execucao)
+    msg = telegram.MensagemEntrante(
+        contato_chave="555", contato_nome="Chefe", texto=texto, midia=None
+    )
+    conv, deve = servico.registrar_entrada(sessao, canal, msg)
+    assert deve
+    servico.processar_turno(conv.id)
+    sessao.refresh(execucao)
+    sessao.refresh(conv)
+    return execucao, conv, enviados
+
+
+def test_cancelar_pelo_canal_encerra_o_fluxo(sessao, dados, monkeypatch):
+    execucao, conv, enviados = _setup_e_responder(sessao, dados, monkeypatch, "cancelar")
+    assert execucao.estado == "cancelada"
+    assert conv.execucao_id is None  # conversa desvinculada
+    assert any("encerrei" in t.lower() for t in enviados)  # ack "⛔ Entendido, encerrei…"
+
+
+def test_comando_barra_cancelar_tambem_encerra(sessao, dados, monkeypatch):
+    execucao, _conv, _e = _setup_e_responder(sessao, dados, monkeypatch, "/CANCELAR")
+    assert execucao.estado == "cancelada"  # normaliza (strip/lower) e casa
+
+
+def test_feedback_contendo_cancela_nao_cancela(sessao, dados, monkeypatch):
+    # "cancela o terceiro parágrafo" é FEEDBACK, não o comando — NÃO encerra (match de
+    # mensagem inteira). Roteia normal e conclui pela única saída.
+    execucao, _conv, _e = _setup_e_responder(
+        sessao, dados, monkeypatch, "cancela o terceiro parágrafo"
+    )
+    assert execucao.estado != "cancelada"
+    assert execucao.estado == "concluida"
+
+
+def test_helper_cancelar_execucao_idempotente(sessao, dados):
+    canal = _canal(sessao, dados)
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal=canal)
+    execucao = _exec_pausada(sessao, auto, ag)
+    aprovacao.vincular_pausa(sessao, execucao)
+
+    assert aprovacao.cancelar_execucao(sessao, execucao) is True
+    assert execucao.estado == "cancelada"
+    assert _conversa_da_execucao(sessao, execucao.id) is None  # desvinculou
+    # 2ª chamada numa execução já encerrada → False, sem efeito.
+    assert aprovacao.cancelar_execucao(sessao, execucao) is False

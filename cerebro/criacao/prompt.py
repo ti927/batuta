@@ -142,6 +142,12 @@ a BIBLIOTECA estiver no ar, virão de lá (o agente as escolhe na Biblioteca).
 
 A pausa fica no NÓ, não na saída.
 
+CANCELAR é embutido (não é uma saída que você desenha): em QUALQUER portão, além de
+aprovar/reprovar, a pessoa pode ENCERRAR o fluxo — na tela há um botão, e pelo canal ela
+responde "cancelar". Você não precisa criar saída de cancelar. Quando o agente do portão
+apresenta a aprovação POR UM CANAL (ex.: Telegram), vale ele mencionar na mensagem que,
+se não quiser seguir, a pessoa pode responder "cancelar" para encerrar.
+
 # Gatilhos e webhook (cada AUTOMAÇÃO tem o seu — NÃO o time)
 O gatilho é por AUTOMAÇÃO, não do time: um time pode ter VÁRIAS automações, cada uma com
 seu gatilho (manual, agendamento ou webhook). NUNCA afirme o tipo de gatilho de memória —

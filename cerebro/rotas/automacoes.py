@@ -559,10 +559,18 @@ def cancelar_execucao(
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Esta execução já encerrou."
         )
-    execucao.estado = "cancelada"
-    if not execucao.resultado:
-        execucao.resultado = {"texto": "Cancelada pelo operador."}
-    execucao.finalizada_em = datetime.now(timezone.utc)
+    # Encerrar num portão é uma ação sensível e desvincula a conversa do aprovador —
+    # por isso passa pelo helper único (mesma lógica do cancelar por canal).
+    era_portao = execucao.estado == "aguardando_humano"
+    aprovacao.cancelar_execucao(sessao, execucao, motivo="Cancelada pelo operador.")
+    auto = sessao.get(Automacao, execucao.automacao_id)
+    auditoria.registrar(
+        sessao, usuario=usuario,
+        acao="portao.cancelado" if era_portao else "execucao.cancelada",
+        recurso_tipo="execucao", recurso_id=execucao.id,
+        organizacao_id=auditoria.org_do_time(sessao, auto.time_id) if auto else None,
+        detalhe={"origem": "tela"},
+    )
     sessao.commit()
     sessao.refresh(execucao)
     return _montar_com_passos(sessao, execucao)

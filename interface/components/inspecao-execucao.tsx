@@ -491,6 +491,9 @@ function PainelAprovacao({
   setResposta,
   respondendo,
   onResponder,
+  onCancelar,
+  cancelando,
+  podeCancelar,
 }: {
   aberta: ExecucaoComPassos;
   automacao: Automacao;
@@ -498,6 +501,9 @@ function PainelAprovacao({
   setResposta: (v: string) => void;
   respondendo: boolean;
   onResponder: (decisao?: string) => void;
+  onCancelar: () => void;
+  cancelando: boolean;
+  podeCancelar: boolean;
 }) {
   const ultimo = aberta.passos[aberta.passos.length - 1];
   // O nó pausado é localizado por id de nó (fallback ao agente, p/ execuções antigas).
@@ -546,6 +552,22 @@ function PainelAprovacao({
           >
             {respondendo ? "Retomando…" : "Responder e retomar"}
           </Button>
+        )}
+        {podeCancelar && (
+          <div className="mt-1 border-t border-[#EFE4C8] pt-2.5">
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={cancelando || respondendo}
+              onClick={onCancelar}
+            >
+              <XCircle className="size-4" />
+              {cancelando ? "Cancelando…" : "Cancelar o fluxo"}
+            </Button>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Encerra a execução de vez — diferente de reprovar, que pede um novo ajuste.
+            </p>
+          </div>
         )}
       </div>
       <LegendaEsperas />
@@ -631,6 +653,9 @@ export function PainelExecucao({
           setResposta={setResposta}
           respondendo={respondendo}
           onResponder={onResponder}
+          onCancelar={onCancelar}
+          cancelando={cancelando}
+          podeCancelar={podeCancelar && cancelavel}
         />
       )}
 

@@ -57,8 +57,13 @@ def varrer(sessao: Session) -> int:
         if not conf["encerrar_por_inatividade"]:
             continue  # este fluxo não encerra por silêncio (ex.: deixa vivo de propósito)
         if not conversa.nudge_enviado:
-            entregue = _enviar(token, conversa.contato_chave, conf["mensagem_nudge"])
-            _registrar(sessao, conversa, conf["mensagem_nudge"], entregue)
+            nudge = conf["mensagem_nudge"]
+            # Conduzindo um portão: lembra a opção de ENCERRAR (descoberta do comando
+            # reservado de cancelar). Só aqui — não polui conversas de atendimento puro.
+            if conversa.execucao_id:
+                nudge += "\n\n(Ou responda *cancelar* para encerrar o fluxo.)"
+            entregue = _enviar(token, conversa.contato_chave, nudge)
+            _registrar(sessao, conversa, nudge, entregue)
             conversa.nudge_enviado = True
             conversa.aguardando_ate = agora + timedelta(
                 minutes=int(conf["nudge_timeout_min"])
