@@ -169,6 +169,19 @@ def test_construir_modelo_aplica_timeout_finito():
     assert getattr(o, "request_timeout", None) == TIMEOUT_IA_S
 
 
+def test_construir_modelo_aplica_retentativa():
+    """Toda chamada de IA retenta com backoff numa sobrecarga transitória (529/5xx) —
+    um pico de poucos segundos não derruba mais uma execução longa (exec 132bcaa6)."""
+    from orquestracao.llm import MAX_RETENTATIVAS_IA
+
+    with usar_chaves({"anthropic": "sk-x"}):
+        m = construir_modelo("claude-haiku-4-5")
+    assert getattr(m, "max_retries", None) == MAX_RETENTATIVAS_IA
+    with usar_chaves({"openai": "sk-y"}):
+        o = construir_modelo("gpt-4o")
+    assert getattr(o, "max_retries", None) == MAX_RETENTATIVAS_IA
+
+
 def test_resolver_chaves_por_time_mapa_por_provedor(sessao, dados):
     """A fronteira resolve um mapa {provedor: chave} para a org do time."""
     from chaves import resolver_chaves_por_time

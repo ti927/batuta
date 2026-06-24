@@ -41,6 +41,17 @@ MAX_TOKENS = 8192
 # falha acontecer já na chamada, sem esperar os 15 min do sweeper.
 TIMEOUT_IA_S = 300
 
+# Retentativas com espera progressiva (backoff) numa chamada de IA. Os provedores
+# devolvem 529/overloaded (Anthropic) ou 5xx/429 quando estão sobrecarregados — um
+# soluço TRANSITÓRIO, não erro de configuração. O SDK de cada provedor já retenta com
+# backoff exponencial nesses casos; o padrão (2 na Anthropic/OpenAI) é curto demais e
+# uma sobrecarga de poucas dezenas de segundos derrubava uma execução longa e cara
+# (foi o que matou a exec 132bcaa6 no último passo). 6 retentativas cobrem ~20-40s de
+# backoff — ride out do pico típico — e ficam BEM abaixo do timeout (300s) por chamada
+# e do sweeper (15min), sem risco de pendurar o trabalhador. Vale para os 3 provedores
+# (Anthropic/OpenAI/Google) por este ponto único.
+MAX_RETENTATIVAS_IA = 6
+
 # Modelos que NÃO aceitam o parâmetro `temperature` (a API responde 400
 # "temperature is deprecated for this model"). Para eles, omitimos o parâmetro.
 # Centralizado aqui para valer tanto para a IA criadora quanto para qualquer
@@ -94,6 +105,7 @@ def construir_modelo(
             "model": modelo,
             "max_tokens": MAX_TOKENS,
             "timeout": TIMEOUT_IA_S,
+            "max_retries": MAX_RETENTATIVAS_IA,
         }
         # Opus 4.8 (e afins) rejeitam `temperature`; só enviamos quando o modelo
         # aceita.
@@ -122,6 +134,7 @@ def construir_modelo(
             max_tokens=MAX_TOKENS,
             temperature=temperatura,
             timeout=TIMEOUT_IA_S,
+            max_retries=MAX_RETENTATIVAS_IA,
         )
 
     if provedor == PROVEDOR_GOOGLE:
@@ -138,6 +151,7 @@ def construir_modelo(
             max_output_tokens=MAX_TOKENS,
             temperature=temperatura,
             timeout=TIMEOUT_IA_S,
+            max_retries=MAX_RETENTATIVAS_IA,
         )
 
     raise ValueError(f"Provedor de IA não suportado: {provedor}")
