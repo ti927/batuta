@@ -481,6 +481,15 @@ export function FormularioInstrumento({
         </Aviso>
       )}
 
+      {camposDoTipo(tipoAtual).filter((campo) => !camposCobertos.has(campo.nome))
+        .length > 0 && (
+        <Aviso variant="info" className="text-xs">
+          O que você preenche aqui vale como está — o agente <strong>não</strong>{" "}
+          troca esses valores pelo texto dele. Na hora de usar o instrumento, ele só
+          fornece o conteúdo (a mensagem, o prompt, a consulta…).
+        </Aviso>
+      )}
+
       {camposDoTipo(tipoAtual)
         .filter((campo) => !camposCobertos.has(campo.nome))
         .map((campo) => (

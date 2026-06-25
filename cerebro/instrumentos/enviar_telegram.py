@@ -22,9 +22,10 @@ MAX_TEXTO = 4096  # limite do Telegram por mensagem
 
 class ConfigTelegram(BaseModel):
     """Configuração fixa, preenchida por quem monta o agente. `token_bot` é
-    SEGREDO (cofre, Fase 7-B). `destinatario_padrao` é opcional: se preenchido,
-    o agente sempre manda para esse chat quando não informar um destinatário
-    (útil para um canal/grupo fixo da equipe).
+    SEGREDO (cofre, Fase 7-B). `destinatario_padrao` é o destino que VALE: se
+    preenchido, o agente manda para esse chat e o que ele escrever no texto dele
+    NÃO o substitui. Em branco, o próprio agente informa o destino ao acionar o
+    instrumento (útil para um canal/grupo fixo da equipe).
 
     Os campos de atendimento (saudação e horário comercial) só fazem efeito no
     modo conversacional da mensageria — a borda os lê (`mensageria/servico.py`);
@@ -37,9 +38,10 @@ class ConfigTelegram(BaseModel):
     )
     destinatario_padrao: str = Field(
         default="",
-        title="Destinatário padrão (opcional)",
-        description="chat_id fixo de destino (opcional). Usado quando o agente "
-        "não informa um destinatário.",
+        title="Destinatário",
+        description="chat_id de destino. Este valor é o que vale: o agente NÃO o "
+        "substitui pelo que escrever no texto dele. Deixe em branco apenas se "
+        "quiser que o próprio agente informe o destino ao acionar o instrumento.",
     )
 
     # ─── Atendimento (mensageria conversacional) ───
@@ -83,8 +85,8 @@ class ArgsTelegram(BaseModel):
 
     destinatario: str = Field(
         default="",
-        description="chat_id de quem recebe. Pode ficar vazio se houver um "
-        "destinatário padrão configurado.",
+        description="chat_id de quem recebe. Só vale quando o instrumento NÃO tem "
+        "um destinatário fixo configurado — o configurado no instrumento prevalece.",
     )
     mensagem: str = Field(min_length=1, description="O texto a enviar.")
 
@@ -109,7 +111,12 @@ class EnviarTelegram(TipoInstrumento):
             raise FalhaInstrumento(
                 "token do bot do Telegram não configurado.", retentavel=False
             )
-        destino = (args.destinatario or config.destinatario_padrao or "").strip()
+        # O destino CONFIGURADO no instrumento prevalece sobre o que o agente
+        # informa no texto dele (decisão do maestro 2026-06-25 — exec d179dd90).
+        # Só cai no `args.destinatario` quando o campo do instrumento está vazio
+        # (ex.: a entrega conversacional da borda, que monta a config sem destino
+        # e passa o contato em args — ver mensageria/telegram.py).
+        destino = (config.destinatario_padrao or args.destinatario or "").strip()
         if not destino:
             raise FalhaInstrumento(
                 "destinatário não informado (e não há destinatário padrão).",
