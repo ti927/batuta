@@ -1464,6 +1464,28 @@ cliente conecta a própria conta):
 
 ---
 
+## FASE — Aprovação pela tela não perde o conteúdo apresentado  ✅ NO AR (2026-06-23, merge `9bce290`, sem migração)
+
+Gatilho: exec `132bcaa6` publicou no WordPress a fala do agente ("Artigo aprovado! Seguindo…") em vez do artigo. Raiz (mesmo bug recorrente do fix de 2026-06-21, ainda não fechado): `retoma._retomar_conversando_tela` usava a heurística `veio_de_canal` — ao aprovar, o agente-portão também confirmava pelo Telegram, e a borda descia essa confirmação no lugar de `ultimo.saida` (o artigo apresentado). Pelo Telegram funcionava (o caminho por canal repassa o histórico); só a TELA quebrava. Correção: unifica os 4 caminhos — pós-aprovação segue SEMPRE `ultimo.saida` + a resposta. Teste de regressão `test_tela_aprova_e_agente_confirma_no_canal_nao_perde_o_conteudo`. Lição [[feedback-bug-recorrente-fonte-de-verdade]].
+
+## FASE — IA companheira diagnostica execuções que deram problema  ✅ NO AR (2026-06-23, merge `8424263`, sem migração, núcleo intocado)
+
+Objetivo: o maestro pergunta NO APP por que uma automação falhou/parou, sem ter que abrir o projeto. Novo `cerebro/diagnostico_execucao.py` (analisador puro de LEITURA, fonte única) reúne os fatos e roda verificações DETERMINÍSTICAS → `avisos[]` (`ia_sobrecarregada` / `falha_instrumento` / `portao_sem_entrega` [agente do portão sem canal no cinto] / `canal_sem_token` / `aprovacao_pendente_normal` / `webhook_disparou_alvo` [segue 1 hop, mesma org] / preso / …); nunca vaza segredo, trunca textos. 2 tools em `criacao/ferramentas.py` (`listar_execucoes` + `diagnosticar_execucao`, escopadas ao time) + seção no `prompt.py` (liderar pelos avisos, traduzir sem jargão, seguir o webhook_alvo, aplicar a correção do próprio time com as tools de edição que já tinha). `scripts/inspecionar_exec.py` imprime os mesmos avisos. Validado em prod (read-only): `2ca7768e`→hop→`ef903d73`. Decisões do maestro: explica + corrige o que dá (sem reexecutar); cross-team só mesma org + resumo.
+
+## FASE — Resiliência a 529 (retentativa com backoff nas chamadas de IA)  ✅ NO AR (2026-06-24, merge `d8552df`, sem migração)
+
+`construir_modelo` (`orquestracao/llm.py`, ponto único de toda construção de modelo) passa a fixar `max_retries=6` nos três provedores (Anthropic/OpenAI/Google) → numa sobrecarga transitória (529/5xx/429) a chamada faz retentativa com backoff (~20-40s, abaixo do timeout de 300s e do sweeper de 15min), em vez de derrubar a execução. Fecha a pendência da exec `132bcaa6`.
+
+## FASE — Ação CANCELAR no portão de aprovação (tela + Telegram)  ✅ NO AR (2026-06-24, merge `5c69613`, sem migração)
+
+O portão só tinha aprovar/reprovar (reprovar faz loop/refaz); faltava ENCERRAR para quem, depois de reprovar N vezes, não quer mais tentar. Insight de desenho: cancelar **não** é uma 3ª saída do grafo (toda automação teria que desenhá-la; no canal conversacional o AGENTE escolheria a saída, quando quem decide é o humano) — é uma **ação reservada da BORDA**, terminal, detectada de forma determinística ANTES do agente/roteador, uniforme nas duas superfícies, reusando o caminho de abandono que já leva uma execução pausada a `cancelada`. Helper ÚNICO `aprovacao.cancelar_execucao` (cancela + desvincula a conversa; idempotente; sem commit) usado pela rota `/cancelar` (corrige lacuna: agora desvincula a conversa do portão) e pelo canal (`COMANDOS_CANCELAR={"cancelar","/cancelar"}` no 1º statement de `_turno_de_portao`; match da mensagem INTEIRA por igualdade → feedback "cancela o 3º parágrafo" não dispara; ack ⛔, sem rodar o agente). Front: botão "Cancelar o fluxo" no `PainelAprovacao`. Permissão: tela = operador+, canal = aprovador configurado.
+
+## FASE — O instrumento é a verdade: destino do Telegram configurado prevalece sobre o markdown  ✅ NO AR (2026-06-25, merge `b8d44ca`, sem migração, núcleo intocado)
+
+Gatilho: exec `d179dd90` — o agente-portão mandou a aprovação para o chat escrito no MARKDOWN, divergente do destinatário configurado no instrumento, sem nada na tela avisando qual prevalece. Levantamento (pente fino nos **18 instrumentos**): existe **um só** ponto de sobreposição Config↔Args em todo o catálogo — `enviar_telegram` (`destinatario_padrao` vs `destinatario`); nos outros 17, a config (conexão/credencial/ajuste) e os args da IA (`mensagem`/`prompt`/`consulta`/`sql`/`url`, que nem aparecem no formulário) são complementares. Correção (decisão do maestro — **o instrumento é a verdade, não o markdown**): (1) `enviar_telegram.executar` inverte a precedência → `destino = config.destinatario_padrao or args.destinatario` (config vence; só cai no args quando o campo está vazio). Seguro no modo conversacional — a borda usa `telegram.enviar`, que monta a config com destino VAZIO e passa o contato em args (verificado em `servico.py` + `telegram.py`). Campo reformulado ("Destinatário"). (2) Front: aviso geral (`Aviso variant=info`) acima dos campos de **todo** instrumento — "o que você preenche aqui vale; o agente não troca pelo texto dele". Novo `test_enviar_telegram.py` (config-vence / fallback / conversacional / sem-destino). Follow-up registrado: "quem recebe o Telegram" ainda mora em dois lugares (destino do envio = instrumento; aprovador do portão = nó) — candidato a unificar (derivar o aprovador do portão do destinatário do instrumento) [[feedback-bug-recorrente-fonte-de-verdade]].
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
