@@ -30,6 +30,33 @@
 
 ---
 
+## Como chegar até a tela de envio (caminho de clique)
+
+> **Use este caminho sempre que se perder.** Painel da Meta = `developers.facebook.com`.
+> (A Meta muda a interface de tempos em tempos; se um rótulo estiver diferente, procure o equivalente.)
+
+1. **`developers.facebook.com`** → topo **"Meus apps"** → abra **"Batuta Team"**.
+2. Menu da **esquerda** → **"Casos de uso"**.
+3. No card **"Gerenciar mensagens e conteúdo no Instagram"** → clique para abrir/**"Personalizar"**.
+4. No sub-menu da esquerda → **"Configuração da API com login do Instagram"** (a tela com os
+   **passos numerados de 1 a 5**).
+5. Role até o **passo 5, "Concluir a análise do app"** → botão **"Ir para Análise do app"**.
+6. Se aparecer o aviso "A análise do app mudou" → **"Continuar para a análise do app"**.
+7. Se cair na lista de permissões ("Envios de análise do app" → "Novas solicitações"): confira que são
+   as **4** (sem as de DM) e clique **"Avançar"**.
+8. Você chega na tela **"Enviar para a análise do app"** — a dos **5 itens** no topo:
+   **Verificação · Configurações do app · Uso permitido · Tratamento de dados · Instruções para o
+   analista**. **Esta é a tela-base de tudo.**
+
+> Nessa tela-base: cada item tem um botão **"Ir para..."**. O botão **"Enviar para análise"**
+> (canto inferior direito) só fica clicável quando **todos** os itens estiverem ✅.
+>
+> **Conferir se a verificação já aprovou:** o item **"Verificação"** no topo deixa de estar pendente
+> e vira ✅. (Alternativa: `business.facebook.com` → engrenagem **Configurações** → **Central de
+> Segurança** → card **"Verificação da empresa"** — sai de "Em análise".)
+
+---
+
 ## Pré-requisito antes de gravar os vídeos
 
 - Tenha uma **conta profissional (Business/Criador)** de Instagram de **TESTE**, adicionada como
@@ -42,14 +69,20 @@
 
 ## Passo a passo na tela "Enviar para a análise do app"
 
-1. **Verificação** — aguardar aprovar (✅ já enviada).
-2. **Configurações do app** — ✅ já feito.
-3. **Uso permitido** — para CADA uma das 4 permissões, clicar **"Começar"** e:
-   colar a **descrição** (abaixo) + subir o **vídeo** (roteiro abaixo) + marcar **conformidade**.
-4. **Tratamento de dados** — concordar com os termos de tratamento de dados da Meta.
-5. **Instruções para o analista** — fornecer **passo a passo + credenciais de teste** para o
-   analista reproduzir as funções (ver modelo no fim deste doc).
-6. **Enviar para análise**.
+> A partir da **tela-base dos 5 itens** (caminho na seção acima). Faça na ordem; cada item tem o seu
+> botão **"Ir para..."**.
+
+1. **Verificação** — aguardar aprovar (✅ já enviada). Quando o item virar ✅, siga.
+2. **Configurações do app** — ✅ já feito; **não precisa mexer**.
+3. **Uso permitido** — clique **"Ir para o uso permitido"**. Para CADA uma das **4 permissões**
+   (cada card tem o nome da permissão), clique **"Começar"** → **cole a descrição** (abaixo) →
+   **suba o vídeo** (roteiro abaixo) → **marque a conformidade** → salve/volte. **Repita nas 4.**
+   Ao terminar, **"Avançar"**.
+4. **Tratamento de dados** — clique **"Ir para o tratamento de dados"** → leia e **concorde** com os
+   termos → **"Avançar"**.
+5. **Instruções para o analista** — clique **"Ir para as instruções da análise"** → preencha o
+   **acesso de teste + passo a passo** (modelo no fim deste doc) → salve.
+6. Com os **5 itens ✅** → clique **"Enviar para análise"** (canto inferior direito).
 
 ---
 
