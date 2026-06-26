@@ -11,11 +11,9 @@ export const ATUALIZADO_EM = "26 de junho de 2026";
 
 // Controlador dos dados pessoais (LGPD, art. 41).
 export const CONTROLADOR = {
-  razaoSocial: "LURE EDUCAÇÃO EMPRESARIAL LTDA - EPP",
-  cnpj: "10.765.379/0001-84",
-  endereco:
-    "Rua 137, nº 556, Quadra 50, Lote 01, Sala 105 — Setor Marista, " +
-    "Goiânia/GO, CEP 74170-120",
+  razaoSocial: "JMF TREINAMENTOS E CONSULTORIA LTDA - ME",
+  cnpj: "56.923.834/0001-23",
+  endereco: "Rua 137, nº 556 — Setor Marista, Goiânia/GO, CEP 74170-120",
 } as const;
 
 // Encarregado pelo tratamento de dados (DPO) e canal de contato.
