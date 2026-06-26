@@ -1,5 +1,7 @@
 import Image from "next/image";
+import Link from "next/link";
 
+import { ROTAS_LEGAIS } from "@/lib/legal";
 import { LoginCliente } from "./login-cliente";
 
 // Rota pública (liberada no proxy.ts). Quem já está logado e cai aqui pode
@@ -23,6 +25,14 @@ export default function LoginPage() {
           className="h-auto w-44"
         />
         <LoginCliente />
+
+        <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          {ROTAS_LEGAIS.map((r) => (
+            <Link key={r.href} href={r.href} className="hover:text-foreground">
+              {r.rotulo}
+            </Link>
+          ))}
+        </nav>
       </div>
 
       {/* Direita — mascote */}

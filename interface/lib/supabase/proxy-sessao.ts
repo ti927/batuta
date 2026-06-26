@@ -9,8 +9,16 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Rotas que não exigem sessão: a tela de login; o aceite de convite e a rota
 // que recebe o link do e-mail de convite (é como um convidado entra antes de
-// ter cadastro).
-const ROTAS_PUBLICAS = ["/login", "/convite", "/auth"];
+// ter cadastro); e as páginas legais públicas (exigidas pelo App Review da Meta:
+// devem abrir sem login).
+const ROTAS_PUBLICAS = [
+  "/login",
+  "/convite",
+  "/auth",
+  "/privacidade",
+  "/termos",
+  "/exclusao-de-dados",
+];
 
 export async function renovarSessao(request: NextRequest) {
   let resposta = NextResponse.next({ request });
