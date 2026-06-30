@@ -40,6 +40,15 @@ def decifrar(token: str) -> str:
     return _fernet().decrypt(token.encode()).decode()
 
 
+def decifrar_temporario(token: str, ttl_segundos: int) -> str:
+    """Como decifrar(), mas REJEITA um token mais velho que `ttl_segundos` (usa o
+    timestamp embutido no Fernet). Levanta cryptography.fernet.InvalidToken se
+    expirou ou foi adulterado. Para dados efêmeros assinados — ex.: o `state` do
+    fluxo OAuth do Instagram, que vale só os minutos entre clicar 'Conectar' e a
+    Meta devolver o navegador."""
+    return _fernet().decrypt(token.encode(), ttl=ttl_segundos).decode()
+
+
 def ultimos4(segredo: str) -> str:
     """Os últimos 4 caracteres de um segredo, para exibição segura na interface
     (PRODUTO §26: a chave inteira nunca é reexibida depois de salva)."""

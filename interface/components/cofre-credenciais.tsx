@@ -12,7 +12,7 @@
 // Na tela da organização a lista inclui as credenciais da consultoria marcadas
 // como compartilháveis — exibidas como somente-leitura (geridas na consultoria).
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { KeyRound } from "lucide-react";
 
@@ -47,6 +47,14 @@ export function CofreCredenciais({
   const [edicao, setEdicao] = useState<Edicao>(null);
   const [erro, setErro] = useState<string | null>(null);
 
+  // Retorno do fluxo "Conectar Instagram" (OAuth): a Meta devolve o navegador
+  // para esta página com ?instagram=ok|erro. useSearchParams não exige Suspense
+  // aqui (página dinâmica, atrás de login).
+  const params = useSearchParams();
+  const igRetorno = params.get("instagram");
+  const igConta = params.get("conta");
+  const igMotivo = params.get("motivo");
+
   const caminhoCriar = ehConsultoria
     ? "/credenciais-consultoria"
     : `/organizacoes/${organizacaoId}/credenciais`;
@@ -75,6 +83,19 @@ export function CofreCredenciais({
   return (
     <div className="flex flex-col gap-4">
       {erro && <Aviso>{erro}</Aviso>}
+
+      {igRetorno === "ok" && (
+        <Aviso variant="sucesso">
+          Conta {igConta ? `@${igConta}` : "do Instagram"} conectada. Ela já
+          aparece na lista abaixo.
+        </Aviso>
+      )}
+      {igRetorno === "erro" && (
+        <Aviso variant="atencao">
+          Não foi possível conectar o Instagram
+          {igMotivo ? `: ${igMotivo}` : "."}
+        </Aviso>
+      )}
 
       {credenciais.length === 0 ? (
         <EstadoVazio icone={KeyRound} titulo="Nenhuma credencial">
@@ -149,6 +170,7 @@ export function CofreCredenciais({
           key={edicao.modo === "editar" ? edicao.cred.id : "criar"}
           tipos={tipos}
           ehConsultoria={ehConsultoria}
+          organizacaoId={organizacaoId}
           credencial={edicao.modo === "editar" ? edicao.cred : null}
           caminhoCriar={caminhoCriar}
           caminhoItem={caminhoItem}
@@ -178,6 +200,7 @@ export function CofreCredenciais({
 function FormularioCredencial({
   tipos,
   ehConsultoria,
+  organizacaoId,
   credencial,
   caminhoCriar,
   caminhoItem,
@@ -187,6 +210,7 @@ function FormularioCredencial({
 }: {
   tipos: TipoCredencial[];
   ehConsultoria: boolean;
+  organizacaoId?: string;
   credencial: Credencial | null; // null = criar
   caminhoCriar: string;
   caminhoItem: (id: string) => string;
@@ -195,6 +219,30 @@ function FormularioCredencial({
   onErro: (m: string | null) => void;
 }) {
   const editando = credencial !== null;
+  const [conectando, setConectando] = useState(false);
+
+  // Conectar Instagram por OAuth: pede ao cérebro a URL de consentimento da Meta
+  // e manda o navegador para lá. No retorno, a credencial já vem preenchida (o
+  // colar token manual abaixo continua como alternativa). Só na org (não na
+  // consultoria), pois o fluxo grava uma credencial DA organização.
+  async function conectarInstagram() {
+    if (!organizacaoId) return;
+    setConectando(true);
+    try {
+      const { url } = await api.post<{ url: string }>(
+        `/organizacoes/${organizacaoId}/instagram/iniciar`,
+        {},
+      );
+      window.location.href = url;
+    } catch (e) {
+      onErro(
+        e instanceof ErroDaApi
+          ? e.message
+          : "Não foi possível iniciar a conexão com o Instagram.",
+      );
+      setConectando(false);
+    }
+  }
   const [tipoSel, setTipoSel] = useState(credencial?.tipo ?? tipos[0]?.tipo ?? "");
   const [nome, setNome] = useState(credencial?.nome ?? "");
   const [compartilhavel, setCompartilhavel] = useState(
@@ -284,6 +332,29 @@ function FormularioCredencial({
           onChange={(e) => setNome(e.target.value)}
         />
       </div>
+
+      {tipoSel === "instagram" && !ehConsultoria && organizacaoId && (
+        <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3">
+          <Button
+            type="button"
+            className="self-start"
+            disabled={conectando}
+            onClick={conectarInstagram}
+          >
+            {conectando ? "Abrindo o Instagram…" : "Conectar Instagram"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Recomendado: você faz login na conta na própria Meta e o Batuta
+            guarda o acesso sozinho — sem colar token, e ele se renova
+            automaticamente.
+          </p>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            ou cole o token manualmente
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </div>
+      )}
 
       {tipo?.campos.map((campo) => (
         <div key={campo.nome} className="flex flex-col gap-1">

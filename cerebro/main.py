@@ -15,6 +15,7 @@ from rotas import (
     cinto,
     credenciais,
     criacao,
+    instagram,
     instrumentos,
     membros,
     mensageria,
@@ -72,6 +73,7 @@ app.include_router(automacoes.rotas)
 app.include_router(chaves_api.rotas)
 app.include_router(credenciais.rotas)
 app.include_router(criacao.rotas)
+app.include_router(instagram.rotas)
 app.include_router(webhooks.rotas)
 app.include_router(mensageria.rotas)
 
