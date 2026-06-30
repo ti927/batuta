@@ -64,7 +64,12 @@ def configurado() -> bool:
 
 def montar_url_autorizacao(state: str) -> str:
     """A URL de consentimento da Meta, com o `state` opaco (assinado pelo cofre)
-    para o callback reconhecer de qual organização/usuário é o pedido."""
+    para o callback reconhecer de qual organização/usuário é o pedido.
+
+    `force_reauth=true` força a tela de login a cada conexão, em vez de reusar a
+    sessão do Instagram já aberta no navegador. É o que a Meta sugere na "URL
+    incorporada" e o que a consultoria precisa: deixa ESCOLHER a conta (conectar a
+    de cada cliente) e evita plugar por engano a conta logada no aparelho."""
     app_id, _, redirect = _config()
     consulta = urlencode(
         {
@@ -72,6 +77,7 @@ def montar_url_autorizacao(state: str) -> str:
             "redirect_uri": redirect,
             "response_type": "code",
             "scope": ",".join(ESCOPOS),
+            "force_reauth": "true",
             "state": state,
         }
     )

@@ -36,6 +36,7 @@ def test_url_autorizacao_carrega_params_e_escopos():
     assert url.startswith("https://www.instagram.com/oauth/authorize?")
     assert "client_id=TESTID" in url
     assert "response_type=code" in url
+    assert "force_reauth=true" in url  # força escolher a conta (não reusa a sessão)
     assert "state=OSTATE" in url
     # os 4 escopos (sem DM), separados por vírgula (codificada %2C)
     assert "instagram_business_basic" in url
