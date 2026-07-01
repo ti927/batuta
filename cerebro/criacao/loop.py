@@ -39,11 +39,12 @@ from criacao.ferramentas import (
 from criacao.prompt import montar_prompt_criadora
 from orquestracao.llm import construir_modelo, texto_da_resposta, usar_chaves
 
-# Modelo da criadora: o MAIS capaz (Opus). A criadora é uma consultora sênior que
-# projeta o time inteiro e escreve a documentação de cada agente — qualidade de
-# raciocínio importa mais que custo aqui (uso esporádico). É Anthropic, então cai na
-# ANTHROPIC_API_KEY do .env quando não há chave de 'criadora' no cofre.
-MODELO_CRIADORA = "claude-opus-4-8"
+# Modelo padrão da IA de conversa: Sonnet 5 — forte e econômico (perto do Opus por
+# bem menos custo), bom para a consultora sênior que projeta o time e escreve a
+# documentação de cada agente. Quem quiser o raciocínio mais exigente troca para o
+# Opus na tela (por organização). É Anthropic, então cai na ANTHROPIC_API_KEY do
+# .env quando não há chave no cofre.
+MODELO_CRIADORA = "claude-sonnet-5"
 
 # Teto do conteúdo de um resultado de ferramenta guardado no histórico. O modelo só
 # precisa VER que chamou a ferramenta e que veio um retorno — não do retorno inteiro

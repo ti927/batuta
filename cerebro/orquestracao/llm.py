@@ -54,9 +54,10 @@ MAX_RETENTATIVAS_IA = 6
 
 # Modelos que NÃO aceitam o parâmetro `temperature` (a API responde 400
 # "temperature is deprecated for this model"). Para eles, omitimos o parâmetro.
-# Centralizado aqui para valer tanto para a IA criadora quanto para qualquer
-# agente que rode num desses modelos.
-MODELOS_SEM_TEMPERATURA = {"claude-opus-4-8"}
+# São da geração de "adaptive thinking" (sempre ligado, com parâmetro `effort`):
+# Opus 4.8 e Sonnet 5. Centralizado aqui para valer tanto para a IA de conversa
+# quanto para qualquer agente que rode num desses modelos.
+MODELOS_SEM_TEMPERATURA = {"claude-opus-4-8", "claude-sonnet-5"}
 
 # Mapa {provedor: chave} resolvido para a execução em curso (Fases 7.3/7-A). É um
 # contextvar para atravessar o stack do motor sem mudar a assinatura de nenhuma

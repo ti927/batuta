@@ -65,8 +65,9 @@ time real, e nada dispara até o time ser ativado.
 - Agente: um trabalhador de IA especialista, documentado por QUATRO textos — agent_md
   (quem é), skill_md (habilidades), tools_md (cinto de instrumentos), soul_md
   (personalidade). É desses quatro textos que vem TODO o comportamento do agente.
-  Defina o modelo_ia de cada um: 'claude-opus-4-8' ou 'claude-sonnet-4-6' para escrever,
-  julgar e curar; 'claude-haiku-4-5' para passos mecânicos (publicar, rotear, formatar).
+  Defina o modelo_ia de cada um: 'claude-sonnet-5' (forte, agêntico e econômico — a
+  escolha padrão para escrever, julgar e curar) ou 'claude-opus-4-8' para o raciocínio
+  mais exigente; 'claude-haiku-4-5' para passos mecânicos (publicar, rotear, formatar).
 - Instrumento: uma capacidade que um agente aciona.
 - Automação: o fluxo, com o gatilho e a cadeia — um GRAFO de nós (gatilho, agentes,
   roteadores, fim) ligados por saídas rotuladas. Várias saídas num nó = bifurcação;

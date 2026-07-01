@@ -45,7 +45,7 @@ export function SeletorModeloConversa({
       toast.success(
         modelo
           ? `Modelo da IA de conversa: ${modelo}`
-          : "Modelo da IA de conversa: padrão (Opus)",
+          : "Modelo da IA de conversa: padrão (Claude Sonnet 5)",
       );
       router.refresh();
     } catch (e) {
@@ -68,7 +68,7 @@ export function SeletorModeloConversa({
         disabled={salvando}
         onChange={(e) => trocar(e.target.value)}
       >
-        <option value="">Padrão (Claude Opus)</option>
+        <option value="">Padrão (Claude Sonnet 5)</option>
         {provedores.map((p) => (
           <optgroup key={p} label={ROTULO_PROVEDOR[p]}>
             {MODELOS_POR_PROVEDOR[p].map((m) => (

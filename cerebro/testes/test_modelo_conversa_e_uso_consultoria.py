@@ -48,6 +48,36 @@ def test_resumir_uso_inclui_conversas():
     assert r["por_origem"]["consultoria"]["tokens_entrada"] == 1000
 
 
+# ───────────────────── Claude Sonnet 5: opção + novo padrão ─────────────────────
+
+
+def test_sonnet_5_no_catalogo_e_provedor_anthropic():
+    from orquestracao import modelos_ia
+
+    assert "claude-sonnet-5" in modelos_ia.MODELOS_POR_PROVEDOR[
+        modelos_ia.PROVEDOR_ANTHROPIC
+    ]
+    assert modelos_ia.provedor_do_modelo("claude-sonnet-5") == "anthropic"
+
+
+def test_sonnet_5_omite_temperature():
+    # Mesma geração do Opus 4.8 (adaptive thinking) → a API rejeita `temperature`.
+    from orquestracao import llm
+
+    assert "claude-sonnet-5" in llm.MODELOS_SEM_TEMPERATURA
+
+
+def test_sonnet_5_preco_cai_na_familia_sonnet():
+    # 1M entrada + 1M saída na família sonnet (US$3 + US$15) = 18.0.
+    assert precos.custo_usd("claude-sonnet-5", 1_000_000, 1_000_000) == 18.0
+
+
+def test_padrao_da_conversa_e_sonnet_5():
+    from criacao.loop import MODELO_CRIADORA
+
+    assert MODELO_CRIADORA == "claude-sonnet-5"
+
+
 def test_entradas_das_conversas_ignora_turnos_sem_uso():
     conversas = [
         SimpleNamespace(

@@ -17,7 +17,7 @@ PROVEDORES = (PROVEDOR_ANTHROPIC, PROVEDOR_OPENAI, PROVEDOR_GOOGLE)
 # Modelos conhecidos por provedor (lista crua, refina-se com o uso). A interface
 # espelha esta lista para montar o seletor agrupado por provedor.
 MODELOS_POR_PROVEDOR: dict[str, list[str]] = {
-    PROVEDOR_ANTHROPIC: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"],
+    PROVEDOR_ANTHROPIC: ["claude-opus-4-8", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5"],
     PROVEDOR_OPENAI: ["gpt-4.1", "gpt-4o", "gpt-4o-mini"],
     PROVEDOR_GOOGLE: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
 }

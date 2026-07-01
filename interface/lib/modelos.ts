@@ -46,7 +46,7 @@ export const USADA_POR: Record<Servico, string> = {
 };
 
 export const MODELOS_POR_PROVEDOR: Record<Provedor, string[]> = {
-  anthropic: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"],
+  anthropic: ["claude-opus-4-8", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5"],
   openai: ["gpt-4.1", "gpt-4o", "gpt-4o-mini"],
   google: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
 };
@@ -82,5 +82,6 @@ export function provedoresParaSeletor(
 
 // Observação mostrada no seletor de modelo da IA de conversa (decisão do maestro).
 export const NOTA_MODELO_CONVERSA =
-  "Para a IA de conversa, prefira modelos de raciocínio profundo (ex.: Claude Opus; " +
-  "e, quando houver chave, os modelos de topo de OpenAI e Google).";
+  "O padrão é o Claude Sonnet 5 (forte e econômico). Para o raciocínio mais " +
+  "exigente, escolha o Claude Opus; e, quando houver chave, os modelos de topo de " +
+  "OpenAI e Google.";
