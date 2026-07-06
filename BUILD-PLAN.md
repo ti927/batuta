@@ -1445,22 +1445,13 @@ QUALQUER instrumento com segredo, não só Instagram. Duas partes:
 
 ---
 
-## FASE — Instagram self-serve: OAuth "Conectar Instagram" + App Review  📋 FASE FUTURA (registrada 2026-06-21, não iniciar sem o sinal do maestro)
+## FASE — Instagram self-serve: OAuth "Conectar Instagram"  ✅ NO AR (2026-06-30, deploys `2d9c937` + `e5360f9`, sem migração, núcleo intocado)
 
-Gatilho: o instrumento de Instagram hoje só serve contas adicionadas como **testador**, porque o app
-na Meta está em **modo de desenvolvimento** (só papéis admin/dev/testador usam a API). **Modelo atual
-(no ar):** cada conta vira testador (teto ~50) + token colado — serve **enquanto a consultoria
-gerencia as contas dos clientes** (Batuta = ferramenta interna). Para um **produto self-serve** (o
-cliente conecta a própria conta):
-1. **App Review da Meta** — Advanced Access `instagram_business_*`: verificação de empresa + vídeo
-   demo + gravações + política de privacidade + URLs de deauthorize/data-deletion; o app vai a
-   **Live**. Processo externo de semanas, tocado pelo maestro.
-2. **Fluxo "Conectar Instagram" (OAuth de redirecionamento / Business Login for Instagram):** rota de
-   redirect ao authorize da Meta + callback que troca `code`→token (curto→longo) e grava na credencial
-   `instagram` por org; **botão "Conectar Instagram"** na UI. **Reusa** o tipo de credencial
-   `instagram`, o `cerebro/instagram_tokens.py` (validar/renovar) e o job de refresh do agendador —
-   falta o redirect/callback + a UI + o app aprovado. (Mesma infra que a Fase 4 DM precisa do app
-   publicado.)
+Gatilho: o instrumento de Instagram só servia contas adicionadas como **testador** (app em modo dev; teto ~50 + token colado por conta). Ao seguir o App Review, o formulário da permissão `instagram_business_basic` escancarou o muro: o screencast/descrição exigem que o **analista conecte a PRÓPRIA conta** por um fluxo no app — que o token colado não tem. Decisão do maestro: **construir o OAuth agora** (o teto de testadores estoura rápido).
+
+**Feito (validado ao vivo em prod):** `cerebro/instagram_oauth.py` (monta a URL de consentimento e troca `code`→token curto→token de 60 dias; `www.instagram.com/oauth/authorize`; reusa `/me` e a política de falha do `instagram_tokens`) + `cerebro/rotas/instagram.py` (`POST /organizacoes/{id}/instagram/iniciar` operador+, devolve a URL com `state` cifrado pelo cofre; `GET /instagram/oauth/callback` PÚBLICO, valida o `state` via `cofre.decifrar_temporario` [Fernet+TTL], revalida o papel, faz **UPSERT** da credencial `instagram` da org — reconexão da mesma conta atualiza, não duplica — e redireciona de volta) + botão **"Conectar Instagram"** no formulário de credencial (só na org; colar token segue como alternativa). `force_reauth=true` na URL (deixa ESCOLHER a conta, não reusa a sessão do navegador). Reusa o tipo de credencial `instagram`, o cofre e o job de refresh do agendador. Config em produção: **redirect URI** na Meta (card "4. Configurar o login da empresa") + **3 vars no Railway** (`INSTAGRAM_APP_ID` = ID do app do IG `1726589371819141`, ≠ App ID Meta; `INSTAGRAM_APP_SECRET`; `INSTAGRAM_REDIRECT_URI`). **Teste ao vivo:** 2 contas conectadas só pelo OAuth (@jmanfrini atualizou a credencial existente; @arrastafaca, testadora nova) + gerar imagem→publicar com sucesso.
+
+**Falta:** completar e enviar o App Review (fase própria abaixo) — o OAuth destrava justamente o screencast do fluxo de conexão que o analista precisa reproduzir. Ver `project-instagram-oauth-app-review-fase-futura`.
 
 ---
 
@@ -1496,7 +1487,19 @@ Gatilho: exec `d179dd90` — o agente-portão mandou a aprovação para o chat e
 
 **Próximos passos (após a verificação aprovar):** completar, na tela "Enviar para a análise do app": **Uso permitido** (descrição + **VÍDEO screencast** por permissão), **Tratamento de dados**, **Instruções para o analista** (acesso de teste + passo a passo) e **Enviar para análise**. ➡️ **Guia completo com os 4 textos prontos + roteiros de vídeo + modelo de instruções ao analista em `Instruções_meta.md` (raiz do projeto).**
 
-**Fase futura relacionada:** botão **"Conectar Instagram" (OAuth / Business Login for Instagram)** para o cliente conectar a própria conta sem colar token — hoje a conexão é por token colado, que serve a consultoria gerenciando contas adicionadas como testadoras. Ver `project-instagram-oauth-app-review-fase-futura`.
+**Relacionado (✅ já no ar):** o botão **"Conectar Instagram" (OAuth / Business Login)** foi construído e validado ao vivo — ver a fase "Instagram self-serve: OAuth" acima. É ele que destrava o screencast do fluxo de conexão exigido pelo App Review.
+
+---
+
+## FASE — Claude Sonnet 5 (opção + novo padrão da IA de conversa)  ✅ NO AR (2026-06-30, deploy `4a0a5e4`, sem migração)
+
+A Anthropic lançou o **Claude Sonnet 5** (`claude-sonnet-5`) — o Sonnet mais agêntico, perto do Opus 4.8 por bem menos custo (US$3/15 vs US$5/25). Entrou no catálogo de modelos (conversa + agentes: `orquestracao/modelos_ia.py` + `interface/lib/modelos.ts`, listas espelhadas) e virou o **PADRÃO da IA de conversa** (`MODELO_CRIADORA` em `criacao/loop.py`, era Opus 4.8; quem escolheu Opus à mão continua). A IA criadora passou a recomendá-lo aos agentes que monta (`criacao/prompt.py`). Como é da geração "adaptive thinking" (igual ao Opus 4.8), REJEITA `temperature` → entrou em `MODELOS_SEM_TEMPERATURA` (`orquestracao/llm.py`). Preço no /uso mantido no padrão (US$3/15, resolve pela família "sonnet"; o introdutório US$2/10 até 31/08 super-estima ~33%, aceitável num painel informativo). Prova real: chamada à Anthropic no `claude-sonnet-5` respondeu OK (sem 400). Decisões do maestro: entrar como opção **e** virar o padrão da conversa; preço padrão (sem manutenção).
+
+## FASE — Canal de Telegram: crachá (webhook_secret) em coluna + status/alcance na tela  ✅ NO AR (2026-07-06, deploys `2428d48` + `ba17982`, migração aditiva `whk00secret001`)
+
+Gatilho (recorrente): o maestro tinha de **RECONECTAR o canal a cada ajuste**. Investigação (`inspecionar_exec.py` + leituras read-only do banco de prod + `getWebhookInfo`/`getMe` dos 6 bots): TODOS os envios saíram `entregue=True` (o Batuta **nunca falhou em ENVIAR**); o "bot não me manda nada" era **destinatário que não deu /start** no bot (ex.: PRO → chat `604459409`, id diferente e INTENCIONAL — flexibilidade do produto). O bug do "reconectar" era o `webhook_secret` (crachá do webhook de ENTRADA) morando dentro do JSONB `configuracao`: como não é campo do schema, **toda edição da config** — o PUT de `rotas/instrumentos.py` **E a IA de conversa** (`criacao/servicos.py`) — o apagava → canal aparecia "Desconectado". Múltiplas fontes de verdade [[feedback-bug-recorrente-fonte-de-verdade]].
+- **Fix (fonte única):** `webhook_secret` vira **COLUNA** em `instrumentos` (migração `whk00secret001` + backfill do JSON→coluna, sem stripar o JSON p/ rollback seguro); `ativar-canal` grava na coluna, a validação de entrada e o status "conectado" leem a coluna; nenhum caminho de edição de config a toca → **editar nunca mais desconecta**. De brinde, o crachá deixa de vazar para o frontend. Teste de regressão (PUT preserva o crachá). Ação única do maestro: reconectar 1x os 4 canais que já tinham perdido (COF Blog/PRO/CAP/InstaBot); PES/EST corrigidos pelo backfill.
+- **Feature (decisão do maestro = "automático ao salvar"):** o drawer do instrumento de Telegram mostra **selo de status** de conexão + faz **checagem de ALCANCE** ao abrir/salvar (`GET /mensageria/{id}/alcance` → `telegram.checar_alcance` via `getChat`, NÃO envia nada): se o bot não alcança o destinatário, avisa para pedir que a pessoa inicie conversa com o bot. `alcancavel=None` quando não dá para consultar (sem alarme falso).
 
 ---
 
