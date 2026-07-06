@@ -485,7 +485,32 @@ def test_ativar_canal_seta_webhook_e_guarda_secret(cliente, entrar, dados, sessa
     assert chamada["token"] == "TOK"
     assert chamada["url"].endswith(f"/mensageria/{inst.id}/entrada")
     sessao.refresh(inst)
-    assert inst.configuracao["webhook_secret"] == chamada["secret"]
+    assert inst.webhook_secret == chamada["secret"]  # crachá na coluna própria
+
+
+def test_editar_instrumento_preserva_webhook_secret(cliente, entrar, dados, sessao):
+    """Editar a config do canal (trocar destinatário, saudação…) NÃO pode apagar o
+    crachá do webhook — senão o canal "desconecta" sozinho e o usuário tem de
+    reconectar a cada ajuste (bug recorrente). O crachá vive em coluna própria,
+    imune à reconstrução da config. Vale para o formulário E para a IA de conversa."""
+    entrar(dados["admin"])
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "TOK"})
+    inst.webhook_secret = "cracha-123"
+    sessao.commit()
+    r = cliente.put(
+        f"/instrumentos/{inst.id}",
+        json={
+            "nome": inst.nome,
+            "configuracao": {"destinatario_padrao": "999"},
+            "icone": None,
+            "credencial_id": None,
+        },
+    )
+    assert r.status_code == 200, r.text
+    sessao.refresh(inst)
+    assert inst.webhook_secret == "cracha-123"  # crachá preservado
+    assert (inst.configuracao or {}).get("destinatario_padrao") == "999"  # edição aplicou
 
 
 def test_ativar_canal_sem_token_recusa(cliente, entrar, dados, sessao):
@@ -537,7 +562,7 @@ def test_ativar_canal_tokens_distintos_conectam(
 def test_entrada_valida_secret_token(cliente, dados, sessao, monkeypatch):
     inst = _bot(sessao, dados)
     _agente_com(sessao, dados, inst)
-    inst.configuracao = {"webhook_secret": "s3cr3t"}
+    inst.webhook_secret = "s3cr3t"
     sessao.commit()
     monkeypatch.setattr(servico, "processar_turno", lambda cid: None)
     corpo = {"message": {"chat": {"id": 1}, "text": "oi"}}

@@ -58,7 +58,8 @@ async def entrada(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Canal não encontrado.")
 
     # Valida a origem pelo secret token, quando o canal já foi conectado (Fase E).
-    esperado = (instrumento.configuracao or {}).get("webhook_secret")
+    # O crachá vive em COLUNA própria (imune a edições de config).
+    esperado = instrumento.webhook_secret
     if esperado:
         recebido = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
         if recebido != esperado:
@@ -136,7 +137,9 @@ def ativar_canal(
             status.HTTP_502_BAD_GATEWAY,
             f"O Telegram recusou o webhook: {resultado.get('description') or resultado}",
         )
-    inst.configuracao = {**(inst.configuracao or {}), "webhook_secret": segredo}
+    # Grava o crachá na COLUNA própria (não no `configuracao`): editar a config do
+    # instrumento depois — pelo formulário ou pela IA — não pode mais desconectá-lo.
+    inst.webhook_secret = segredo
     sessao.commit()
     return {"ok": True, "url": url}
 
@@ -152,7 +155,7 @@ def status_canal(
     inst = instrumento_acessivel(sessao, usuario, instrumento_id)
     _exigir_canal(inst)
     token = segredos_instrumento.decifrar(sessao, inst.id).get("token_bot")
-    conectado = bool((inst.configuracao or {}).get("webhook_secret"))
+    conectado = bool(inst.webhook_secret)
     info = telegram.info_webhook(token) if token else {"ok": False}
     return {
         "conectado": conectado,

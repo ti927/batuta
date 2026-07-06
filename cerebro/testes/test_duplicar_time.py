@@ -45,7 +45,8 @@ def time_rico(sessao, dados):
     )
     canal = Instrumento(
         time_id=tA.id, nome="Bot", tipo="enviar_telegram",
-        configuracao={"webhook_secret": "xyz", "destinatario_padrao": "555"},
+        configuracao={"destinatario_padrao": "555"},
+        webhook_secret="xyz",  # canal conectado (crachá em coluna própria)
     )
     sessao.add_all([comum, canal])
     sessao.flush()
@@ -210,8 +211,8 @@ def test_canal_nasce_desconectado(cliente, entrar, dados, sessao, time_rico):
         select(SegredoInstrumento).where(SegredoInstrumento.instrumento_id == bot.id)
     ).all()
     assert segs == []
-    # webhook_secret removido; demais campos da config preservados
-    assert "webhook_secret" not in (bot.configuracao or {})
+    # canal nasce "a conectar": sem crachá (webhook_secret); config preservada
+    assert bot.webhook_secret is None
     assert bot.configuracao.get("destinatario_padrao") == "555"
     assert bot.credencial_id is None
 

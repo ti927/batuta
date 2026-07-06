@@ -151,6 +151,12 @@ class Instrumento(IdData, Base):
     credencial_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("credenciais.id", ondelete="SET NULL"), nullable=True
     )
+    # Crachá do webhook de um canal de mensageria (Telegram): o segredo que valida
+    # a origem das chamadas de ENTRADA. Fica em COLUNA PRÓPRIA (não no `configuracao`
+    # JSONB) de propósito: assim editar a config do instrumento — pelo formulário ou
+    # pela IA de conversa — NUNCA o apaga (senão o canal "desconecta" a cada ajuste).
+    # NULL = canal ainda não conectado. Escrito só por `ativar-canal`.
+    webhook_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class AgenteInstrumento(Base):
