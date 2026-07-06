@@ -164,6 +164,25 @@ def status_canal(
     }
 
 
+@rotas.get("/mensageria/{instrumento_id}/alcance")
+def alcance_canal(
+    instrumento_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """O bot deste canal CONSEGUE enviar para o destinatário configurado? (No
+    Telegram, o destinatário precisa ter dado /start no bot.) Sonda sem enviar nada.
+    Usado pela tela para avisar, ao salvar, quando o destino é inalcançável.
+    `aplicavel=False` quando não há como checar (sem token ou sem destinatário fixo)."""
+    inst = instrumento_acessivel(sessao, usuario, instrumento_id, minimo="operador")
+    _exigir_canal(inst)
+    token = segredos_instrumento.decifrar(sessao, inst.id).get("token_bot")
+    destino = str((inst.configuracao or {}).get("destinatario_padrao") or "").strip()
+    if not token or not destino:
+        return {"aplicavel": False}
+    return {"aplicavel": True, "destino": destino, **telegram.checar_alcance(token, destino)}
+
+
 # ─────────────────────── Inbox e transferência (Fase F) ──────────────────────
 
 

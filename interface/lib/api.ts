@@ -287,6 +287,17 @@ export type StatusCanal = {
   webhook: Record<string, unknown> | null;
 };
 
+// O bot alcança o destinatário configurado? (GET /mensageria/{id}/alcance).
+// `aplicavel=false` quando não dá para checar (sem token ou sem destinatário fixo).
+// `alcancavel=null` = não deu para consultar o Telegram (não alarma).
+export type AlcanceCanal = {
+  aplicavel: boolean;
+  destino?: string;
+  alcancavel?: boolean | null;
+  bot_username?: string | null;
+  motivo?: string | null;
+};
+
 // ─── Automações: a cadeia é um GRAFO de nós tipados (bifurcação, loop, portão) ───
 // Forma canônica (cérebro: orquestracao/grafo.py). `tone`/`x`/`y` são cosméticos.
 

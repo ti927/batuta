@@ -107,6 +107,39 @@ def info_webhook(token: str) -> dict:
     return resposta.json() if resposta.content else {"ok": resposta.is_success}
 
 
+def checar_alcance(token: str, chat_id: str) -> dict:
+    """Diz se o bot CONSEGUE ENVIAR para `chat_id`. No Telegram, um bot só fala com
+    quem já deu /start nele; um destinatário que nunca abriu o bot é inalcançável
+    (o envio falharia calado). Usa `getChat` (NÃO envia nada) como sonda e `getMe`
+    para o @username do bot (usado na mensagem de aviso).
+
+    Devolve `{alcancavel: bool|None, bot_username: str|None, motivo: str|None}`.
+    `alcancavel=None` quando não deu para consultar (rede/token) — a UI trata como
+    'não sei', sem alarme falso."""
+    bot_username = None
+    try:
+        with httpx.Client(timeout=TIMEOUT_S) as cliente:
+            me = cliente.post(f"{API_BASE}/bot{token}/getMe")
+            if me.is_success:
+                bot_username = (me.json().get("result") or {}).get("username")
+            resposta = cliente.post(
+                f"{API_BASE}/bot{token}/getChat", json={"chat_id": chat_id}
+            )
+    except httpx.HTTPError:
+        return {"alcancavel": None, "bot_username": bot_username, "motivo": None}
+    dados = resposta.json() if resposta.content else {}
+    if dados.get("ok"):
+        return {"alcancavel": True, "bot_username": bot_username, "motivo": None}
+    # Token recusado (401) é outro problema (não é alcance) → 'não sei'.
+    if resposta.status_code == 401:
+        return {"alcancavel": None, "bot_username": bot_username, "motivo": None}
+    return {
+        "alcancavel": False,
+        "bot_username": bot_username,
+        "motivo": dados.get("description") or f"HTTP {resposta.status_code}",
+    }
+
+
 def baixar_arquivo(token: str, file_id: str) -> bytes:
     """Baixa o conteúdo de um arquivo do Telegram (ex.: o áudio de uma mensagem
     de voz): getFile devolve o caminho, depois baixa de /file/bot<token>/<caminho>."""

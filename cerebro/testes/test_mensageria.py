@@ -513,6 +513,84 @@ def test_editar_instrumento_preserva_webhook_secret(cliente, entrar, dados, sess
     assert (inst.configuracao or {}).get("destinatario_padrao") == "999"  # edição aplicou
 
 
+# ─────────────────── checagem de alcance do destinatário ───────────────────
+
+
+def _mock_telegram_alcance(monkeypatch, *, chat_status, chat_corpo):
+    """Intercepta o httpx de `mensageria.telegram`: getMe fixo + getChat controlado."""
+
+    class _Resp:
+        def __init__(self, status, corpo):
+            self.status_code = status
+            self.is_success = 200 <= status < 300
+            self.content = b"x"
+            self._c = corpo
+
+        def json(self):
+            return self._c
+
+    class _Cli:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, json=None):
+            if url.endswith("/getMe"):
+                return _Resp(200, {"ok": True, "result": {"username": "MeuBot"}})
+            if url.endswith("/getChat"):
+                return _Resp(chat_status, chat_corpo)
+            return _Resp(200, {"ok": True})
+
+    monkeypatch.setattr("mensageria.telegram.httpx.Client", _Cli)
+
+
+def test_checar_alcance_destino_alcancavel(monkeypatch):
+    _mock_telegram_alcance(monkeypatch, chat_status=200, chat_corpo={"ok": True, "result": {"id": 999}})
+    r = telegram.checar_alcance("TOK", "999")
+    assert r["alcancavel"] is True
+    assert r["bot_username"] == "MeuBot"
+
+
+def test_checar_alcance_destino_inalcancavel(monkeypatch):
+    _mock_telegram_alcance(
+        monkeypatch, chat_status=400, chat_corpo={"ok": False, "description": "chat not found"}
+    )
+    r = telegram.checar_alcance("TOK", "999")
+    assert r["alcancavel"] is False
+    assert r["bot_username"] == "MeuBot"
+    assert "chat not found" in r["motivo"]
+
+
+def test_alcance_sem_token_ou_destino_nao_aplicavel(cliente, entrar, dados, sessao):
+    entrar(dados["admin"])
+    inst = _bot(sessao, dados)  # sem token e sem destinatário
+    r = cliente.get(f"/mensageria/{inst.id}/alcance")
+    assert r.status_code == 200
+    assert r.json()["aplicavel"] is False
+
+
+def test_alcance_route_reporta_inalcancavel(cliente, entrar, dados, sessao, monkeypatch):
+    entrar(dados["admin"])
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "TOK"})
+    inst.configuracao = {"destinatario_padrao": "999"}
+    sessao.commit()
+    monkeypatch.setattr(
+        "mensageria.telegram.checar_alcance",
+        lambda token, chat: {"alcancavel": False, "bot_username": "MeuBot", "motivo": "chat not found"},
+    )
+    r = cliente.get(f"/mensageria/{inst.id}/alcance")
+    assert r.status_code == 200, r.text
+    b = r.json()
+    assert b["aplicavel"] is True and b["alcancavel"] is False
+    assert b["bot_username"] == "MeuBot" and b["destino"] == "999"
+
+
 def test_ativar_canal_sem_token_recusa(cliente, entrar, dados, sessao):
     entrar(dados["admin"])
     inst = _bot(sessao, dados)  # sem token_bot

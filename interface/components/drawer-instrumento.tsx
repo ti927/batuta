@@ -1,15 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { FlaskConical, Radio, Trash2, X } from "lucide-react";
 
 import {
   api,
   ErroDaApi,
+  type AlcanceCanal,
   type Instrumento,
   type PapelAcesso,
+  type StatusCanal,
   type TipoInstrumento,
   type Time,
 } from "@/lib/api";
@@ -20,6 +22,17 @@ import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+
+// A mensagem de aviso quando o bot NÃO alcança o destinatário (senão, null).
+function mensagemAlcance(a: AlcanceCanal): string | null {
+  if (!a.aplicavel || a.alcancavel !== false) return null;
+  const bot = a.bot_username ? `@${a.bot_username}` : "o bot";
+  return (
+    `O ${bot} ainda não consegue enviar mensagens para o destinatário ${a.destino}. ` +
+    `Peça para essa pessoa abrir o Telegram e mandar /start para ${bot} — ` +
+    `sem isso, as mensagens não chegam.`
+  );
+}
 
 // Interpreta um texto como objeto JSON. [valor, null] ou [null, mensagem]. Vazio = {}.
 function lerJson(texto: string): [Record<string, unknown> | null, string | null] {
@@ -70,6 +83,64 @@ export function DrawerInstrumento({
   const [argsTexto, setArgsTexto] = useState("{}");
   const [resultado, setResultado] = useState<string | null>(null);
 
+  // Canal (Telegram): status de conexão (RECEBER suas respostas) e alcance do
+  // destinatário (o bot consegue ENVIAR?). Carregados ao abrir e re-checados ao
+  // conectar/salvar — o aviso de alcance é o "automático ao salvar".
+  const [statusCanal, setStatusCanal] = useState<StatusCanal | null>(null);
+  const [avisoAlcance, setAvisoAlcance] = useState<string | null>(null);
+  // De qual instrumento é o status carregado — evita mostrar o de outro canal ao
+  // trocar de instrumento antes de a nova checagem chegar.
+  const [canalDe, setCanalDe] = useState<string | null>(null);
+
+  const aplicarCanal = useCallback(
+    (id: string, st: StatusCanal, al: AlcanceCanal) => {
+      setStatusCanal(st);
+      setAvisoAlcance(mensagemAlcance(al));
+      setCanalDe(id);
+    },
+    [],
+  );
+
+  // Recarrega status + alcance (usado por eventos: conectar/salvar).
+  const carregarCanal = useCallback(
+    async (id: string) => {
+      try {
+        const [st, al] = await Promise.all([
+          api.get<StatusCanal>(`/mensageria/${id}/canal`),
+          api.get<AlcanceCanal>(`/mensageria/${id}/alcance`),
+        ]);
+        aplicarCanal(id, st, al);
+      } catch {
+        /* informativo: não bloqueia o drawer se a checagem falhar */
+      }
+    },
+    [aplicarCanal],
+  );
+
+  // Ao abrir/trocar o instrumento, carrega o estado do canal (Telegram). O
+  // setState acontece só no retorno da rede (não síncrono no efeito).
+  useEffect(() => {
+    if (instrumento?.tipo !== "enviar_telegram") return;
+    const id = instrumento.id;
+    let vivo = true;
+    Promise.all([
+      api.get<StatusCanal>(`/mensageria/${id}/canal`),
+      api.get<AlcanceCanal>(`/mensageria/${id}/alcance`),
+    ])
+      .then(([st, al]) => {
+        if (vivo) aplicarCanal(id, st, al);
+      })
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [instrumento, aplicarCanal]);
+
+  // Só mostra o status quando ele é DESTE instrumento (não de um anterior).
+  const canalCarregado = !!instrumento && canalDe === instrumento.id;
+  const statusMostrado = canalCarregado ? statusCanal : null;
+  const alcanceMostrado = canalCarregado ? avisoAlcance : null;
+
   // Esc fecha o drawer (handoff §4).
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
@@ -105,6 +176,7 @@ export function DrawerInstrumento({
     try {
       await api.post(`/mensageria/${instrumento.id}/ativar-canal`, {});
       toast.success("Canal conectado ao Telegram");
+      carregarCanal(instrumento.id);
       router.refresh();
     } catch (e) {
       tratar(e, "Falha ao conectar o canal");
@@ -176,6 +248,8 @@ export function DrawerInstrumento({
               toast.success(criando ? "Instrumento criado" : "Instrumento salvo");
               onSalvou(salvo);
               router.refresh();
+              // "Automático ao salvar": re-checa alcance do destinatário (Telegram).
+              if (salvo.tipo === "enviar_telegram") carregarCanal(salvo.id);
             }}
             onCancelar={onFechar}
           />
@@ -184,9 +258,33 @@ export function DrawerInstrumento({
           {!criando && souOperador && (
             <div className="mt-6 space-y-3 border-t border-border pt-4">
               {instrumento.tipo === "enviar_telegram" && (
-                <Button variant="outline" className="w-full" onClick={conectarCanal}>
-                  <Radio className="size-4" /> Conectar canal ao Telegram
-                </Button>
+                <div className="space-y-2">
+                  {statusMostrado &&
+                    (statusMostrado.conectado ? (
+                      <Aviso variant="sucesso">
+                        Canal conectado — as respostas enviadas ao bot chegam ao
+                        Batuta.
+                      </Aviso>
+                    ) : (
+                      <Aviso variant="atencao">
+                        Canal não conectado — conecte para o Batuta receber as
+                        respostas enviadas ao bot.
+                      </Aviso>
+                    ))}
+                  {alcanceMostrado && (
+                    <Aviso variant="atencao">{alcanceMostrado}</Aviso>
+                  )}
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={conectarCanal}
+                  >
+                    <Radio className="size-4" />{" "}
+                    {statusMostrado?.conectado
+                      ? "Reconectar canal ao Telegram"
+                      : "Conectar canal ao Telegram"}
+                  </Button>
+                </div>
               )}
 
               {!testando ? (
