@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Geist_Mono, Inter } from "next/font/google";
+import { cookies } from "next/headers";
 import { Toaster } from "sonner";
 import "./globals.css";
 
@@ -10,6 +11,7 @@ import {
   type Time,
 } from "@/lib/api";
 import { buscarCerebro, buscarMeuAcesso } from "@/lib/cerebro-servidor";
+import { COOKIE_ORG_ATIVA } from "@/lib/org-ativa";
 import { criarClienteServidor } from "@/lib/supabase/cliente-servidor";
 import { CabecalhoConteudo } from "@/components/cabecalho-conteudo";
 import { Sidebar } from "@/components/sidebar";
@@ -60,6 +62,9 @@ export default async function RootLayout({
   let organizacoes: Organizacao[] = [];
   let timesPorOrg: Record<string, Time[]> = {};
   let eu: MeuAcesso | null = null;
+  // Org ativa (fonte única, cookie). Validada contra as orgs do usuário: um
+  // cookie apontando para org à qual ele não pertence mais cai na primeira.
+  let orgInicial = "";
   if (user?.email) {
     const [respConv, respOrgs, acesso] = await Promise.all([
       buscarCerebro("/convites/pendentes"),
@@ -76,6 +81,11 @@ export default async function RootLayout({
       }),
     );
     timesPorOrg = Object.fromEntries(listas);
+
+    const orgCookie = (await cookies()).get(COOKIE_ORG_ATIVA)?.value;
+    orgInicial = organizacoes.some((o) => o.id === orgCookie)
+      ? orgCookie!
+      : (organizacoes[0]?.id ?? "");
   }
 
   const logado = Boolean(user?.email);
@@ -98,6 +108,7 @@ export default async function RootLayout({
               timesPorOrg={timesPorOrg}
               papeis={eu?.papeis ?? {}}
               adminConsultoria={eu?.admin_consultoria ?? false}
+              orgInicial={orgInicial}
             />
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
               <CabecalhoConteudo />

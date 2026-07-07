@@ -15,15 +15,18 @@ import { api, ErroDaApi, type ConversaCriacao, type Organizacao } from "@/lib/ap
 // tela da conversa.
 export function IniciarCliente({
   organizacoes,
+  orgInicial,
   compacto = false,
 }: {
   organizacoes: Organizacao[];
+  // Org ativa vinda do cookie (mesma fonte da sidebar). Vazia = cai na primeira.
+  orgInicial: string;
   // Quando já há projetos para retomar acima, a tela de novo time fica enxuta
   // (sem o herói centralizado), para não competir com a lista.
   compacto?: boolean;
 }) {
   const router = useRouter();
-  const [orgId, setOrgId] = useState(organizacoes[0]?.id ?? "");
+  const [orgId, setOrgId] = useState(orgInicial || organizacoes[0]?.id || "");
   const [mensagem, setMensagem] = useState("");
   const [iniciando, setIniciando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);

@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { MessageSquare, Sparkles } from "lucide-react";
 
@@ -6,6 +7,7 @@ import {
   type Organizacao,
 } from "@/lib/api";
 import { buscarCerebro, buscarMeuAcesso } from "@/lib/cerebro-servidor";
+import { COOKIE_ORG_ATIVA } from "@/lib/org-ativa";
 import { podeOperar } from "@/lib/permissoes";
 
 import { IniciarCliente } from "./iniciar-cliente";
@@ -55,9 +57,20 @@ export default async function CriarPage() {
   const { operaveis, conversas } = await carregar();
   const temConversas = conversas.length > 0;
 
+  // Mesma fonte única da sidebar (cookie): a org ativa vira o padrão do seletor,
+  // validada contra as organizações onde este usuário pode operar.
+  const orgCookie = (await cookies()).get(COOKIE_ORG_ATIVA)?.value;
+  const orgInicial = operaveis.some((o) => o.id === orgCookie)
+    ? orgCookie!
+    : (operaveis[0]?.id ?? "");
+
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-10 sm:px-6">
-      <IniciarCliente organizacoes={operaveis} compacto={temConversas} />
+      <IniciarCliente
+        organizacoes={operaveis}
+        orgInicial={orgInicial}
+        compacto={temConversas}
+      />
 
       {temConversas && (
         <section className="mt-12">

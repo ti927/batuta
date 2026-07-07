@@ -22,6 +22,7 @@ import {
 import { AvatarOrg } from "@/components/avatar-org";
 import { SimboloBatuta } from "@/components/logo";
 import { criarClienteNavegador } from "@/lib/supabase/cliente-navegador";
+import { gravarOrgAtiva } from "@/lib/org-ativa";
 import { podeAdmin } from "@/lib/permissoes";
 import {
   type Organizacao,
@@ -48,16 +49,19 @@ export function Sidebar({
   timesPorOrg,
   papeis,
   adminConsultoria,
+  orgInicial,
 }: {
   email: string;
   organizacoes: Organizacao[];
   timesPorOrg: Record<string, Time[]>;
   papeis: Record<string, PapelAcesso>;
   adminConsultoria: boolean;
+  // Org ativa lida do cookie no servidor (fonte única). Vazia = cai na primeira.
+  orgInicial: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [orgAtiva, setOrgAtiva] = useState(organizacoes[0]?.id ?? "");
+  const [orgAtiva, setOrgAtiva] = useState(orgInicial || organizacoes[0]?.id || "");
   const [seletorAberto, setSeletorAberto] = useState(false);
   const [timesAberto, setTimesAberto] = useState(true);
   const [saindo, setSaindo] = useState(false);
@@ -66,6 +70,9 @@ export function Sidebar({
   function trocarOrg(id: string) {
     setOrgAtiva(id);
     setSeletorAberto(false);
+    // Persiste a escolha para o /criar (e o próximo carregamento) usarem a MESMA
+    // organização — evita criar o time na org errada.
+    gravarOrgAtiva(id);
   }
 
   async function sair() {
