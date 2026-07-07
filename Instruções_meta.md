@@ -9,17 +9,26 @@
 
 ---
 
+> **STATUS 2026-07-07 — quase enviando.** Empresa verificada (JMF). Ambiente de teste montado (org
+> "Testes Meta", login do analista, @arrastafaca conectada, 3 automações Postar/Responder/Métricas).
+> Na tela "Enviar para a análise": Verificação · Configurações · Tratamento de dados · Instruções ✅.
+> **Uso permitido** com as 4 descrições + 4 vídeos subidos. Falta só a Meta registrar as **2 chamadas
+> de API de teste** (insights + comentários) — feitas ao rodar as automações, mas leva **até 24h** para
+> marcar `1/1`; aí o "Enviar para análise" acende. Comentários teve exigência extra (vídeo com usuário
+> comentando + resposta; descrição com link do post + palavras-chave) — atendida.
+
 ## Onde estamos (contexto, atualizado em 26/06/2026)
 
 - **App:** Batuta Team — App ID `1521228536398165` — status **Publicado/Live**.
 - **Caso de uso:** "Gerenciar mensagens e conteúdo no Instagram", via **API com login do Instagram**
-  (`graph.instagram.com`, conexão por **token colado** gerado no painel da Meta).
+  (`graph.instagram.com`). Conexão da conta pelo botão **"Conectar Instagram"** (OAuth Business Login,
+  já no ar); alternativamente, o token pode ser colado.
 - **Empresa verificada / controladora oficial:** **JMF TREINAMENTOS E CONSULTORIA LTDA - ME**
   (CNPJ `56.923.834/0001-23`). As páginas legais já estão neste nome:
   - Política de Privacidade → https://batuta.team/privacidade
   - Termos de Uso → https://batuta.team/termos
   - Exclusão de Dados → https://batuta.team/exclusao-de-dados
-- **Verificação da empresa:** ✅ **ENVIADA** sob a JMF — aguardando aprovar ("Em análise").
+- **Verificação da empresa:** ✅ **APROVADA** sob a JMF (o botão "Enviar para análise" está liberado).
 - **Permissões enviadas ao review (4):** `instagram_business_basic`,
   `instagram_business_content_publish`, `instagram_business_manage_comments`,
   `instagram_business_manage_insights`.
@@ -79,7 +88,8 @@
    **suba o vídeo** (roteiro abaixo) → **marque a conformidade** → salve/volte. **Repita nas 4.**
    Ao terminar, **"Avançar"**.
 4. **Tratamento de dados** — clique **"Ir para o tratamento de dados"** → leia e **concorde** com os
-   termos → **"Avançar"**.
+   termos. Se pedir uma **URL de exclusão de dados**, informe `https://batuta.team/exclusao-de-dados`
+   (e a política de privacidade `https://batuta.team/privacidade`) → **"Avançar"**.
 5. **Instruções para o analista** — clique **"Ir para as instruções da análise"** → preencha o
    **acesso de teste + passo a passo** (modelo no fim deste doc) → salve.
 6. Com os **5 itens ✅** → clique **"Enviar para análise"** (canto inferior direito).
@@ -101,11 +111,11 @@
 > publicidade.
 
 **Roteiro do vídeo:**
-1. Batuta logado → tela onde a empresa conecta o Instagram (credencial "Instagram", onde cola o token
-   gerado no painel da Meta).
-2. Mostrar o app reconhecendo a conta (aparece o usuário / ID da conta).
-3. Rodar o instrumento "Instagram — conteúdo e métricas" lendo a conta.
-4. Mostrar na tela os dados retornados (usuário, tipo de conta, mídias).
+1. Batuta logado → tela de credenciais da organização → clicar em **"Conectar Instagram"**.
+2. Mostrar a tela de autorização do Instagram (login + consentimento) → autorizar.
+3. Voltar ao Batuta com a conta conectada (banner verde, aparece o usuário da conta).
+4. Rodar o instrumento "Instagram — conteúdo e métricas" e mostrar os dados retornados
+   (usuário, tipo de conta, mídias).
 
 ### 2. `instagram_business_content_publish`
 
@@ -162,29 +172,29 @@
 
 ```
 Acesso de teste:
-- App: https://batuta.team  | Login: <email de teste>  | Senha: <senha de teste>
-- A conta de Instagram de teste já está conectada nesta organização.
+- App: https://batuta.team/login  | Login: <EMAIL DE TESTE>  | Senha: <SENHA DE TESTE>
+- Organização de teste "Testes Meta", com a conta de Instagram de teste (@arrastafaca) já conectada.
 
 Como reproduzir cada permissão:
-1. instagram_business_basic / manage_insights:
-   Abra o time > aba Instrumentos > rode "Instagram — conteúdo e métricas".
-   Mostra os dados da conta e as métricas dos posts.
+1. instagram_business_basic:
+   Tela de credenciais > "Conectar Instagram" (o app reconhece e exibe a conta).
 2. instagram_business_content_publish:
-   Abra a automação "<nome>" > Rodar. O agente prepara um post; aprove no portão.
-   O post aparece na conta de Instagram de teste.
+   Abra a automação "Instagram - Postar" > Rodar. O agente gera imagem + legenda; aprove no portão;
+   o post aparece na conta de teste.
 3. instagram_business_manage_comments:
-   Rode "Ler comentários" no post X; depois "Responder/moderar comentário" para responder.
-   A resposta aparece no Instagram.
+   Abra a automação "Instagram - Responder" > Rodar: lê os comentários de um post e responde
+   (a resposta passa pelo portão de aprovação antes de ir ao ar).
+4. instagram_business_manage_insights:
+   Abra a automação "Instagram - Métricas" > Rodar: alcance, curtidas e comentários da conta e posts.
 ```
 
 ---
 
 ## Avisos honestos
 
-- **Conexão por token colado (não OAuth).** Se o analista perguntar como o acesso é concedido: o token
-  é **gerado no painel da Meta da própria empresa e colado no Batuta** (mostre a tela da credencial no
-  vídeo do item 1). Se a Meta **exigir** o fluxo de login na tela, aí entra a **fase futura "Conectar
-  Instagram" (OAuth)** — ver `docs`/memória `project-instagram-oauth-app-review-fase-futura`.
+- **Conexão via "Conectar Instagram" (OAuth Business Login).** Já está no ar: o analista conecta a
+  conta pelo botão **"Conectar Instagram"** (é o que a Meta pediu para a `basic`). Mostre esse fluxo no
+  vídeo do item 1. O token colado continua funcionando como alternativa.
 - **Idioma:** os textos estão em PT-BR. Se algum analista internacional pedir, dá para traduzir para EN.
 - **Não é aconselhamento jurídico:** as páginas legais são um modelo factual; recomenda-se revisão por
   advogado para uso definitivo.
