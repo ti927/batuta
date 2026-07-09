@@ -3,9 +3,15 @@
 // Diálogo "Configurações do fluxo": o usuário escolhe um TIPO DE FLUXO (perfil, que
 // já traz regras sensatas) e, no "Avançado", afina botão a botão. Os perfis, grupos
 // e opções vêm de /config/fluxo (fonte única no backend) — nada é duplicado aqui.
+//
+// A tela é HONESTA sobre o que o fluxo faz: (a) não finge um tipo quando nenhum foi
+// escolhido (mostra "padrão geral" e avisa); (b) resume em português claro o tempo
+// efetivo e o comportamento do portão; (c) no "Avançado", marca cada campo como
+// "herdado do tipo" ou "ajustado" (com um "voltar ao padrão"), para um valor afinado
+// não vencer o tipo em silêncio.
 
 import { useEffect, useState } from "react";
-import { Sliders, X } from "lucide-react";
+import { AlertTriangle, Clock, RotateCcw, ShieldCheck, Sliders, X } from "lucide-react";
 
 import {
   api,
@@ -18,35 +24,73 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 
+function semChave(
+  obj: Record<string, unknown>,
+  chave: string,
+): Record<string, unknown> {
+  const resto = { ...obj };
+  delete resto[chave];
+  return resto;
+}
+
 function CampoConfig({
   campo,
   valor,
+  ajustado,
   podeEditar,
   onChange,
+  onReset,
 }: {
   campo: CampoConfigFluxo;
   valor: unknown;
+  ajustado: boolean;
   podeEditar: boolean;
   onChange: (v: unknown) => void;
+  onReset: () => void;
 }) {
+  // Marcador "herdado do tipo" / "ajustado — voltar ao padrão" (o afinado vence o
+  // tipo; deixamos isso visível e reversível).
+  const marcador =
+    ajustado && podeEditar ? (
+      <button
+        type="button"
+        onClick={onReset}
+        className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+      >
+        <RotateCcw className="size-3" /> ajustado — voltar ao padrão
+      </button>
+    ) : ajustado ? (
+      <span className="text-[11px] text-primary">ajustado</span>
+    ) : (
+      <span className="text-[11px] text-muted-foreground/60">herdado do tipo</span>
+    );
+
   if (campo.tipo === "bool") {
     return (
-      <label className="flex items-center gap-2 text-[13px] text-foreground">
-        <input
-          type="checkbox"
-          className="accent-primary"
-          disabled={!podeEditar}
-          checked={!!valor}
-          onChange={(e) => onChange(e.target.checked)}
-        />
-        {campo.rotulo}
-      </label>
+      <div className="flex items-center justify-between gap-2">
+        <label className="flex items-center gap-2 text-[13px] text-foreground">
+          <input
+            type="checkbox"
+            className="accent-primary"
+            disabled={!podeEditar}
+            checked={!!valor}
+            onChange={(e) => onChange(e.target.checked)}
+          />
+          {campo.rotulo}
+        </label>
+        {marcador}
+      </div>
     );
   }
   return (
     <Label className="flex-col items-start gap-1 text-[12px] text-muted-foreground">
-      {campo.rotulo}
-      {campo.sufixo ? ` (${campo.sufixo})` : ""}
+      <span className="flex w-full items-center justify-between gap-2">
+        <span>
+          {campo.rotulo}
+          {campo.sufixo ? ` (${campo.sufixo})` : ""}
+        </span>
+        {marcador}
+      </span>
       {campo.tipo === "escolha" ? (
         <Select
           value={String(valor ?? "")}
@@ -119,13 +163,21 @@ export function DialogoConfigFluxo({
   }, []);
 
   const ajustes = valor.ajustes ?? {};
-  const perfilId = valor.perfil ?? "atendimento";
-  const perfil = painel?.perfis.find((p) => p.id === perfilId);
-  const defaults = perfil?.defaults ?? painel?.padrao_global ?? {};
+  // HONESTO: só considera "tem tipo" um perfil realmente salvo e conhecido. Sem tipo
+  // (automação legada) → os defaults vêm do PADRÃO GERAL, não de um perfil fingido.
+  const perfilObj = painel?.perfis.find((p) => p.id === valor.perfil);
+  const temPerfil = !!perfilObj;
+  const defaults = perfilObj?.defaults ?? painel?.padrao_global ?? {};
 
   function efetivo(chave: string): unknown {
     return chave in ajustes ? ajustes[chave] : defaults[chave];
   }
+
+  const temAjustes = Object.keys(ajustes).length > 0;
+  const cutucar = Number(efetivo("timeout_min"));
+  const encerrar = Number(efetivo("nudge_timeout_min"));
+  const encerraPorInatividade = !!efetivo("encerrar_por_inatividade");
+  const cancelaNoPortao = String(efetivo("portao_acao_abandono") ?? "") === "cancelar";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -153,11 +205,18 @@ export function DialogoConfigFluxo({
               <Label className="flex-col items-start gap-1">
                 Tipo de fluxo
                 <Select
-                  value={perfilId}
+                  value={temPerfil ? String(valor.perfil) : ""}
                   disabled={!podeEditar}
-                  onChange={(e) => onChange({ ...valor, perfil: e.target.value })}
+                  onChange={(e) =>
+                    onChange({ ...valor, perfil: e.target.value || undefined })
+                  }
                   className="w-full"
                 >
+                  {!temPerfil && (
+                    <option value="">
+                      — Padrão geral (nenhum tipo escolhido) —
+                    </option>
+                  )}
                   {painel.perfis.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.rotulo}
@@ -166,9 +225,57 @@ export function DialogoConfigFluxo({
                 </Select>
               </Label>
               <p className="mt-1.5 text-xs text-muted-foreground">
-                O tipo de fluxo já vem com regras sensatas. Use o “Avançado” só se
-                quiser afinar algo.
+                Cada tipo já vem com regras sensatas. Use o “Avançado” só se quiser
+                afinar algo.
               </p>
+
+              {!temPerfil && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-[13px] text-amber-900">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                  <span>
+                    Nenhum tipo escolhido: este fluxo está usando o{" "}
+                    <strong>padrão geral</strong>. Escolha um tipo acima para regras
+                    mais adequadas ao seu caso.
+                  </span>
+                </div>
+              )}
+
+              {/* Resumo em português claro do que o fluxo REALMENTE faz. */}
+              <div className="mt-3 flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3 text-[13px] text-foreground">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Como este fluxo se comporta
+                </div>
+                <div className="flex items-start gap-2">
+                  <Clock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  <span>
+                    {encerraPorInatividade ? (
+                      <>
+                        Cutuca quem some em <strong>{cutucar} min</strong>; se
+                        continuar quieto, encerra <strong>{encerrar} min</strong>{" "}
+                        depois.
+                      </>
+                    ) : (
+                      <>Não encerra por inatividade (a conversa fica aberta).</>
+                    )}
+                  </span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  <span>
+                    {cancelaNoPortao ? (
+                      <>
+                        Se o aprovador some no portão: o fluxo é{" "}
+                        <strong>cancelado</strong>.
+                      </>
+                    ) : (
+                      <>
+                        Se o aprovador some no portão: fica{" "}
+                        <strong>pendente e retomável</strong> (não cancela).
+                      </>
+                    )}
+                  </span>
+                </div>
+              </div>
 
               <button
                 type="button"
@@ -180,6 +287,15 @@ export function DialogoConfigFluxo({
 
               {avancado && (
                 <div className="mt-3 flex flex-col gap-5">
+                  {temAjustes && podeEditar && (
+                    <button
+                      type="button"
+                      onClick={() => onChange({ ...valor, ajustes: {} })}
+                      className="flex items-center gap-1.5 self-start text-xs font-medium text-primary hover:underline"
+                    >
+                      <RotateCcw className="size-3.5" /> Restaurar os padrões do tipo
+                    </button>
+                  )}
                   {painel.grupos.map((g) => (
                     <div key={g.grupo} className="flex flex-col gap-3">
                       <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -190,12 +306,16 @@ export function DialogoConfigFluxo({
                           key={c.chave}
                           campo={c}
                           valor={efetivo(c.chave)}
+                          ajustado={c.chave in ajustes}
                           podeEditar={podeEditar}
                           onChange={(v) =>
                             onChange({
                               ...valor,
                               ajustes: { ...ajustes, [c.chave]: v },
                             })
+                          }
+                          onReset={() =>
+                            onChange({ ...valor, ajustes: semChave(ajustes, c.chave) })
                           }
                         />
                       ))}

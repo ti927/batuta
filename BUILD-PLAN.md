@@ -1519,6 +1519,15 @@ Gatilho: exec `18e42293` parou no portão para sempre. Causa raiz — **duas fon
 
 ---
 
+## FASE — Tipo de fluxo confiável + automação nasce como "Processo interno"  ✅ (2026-07-09, sem migração, núcleo intocado)
+
+Gatilho: o maestro estranhou que um fluxo "Processo interno" (esperado ~15 min) só cutucou depois de ~60 min (exec `18e42293`). Investigação: o motor **RESPEITA** o Tipo de fluxo (`resolver_config` aplica o perfil na cascata `global<canal<perfil<ajustes<nó`; sweeper e relógio do portão leem daí). A causa do "60 min" foi que **aquela automação tinha `configuracao={}`** (nunca teve tipo salvo) → rodou no **padrão geral** (60/30). Dois enganos na tela agravavam: (a) mostrava "Atendimento" como se estivesse escolhido mesmo sem nada salvo; (b) valores do "Avançado" (`ajustes`) venciam o tipo sem aviso nem reset. E **toda automação nascia sem perfil** (IA criadora + create manual). O Fix 3 do portão NÃO interfere (mexeu só na ação de abandono, não nos tempos). Decisões do maestro: deixar o tipo confiável na tela + automação nasce "Processo interno".
+- **Backend (nasce com tipo):** `mensageria/config.py::PERFIL_PADRAO = "interno"` (fonte única). Plantado em `criacao/servicos.py` (`_obter_ou_criar_automacao` e `definir_automacao`) e no create manual `rotas/automacoes.py` (só quando ausente — respeita perfil explícito). Duplicar já copiava. **Não retroage** sobre automações legadas (config vazia segue no padrão geral até o maestro escolher).
+- **Frontend (tela honesta), `config-fluxo.tsx`:** (a) seletor não finge mais "Atendimento" quando nada foi salvo — mostra "Padrão geral (nenhum tipo escolhido)" + aviso, e os defaults viram os globais; (b) resumo sempre visível em português claro ("cutuca em X min; encerra Y depois" + comportamento do portão); (c) no "Avançado", cada campo é marcado `herdado do tipo`/`ajustado` com "voltar ao padrão" (remove de `ajustes`) + "Restaurar padrões do tipo". `automacoes-cliente.tsx`: nova automação inicia `{perfil:"interno"}` (editar carrega o real). Tudo com dados de `/config/fluxo`, sem mudança de backend.
+- Verificação: **532 testes** (+5 novos: nasce interno pela IA e pela rota; rota respeita perfil explícito; `config_da_automacao` do padrão rende timeout=30/nudge=15) + lint/tsc/build front. Obs.: a exec `18e42293` já está `cancelada` (aprovar pela tela não vale mais; publicar = re-disparar).
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.

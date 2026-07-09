@@ -119,6 +119,13 @@ PERFIS: dict[str, dict] = {
     "personalizado": {},
 }
 
+# Perfil que uma automação recém-criada assume quando ninguém escolhe um tipo de
+# fluxo. Antes nasciam sem perfil (`configuracao={}`) e caíam no GLOBAL (cutuca em
+# 60 min) sem o usuário perceber — a maioria dos fluxos é interna, então este é o
+# padrão sensato. Aplicado nos pontos de nascimento (IA criadora e create manual);
+# o duplicar copia o perfil da original. Não retroage sobre automações legadas.
+PERFIL_PADRAO = "interno"
+
 # Rótulos amigáveis dos perfis (para a UI; fonte única).
 PERFIS_ROTULOS = {
     "interno": "Processo interno",

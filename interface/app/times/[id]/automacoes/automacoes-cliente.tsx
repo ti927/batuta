@@ -123,9 +123,11 @@ function EditorAutomacao({
         : cadeiaInicial(gatilhoDe(automacao).tipo),
     ),
   );
-  // Comportamento do fluxo (perfil + ajustes). {} = usa o padrão do canal/global.
-  const [configFluxo, setConfigFluxo] = useState<ConfiguracaoFluxo>(
-    () => automacao?.configuracao ?? {},
+  // Comportamento do fluxo (perfil + ajustes). Nova automação nasce como "Processo
+  // interno" (regra sensata); editando, carrega o que está salvo ({} legado = padrão
+  // geral, e a tela avisa). O backend também planta esse padrão ao criar.
+  const [configFluxo, setConfigFluxo] = useState<ConfiguracaoFluxo>(() =>
+    automacao ? (automacao.configuracao ?? {}) : { perfil: "interno" },
   );
   const [mostrarConfig, setMostrarConfig] = useState(false);
 

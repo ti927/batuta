@@ -56,7 +56,7 @@ from chaves import (
     resolver_chaves_por_time,
 )
 from consultoria import exigir_admin_consultoria
-from mensageria import aprovacao, retoma
+from mensageria import aprovacao, config, retoma
 from mensageria.config import painel_config
 from orquestracao import grafo
 from orquestracao.cadeia import validar_cadeia
@@ -140,6 +140,8 @@ def criar(
         _validar_portao_ou_422(sessao, time_id, dados.cadeia)
     auto = Automacao(time_id=time_id, **dados.model_dump())
     auto.cadeia = grafo.normalizar(auto.cadeia or {})  # grava no formato canônico
+    if not (auto.configuracao or {}).get("perfil"):  # nasce com um tipo de fluxo sensato
+        auto.configuracao = {**(auto.configuracao or {}), "perfil": config.PERFIL_PADRAO}
     sessao.add(auto)
     sessao.commit()
     sessao.refresh(auto)
