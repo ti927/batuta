@@ -1509,6 +1509,16 @@ Gatilho: ao montar o time de teste do App Review, a IA criadora criava o time na
 
 ---
 
+## FASE — Portão por canal: aprovador derivado do instrumento + retomada tardia  ✅ NO AR (2026-07-09, deploy `71af7df`, sem migração, núcleo intocado)
+
+Gatilho: exec `18e42293` parou no portão para sempre. Causa raiz — **duas fontes de verdade para "quem aprova"** [[feedback-bug-recorrente-fonte-de-verdade]]: o instrumento `enviar_telegram` **envia** o pedido para `destinatario_padrao` (604459409, desde "o instrumento é a verdade" de 2026-06-25), mas o nó do gate **esperava** aprovação de `no.aprovacao.destinatario` (5175352629, campo à parte que divergiu). O artigo ia para um chat e o sistema esperava em outro → a resposta "aprovado" virava conversa conversacional órfã ("aprovado, encaminhando", falso) e a execução ficava `aguardando_humano` eterno. É o **follow-up que a memória previu** em 2026-06-25 (35 conversas históricas ao 5175352629 com o mesmo padrão).
+- **Fix 1 (fonte única):** `aprovacao._destino_efetivo` deriva o aprovador do `destinatario_padrao` do instrumento (`no.aprovacao.destinatario` só como fallback); `vincular_pausa` usa isso → envio e espera no MESMO chat. **Auto-cura as automações atuais, sem migração.** Frontend: o campo de destinatário do portão no `inspector.tsx` vira derivado/somente-leitura (mostra o destino do canal).
+- **Fix 2 (retomada tardia):** `servico.registrar_entrada` religa uma resposta tardia a um portão `aguardando_humano` cujo aprovador derivado é o contato — mesmo após o sweeper ter encerrado a conversa. Novo `aprovacao.execucao_parada_do_contato`.
+- **Fix 3 (estacionar):** unifica as 2 chaves de abandono do portão (`acao_ao_encerrar` do sweeper + `portao_acao_abandono` do turno) numa só; default vira **`estacionar`** (execução parada e retomável; perfil `disparo` segue `cancelar`). Sweeper não cancela quando estacionar; despedida do portão mais suave.
+- Verificação: **527 testes** (+4 novos: derivação, fallback, reconexão tardia, estacionar/cancelar) + lint/build front. Pendência de dado: a exec `18e42293` presa é destravada aprovando pela TELA (publica o artigo).
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
