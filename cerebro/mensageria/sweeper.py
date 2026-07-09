@@ -16,8 +16,10 @@ import segredos_instrumento
 from mensageria import telegram
 from mensageria.config import (  # noqa: F401 (compat sweeper.X)
     DESPEDIDA_MSG,
+    DESPEDIDA_PORTAO_CANCELA_MSG,
     DESPEDIDA_PORTAO_MSG,
     NUDGE_MSG,
+    complemento_nudge_portao,
     resolver_config,
 )
 from modelos import Conversa, Execucao, Instrumento, MensagemConversa
@@ -63,10 +65,11 @@ def varrer(sessao: Session) -> int:
             continue  # este fluxo não encerra por silêncio (ex.: deixa vivo de propósito)
         if not conversa.nudge_enviado:
             nudge = conf["mensagem_nudge"]
-            # Conduzindo um portão: lembra a opção de ENCERRAR (descoberta do comando
-            # reservado de cancelar). Só aqui — não polui conversas de atendimento puro.
+            # Conduzindo um portão: acrescenta o prazo até encerrar, a opção de *cancelar*
+            # e (se estacionar) que a aprovação segue no app — tudo derivado do Tipo de
+            # fluxo. Só aqui — não polui conversas de atendimento puro.
             if conversa.execucao_id:
-                nudge += "\n\n(Ou responda *cancelar* para encerrar o fluxo.)"
+                nudge += complemento_nudge_portao(conf)
             entregue = _enviar(token, conversa.contato_chave, nudge)
             _registrar(sessao, conversa, nudge, entregue)
             conversa.nudge_enviado = True
@@ -76,12 +79,12 @@ def varrer(sessao: Session) -> int:
         else:
             eh_portao = bool(conversa.execucao_id)
             acao = conf["portao_acao_abandono"]  # chave ÚNICA (unificada com o turno)
-            # Portão deixado PENDENTE (estacionar): despedida que não sugere fim de fluxo.
-            msg = (
-                DESPEDIDA_PORTAO_MSG
-                if eh_portao and acao != "cancelar"
-                else conf["mensagem_despedida"]
-            )
+            # Portão: despedida derivada da ação de abandono — estacionar diz que a
+            # aprovação segue no app; cancelar avisa que o fluxo foi encerrado junto.
+            if eh_portao:
+                msg = DESPEDIDA_PORTAO_CANCELA_MSG if acao == "cancelar" else DESPEDIDA_PORTAO_MSG
+            else:
+                msg = conf["mensagem_despedida"]
             entregue = _enviar(token, conversa.contato_chave, msg)
             _registrar(sessao, conversa, msg, entregue)
             conversa.estado = "fechada"

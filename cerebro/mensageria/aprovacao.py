@@ -21,7 +21,9 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from mensageria.config import resolver_config
+import segredos_instrumento
+from mensageria import telegram
+from mensageria.config import aviso_expectativa_portao, resolver_config
 from modelos import (
     Agente,
     AgenteInstrumento,
@@ -134,7 +136,9 @@ def vincular_pausa(sessao: Session, execucao: Execucao) -> None:
     portão por canal (`aprovacao = {instrumento_id, destinatario}`), amarra (upsert)
     uma `Conversa` viva desse (instrumento, destinatário) a esta execução, para a
     resposta do aprovador religar o fluxo. Idempotente; respeita o índice único de
-    conversa viva. NÃO envia nada (o agente já enviou o pedido)."""
+    conversa viva. O PEDIDO em si é do agente (já enviado); aqui a borda só acrescenta UM
+    aviso de expectativa derivado do Tipo de fluxo (`_avisar_expectativa`, à prova de falha
+    e idempotente) — o que acontece se o humano não responder."""
     cfg = _config_aprovacao_do_no(sessao, execucao)
     if cfg is None:
         return
@@ -173,6 +177,8 @@ def vincular_pausa(sessao: Session, execucao: Execucao) -> None:
     # (regra geral de mensageria) — antes ficava "aberto para sempre". Cutuca e,
     # persistindo o silêncio, encerra (cancelando/estacionando a execução).
     conf = resolver_config(sessao, conversa)
+    # Ordem natural na thread: primeiro o PEDIDO apresentado, depois o aviso de expectativa.
+    _registrar_apresentado(sessao, conversa, execucao)
     if conf["encerrar_por_inatividade"] and conversa.estado not in (
         "humano_assumiu", "fechada",
     ):
@@ -181,8 +187,55 @@ def vincular_pausa(sessao: Session, execucao: Execucao) -> None:
         )
         conversa.nudge_enviado = False
         sessao.flush()
+        _avisar_expectativa(sessao, conversa, inst, conf, execucao)
 
-    _registrar_apresentado(sessao, conversa, execucao)
+
+def _avisar_expectativa(
+    sessao: Session, conversa: Conversa, inst: Instrumento, conf: dict, execucao: Execucao
+) -> None:
+    """Envia, JUNTO da pausa do portão, UM aviso do que acontece se o humano não
+    responder (prazo até encerrar + destino da aprovação), DERIVADO do Tipo de fluxo
+    (`config.aviso_expectativa_portao`). À PROVA DE FALHA — `vincular_pausa` roda no
+    `try` de `disparo`/`retoma` que marca a execução como `falhou` se algo estourar, então
+    o envio NUNCA pode propagar exceção. Idempotente por passo pausado (carimba
+    `midia.tipo='aviso_portao'` + `passo_id`): uma 2ª chamada da mesma pausa não duplica."""
+    msg = aviso_expectativa_portao(conf)
+    if not msg:
+        return
+    ultimo = sessao.scalars(
+        select(PassoExecucao)
+        .where(PassoExecucao.execucao_id == execucao.id)
+        .order_by(PassoExecucao.ordem.desc())
+    ).first()
+    if ultimo is None:
+        return
+    ja_avisado = sessao.scalars(
+        select(MensagemConversa.id)
+        .where(MensagemConversa.conversa_id == conversa.id)
+        .where(MensagemConversa.midia["tipo"].astext == "aviso_portao")
+        .where(MensagemConversa.midia["passo_id"].astext == str(ultimo.id))
+    ).first()
+    if ja_avisado:
+        return
+    entregue = False
+    try:
+        token = segredos_instrumento.decifrar(sessao, inst.id).get("token_bot")
+        if token:
+            entregue = bool(
+                telegram.enviar(token, conversa.contato_chave, msg).get("ok")
+            )
+    except Exception:
+        entregue = False  # nunca falha a execução por causa do aviso
+    sessao.add(
+        MensagemConversa(
+            conversa_id=conversa.id,
+            papel="agente",
+            conteudo=msg,
+            midia={"tipo": "aviso_portao", "passo_id": str(ultimo.id)},
+            entregue=entregue,
+        )
+    )
+    sessao.flush()
 
 
 def _registrar_apresentado(
@@ -193,8 +246,10 @@ def _registrar_apresentado(
     envia por canal durante a execução só vive em memória e nunca aparecia nas
     Conversas (só a resposta do humano e os acks). É o passo pausado que carrega o
     apresentado (`cadeia.py` sobrescreve a saída com a mensagem que a pessoa viu).
-    Idempotente por passo (carimba `midia.passo_id`), pois `vincular_pausa` pode ser
-    chamada mais de uma vez para a mesma pausa."""
+    Idempotente pelo SEU marcador (`midia.origem='execucao'` + `passo_id`), pois
+    `vincular_pausa` pode ser chamada mais de uma vez para a mesma pausa — e a mesma pausa
+    também grava o aviso de expectativa com o mesmo `passo_id` (por isso o dedup filtra
+    pela origem, não só pelo passo)."""
     ultimo = sessao.scalars(
         select(PassoExecucao)
         .where(PassoExecucao.execucao_id == execucao.id)
@@ -208,6 +263,7 @@ def _registrar_apresentado(
     ja_gravado = sessao.scalars(
         select(MensagemConversa.id)
         .where(MensagemConversa.conversa_id == conversa.id)
+        .where(MensagemConversa.midia["origem"].astext == "execucao")
         .where(MensagemConversa.midia["passo_id"].astext == str(ultimo.id))
     ).first()
     if ja_gravado:

@@ -1528,6 +1528,16 @@ Gatilho: o maestro estranhou que um fluxo "Processo interno" (esperado ~15 min) 
 
 ---
 
+## FASE — Portão avisa o humano o que vai acontecer (derivado do Tipo de fluxo)  ✅ (2026-07-09, sem migração, núcleo intocado)
+
+Gatilho: o maestro pediu que o Batuta **transmita ao humano as regras do fluxo** no portão por canal (Telegram), derivadas do Tipo de fluxo. Pergunta dele: "código ou markdown?" → **código**: os avisos de cutucar/encerrar são do sweeper (o markdown não os alcança), e fixar "X min" no markdown seria uma 2ª cópia do parâmetro que desatualiza ao trocar o Tipo de fluxo (múltiplas fontes de verdade) [[feedback-bug-recorrente-fonte-de-verdade]]. Em código a mensagem é derivada do parâmetro real, uniforme em toda automação.
+- **`mensageria/config.py` (fonte única):** `URL_APP="batuta.team"`; `aviso_expectativa_portao(conf)` (o aviso do PEDIDO: prazo `timeout+nudge` + destino da aprovação; `None` se não encerra por inatividade) e `complemento_nudge_portao(conf)` (cauda do cutucar), ambos variando estacionar↔cancelar; `DESPEDIDA_PORTAO_MSG` reescrita citando o app + nova `DESPEDIDA_PORTAO_CANCELA_MSG`.
+- **`mensageria/aprovacao.py::vincular_pausa`:** passa a enviar UM aviso de expectativa junto da pausa (`_avisar_expectativa`), **à prova de falha** (roda no `try` de disparo/retoma que marca `falhou` — o envio nunca propaga; sem token não envia) e **idempotente por passo**. Bônus: `_registrar_apresentado` passou a deduplicar pelo seu próprio marcador (`origem="execucao"`), não só por `passo_id` (o aviso compartilha o passo).
+- **`mensageria/sweeper.py`:** nudge e despedida de portão usam as mensagens novas (estacionar cita o app; cancelar avisa o cancelamento).
+- Verificação: **536 testes** (+4 novos: aviso estacionar com prazo+app e idempotente; cancelamento no perfil `disparo`; sem timeout não avisa; envio à prova de falha). Núcleo/tela intocados; sem migração.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.

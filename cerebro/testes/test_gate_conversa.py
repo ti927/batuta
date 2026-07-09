@@ -495,13 +495,17 @@ def test_sweeper_estaciona_portao_por_default(sessao, dados, monkeypatch):
     assert conv.estado == "fechada"
     assert execucao.estado == "aguardando_humano"  # ESTACIONADA, não cancelada
     assert conv.execucao_id is None  # desvinculada — uma resposta tardia religa (Fix 2)
+    assert any("aprovação ainda pode ser feita" in t for t in enviados)  # despedida cita o app
 
 
 def test_sweeper_cancela_portao_quando_configurado(sessao, dados, monkeypatch):
     """Config explícito `cancelar`: o sweeper encerra a conversa E cancela a execução."""
     from mensageria import sweeper
 
-    monkeypatch.setattr("mensageria.telegram.enviar", lambda t, c, x: {"ok": True})
+    enviados = []
+    monkeypatch.setattr(
+        "mensageria.telegram.enviar", lambda t, c, x: enviados.append(x) or {"ok": True}
+    )
     canal = _canal(sessao, dados)
     si.salvar_segredos(sessao, canal.id, {"token_bot": "tok"})
     ag = _agente(sessao, dados)
@@ -523,3 +527,86 @@ def test_sweeper_cancela_portao_quando_configurado(sessao, dados, monkeypatch):
     assert conv.estado == "fechada"
     assert execucao.estado == "cancelada"
     assert conv.execucao_id is None
+    assert any("cancelando o fluxo" in t for t in enviados)  # despedida avisa o cancelamento
+
+
+# ─────── Aviso de expectativa do portão (derivado do Tipo de fluxo) ───────
+# O agente manda o pedido; a borda (`vincular_pausa`) acrescenta UM aviso do que acontece
+# se o humano não responder — prazo + destino da aprovação — montado dos parâmetros reais.
+
+def test_vincular_pausa_avisa_expectativa_estacionar(sessao, dados, monkeypatch):
+    enviados = []
+    monkeypatch.setattr(telegram, "enviar", lambda t, c, x: enviados.append(x) or {"ok": True})
+    canal = _canal(sessao, dados)
+    si.salvar_segredos(sessao, canal.id, {"token_bot": "tok"})
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal)  # sem perfil → global: estacionar, 60/30
+    execucao = _exec_pausada(sessao, auto, ag)
+
+    aprovacao.vincular_pausa(sessao, execucao)
+
+    avisos = [t for t in enviados if "batuta.team" in t]
+    assert len(avisos) == 1
+    assert "encerro esta conversa" in avisos[0]
+    assert "90 min" in avisos[0]  # global: timeout 60 + nudge 30
+    assert "continua disponível" in avisos[0]  # estacionar: aprovação segue no app
+
+    # 2ª chamada da MESMA pausa não duplica o aviso (idempotente por passo)
+    aprovacao.vincular_pausa(sessao, execucao)
+    assert len([t for t in enviados if "batuta.team" in t]) == 1
+
+
+def test_vincular_pausa_avisa_cancelamento_no_perfil_disparo(sessao, dados, monkeypatch):
+    enviados = []
+    monkeypatch.setattr(telegram, "enviar", lambda t, c, x: enviados.append(x) or {"ok": True})
+    canal = _canal(sessao, dados)
+    si.salvar_segredos(sessao, canal.id, {"token_bot": "tok"})
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal, configuracao={"perfil": "disparo"})  # cancelar
+    execucao = _exec_pausada(sessao, auto, ag)
+
+    aprovacao.vincular_pausa(sessao, execucao)
+
+    aviso = next(t for t in enviados if "encerro esta conversa" in t)
+    assert "cancelado" in aviso
+    assert "continua disponível" not in aviso  # cancelar ≠ estacionar
+
+
+def test_vincular_pausa_sem_encerrar_por_inatividade_nao_avisa(sessao, dados, monkeypatch):
+    enviados = []
+    monkeypatch.setattr(telegram, "enviar", lambda t, c, x: enviados.append(x) or {"ok": True})
+    canal = _canal(sessao, dados)
+    si.salvar_segredos(sessao, canal.id, {"token_bot": "tok"})
+    ag = _agente(sessao, dados)
+    auto = _automacao(
+        sessao, dados, ag, canal,
+        configuracao={"ajustes": {"encerrar_por_inatividade": False}},
+    )
+    execucao = _exec_pausada(sessao, auto, ag)
+
+    aprovacao.vincular_pausa(sessao, execucao)
+    assert not any("batuta.team" in t for t in enviados)  # sem timeout → nada a avisar
+
+
+def test_vincular_pausa_avisar_e_a_prova_de_falha(sessao, dados, monkeypatch):
+    """O envio do aviso roda no `try` de disparo/retoma — uma falha de rede NÃO pode
+    propagar (senão marcaria a execução como falhou)."""
+    def boom(*a, **k):
+        raise RuntimeError("telegram fora do ar")
+    monkeypatch.setattr(telegram, "enviar", boom)
+    canal = _canal(sessao, dados)
+    si.salvar_segredos(sessao, canal.id, {"token_bot": "tok"})
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal)
+    execucao = _exec_pausada(sessao, auto, ag)
+
+    aprovacao.vincular_pausa(sessao, execucao)  # NÃO deve levantar
+
+    conv = _conv(sessao, execucao.id)
+    assert conv is not None  # a pausa foi vinculada apesar da falha de envio
+    # o aviso fica registrado como não-entregue
+    msgs = sessao.scalars(
+        select(MensagemConversa).where(MensagemConversa.conversa_id == conv.id)
+    ).all()
+    aviso = next(m for m in msgs if (m.midia or {}).get("tipo") == "aviso_portao")
+    assert aviso.entregue is False

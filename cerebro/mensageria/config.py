@@ -22,6 +22,10 @@ from sqlalchemy.orm import Session
 
 from modelos import Automacao, Execucao, Instrumento
 
+# Endereço público do app (onde a aprovação de um portão também pode ser resolvida pela
+# tela). Fonte única para as mensagens que orientam o humano.
+URL_APP = "batuta.team"
+
 # ── Mensagens-padrão (a borda importa daqui; antes viviam em servico/sweeper) ──
 SAUDACAO_PADRAO = "Olá! Você está falando com um assistente virtual. Como posso ajudar?"
 MSG_FORA_HORARIO_PADRAO = (
@@ -36,8 +40,13 @@ DESPEDIDA_MSG = (
 # Despedida de um PORTÃO deixado pendente (estacionar): não sugere que o fluxo morreu —
 # ele segue aguardando aprovação e é retomável por uma resposta tardia (ou pela tela).
 DESPEDIDA_PORTAO_MSG = (
-    "Vou pausar o lembrete por aqui, mas o fluxo segue aguardando a sua aprovação — "
-    "responda quando puder para continuar, ou *cancelar* para encerrar."
+    f"Estou encerrando a conversa por aqui, mas a aprovação ainda pode ser feita dentro "
+    f"do {URL_APP}. (Ou responda aqui quando puder para retomar.)"
+)
+# Despedida de um PORTÃO quando o Tipo de fluxo manda CANCELAR ao abandonar: aí não há
+# "continua no app" — o fluxo se encerra junto.
+DESPEDIDA_PORTAO_CANCELA_MSG = (
+    "Como não houve resposta, estou encerrando a conversa e cancelando o fluxo."
 )
 
 # ── Padrão GLOBAL: o efetivo quando nada mais especifica. Os valores batem com o
@@ -247,3 +256,44 @@ def com_ajuste_do_no(cfg: dict, no: dict | None) -> dict:
     """Sobrepõe a config efetiva com ajustes específicos do NÓ do portão
     (`no.config`), o nível mais específico da cascata."""
     return _mesclar(cfg, (no or {}).get("config"))
+
+
+# ── Mensagens de portão DERIVADAS dos parâmetros do Tipo de fluxo ──────────────
+# Em vez de o agente (markdown) fixar "X minutos" na mão — que desatualizaria ao
+# trocar o Tipo de fluxo (múltiplas fontes de verdade) — a borda MONTA o texto a
+# partir do `conf` resolvido. Assim o aviso é sempre coerente com o parâmetro real,
+# uniforme em toda automação. `conf` é o efetivo de `resolver_config`.
+
+
+def aviso_expectativa_portao(conf: dict) -> str | None:
+    """Aviso enviado JUNTO do pedido de aprovação (borda), dizendo o que acontece se o
+    humano não responder — derivado dos tempos e da ação de abandono do fluxo. Devolve
+    `None` quando o fluxo não encerra por inatividade (não há timeout → nada a avisar)."""
+    if not conf.get("encerrar_por_inatividade"):
+        return None
+    total = int(conf["timeout_min"]) + int(conf["nudge_timeout_min"])
+    if conf.get("portao_acao_abandono") == "cancelar":
+        return (
+            f"⏳ Se você não responder, encerro esta conversa em cerca de {total} min e o "
+            f"fluxo será cancelado. Dá para aprovar aqui ou em {URL_APP} até lá."
+        )
+    return (
+        f"⏳ Se você não responder, encerro esta conversa em cerca de {total} min — mas "
+        f"sem problema: a aprovação continua disponível dentro do {URL_APP} mesmo depois."
+    )
+
+
+def complemento_nudge_portao(conf: dict) -> str:
+    """Cauda acrescentada ao 'cutucar' de um portão: lembra o prazo até encerrar, a
+    opção de *cancelar* e (se estacionar) que a aprovação segue no app. Derivado do
+    parâmetro do Tipo de fluxo."""
+    y = int(conf["nudge_timeout_min"])
+    if conf.get("portao_acao_abandono") == "cancelar":
+        return (
+            f"\n\n(Sem resposta, encerro em ~{y} min e cancelo o fluxo. "
+            f"Ou responda *cancelar* para encerrar agora.)"
+        )
+    return (
+        f"\n\n(Sem resposta, encerro em ~{y} min — a aprovação segue no {URL_APP}. "
+        f"Ou responda *cancelar* para encerrar o fluxo.)"
+    )

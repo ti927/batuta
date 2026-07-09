@@ -193,8 +193,10 @@ def test_vincular_pausa_registra_o_apresentado_na_thread(sessao, dados):
 
     conv = _conversa_da_execucao(sessao, execucao.id)
     msgs = _msgs_agente(sessao, conv.id)
-    assert len(msgs) == 1
-    assert msgs[0].conteudo == "Artigo para aprovar"
+    # A thread carrega o apresentado (o pedido) e, à parte, o aviso de expectativa.
+    apresentado = [m for m in msgs if (m.midia or {}).get("origem") == "execucao"]
+    assert len(apresentado) == 1
+    assert apresentado[0].conteudo == "Artigo para aprovar"
 
 
 def test_vincular_pausa_nao_duplica_o_apresentado(sessao, dados):
@@ -207,7 +209,10 @@ def test_vincular_pausa_nao_duplica_o_apresentado(sessao, dados):
     aprovacao.vincular_pausa(sessao, execucao)  # 2ª chamada (mesma pausa) não duplica
 
     conv = _conversa_da_execucao(sessao, execucao.id)
-    assert len(_msgs_agente(sessao, conv.id)) == 1
+    msgs = _msgs_agente(sessao, conv.id)
+    # Nem o apresentado nem o aviso duplicam após a 2ª chamada.
+    assert len([m for m in msgs if (m.midia or {}).get("origem") == "execucao"]) == 1
+    assert len([m for m in msgs if (m.midia or {}).get("tipo") == "aviso_portao"]) == 1
 
 
 def test_vincular_pausa_sem_canal_nao_grava_mensagem(sessao, dados):
