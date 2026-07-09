@@ -222,6 +222,14 @@ export function Inspector({
     (n) => n.tipo === "agente" || n.tipo === "roteador",
   );
 
+  // Aprovação por canal (portão): o aprovador é DERIVADO do destinatário configurado no
+  // canal escolhido — a MESMA pessoa para quem o agente envia. Fonte única: o valor não é
+  // mais editável à parte no nó, para nunca divergir do envio (era a causa do fluxo órfão).
+  const canalAprovacao = canais.find((c) => c.id === no.aprovacao?.instrumento_id);
+  const destinoAprovacao = (
+    (canalAprovacao?.configuracao?.destinatario_padrao as string | undefined) ?? ""
+  ).trim();
+
   return (
     <div className="flex h-full flex-col">
       {/* cabeçalho */}
@@ -485,10 +493,7 @@ export function Inspector({
                     onChange={(e) =>
                       onPatchNode(no.id, {
                         aprovacao: e.target.value
-                          ? {
-                              instrumento_id: e.target.value,
-                              destinatario: no.aprovacao?.destinatario ?? "",
-                            }
+                          ? { instrumento_id: e.target.value }
                           : null,
                       })
                     }
@@ -501,32 +506,20 @@ export function Inspector({
                     ))}
                   </select>
                 </label>
-                {no.aprovacao?.instrumento_id && (
-                  <label className="text-[11px]" style={{ color: "#6B6880" }}>
-                    Destinatário (quem aprova neste canal)
-                    <input
-                      className={`${inputCls} mt-1`}
-                      placeholder="ex.: id do chat do Telegram"
-                      value={no.aprovacao?.destinatario ?? ""}
-                      disabled={!podeEditar}
-                      onChange={(e) =>
-                        onPatchNode(no.id, {
-                          aprovacao: {
-                            instrumento_id: no.aprovacao?.instrumento_id ?? null,
-                            destinatario: e.target.value,
-                          },
-                        })
-                      }
-                    />
-                  </label>
-                )}
                 {no.aprovacao?.instrumento_id &&
-                  !(no.aprovacao?.destinatario ?? "").trim() && (
-                    <span className="text-[11px] text-warning">
-                      ⚠ Sem destinatário, a aprovação por canal não funciona — vale só
-                      a tela.
+                  (destinoAprovacao ? (
+                    <span className="text-[11px]" style={{ color: "#6B6880" }}>
+                      A aprovação será pedida a <strong>{destinoAprovacao}</strong> — o
+                      mesmo destinatário deste canal (para onde o agente envia). Para
+                      mudar quem aprova, edite o destinatário no instrumento do canal.
                     </span>
-                  )}
+                  ) : (
+                    <span className="text-[11px] text-warning">
+                      ⚠ Este canal não tem destinatário configurado — a aprovação por
+                      canal não vai funcionar. Defina o destinatário no instrumento do
+                      canal (ou aprove pela tela).
+                    </span>
+                  ))}
                 {canais.length === 0 && (
                   <span className="text-[11px]" style={{ color: "#A09DB8" }}>
                     Sem canais no time. Crie um instrumento de canal (Telegram) para

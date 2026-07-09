@@ -33,6 +33,12 @@ NUDGE_MSG = "Ainda está por aí? Se precisar de algo, é só me escrever."
 DESPEDIDA_MSG = (
     "Vou encerrar por aqui por enquanto. Quando precisar, é só mandar uma mensagem."
 )
+# Despedida de um PORTÃO deixado pendente (estacionar): não sugere que o fluxo morreu —
+# ele segue aguardando aprovação e é retomável por uma resposta tardia (ou pela tela).
+DESPEDIDA_PORTAO_MSG = (
+    "Vou pausar o lembrete por aqui, mas o fluxo segue aguardando a sua aprovação — "
+    "responda quando puder para continuar, ou *cancelar* para encerrar."
+)
 
 # ── Padrão GLOBAL: o efetivo quando nada mais especifica. Os valores batem com o
 # comportamento de HOJE (instrumento sem chave → estes defaults). As chaves dos
@@ -43,7 +49,6 @@ GLOBAL: dict = {
     "timeout_min": 60,            # min sem resposta até cutucar (sweeper)
     "nudge_timeout_min": 30,      # min após cutucar até encerrar
     "encerrar_por_inatividade": True,
-    "acao_ao_encerrar": "cancelar",   # execução de fluxo ao encerrar a conversa: cancelar | estacionar
     # B. Limites da conversa
     "max_turnos": 40,
     "teto_usd": 1.0,
@@ -60,7 +65,12 @@ GLOBAL: dict = {
     "mensagem_despedida": DESPEDIDA_MSG,
     # D. Portão (aprovação)
     "portao_forma": "conversa",          # conversa | direto
-    "portao_acao_abandono": "cancelar",  # ao abandonar/encerrar o portão: cancelar | estacionar
+    # Ao ABANDONAR o portão (silêncio no timeout OU estouro de turnos/teto): FONTE ÚNICA,
+    # lida pelo sweeper E por `_turno_de_portao`. `estacionar` (padrão) = mantém a execução
+    # `aguardando_humano` e RETOMÁVEL (uma resposta tardia pelo canal religa; a tela também
+    # resolve); `cancelar` = encerra a execução. (Antes havia uma 2ª chave só no sweeper,
+    # `acao_ao_encerrar`, que podia divergir desta — unificadas.)
+    "portao_acao_abandono": "estacionar",
     "portao_max_rodadas": 8,
     # E. Motor (avançado/raro)
     "max_passos": 25,
@@ -82,8 +92,7 @@ PERFIS: dict[str, dict] = {
         "max_turnos": 20,
         "teto_usd": 0.5,
         "portao_forma": "conversa",
-        "portao_acao_abandono": "cancelar",
-        "acao_ao_encerrar": "cancelar",
+        "portao_acao_abandono": "estacionar",
         "acao_ao_estourar": "passar_humano",
     },
     "atendimento": {
@@ -94,7 +103,6 @@ PERFIS: dict[str, dict] = {
         "teto_usd": 1.0,
         "portao_forma": "conversa",
         "portao_acao_abandono": "estacionar",
-        "acao_ao_encerrar": "estacionar",
         "acao_ao_estourar": "passar_humano",
     },
     "disparo": {
@@ -106,7 +114,6 @@ PERFIS: dict[str, dict] = {
         "teto_usd": 0.25,
         "portao_forma": "direto",
         "portao_acao_abandono": "cancelar",
-        "acao_ao_encerrar": "cancelar",
         "acao_ao_estourar": "encerrar",
     },
     "personalizado": {},
@@ -122,7 +129,6 @@ PERFIS_ROTULOS = {
 
 # Opções dos botões de escolha (valor → rótulo amigável).
 ESCOLHAS = {
-    "acao_ao_encerrar": [("cancelar", "Cancelar o fluxo"), ("estacionar", "Deixar pendente na tela")],
     "acao_ao_estourar": [("passar_humano", "Passar para um humano"), ("encerrar", "Encerrar a conversa")],
     "portao_forma": [
         ("conversa", "O agente conversa (pode perguntar de volta)"),
@@ -139,7 +145,6 @@ CAMPOS = [
         {"chave": "timeout_min", "rotulo": "Tempo até cutucar quem some", "tipo": "int", "sufixo": "min"},
         {"chave": "nudge_timeout_min", "rotulo": "Tempo após cutucar até encerrar", "tipo": "int", "sufixo": "min"},
         {"chave": "encerrar_por_inatividade", "rotulo": "Encerrar conversas paradas", "tipo": "bool"},
-        {"chave": "acao_ao_encerrar", "rotulo": "Ao encerrar um portão sem resposta", "tipo": "escolha"},
     ]},
     {"grupo": "Limites da conversa", "campos": [
         {"chave": "max_turnos", "rotulo": "Máx. de mensagens por conversa", "tipo": "int"},

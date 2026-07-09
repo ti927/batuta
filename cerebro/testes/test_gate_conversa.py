@@ -406,9 +406,10 @@ def test_canal_turno_vazio_nao_fica_aberto_pra_sempre(sessao, dados, monkeypatch
 
 def test_canal_teto_passa_humano_e_cancela_execucao(sessao, dados, monkeypatch):
     enviados = []
-    # perfil interno → portao_acao_abandono = cancelar (default global tb é cancelar)
+    # ajuste explícito: abandono do portão = cancelar (o default agora é estacionar)
     canal, ag, auto, execucao = _setup_canal(
-        sessao, dados, monkeypatch, enviados, configuracao={"perfil": "interno"}
+        sessao, dados, monkeypatch, enviados,
+        configuracao={"ajustes": {"portao_acao_abandono": "cancelar"}},
     )
     conv = _conv(sessao, execucao.id)
     conv.custo_acumulado_usd = 999  # estoura o teto
@@ -467,7 +468,9 @@ def test_canal_cancelar_nao_roda_o_agente_e_encerra(sessao, dados, monkeypatch):
     assert any("encerrei" in t.lower() for t in enviados)  # ack "⛔"
 
 
-def test_sweeper_encerra_portao_e_cancela_execucao(sessao, dados, monkeypatch):
+def test_sweeper_estaciona_portao_por_default(sessao, dados, monkeypatch):
+    """Default (estacionar): o sweeper encerra a CONVERSA do portão, mas a execução
+    fica `aguardando_humano` (retomável por resposta tardia ou pela tela). Não cancela."""
     from mensageria import sweeper
 
     enviados = []
@@ -477,11 +480,11 @@ def test_sweeper_encerra_portao_e_cancela_execucao(sessao, dados, monkeypatch):
     canal = _canal(sessao, dados)
     si.salvar_segredos(sessao, canal.id, {"token_bot": "tok"})
     ag = _agente(sessao, dados)
-    auto = _automacao(sessao, dados, ag, canal)  # sem perfil → global acao_ao_encerrar=cancelar
+    auto = _automacao(sessao, dados, ag, canal)  # sem perfil → global: estacionar
     execucao = _exec_pausada(sessao, auto, ag)
     aprovacao.vincular_pausa(sessao, execucao)
     conv = _conv(sessao, execucao.id)
-    conv.nudge_enviado = True  # já cutucado → a varredura encerra
+    conv.nudge_enviado = True  # já cutucado → a varredura encerra a conversa
     conv.aguardando_ate = datetime.now(timezone.utc) - timedelta(minutes=1)
     sessao.commit()
 
@@ -490,5 +493,33 @@ def test_sweeper_encerra_portao_e_cancela_execucao(sessao, dados, monkeypatch):
     sessao.refresh(conv)
     sessao.refresh(execucao)
     assert conv.estado == "fechada"
-    assert execucao.estado == "cancelada"  # portão abandonado por inatividade → cancela
+    assert execucao.estado == "aguardando_humano"  # ESTACIONADA, não cancelada
+    assert conv.execucao_id is None  # desvinculada — uma resposta tardia religa (Fix 2)
+
+
+def test_sweeper_cancela_portao_quando_configurado(sessao, dados, monkeypatch):
+    """Config explícito `cancelar`: o sweeper encerra a conversa E cancela a execução."""
+    from mensageria import sweeper
+
+    monkeypatch.setattr("mensageria.telegram.enviar", lambda t, c, x: {"ok": True})
+    canal = _canal(sessao, dados)
+    si.salvar_segredos(sessao, canal.id, {"token_bot": "tok"})
+    ag = _agente(sessao, dados)
+    auto = _automacao(
+        sessao, dados, ag, canal,
+        configuracao={"ajustes": {"portao_acao_abandono": "cancelar"}},
+    )
+    execucao = _exec_pausada(sessao, auto, ag)
+    aprovacao.vincular_pausa(sessao, execucao)
+    conv = _conv(sessao, execucao.id)
+    conv.nudge_enviado = True
+    conv.aguardando_ate = datetime.now(timezone.utc) - timedelta(minutes=1)
+    sessao.commit()
+
+    sweeper.varrer(sessao)
+
+    sessao.refresh(conv)
+    sessao.refresh(execucao)
+    assert conv.estado == "fechada"
+    assert execucao.estado == "cancelada"
     assert conv.execucao_id is None

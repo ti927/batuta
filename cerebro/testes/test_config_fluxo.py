@@ -68,7 +68,7 @@ def test_perfil_interno_sobrepoe_o_canal(sessao, dados):
     r = cfg.resolver_config(sessao, conv)
     assert r["saudacao_abertura"] == ""  # interno desliga a saudação
     assert r["timeout_min"] == 30
-    assert r["portao_acao_abandono"] == "cancelar"
+    assert r["portao_acao_abandono"] == "estacionar"  # parada e retomável (padrão)
     assert r["max_turnos"] == 20
 
 

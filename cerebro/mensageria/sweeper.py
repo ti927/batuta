@@ -14,7 +14,12 @@ from sqlalchemy.orm import Session
 
 import segredos_instrumento
 from mensageria import telegram
-from mensageria.config import DESPEDIDA_MSG, NUDGE_MSG, resolver_config  # noqa: F401 (compat sweeper.X)
+from mensageria.config import (  # noqa: F401 (compat sweeper.X)
+    DESPEDIDA_MSG,
+    DESPEDIDA_PORTAO_MSG,
+    NUDGE_MSG,
+    resolver_config,
+)
 from modelos import Conversa, Execucao, Instrumento, MensagemConversa
 from sessao import CriadorDeSessao
 
@@ -69,17 +74,27 @@ def varrer(sessao: Session) -> int:
                 minutes=int(conf["nudge_timeout_min"])
             )
         else:
-            entregue = _enviar(token, conversa.contato_chave, conf["mensagem_despedida"])
-            _registrar(sessao, conversa, conf["mensagem_despedida"], entregue)
+            eh_portao = bool(conversa.execucao_id)
+            acao = conf["portao_acao_abandono"]  # chave ÚNICA (unificada com o turno)
+            # Portão deixado PENDENTE (estacionar): despedida que não sugere fim de fluxo.
+            msg = (
+                DESPEDIDA_PORTAO_MSG
+                if eh_portao and acao != "cancelar"
+                else conf["mensagem_despedida"]
+            )
+            entregue = _enviar(token, conversa.contato_chave, msg)
+            _registrar(sessao, conversa, msg, entregue)
             conversa.estado = "fechada"
-            # Portão por canal encerrado por inatividade: cancela ou estaciona a
-            # execução vinculada conforme o config (regra geral) e desvincula.
-            if conversa.execucao_id:
+            # Portão por canal abandonado por inatividade: cancela ou ESTACIONA a
+            # execução conforme a chave única e desvincula. Se estacionar, a execução
+            # fica `aguardando_humano` e uma resposta tardia a religa (via
+            # `servico.registrar_entrada`) — antes ficava órfã para sempre.
+            if eh_portao:
                 execucao = sessao.get(Execucao, conversa.execucao_id)
                 if (
                     execucao is not None
                     and execucao.estado == "aguardando_humano"
-                    and conf["acao_ao_encerrar"] == "cancelar"
+                    and acao == "cancelar"
                 ):
                     execucao.estado = "cancelada"
                     execucao.finalizada_em = agora

@@ -141,6 +141,38 @@ def test_vincular_pausa_amarra_conversa_do_aprovador(sessao, dados):
     assert conv.execucao_id == execucao.id
 
 
+def test_vincular_pausa_deriva_aprovador_do_instrumento(sessao, dados):
+    """FONTE ÚNICA: o portão espera aprovação no MESMO chat para onde o agente MANDA
+    (o `destinatario_padrao` do instrumento), mesmo que o nó guarde um destinatário
+    DIVERGENTE. Regressão do bug em que o envio ia para um chat e a espera para outro
+    (execução órfã, exec 18e42293)."""
+    canal = _canal(sessao, dados, destinatario="chat-do-envio")
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal=canal, destinatario="chat-divergente")
+    execucao = _exec_pausada(sessao, auto, ag)
+
+    aprovacao.vincular_pausa(sessao, execucao)
+
+    conv = _conversa_da_execucao(sessao, execucao.id)
+    assert conv is not None
+    assert conv.contato_chave == "chat-do-envio"  # do instrumento, não do nó
+
+
+def test_vincular_pausa_cai_no_no_sem_destino_no_instrumento(sessao, dados):
+    """Sem `destinatario_padrao` no instrumento, o portão usa o destinatário do nó
+    como FALLBACK (não perde a aprovação por canal)."""
+    canal = _canal(sessao, dados, destinatario="")  # instrumento sem destino
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal=canal, destinatario="chat-do-no")
+    execucao = _exec_pausada(sessao, auto, ag)
+
+    aprovacao.vincular_pausa(sessao, execucao)
+
+    conv = _conversa_da_execucao(sessao, execucao.id)
+    assert conv is not None
+    assert conv.contato_chave == "chat-do-no"
+
+
 def _msgs_agente(sessao, conversa_id):
     return sessao.scalars(
         select(MensagemConversa)
@@ -190,7 +222,10 @@ def test_vincular_pausa_sem_canal_nao_grava_mensagem(sessao, dados):
 
 
 def test_vincular_pausa_sem_destinatario_nao_amarra(sessao, dados):
-    canal = _canal(sessao, dados)
+    """Sem destino no INSTRUMENTO e sem destinatário no NÓ, não há como correlacionar a
+    resposta → não amarra (a aprovação fica só na tela). Com o Fix 1, basta o instrumento
+    ter `destinatario_padrao` para correlacionar; por isso aqui os dois são vazios."""
+    canal = _canal(sessao, dados, destinatario="")  # instrumento SEM destino
     ag = _agente(sessao, dados)
     auto = _automacao(sessao, dados, ag, canal=canal, destinatario="")  # nó sem destinatário
     execucao = _exec_pausada(sessao, auto, ag)
@@ -277,6 +312,45 @@ def test_aprovacao_pelo_canal_religa_e_conclui_o_fluxo(sessao, dados, monkeypatc
     assert enviados  # confirmação enviada ao aprovador
     sessao.refresh(conv)
     assert conv.execucao_id is None  # vínculo desfeito ao concluir
+
+
+def test_resposta_tardia_religa_portao_apos_conversa_fechada(sessao, dados, monkeypatch):
+    """Fix 2: se a conversa do portão foi ENCERRADA (sweeper) e o aprovador responde
+    DEPOIS, a nova mensagem RELIGA ao portão parado e retoma o fluxo — não vira uma
+    conversa conversacional órfã com confirmação enganosa (o bug relatado)."""
+    enviados = []
+    monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
+    monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
+    monkeypatch.setattr(
+        servico.telegram, "enviar",
+        lambda token, chat, t: enviados.append(t) or {"ok": True},
+    )
+    canal = _canal(sessao, dados, destinatario="555")
+    si.salvar_segredos(sessao, canal.id, {"token_bot": "tok-x"})
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal=canal, destino=None)  # 1 saída → fim
+    execucao = _exec_pausada(sessao, auto, ag)
+    aprovacao.vincular_pausa(sessao, execucao)
+
+    # Simula o sweeper com estacionar: encerra a CONVERSA (fechada + desvinculada), mas
+    # a execução fica aguardando_humano.
+    conv0 = _conversa_da_execucao(sessao, execucao.id)
+    conv0.estado = "fechada"
+    conv0.execucao_id = None
+    sessao.commit()
+
+    # Resposta tardia do aprovador: uma conversa NOVA nasce e deve RELIGAR ao portão.
+    msg = telegram.MensagemEntrante(
+        contato_chave="555", contato_nome="Chefe", texto="aprovado", midia=None
+    )
+    conv, deve = servico.registrar_entrada(sessao, canal, msg)
+    assert deve
+    assert conv.id != conv0.id  # conversa nova (a antiga está fechada)
+    assert conv.execucao_id == execucao.id  # RELIGADA ao portão parado
+    servico.processar_turno(conv.id)
+
+    sessao.refresh(execucao)
+    assert execucao.estado == "concluida"  # retomou e concluiu — não ficou órfã
 
 
 # ──────────────────────── CANCELAR pelo canal ────────────────────────

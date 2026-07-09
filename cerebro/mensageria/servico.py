@@ -195,6 +195,19 @@ def registrar_entrada(
     conversa.ultima_entrada_em = datetime.now(timezone.utc)
     conversa.nudge_enviado = False
 
+    # Retomada TARDIA de portão: se a conversa ainda não conduz uma execução pausada,
+    # mas existe um portão parado (`aguardando_humano`) cujo aprovador (derivado do
+    # instrumento) é ESTE contato, RELIGA — a resposta tardia retoma o portão em vez de
+    # virar conversa. Cobre o caso de o sweeper já ter encerrado a conversa do portão
+    # (que, sem isto, criaria uma conversa nova conversacional e a execução ficava órfã).
+    if _execucao_pausada(sessao, conversa) is None:
+        parada = aprovacao.execucao_parada_do_contato(
+            sessao, instrumento, msg.contato_chave
+        )
+        if parada is not None:
+            conversa.execucao_id = parada.id
+            sessao.flush()
+
     # Aprovação por canal: se a conversa conduz uma execução pausada, a resposta do
     # contato é a decisão do aprovador (processada como retoma, não conversacional).
     aprovacao_pendente = _execucao_pausada(sessao, conversa) is not None

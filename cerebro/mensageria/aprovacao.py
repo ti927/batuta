@@ -71,6 +71,53 @@ def _conversa_viva(
     ).first()
 
 
+def _destino_efetivo(inst: Instrumento, cfg: dict) -> str:
+    """O aprovador do portão = destino EFETIVO do instrumento (`destinatario_padrao`),
+    com o `destinatario` do nó só como FALLBACK (instrumento sem destino configurado).
+
+    FONTE ÚNICA: quem recebe o envio é quem aprova. O envio usa `destinatario_padrao`
+    desde "o instrumento é a verdade" (2026-06-25); então o portão passa a esperar a
+    resposta no MESMO chat para onde o agente mandou o pedido. Antes o aprovador vinha
+    de `no.aprovacao.destinatario`, um campo à parte que divergia do envio e deixava a
+    execução órfã (o pedido ia para um chat e o sistema esperava em outro)."""
+    padrao = ((inst.configuracao or {}).get("destinatario_padrao") or "").strip()
+    return padrao or (cfg.get("destinatario") or "").strip()
+
+
+def execucao_parada_do_contato(
+    sessao: Session, instrumento: Instrumento, contato_chave: str
+) -> Execucao | None:
+    """Uma execução `aguardando_humano` cujo portão por canal (aprovador DERIVADO,
+    `_destino_efetivo`) é (este instrumento, este contato). Serve para RELIGAR uma
+    resposta TARDIA a um portão que ficou parado — mesmo depois de o sweeper ter
+    encerrado a conversa anterior. Devolve a mais recente (a resposta do aprovador
+    costuma se referir ao último pedido apresentado)."""
+    contato = (contato_chave or "").strip()
+    if not contato:
+        return None
+    auto_ids = sessao.scalars(
+        select(Automacao.id).where(Automacao.time_id == instrumento.time_id)
+    ).all()
+    if not auto_ids:
+        return None
+    execs = sessao.scalars(
+        select(Execucao)
+        .where(Execucao.automacao_id.in_(auto_ids))
+        .where(Execucao.estado == "aguardando_humano")
+        .order_by(Execucao.iniciada_em.desc())
+    ).all()
+    for ex in execs:
+        cfg = _config_aprovacao_do_no(sessao, ex)
+        if cfg is None:
+            continue
+        inst = sessao.get(Instrumento, uuid.UUID(str(cfg["instrumento_id"])))
+        if inst is None or inst.id != instrumento.id:
+            continue
+        if _destino_efetivo(inst, cfg) == contato:
+            return ex
+    return None
+
+
 def _agente_atendente_id(sessao: Session, instrumento_id: uuid.UUID) -> uuid.UUID | None:
     """O agente que atende este canal (tem o instrumento no cinto), se houver — para
     a conversa do aprovador voltar ao modo conversacional depois da aprovação."""
@@ -97,7 +144,7 @@ def vincular_pausa(sessao: Session, execucao: Execucao) -> None:
         return
     if auto is not None and inst.time_id != auto.time_id:
         return  # o canal precisa ser do mesmo time da automação
-    destinatario = (cfg.get("destinatario") or "").strip()
+    destinatario = _destino_efetivo(inst, cfg)
     if not destinatario:
         return  # sem destinatário não há como correlacionar a resposta
 
