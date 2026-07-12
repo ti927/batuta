@@ -1547,6 +1547,16 @@ Gatilho: o maestro notou que a IA criadora/companheira só mexia numa automaçã
 
 ---
 
+## FASE — Webhook de comentários do Instagram em tempo real (GAP 2)  ✅ (2026-07-12, migração aditiva, núcleo intocado)
+
+Gatilho: o maestro perguntou se o webhook de comentários dependia de um novo tipo de uso na Meta (não: usa a permissão `instagram_business_manage_comments` já enviada) e pediu um plano cobrindo todas as bordas, usos e problemas do usuário. Hoje só se lia comentário sob demanda (`instagram_ler_comentarios` por `media_id`); faltava o "ele sabe na hora". Decisão de arquitetura: comentário é **evento discreto → gatilho** (não a borda de `Conversa`); a Meta entrega os comentários de TODAS as contas conectadas numa URL única do app → um **receptor faz o fan-out**. Aprovação flexível (portão opcional por nó, decisão do maestro); teto/filtros configuráveis; a conta é escolhida pelo humano na tela (a IA criadora não aponta credencial — v1-A).
+- **Backend:** `rotas/instagram_webhook.py` (GET handshake de verificação; POST valida `X-Hub-Signature-256` do app secret e faz fast-ack; em 2º plano resolve conta por `ig_user_id`→`resumo` da credencial, aplica anti-loop [só comentário de topo; ignora a própria conta], acha automações que casam os filtros, deduplica+teto e dispara via `criar_execucao`+`fila`). `instagram_webhook.py` (helpers puros: assinatura, verify token, extrair comentários, montar entrada rotulada, `inscrever_conta`). Modelo `EventoComentarioInstagram` + migração **`igc00coment001`** (tabela `eventos_comentario_instagram`: dedupe por `(comment_id, automacao_id)`, teto por janela, auditoria). Novo `tipo_gatilho="comentario_instagram"` (registrado em `criacao/ferramentas.py`+`orquestracao/grafo.py`+`_validar_gatilho`); config `{credencial_id, midias, palavra_chave?, teto_por_hora?}`. Callback do OAuth (`rotas/instagram.py`) inscreve a conta (best-effort). Reusa `instagram_responder_comentario`.
+- **Duplicação:** `duplicacao_comum.sanear_gatilho_duplicado` (helper único em `duplicacao_time.py` + `rotas/automacoes.py::duplicar`) — o gatilho de comentário nasce "a conectar" na cópia (zera `credencial_id`, mantém filtros), como o canal nasce sem token, para a cópia não disparar na conta do original.
+- **Frontend:** 4º card "Comentário do Instagram" no nó de gatilho (`inspector.tsx`) com conta (dropdown das credenciais da org), quais posts (todos/específicos), palavra-chave, teto e dica do portão; plumbing de `credenciaisInstagram` do Server Component (`page.tsx`) até o inspector; `salvar()` barra ativar sem conta.
+- Verificação: **562 testes** (+17 do receptor: assinatura, handshake, dedupe, anti-loop, fan-out, teto, conta inexistente, helpers; +2 OAuth [inscreve/inscrição falha não derruba]; +2 duplicação) + tsc/eslint/build front. FALTA operação do maestro p/ funcionar: `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` no Railway + assinar o campo `comments` no painel da Meta (`https://api.batuta.team/instagram/webhook`) + Acesso Avançado do App Review (até lá só contas testadoras).
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
