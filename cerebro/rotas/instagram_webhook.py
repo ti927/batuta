@@ -111,51 +111,67 @@ def _processar_comentario(sessao: Session, comentario: dict) -> bool:
     if comentario.get("autor_id") and comentario["autor_id"] == ig_user_id:
         return False
 
-    cred = _credencial_da_conta(sessao, ig_user_id)
-    if cred is None or cred.organizacao_id is None:
+    # A MESMA conta do Instagram pode estar conectada em VÁRIAS organizações (cada
+    # uma com sua credencial e suas automações). Consideramos TODAS — senão um
+    # comentário resolveria numa org à toa e não acharia a automação da outra.
+    creds = _credenciais_da_conta(sessao, ig_user_id)
+    if not creds:
         return False  # conta não conectada aqui: ignora em silêncio (correto)
 
     disparou = False
-    for auto in _automacoes_que_casam(sessao, cred, comentario):
+    for auto, cred in _automacoes_que_casam(sessao, creds, comentario):
         if _registrar_e_disparar(sessao, auto, cred, comentario):
             disparou = True
     return disparou
 
 
-def _credencial_da_conta(sessao: Session, ig_user_id: str) -> Credencial | None:
-    """A credencial `instagram` cujo `ig_user_id` (no `resumo`, texto claro) bate.
-    Mesma leitura do `resumo` que o upsert do OAuth faz — fonte única do formato."""
-    for c in sessao.scalars(select(Credencial).where(Credencial.tipo == "instagram")):
-        if (c.resumo or {}).get("ig_user_id", {}).get("valor") == ig_user_id:
-            return c
-    return None
+def _credenciais_da_conta(sessao: Session, ig_user_id: str) -> list[Credencial]:
+    """TODAS as credenciais `instagram` cujo `ig_user_id` (no `resumo`, texto claro)
+    bate — a mesma conta pode estar em mais de uma organização. Mesma leitura do
+    `resumo` que o upsert do OAuth faz (fonte única do formato)."""
+    return [
+        c
+        for c in sessao.scalars(
+            select(Credencial).where(Credencial.tipo == "instagram")
+        )
+        if (c.resumo or {}).get("ig_user_id", {}).get("valor") == ig_user_id
+        and c.organizacao_id is not None
+    ]
 
 
 def _automacoes_que_casam(
-    sessao: Session, cred: Credencial, comentario: dict
-) -> list[Automacao]:
-    """Automações ATIVAS da organização, com gatilho de comentário, cujos filtros
-    (conta + posts + palavra-chave) casam este comentário."""
+    sessao: Session, creds: list[Credencial], comentario: dict
+) -> list[tuple[Automacao, Credencial]]:
+    """Pares (automação, credencial) das automações ATIVAS de comentário, nas orgs
+    das credenciais desta conta, cujo `credencial_id` aponta para UMA delas e cujos
+    filtros (posts + palavra-chave) casam este comentário. Um gatilho sem conta
+    (recém-criado ou cópia duplicada "a conectar") não aponta para nenhuma → nunca
+    casa, então nunca dispara indevidamente."""
+    cred_por_id = {str(c.id): c for c in creds}
+    orgs = {c.organizacao_id for c in creds}
     autos = sessao.scalars(
         select(Automacao)
         .join(Time, Time.id == Automacao.time_id)
         .where(
-            Time.organizacao_id == cred.organizacao_id,
+            Time.organizacao_id.in_(orgs),
             Automacao.tipo_gatilho == TIPO_GATILHO,
             Automacao.ativa.is_(True),
         )
     ).all()
-    return [a for a in autos if _casa_filtro(a, cred, comentario)]
+    pares: list[tuple[Automacao, Credencial]] = []
+    for auto in autos:
+        cred = cred_por_id.get(
+            str((auto.configuracao_gatilho or {}).get("credencial_id") or "")
+        )
+        if cred is not None and _casa_filtro(auto, comentario):
+            pares.append((auto, cred))
+    return pares
 
 
-def _casa_filtro(auto: Automacao, cred: Credencial, comentario: dict) -> bool:
-    """Regras do `configuracao_gatilho`. A conta (credencial_id) precisa estar
-    ligada E ser esta — gatilho sem conta (recém-criado ou cópia duplicada "a
-    conectar") NUNCA casa, então nunca dispara indevidamente."""
+def _casa_filtro(auto: Automacao, comentario: dict) -> bool:
+    """Filtros de POSTS + PALAVRA-CHAVE do `configuracao_gatilho` (a conta já foi
+    resolvida antes, em `_automacoes_que_casam`)."""
     cfg = auto.configuracao_gatilho or {}
-    cred_cfg = cfg.get("credencial_id")
-    if not cred_cfg or str(cred_cfg) != str(cred.id):
-        return False
     midias = cfg.get("midias", "todas")
     if midias != "todas":
         mid = comentario.get("media_id")

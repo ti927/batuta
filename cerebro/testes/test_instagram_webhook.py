@@ -231,6 +231,34 @@ def test_fanout_so_as_que_casam(ambiente):
     assert _execs(s, a_inativa.id) == []         # inativa não dispara
 
 
+def test_fanout_mesma_conta_em_outra_org(ambiente, dados):
+    """A MESMA conta (ig_user_id) conectada em DUAS orgs: a automação da org certa
+    dispara mesmo existindo outra credencial (mesma conta) noutra org — e usa a
+    credencial certa. (Regressão do bug do `.first()` pegar a org errada.)"""
+    sessao = ambiente["sessao"]
+    sessao.add(
+        Credencial(
+            organizacao_id=dados["orgB"].id,
+            nome="Instagram: @conta (orgB)",
+            tipo="instagram",
+            dados_cifrado="",
+            resumo={"ig_user_id": {"valor": IGID, "secreto": False}},
+        )
+    )
+    sessao.flush()
+    auto = ambiente["nova_auto"](
+        "A", {"credencial_id": str(ambiente["cred"].id), "midias": "todas"}
+    )
+    _entregar(_payload("C1"))
+    assert len(_execs(sessao, auto.id)) == 1  # dispara apesar da credencial na orgB
+    ev = sessao.scalars(
+        select(EventoComentarioInstagram).where(
+            EventoComentarioInstagram.automacao_id == auto.id
+        )
+    ).one()
+    assert str(ev.credencial_id) == str(ambiente["cred"].id)  # usou a credencial certa
+
+
 def test_entrada_carrega_comment_id_e_instrumento(ambiente):
     auto = ambiente["nova_auto"]("A", {"credencial_id": str(ambiente["cred"].id), "midias": "todas"})
     _entregar(_payload("COMENT-XYZ", media_id="M9", autor_nome="joao"))
