@@ -15,7 +15,10 @@ from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 
 API = "https://graph.instagram.com/v23.0"
 TIMEOUT_S = 20.0
-CAMPOS = "id,caption,media_type,permalink,timestamp,like_count,comments_count"
+CAMPOS = (
+    "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,"
+    "like_count,comments_count"
+)
 
 
 def _detalhe_erro(resposta: httpx.Response) -> str:
@@ -82,9 +85,10 @@ class InstagramLerPost(TipoInstrumento):
     categoria = "Instagram"
     nome_exibicao = "Ler post do Instagram"
     descricao = (
-        "Lê o conteúdo de um post do Instagram (legenda, tipo, link, curtidas e nº de "
-        "comentários) a partir do id do post. Use para responder um comentário COM o "
-        "contexto do post. Só leitura."
+        "Lê o conteúdo de um post do Instagram (legenda, tipo, URL da imagem, link, "
+        "curtidas e nº de comentários) a partir do id do post. Use para responder um "
+        "comentário COM o contexto do post; a URL da imagem pode ir para o instrumento "
+        "'Descrever/ler imagem' para o agente enxergar a foto. Só leitura."
     )
     Config = ConfigLerPost
     Args = ArgsLerPost
@@ -109,6 +113,11 @@ class InstagramLerPost(TipoInstrumento):
                 "id": dados.get("id"),
                 "legenda": dados.get("caption"),
                 "tipo": dados.get("media_type"),
+                # URL da mídia: para FOTO é a própria imagem; para VÍDEO/REELS é o
+                # vídeo (use a `miniatura` como imagem). Serve para o agente "ver" a
+                # imagem via o instrumento "Descrever/ler imagem".
+                "imagem": dados.get("media_url"),
+                "miniatura": dados.get("thumbnail_url"),
                 "link": dados.get("permalink"),
                 "data": dados.get("timestamp"),
                 "curtidas": dados.get("like_count"),

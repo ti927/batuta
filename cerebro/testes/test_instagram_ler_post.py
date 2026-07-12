@@ -58,6 +58,7 @@ def test_ler_post_estrutura(monkeypatch):
                 "id": "m1",
                 "caption": "Promo de verão!",
                 "media_type": "IMAGE",
+                "media_url": "https://cdn.instagr.am/m1.jpg",
                 "permalink": "https://instagr.am/p/x",
                 "timestamp": "2026-01-01",
                 "like_count": 42,
@@ -70,10 +71,11 @@ def test_ler_post_estrutura(monkeypatch):
     assert res["ok"] is True
     assert res["post"]["legenda"] == "Promo de verão!"
     assert res["post"]["tipo"] == "IMAGE"
+    assert res["post"]["imagem"] == "https://cdn.instagr.am/m1.jpg"  # URL da imagem
     assert res["post"]["curtidas"] == 42 and res["post"]["comentarios"] == 7
     metodo, url, params = cli.calls[0]
     assert metodo == "GET" and url.endswith("/m1")
-    assert "caption" in params["fields"]
+    assert "caption" in params["fields"] and "media_url" in params["fields"]
 
 
 def test_ler_post_nao_conectado_falha():
