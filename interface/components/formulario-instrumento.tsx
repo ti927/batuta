@@ -8,10 +8,18 @@ import {
   ErroDaApi,
   type Credencial,
   type Instrumento,
+  type ModelosDisponiveis,
   type TipoCredencial,
   type TipoInstrumento,
   type Time,
 } from "@/lib/api";
+import {
+  MODELOS_POR_PROVEDOR,
+  provedorDoModelo,
+  provedoresParaSeletor,
+  ROTULO_PROVEDOR,
+  type ProvedoresDisponiveis,
+} from "@/lib/modelos";
 import { SeletorIcone } from "@/components/seletor-icone";
 import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
@@ -34,6 +42,9 @@ type CampoConfig = {
   secreto: boolean;
   opcoes?: string[]; // enum/Literal → vira Select
   padrao?: string; // valor padrão do schema (semeia o formulário ao criar)
+  // Dica de UI do schema (json_schema_extra.ui). "modelo_ia" = seletor de modelo
+  // agrupado por provedor, filtrado pelos provedores com chave na organização.
+  ui?: string;
   // Se este campo reusa uma chave de serviço da organização (ex.: gerar_imagem→
   // openai): aí é opcional — em branco usa a chave da org.
   compartilhada?: boolean;
@@ -114,6 +125,7 @@ export function camposDoTipo(tipo: TipoInstrumento | undefined): CampoConfig[] {
     secreto: secretos.has(nome),
     opcoes: opcoesDoCampo(prop),
     padrao: prop.default !== undefined ? String(prop.default) : undefined,
+    ui: (prop.ui as string) ?? undefined,
     compartilhada: nome === campoCompart,
     servico: nome === campoCompart ? (servicoCompart ?? undefined) : undefined,
   }));
@@ -165,11 +177,13 @@ function CampoConfigInput({
   campo,
   valor,
   jaGuardado,
+  disponiveis,
   onChange,
 }: {
   campo: CampoConfig;
   valor: string;
   jaGuardado: string | undefined; // 4 últimos dígitos, se já há segredo guardado
+  disponiveis: ProvedoresDisponiveis | undefined; // p/ o seletor de modelo de IA
   onChange: (v: string) => void;
 }) {
   let entrada;
@@ -179,6 +193,25 @@ function CampoConfigInput({
         <option value="">—</option>
         <option value="true">Sim</option>
         <option value="false">Não</option>
+      </Select>
+    );
+  } else if (campo.ui === "modelo_ia" && !campo.secreto) {
+    // Seletor de modelo de IA: agrupado por provedor e filtrado pelos provedores
+    // com chave na org (mesmo padrão do seletor do agente). O provedor do valor já
+    // salvo continua visível mesmo se a chave sumir.
+    const provedores = provedoresParaSeletor(disponiveis, provedorDoModelo(valor));
+    entrada = (
+      <Select value={valor} onChange={(e) => onChange(e.target.value)}>
+        {!campo.obrigatorio && <option value="">(padrão)</option>}
+        {provedores.map((p) => (
+          <optgroup key={p} label={ROTULO_PROVEDOR[p]}>
+            {MODELOS_POR_PROVEDOR[p].map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </optgroup>
+        ))}
       </Select>
     );
   } else if (campo.opcoes && !campo.secreto) {
@@ -291,6 +324,26 @@ export function FormularioInstrumento({
   );
   const [credenciais, setCredenciais] = useState<Credencial[]>([]);
   const [tiposCredencial, setTiposCredencial] = useState<TipoCredencial[]>([]);
+  // Provedores com chave na org — para um campo de modelo de IA (ui:modelo_ia) só
+  // oferecer modelos cujo provedor tem chave. Fallback (falha/carregando): mostra todos.
+  const [disponiveis, setDisponiveis] = useState<ProvedoresDisponiveis>();
+
+  useEffect(() => {
+    let vivo = true;
+    api
+      .get<ModelosDisponiveis>(
+        `/organizacoes/${time.organizacao_id}/modelos-disponiveis`,
+      )
+      .then((d) => {
+        if (vivo) setDisponiveis(d);
+      })
+      .catch(() => {
+        /* sem disponibilidade: o seletor de modelo mostra todos (fallback seguro) */
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [time.organizacao_id]);
 
   useEffect(() => {
     let ativo = true;
@@ -498,6 +551,7 @@ export function FormularioInstrumento({
             campo={{ ...campo, opcoes: opcoesAtivas(campo, deps, valores) }}
             valor={valores[campo.nome] ?? ""}
             jaGuardado={instrumento?.segredos?.[campo.nome]}
+            disponiveis={disponiveis}
             onChange={(v) =>
               setValores((atual) => {
                 const proximo = { ...atual, [campo.nome]: v };

@@ -31,6 +31,21 @@ PRECOS_IMAGEM_USD = {
 }
 PRECO_IMAGEM_PADRAO = 0.042
 
+# Leitura/descrição de imagem (instrumento de visão `descrever_imagem`) — a chamada
+# real é por TOKEN, mas a borda só vê o NOME da ferramenta (não os tokens), então
+# estimamos POR IMAGEM lida, por família do modelo. Informativo, não cobrança. Ordem
+# importa (substring): 'gpt-4o-mini' antes de 'gpt-4o'.
+PRECOS_DESCRICAO_USD = {
+    "opus": 0.02,
+    "sonnet": 0.006,
+    "haiku": 0.002,
+    "gpt-4.1": 0.006,
+    "gpt-4o-mini": 0.001,
+    "gpt-4o": 0.004,
+    "gemini": 0.001,
+}
+PRECO_DESCRICAO_PADRAO = 0.004
+
 # Rótulos internos das categorias de uso (em que FUNÇÃO a IA paga foi gasta). A
 # interface dá o nome amigável (`interface/lib/uso.ts`). Carimbadas na borda:
 # execucao (disparo), conversa (IA criadora), mensageria/transcricao (atendimento),
@@ -72,6 +87,16 @@ def custo_por_imagem(modelo: str, tamanho: str = "", qualidade: str = "medium") 
     if tabela is None:
         return PRECO_IMAGEM_PADRAO
     return tabela.get((qualidade or "medium").lower(), tabela.get("medium", PRECO_IMAGEM_PADRAO))
+
+
+def custo_por_descricao(modelo: str) -> float:
+    """Custo aproximado de LER/descrever UMA imagem, em USD, por família do modelo.
+    Informativo (a cobrança real é por token). Desconhecido → padrão."""
+    m = (modelo or "").lower()
+    for familia, preco in PRECOS_DESCRICAO_USD.items():
+        if familia in m:
+            return preco
+    return PRECO_DESCRICAO_PADRAO
 
 
 def custo_de_entrada(e: dict) -> float:

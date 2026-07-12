@@ -23,11 +23,12 @@ import precos
 from chaves import ORIGEM_ORGANIZACAO
 from instrumentos.base import obter_tipo
 from modelos import AgenteInstrumento, Instrumento, SegredoInstrumento
+from orquestracao.modelos_ia import provedor_do_modelo_seguro
 
 # Tipos de instrumento que consomem IA paga (cobrança própria, fora do LLM do
-# agente). Por ora os de imagem (gerar do zero e montar a partir de fotos) — ambos
-# cobrados por imagem, com modelo/tamanho/qualidade na config.
-TIPOS_PAGOS = {"gerar_imagem", "montar_imagem"}
+# agente): os de imagem (gerar do zero e montar a partir de fotos, cobrados por
+# imagem) e o de VISÃO (`descrever_imagem`, que lê uma imagem com um modelo de chat).
+TIPOS_PAGOS = {"gerar_imagem", "montar_imagem", "descrever_imagem"}
 
 
 def _id8(nome_ferramenta: str) -> str:
@@ -46,6 +47,26 @@ def _custo_imagem(cfg: dict) -> dict:
         "imagens": 1,
         "custo_usd": round(precos.custo_por_imagem(modelo, tamanho, qualidade), 6),
     }
+
+
+def _custo_descricao(cfg: dict) -> dict:
+    """Entrada de uso de UMA imagem LIDA (visão), a partir da config do instrumento."""
+    modelo = cfg.get("modelo") or "?"
+    return {
+        "modelo": modelo,
+        "imagens": 1,
+        "custo_usd": round(precos.custo_por_descricao(modelo), 6),
+    }
+
+
+def _entrada_e_servico(inst: Instrumento) -> tuple[dict, str | None]:
+    """(entrada de uso, serviço p/ a origem) de um instrumento pago acionado. Para a
+    visão, o serviço é o PROVEDOR do modelo escolhido (não há chave compartilhada
+    fixa); para imagem, é o serviço da chave compartilhada do tipo."""
+    cfg = inst.configuracao or {}
+    if inst.tipo == "descrever_imagem":
+        return _custo_descricao(cfg), provedor_do_modelo_seguro(cfg.get("modelo") or "")
+    return _custo_imagem(cfg), _servico_do_tipo(inst.tipo)
 
 
 def _servico_do_tipo(tipo_str: str) -> str | None:
@@ -106,11 +127,10 @@ def uso_de_instrumentos_pagos(
         inst = por_id8.get(_id8(nome))
         if inst is None:
             continue
-        entrada = _custo_imagem(inst.configuracao or {})
+        entrada, servico = _entrada_e_servico(inst)
         if inst.id in com_chave_propria:
             entrada["origem"] = ORIGEM_ORGANIZACAO
         else:
-            servico = _servico_do_tipo(inst.tipo)
             entrada["origem"] = origens.get(servico) or ORIGEM_ORGANIZACAO
         entrada["categoria"] = "instrumento"
         entradas.append(entrada)
