@@ -8,6 +8,7 @@ import {
   CircleHelp,
   Clock,
   Layers,
+  MessageCircle,
   Play,
   Plus,
   Shield,
@@ -18,6 +19,7 @@ import {
 import type {
   Agente,
   Cadeia,
+  Credencial,
   Instrumento,
   NoCadeia,
   SaidaCadeia,
@@ -40,12 +42,18 @@ const DIAS_SEMANA = [
 ];
 
 export type ConfigGatilho = {
-  tipo: "manual" | "agendamento" | "webhook";
+  tipo: "manual" | "agendamento" | "webhook" | "comentario_instagram";
   frequencia: "diaria" | "semanal" | "mensal";
   diaSemana: number;
   diaMes: number;
   horario: string;
   entrada: string;
+  // gatilho de comentário do Instagram
+  credencialId: string; // "" = conta a conectar (o humano escolhe)
+  midiasModo: "todas" | "especificas";
+  midiasIds: string; // texto: media_ids separados por vírgula
+  palavraChave: string;
+  tetoPorHora: number;
 };
 
 function nomeNo(no: NoCadeia, agentes: Agente[]): string {
@@ -175,6 +183,7 @@ export function Inspector({
   gatilho,
   setGatilho,
   webhookUrl,
+  credenciaisInstagram,
   onDefinirInicial,
   onPatchNode,
   onPatchSaida,
@@ -190,6 +199,7 @@ export function Inspector({
   gatilho: ConfigGatilho;
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
   webhookUrl?: string | null;
+  credenciaisInstagram: Credencial[];
   onDefinirInicial: (nodeId: string) => void;
   onPatchNode: (id: string, patch: Partial<NoCadeia>) => void;
   onPatchSaida: (id: string, sid: string, patch: Partial<SaidaCadeia>) => void;
@@ -273,11 +283,17 @@ export function Inspector({
             <div className="flex flex-col gap-2">
               {(
                 [
-                  ["manual", Play, "Dispara pelo botão de teste."],
-                  ["agendamento", Clock, "Roda sozinho num horário fixo."],
-                  ["webhook", Zap, "Um sistema externo dispara via URL."],
+                  ["manual", Play, "Dispara pelo botão de teste.", "Manual"],
+                  ["agendamento", Clock, "Roda sozinho num horário fixo.", "Agendamento"],
+                  ["webhook", Zap, "Um sistema externo dispara via URL.", "Webhook"],
+                  [
+                    "comentario_instagram",
+                    MessageCircle,
+                    "Um comentário num post dispara o fluxo.",
+                    "Comentário do Instagram",
+                  ],
                 ] as const
-              ).map(([k, Ic, hint]) => {
+              ).map(([k, Ic, hint, rotulo]) => {
                 const on = gatilho.tipo === k;
                 return (
                   <button
@@ -298,8 +314,8 @@ export function Inspector({
                       <Ic size={15} color={on ? "#fff" : "#6D4AFF"} />
                     </span>
                     <div>
-                      <div className="text-[13.5px] font-medium capitalize text-[#1A1730]">
-                        {k}
+                      <div className="text-[13.5px] font-medium text-[#1A1730]">
+                        {rotulo}
                       </div>
                       <div className="mt-px text-[11.5px] leading-snug text-[#6B6880]">
                         {hint}
@@ -442,6 +458,127 @@ export function Inspector({
                     Salve a automação para gerar a URL do webhook.
                   </p>
                 )}
+              </div>
+            )}
+
+            {gatilho.tipo === "comentario_instagram" && (
+              <div className="flex flex-col gap-2.5 rounded-[9px] border border-[#E8E6F0] p-3">
+                <p className="text-[12px] leading-relaxed text-[#6B6880]">
+                  Cada comentário nos posts da conta escolhida dispara este fluxo.
+                </p>
+
+                {/* Conta do Instagram */}
+                <label className="text-[11px]" style={{ color: "#6B6880" }}>
+                  Conta do Instagram
+                  {credenciaisInstagram.length > 0 ? (
+                    <select
+                      className={`${inputCls} mt-1 cursor-pointer`}
+                      value={gatilho.credencialId}
+                      disabled={!podeEditar}
+                      onChange={(e) => setGatilho({ credencialId: e.target.value })}
+                    >
+                      <option value="">Escolha a conta…</option>
+                      {credenciaisInstagram.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nome}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span
+                      className="mt-1 block text-[11.5px]"
+                      style={{ color: "#A09DB8" }}
+                    >
+                      Nenhuma conta do Instagram conectada nesta organização. Conecte
+                      uma em Chaves &amp; credenciais para usar este gatilho.
+                    </span>
+                  )}
+                </label>
+                {credenciaisInstagram.length > 0 && !gatilho.credencialId && (
+                  <span className="text-[11px] text-warning">
+                    ⚠ Escolha a conta antes de ativar — sem ela o gatilho não dispara.
+                  </span>
+                )}
+
+                {/* Quais posts */}
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[11px]" style={{ color: "#6B6880" }}>
+                    Quais posts
+                  </span>
+                  {(
+                    [
+                      ["todas", "Todos os posts do perfil"],
+                      ["especificas", "Posts específicos"],
+                    ] as const
+                  ).map(([modo, rotulo]) => (
+                    <label
+                      key={modo}
+                      className="flex cursor-pointer items-center gap-2 text-[12.5px] text-[#1A1730]"
+                    >
+                      <input
+                        type="radio"
+                        name="midiasModo"
+                        checked={gatilho.midiasModo === modo}
+                        disabled={!podeEditar}
+                        onChange={() => setGatilho({ midiasModo: modo })}
+                      />
+                      {rotulo}
+                    </label>
+                  ))}
+                  {gatilho.midiasModo === "especificas" && (
+                    <textarea
+                      className={`${inputCls} mt-1 min-h-14`}
+                      placeholder="IDs dos posts (media_id), separados por vírgula"
+                      value={gatilho.midiasIds}
+                      disabled={!podeEditar}
+                      onChange={(e) => setGatilho({ midiasIds: e.target.value })}
+                    />
+                  )}
+                </div>
+
+                {/* Palavra-chave */}
+                <label className="text-[11px]" style={{ color: "#6B6880" }}>
+                  Palavra-chave (opcional)
+                  <input
+                    className={`${inputCls} mt-1`}
+                    placeholder="Só dispara se o comentário contiver…"
+                    value={gatilho.palavraChave}
+                    disabled={!podeEditar}
+                    onChange={(e) => setGatilho({ palavraChave: e.target.value })}
+                  />
+                </label>
+
+                {/* Teto por hora */}
+                <label className="text-[11px]" style={{ color: "#6B6880" }}>
+                  Teto de disparos por hora
+                  <input
+                    type="number"
+                    min={0}
+                    className={`${inputCls} mt-1`}
+                    value={gatilho.tetoPorHora}
+                    disabled={!podeEditar}
+                    onChange={(e) =>
+                      setGatilho({ tetoPorHora: Number(e.target.value) })
+                    }
+                  />
+                  <span
+                    className="mt-0.5 block text-[11px]"
+                    style={{ color: "#A09DB8" }}
+                  >
+                    Protege seu custo se um post viralizar. 0 = sem limite.
+                  </span>
+                </label>
+
+                {/* dica do portão */}
+                <p className="flex gap-1.5 rounded-md bg-[#FAFAF7] p-2 text-[11px] leading-snug text-[#6B6880]">
+                  <MessageCircle
+                    size={13}
+                    color="#6D4AFF"
+                    className="mt-px flex-none"
+                  />
+                  A resposta é pública. Se quiser revisar antes de responder, ligue o
+                  portão de aprovação no passo que responde.
+                </p>
               </div>
             )}
           </div>

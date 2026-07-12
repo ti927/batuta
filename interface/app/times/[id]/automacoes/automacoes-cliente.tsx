@@ -13,6 +13,7 @@ import {
   type Automacao,
   type Cadeia,
   type ConfiguracaoFluxo,
+  type Credencial,
   type Instrumento,
   type PapelAcesso,
   type Time,
@@ -45,13 +46,21 @@ function hhmm(h: unknown, m: unknown): string {
 function gatilhoDe(a: Automacao | null): ConfigGatilho {
   const tipo = (a?.tipo_gatilho ?? "manual") as ConfigGatilho["tipo"];
   const cfg = (a?.configuracao_gatilho ?? {}) as Record<string, unknown>;
+  const midias = cfg.midias;
   return {
-    tipo: ["agendamento", "webhook"].includes(tipo) ? tipo : "manual",
+    tipo: ["agendamento", "webhook", "comentario_instagram"].includes(tipo)
+      ? tipo
+      : "manual",
     frequencia: (cfg.frequencia as ConfigGatilho["frequencia"]) ?? "diaria",
     diaSemana: Number(cfg.dia_semana ?? 0),
     diaMes: Number(cfg.dia_mes ?? 1),
     horario: hhmm(cfg.hora, cfg.minuto),
     entrada: (cfg.entrada as string) ?? "",
+    credencialId: (cfg.credencial_id as string) ?? "",
+    midiasModo: Array.isArray(midias) ? "especificas" : "todas",
+    midiasIds: Array.isArray(midias) ? (midias as string[]).join(", ") : "",
+    palavraChave: (cfg.palavra_chave as string) ?? "",
+    tetoPorHora: Number(cfg.teto_por_hora ?? 50),
   };
 }
 
@@ -78,6 +87,7 @@ function EditorAutomacao({
   canais,
   cintos,
   instrumentos,
+  credenciaisInstagram,
   tipos,
   meuPapel,
   souOperador,
@@ -95,6 +105,7 @@ function EditorAutomacao({
   canais: Instrumento[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
+  credenciaisInstagram: Credencial[];
   tipos: TipoInstrumento[];
   meuPapel: PapelAcesso | null;
   souOperador: boolean;
@@ -193,6 +204,22 @@ function EditorAutomacao({
   }
 
   function montarConfigGatilho(): Record<string, unknown> {
+    if (gatilho.tipo === "comentario_instagram") {
+      const cfg: Record<string, unknown> = {
+        midias:
+          gatilho.midiasModo === "especificas"
+            ? gatilho.midiasIds
+                .split(/[\s,]+/)
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : "todas",
+        teto_por_hora: gatilho.tetoPorHora,
+      };
+      if (gatilho.credencialId) cfg.credencial_id = gatilho.credencialId;
+      if (gatilho.palavraChave.trim())
+        cfg.palavra_chave = gatilho.palavraChave.trim();
+      return cfg;
+    }
     if (gatilho.tipo !== "agendamento") return {};
     const [h, m] = gatilho.horario.split(":").map(Number);
     const cfg: Record<string, unknown> = {
@@ -213,6 +240,12 @@ function EditorAutomacao({
     }
     if (gatilho.tipo === "agendamento" && !gatilho.entrada.trim()) {
       setErro("No agendamento, escreva a mensagem que o gatilho envia ao fluxo.");
+      return;
+    }
+    if (gatilho.tipo === "comentario_instagram" && ativa && !gatilho.credencialId) {
+      setErro(
+        "Escolha a conta do Instagram antes de ativar o gatilho de comentário.",
+      );
       return;
     }
     const corpo = {
@@ -378,6 +411,7 @@ function EditorAutomacao({
               ? `${URL_CEREBRO}/webhooks/automacoes/${automacao.id}`
               : null
           }
+          credenciaisInstagram={credenciaisInstagram}
           cintos={cintos}
           instrumentosTime={instrumentos}
           tipos={tipos}
@@ -473,6 +507,7 @@ export function AutomacoesCliente({
   agentes,
   cintos,
   instrumentos,
+  credenciaisInstagram,
   tipos,
   meuPapel,
 }: {
@@ -481,6 +516,7 @@ export function AutomacoesCliente({
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
+  credenciaisInstagram: Credencial[];
   tipos: TipoInstrumento[];
   meuPapel: PapelAcesso | null;
 }) {
@@ -532,6 +568,7 @@ export function AutomacoesCliente({
       canais={canais}
       cintos={cintos}
       instrumentos={instrumentos}
+      credenciaisInstagram={credenciaisInstagram}
       tipos={tipos}
       meuPapel={meuPapel}
       souOperador={souOperador}

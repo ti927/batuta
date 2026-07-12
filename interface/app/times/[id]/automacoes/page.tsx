@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import {
   type Agente,
   type Automacao,
+  type Credencial,
   type Instrumento,
   type PapelAcesso,
   type Time,
@@ -22,6 +23,7 @@ async function carregar(timeId: string): Promise<{
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
+  credenciaisInstagram: Credencial[];
   tipos: TipoInstrumento[];
   meuPapel: PapelAcesso | null;
 } | null> {
@@ -38,6 +40,14 @@ async function carregar(timeId: string): Promise<{
     throw new Error("Falha ao carregar automações");
   const time: Time = await respTime.json();
   const agentes: Agente[] = await respAg.json();
+  // Contas do Instagram conectadas à organização — alimentam o seletor de conta
+  // do gatilho "Comentário do Instagram". Só operador+ enxerga (jsonOu → [] se 403).
+  const respCred = await buscarCerebro(
+    `/organizacoes/${time.organizacao_id}/credenciais`,
+  );
+  const credenciaisInstagram = (
+    await jsonOu<Credencial[]>(respCred, [])
+  ).filter((c) => c.tipo === "instagram");
   // Cinto de cada agente — para o editor de agente (drawer) acionado pelo lápis
   // do nó gerir o cinto sem trocar de aba (mesmo padrão da aba Agentes).
   const cintosPares = await Promise.all(
@@ -52,6 +62,7 @@ async function carregar(timeId: string): Promise<{
     agentes,
     cintos: Object.fromEntries(cintosPares),
     instrumentos: await respInst.json(),
+    credenciaisInstagram,
     tipos: await jsonOu<TipoInstrumento[]>(respTipos, []),
     meuPapel: eu?.papeis[time.organizacao_id] ?? null,
   };
@@ -82,6 +93,7 @@ export default async function AutomacoesPage({
       agentes={dados.agentes}
       cintos={dados.cintos}
       instrumentos={dados.instrumentos}
+      credenciaisInstagram={dados.credenciaisInstagram}
       tipos={dados.tipos}
       meuPapel={dados.meuPapel}
     />

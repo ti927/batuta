@@ -303,7 +303,11 @@ export type AlcanceCanal = {
 
 export type ToneSaida = "normal" | "ok" | "loop";
 export type TipoNo = "gatilho" | "agente" | "roteador" | "fim";
-export type TipoGatilho = "manual" | "agendamento" | "webhook";
+export type TipoGatilho =
+  | "manual"
+  | "agendamento"
+  | "webhook"
+  | "comentario_instagram";
 
 export type SaidaCadeia = {
   id?: string;

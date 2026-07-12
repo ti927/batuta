@@ -84,7 +84,9 @@ export function GatilhoNode({ data, selected }: NodeProps) {
       ? "Agendamento"
       : no.gatilho === "webhook"
         ? "Webhook"
-        : "Manual";
+        : no.gatilho === "comentario_instagram"
+          ? "Comentário do Instagram"
+          : "Manual";
   return (
     <div style={{ ...cartao(!!selected, "#fff", "#6D4AFF", "#E8E6F0"), height: 66 }}>
       <div className="flex h-full items-center gap-3 px-3.5">
