@@ -185,7 +185,7 @@ def _state(org_id, usuario_id) -> str:
 
 
 def _mock_conectar(monkeypatch, *, token="IGLONGO9999", ig="178414",
-                   username="batuta"):
+                   username="batuta", inscrever=None):
     from datetime import datetime, timedelta, timezone
 
     monkeypatch.setattr(
@@ -196,6 +196,12 @@ def _mock_conectar(monkeypatch, *, token="IGLONGO9999", ig="178414",
             "username": username,
             "expira_em": datetime.now(timezone.utc) + timedelta(days=60),
         },
+    )
+    # A inscrição do webhook de comentários faz chamada de rede — troca por dublê
+    # (padrão: no-op) para os testes de callback não baterem na Meta de verdade.
+    monkeypatch.setattr(
+        "instagram_webhook.inscrever_conta",
+        inscrever or (lambda token, ig_user_id: None),
     )
 
 
@@ -231,6 +237,44 @@ def test_callback_cria_credencial_e_redireciona(cliente, dados, sessao, monkeypa
     assert c.resumo["ig_user_id"] == {"secreto": False, "valor": "178414"}
     assert c.resumo["token"]["ultimos4"] == "9999"
     assert "IGLONGO9999" not in r.text  # token pleno nunca aparece
+
+
+def test_callback_inscreve_a_conta_no_webhook(cliente, dados, sessao, monkeypatch):
+    """Ao conectar, o callback assina o webhook de comentários DAQUELA conta
+    (GAP 2), com o token e o ig_user_id da conta conectada."""
+    chamadas = []
+    _mock_conectar(
+        monkeypatch,
+        token="TOKENIG",
+        ig="178414",
+        inscrever=lambda token, ig_user_id: chamadas.append((token, ig_user_id)),
+    )
+    org = dados["orgA"].id
+    r = cliente.get(
+        "/instagram/oauth/callback",
+        params={"code": "OCODE", "state": _state(org, dados["operador"].id)},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert chamadas == [("TOKENIG", "178414")]
+
+
+def test_callback_inscricao_falha_nao_derruba_conexao(cliente, dados, sessao, monkeypatch):
+    """Se a inscrição do webhook falhar, a conexão NÃO cai — a credencial é salva
+    e o redirect segue com ok (reconectar re-afirma a inscrição)."""
+    def _explode(token, ig_user_id):
+        raise RuntimeError("meta fora do ar")
+
+    _mock_conectar(monkeypatch, inscrever=_explode)
+    org = dados["orgA"].id
+    r = cliente.get(
+        "/instagram/oauth/callback",
+        params={"code": "OCODE", "state": _state(org, dados["operador"].id)},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert "instagram=ok" in r.headers["location"]
+    assert len(_instagram_da_org(sessao, org)) == 1  # credencial salva mesmo assim
 
 
 def test_callback_reconexao_mesma_conta_nao_duplica(cliente, dados, sessao, monkeypatch):

@@ -37,8 +37,8 @@ from dataclasses import dataclass, field
 TIPOS_VALIDOS = {"gatilho", "agente", "roteador", "fim"}
 # Cor da aresta na UI (cosmético).
 TONES_VALIDOS = {"normal", "ok", "loop"}
-# Tipos de gatilho (espelham `automacoes.tipo_gatilho`).
-TIPOS_GATILHO = {"manual", "agendamento", "webhook"}
+# Tipos de gatilho (espelham `automacoes.tipo_gatilho` e `criacao.ferramentas`).
+TIPOS_GATILHO = {"manual", "agendamento", "webhook", "comentario_instagram"}
 
 # Sentinelas de "encerrar a cadeia" aceitas num `destino` (retrocompat com o
 # formato antigo, onde destino null/"" significava fim).

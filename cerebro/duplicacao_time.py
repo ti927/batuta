@@ -30,6 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import agendador
+import duplicacao_comum
 from mensageria.aprovacao import CANAIS_TIPOS
 from modelos import (
     Agente,
@@ -195,7 +196,12 @@ def duplicar_time(
             time_id=novo.id,
             nome=auto.nome,
             tipo_gatilho=auto.tipo_gatilho,
-            configuracao_gatilho=copy.deepcopy(auto.configuracao_gatilho or {}),
+            # Gatilho de entrada (ex.: comentário do Instagram) nasce "a conectar" —
+            # some a conta, como o canal nasce sem token — para a cópia não disparar
+            # na conta do original. Filtros preservados.
+            configuracao_gatilho=duplicacao_comum.sanear_gatilho_duplicado(
+                auto.tipo_gatilho, auto.configuracao_gatilho
+            ),
             cadeia=cadeia,
             ativa=False,
             configuracao=copy.deepcopy(auto.configuracao or {}),

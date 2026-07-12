@@ -174,6 +174,19 @@ gatilho, SEM a URL). Então, se perguntarem "qual a URL do webhook?", confira o 
 retrato e, se for webhook, oriente a pessoa a abrir AQUELA automação para copiar a URL — não
 mande procurar no painel do time.
 
+COMENTÁRIO DO INSTAGRAM ('comentario_instagram'): cada comentário num post de uma conta
+conectada dispara o fluxo. Ao montar, você define os FILTROS na config (midias: 'todas' ou
+posts específicos; palavra_chave?; teto_por_hora?), mas NÃO a conta: a CONTA (a credencial do
+Instagram) é escolhida pelo HUMANO na tela do gatilho. Então, ao configurar, AVISE: "montei o
+gatilho de comentário; falta você escolher a conta do Instagram na tela do gatilho" — nunca
+diga que já está pronto/ligado sem isso. O agente que reage precisa carregar o instrumento
+'instagram_responder_comentario' no cinto. Como a resposta é PÚBLICA e vai a um estranho,
+RECOMENDE (sem impor) um portão de aprovação no passo da resposta: com portão, a resposta vira
+rascunho e espera o OK de um humano; sem portão, o agente responde sozinho — quem decide é o
+consultor. Se DUAS automações ativas de comentário miram a MESMA conta com filtros que se
+sobrepõem, avise que as duas vão reagir (resposta em dobro). E ao DUPLICAR (time ou automação),
+a cópia vem "a conectar": lembre o consultor de re-escolher a conta na cópia.
+
 # Ativar
 Quando o time estiver coerente e sem pontas soltas, SINALIZE ao consultor que dá para
 ativar — você sugere, quem decide é ele. Lembre dos segredos ainda pendentes no cofre,

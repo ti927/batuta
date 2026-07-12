@@ -32,6 +32,7 @@ from esquemas import (
 )
 import agendador
 import auditoria
+import duplicacao_comum
 import fila
 import portao_ativacao
 import precos
@@ -228,7 +229,11 @@ def duplicar(
     # Deep-copy + normalização: a cópia fica isolada da original (mutar uma não
     # afeta a outra), no formato canônico que o motor enxerga (cobre linha legada).
     cadeia = grafo.normalizar(copy.deepcopy(original.cadeia or {}))
-    config = copy.deepcopy(original.configuracao_gatilho or {})
+    # Gatilho de entrada (ex.: comentário do Instagram) nasce "a conectar" na cópia
+    # (some a conta) — mesmo helper da duplicação de time, para não divergir.
+    config = duplicacao_comum.sanear_gatilho_duplicado(
+        original.tipo_gatilho, original.configuracao_gatilho
+    )
     config_fluxo = copy.deepcopy(original.configuracao or {})
 
     # Mesma validação do criar (refs de agente do time). Não validamos o portão de

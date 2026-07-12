@@ -98,6 +98,34 @@ def test_duplicar_preserva_gatilho_mas_nasce_inativa(
     assert recebido == {"ativa": False, "tipo": "agendamento"}
 
 
+def test_duplicar_gatilho_comentario_nasce_a_conectar(cliente, entrar, dados, sessao):
+    """Duplicar uma automação de COMENTÁRIO do Instagram: a cópia perde a CONTA
+    (credencial_id) — nasce 'a conectar', como o canal nasce sem token — mas
+    preserva os filtros. Impede a cópia de responder na conta do original."""
+    auto = Automacao(
+        time_id=dados["timeA"].id, nome="Responde comentários",
+        tipo_gatilho="comentario_instagram",
+        configuracao_gatilho={
+            "credencial_id": str(uuid.uuid4()),
+            "midias": ["POST1"],
+            "palavra_chave": "preço",
+            "teto_por_hora": 30,
+        },
+        cadeia={}, ativa=True,
+    )
+    sessao.add(auto)
+    sessao.flush()
+
+    entrar(dados["operador"])
+    r = cliente.post(f"/automacoes/{auto.id}/duplicar", json={"nome": "Cópia"})
+    assert r.status_code == 201
+    cfg = r.json()["configuracao_gatilho"]
+    assert "credencial_id" not in cfg          # conta sumiu (a conectar)
+    assert cfg["midias"] == ["POST1"]          # filtros preservados
+    assert cfg["palavra_chave"] == "preço"
+    assert cfg["teto_por_hora"] == 30
+
+
 def test_duplicar_deep_copy_nao_mexe_na_original(cliente, entrar, dados, auto_pronta):
     """A normalização da cópia não pode vazar para a original (deep-copy). Como o
     endpoint lê a original pela MESMA sessão (identity map), `original.cadeia` aqui

@@ -132,7 +132,7 @@ def _uuid(valor: str) -> uuid.UUID | None:
 # Tipos de gatilho e o formato EXATO da config de agendamento que o `agendador`
 # espera. A IA erra por não conhecer este formato — por isso ele é documentado
 # aqui, injetado no prompt e validado em definir_gatilho.
-TIPOS_GATILHO = ("manual", "agendamento", "webhook")
+TIPOS_GATILHO = ("manual", "agendamento", "webhook", "comentario_instagram")
 FORMATO_GATILHO = (
     "Tipos de gatilho:\n"
     "- 'manual': sem config. Você dispara quando quiser.\n"
@@ -140,7 +140,13 @@ FORMATO_GATILHO = (
     "- 'agendamento': roda no relógio. config = {frequencia: 'diaria'|'semanal'|"
     "'mensal', hora: 0-23, minuto: 0-59, dia_semana: 0-6 (0=segunda, SÓ p/ semanal), "
     "dia_mes: 1-31 (SÓ p/ mensal), entrada?: texto que vira a entrada do fluxo}. "
-    "Ex. semanal: {frequencia:'semanal', dia_semana:0, hora:8, minuto:0}."
+    "Ex. semanal: {frequencia:'semanal', dia_semana:0, hora:8, minuto:0}.\n"
+    "- 'comentario_instagram': cada comentário num post de uma conta conectada "
+    "dispara o fluxo. config = {midias: 'todas' (padrão) ou lista de ids de post "
+    "(media_id); palavra_chave?: só dispara se o texto contém (ignora maiúsc.); "
+    "teto_por_hora?: teto de disparos/hora por automação (padrão 50, protege custo)}. "
+    "A CONTA em si (credencial do Instagram) é escolhida pelo humano na tela do "
+    "gatilho — você NÃO a define; avise o consultor que falta escolher a conta lá."
 )
 
 
@@ -155,6 +161,24 @@ def _validar_gatilho(tipo: str, config: dict) -> str | None:
     """Devolve uma mensagem de erro se o gatilho estiver malformado (None = ok)."""
     if tipo not in TIPOS_GATILHO:
         return f"Gatilho desconhecido: '{tipo}'. Use um de: {', '.join(TIPOS_GATILHO)}."
+    if tipo == "comentario_instagram":
+        # A conta (credencial_id) é escolhida pelo HUMANO na tela (v1). Se a IA
+        # mandar algo, validamos; ausência é OK (o gatilho fica "a conectar").
+        cred = config.get("credencial_id")
+        if cred not in (None, "") and _uuid(cred) is None:
+            return "credencial_id, se informado, deve ser um id válido."
+        midias = config.get("midias", "todas")
+        if midias != "todas" and not (
+            isinstance(midias, list) and all(isinstance(m, str) for m in midias)
+        ):
+            return "midias deve ser 'todas' ou uma lista de ids de post (media_id)."
+        pc = config.get("palavra_chave")
+        if pc is not None and not isinstance(pc, str):
+            return "palavra_chave, se informada, deve ser um texto."
+        teto = config.get("teto_por_hora")
+        if teto is not None and not _inteiro_no_intervalo(teto, 1, 100000):
+            return "teto_por_hora, se informado, deve ser um inteiro positivo."
+        return None
     if tipo != "agendamento":
         return None
     freq = config.get("frequencia")

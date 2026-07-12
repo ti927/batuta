@@ -240,6 +240,38 @@ def test_memoria_da_ia_herdada(cliente, entrar, dados, sessao, time_rico):
     assert any("duplicado de" in c for c in conteudos)  # proveniência, sem ids stale
 
 
+def test_gatilho_comentario_nasce_a_conectar(cliente, entrar, dados, sessao, time_rico):
+    """Na duplicação de TIME, a automação de comentário do Instagram nasce
+    'a conectar' na cópia (sem credencial_id), preservando os filtros — para dois
+    times não brigarem pela mesma conta (mesmo princípio do canal desconectado)."""
+    auto = Automacao(
+        time_id=time_rico["time"].id, nome="Comentários IG",
+        tipo_gatilho="comentario_instagram",
+        configuracao_gatilho={
+            "credencial_id": str(uuid.uuid4()), "midias": "todas", "teto_por_hora": 40,
+        },
+        cadeia={}, ativa=False,
+    )
+    sessao.add(auto)
+    sessao.flush()
+
+    entrar(dados["admin"])
+    novo = cliente.post(
+        f"/times/{time_rico['time'].id}/duplicar", json={"nome": "Cópia"}
+    ).json()
+    copia = sessao.scalars(
+        select(Automacao).where(
+            Automacao.time_id == uuid.UUID(novo["id"]),
+            Automacao.nome == "Comentários IG",
+        )
+    ).one()
+    cfg = copia.configuracao_gatilho or {}
+    assert "credencial_id" not in cfg          # conta sumiu (a conectar)
+    assert cfg["midias"] == "todas"            # filtros preservados
+    assert cfg["teto_por_hora"] == 40
+    assert copia.ativa is False
+
+
 def test_runtime_nao_copiado(cliente, entrar, dados, sessao, time_rico):
     """A cópia nasce sem histórico operacional (sem execuções)."""
     entrar(dados["admin"])

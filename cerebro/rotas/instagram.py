@@ -29,6 +29,7 @@ import auditoria
 import cofre
 import credenciais_cofre as cofre_cred
 import instagram_oauth
+import instagram_webhook
 from auth import usuario_atual
 from instrumentos.base import FalhaInstrumento
 from modelos import Credencial, Membro, Usuario
@@ -158,6 +159,13 @@ def callback(
 
     # 5. Cria/atualiza a credencial e audita.
     cred = _upsert_credencial(sessao, organizacao_id, conta)
+    # Assina o webhook de comentários desta conta (GAP 2), para a Meta passar a
+    # entregar os comentários dela. BEST-EFFORT: se falhar (app sem webhook ainda,
+    # rede), NÃO derruba a conexão — reconectar re-afirma a inscrição.
+    try:
+        instagram_webhook.inscrever_conta(conta["token"], conta["ig_user_id"])
+    except Exception:
+        pass
     auditoria.registrar(
         sessao,
         usuario=sessao.get(Usuario, usuario_id),

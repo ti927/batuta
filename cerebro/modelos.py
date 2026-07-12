@@ -445,6 +445,46 @@ class Credencial(IdData, Base):
     )
 
 
+class EventoComentarioInstagram(IdData, Base):
+    """Comentário do Instagram já recebido pelo webhook (GAP 2) — camada de BORDA.
+
+    O núcleo de orquestração não sabe que esta tabela existe. Ela serve a três
+    propósitos, todos da borda de comentários:
+    - **DEDUPE:** a Meta REENTREGA o mesmo comentário quando não recebe o 200 a
+      tempo. O índice único `(comment_id, automacao_id)` garante que cada par vira
+      UMA execução só (o INSERT que viola a unicidade sinaliza "já processei").
+    - **TETO:** contar quantos eventos uma automação processou numa janela, para
+      não estourar custo de IA num post que viralizou.
+    - **AUDITORIA:** rastro de qual comentário disparou qual execução.
+
+    Aditiva: não toca nenhuma tabela do motor."""
+
+    __tablename__ = "eventos_comentario_instagram"
+    comment_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    automacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("automacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    organizacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    credencial_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("credenciais.id", ondelete="SET NULL"), nullable=True
+    )
+    media_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    execucao_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("execucoes.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (
+        Index(
+            "uq_evento_comentario_ig", "comment_id", "automacao_id", unique=True
+        ),
+        Index(
+            "ix_evento_comentario_ig_automacao", "automacao_id", "criado_em"
+        ),
+    )
+
+
 # ───────────────────── IA criadora (Etapa 2, Fase 9) ─────────────────────────
 
 
