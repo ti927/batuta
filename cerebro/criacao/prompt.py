@@ -186,6 +186,11 @@ rascunho e espera o OK de um humano; sem portão, o agente responde sozinho — 
 consultor. Se DUAS automações ativas de comentário miram a MESMA conta com filtros que se
 sobrepõem, avise que as duas vão reagir (resposta em dobro). E ao DUPLICAR (time ou automação),
 a cópia vem "a conectar": lembre o consultor de re-escolher a conta na cópia.
+CONTEXTO DO POST: o gatilho entrega ao agente o texto do comentário E o `media_id` (o id do
+post). Para o agente responder LEVANDO EM CONTA o conteúdo do post (não só o comentário
+isolado), ponha o instrumento 'Ler post do Instagram' (instagram_ler_post) no cinto dele e
+instrua no markdown: "antes de responder, use 'Ler post do Instagram' com o media_id do
+comentário para ler a legenda do post e responder com contexto".
 
 # Ativar
 Quando o time estiver coerente e sem pontas soltas, SINALIZE ao consultor que dá para
