@@ -253,17 +253,90 @@ def _obter_ou_criar_automacao(sessao: Session, time: Time) -> Automacao:
     return auto
 
 
-def definir_cadeia(
-    sessao: Session, time: Time, cadeia: dict, *, usuario: Usuario | None = None
+def resolver_automacao(
+    sessao: Session, time: Time, automacao_id: "uuid.UUID | str | None" = None,
+    *, permitir_criar: bool = True,
 ) -> Automacao:
-    """Define só a CADEIA da automação do time (upsert), validando contra os agentes
-    reais. Mantém gatilho e nome. Se ativar uma cadeia que tira o portão de um agente
-    irreversível, a ativação (à parte) é que vai recusar."""
+    """FONTE ÚNICA de "qual automação" a IA vai editar (um time pode ter N):
+    - com `automacao_id`: a automação daquele id (recusa se não for deste time);
+    - sem id e só UMA automação: essa;
+    - sem id e NENHUMA: cria a primeira se `permitir_criar` (conveniência de montar a
+      primeira); senão recusa (ex.: ativar não deve criar automação vazia);
+    - sem id e VÁRIAS: recusa com `ConflitoDominio` listando nome+id — a IA deve
+      PERGUNTAR ao consultor em qual mexer (não adivinha)."""
+    autos = sessao.scalars(
+        select(Automacao).where(Automacao.time_id == time.id).order_by(Automacao.criado_em)
+    ).all()
+    if automacao_id is not None:
+        try:
+            aid = (
+                automacao_id if isinstance(automacao_id, uuid.UUID)
+                else uuid.UUID(str(automacao_id))
+            )
+        except (ValueError, AttributeError, TypeError):
+            raise ConflitoDominio(f"Id de automação inválido: {automacao_id}.")
+        alvo = next((a for a in autos if a.id == aid), None)
+        if alvo is None:
+            raise ConflitoDominio(f"Não há automação com id {automacao_id} neste time.")
+        return alvo
+    if len(autos) == 1:
+        return autos[0]
+    if not autos:
+        if permitir_criar:
+            return _obter_ou_criar_automacao(sessao, time)
+        raise ConflitoDominio("Monte a automação primeiro (cadeia e gatilho).")
+    lista = "; ".join(f"'{a.nome}' (id {a.id})" for a in autos)
+    raise ConflitoDominio(
+        f"Este time tem {len(autos)} automações — diga em qual mexer (passe automacao_id). "
+        f"As automações são: {lista}."
+    )
+
+
+def criar_automacao(
+    sessao: Session, time: Time, *, nome: str, usuario: Usuario | None = None
+) -> Automacao:
+    """Cria uma automação NOVA (inativa, gatilho 'manual', cadeia vazia) — para o time
+    ter MAIS DE UMA. Nasce com o tipo de fluxo padrão ('interno'). Não mexe nas outras."""
+    nome = (nome or "").strip() or f"Automação de {time.nome}"
+    auto = Automacao(
+        time_id=time.id, nome=nome, tipo_gatilho="manual",
+        configuracao_gatilho={}, cadeia={}, ativa=False,
+        configuracao={"perfil": PERFIL_PADRAO},
+    )
+    sessao.add(auto)
+    sessao.flush()
+    _audit(sessao, usuario, "automacao.criada", "automacao", auto.id, time.organizacao_id)
+    return auto
+
+
+def renomear_automacao(
+    sessao: Session, time: Time, *, automacao_id: "uuid.UUID | str", nome: str,
+    usuario: Usuario | None = None,
+) -> Automacao:
+    """Renomeia uma automação do time (para distinguir quando há várias)."""
+    auto = resolver_automacao(sessao, time, automacao_id)
+    novo = (nome or "").strip()
+    if not novo:
+        raise ConflitoDominio("O nome da automação não pode ser vazio.")
+    auto.nome = novo
+    sessao.flush()
+    _audit(sessao, usuario, "automacao.renomeada", "automacao", auto.id, time.organizacao_id)
+    return auto
+
+
+def definir_cadeia(
+    sessao: Session, time: Time, cadeia: dict, *,
+    automacao_id: "uuid.UUID | str | None" = None, usuario: Usuario | None = None,
+) -> Automacao:
+    """Define a CADEIA de UMA automação do time, validando contra os agentes reais.
+    `automacao_id` escolhe qual (via `resolver_automacao`); mantém gatilho e nome. Se
+    ativar uma cadeia que tira o portão de um agente irreversível, a ativação (à parte)
+    é que vai recusar."""
     try:
         validar_cadeia(cadeia or {}, _ids_agentes(sessao, time.id))
     except ValueError as e:
         raise ConflitoDominio(f"Cadeia inválida: {e}")
-    auto = _obter_ou_criar_automacao(sessao, time)
+    auto = resolver_automacao(sessao, time, automacao_id)
     auto.cadeia = grafo.normalizar(cadeia or {})  # grava no formato canônico de grafo
     sessao.flush()
     _audit(sessao, usuario, "automacao.definida", "automacao", auto.id, time.organizacao_id)
@@ -272,10 +345,12 @@ def definir_cadeia(
 
 def definir_gatilho(
     sessao: Session, time: Time, *, tipo_gatilho: str,
-    configuracao_gatilho: dict | None = None, usuario: Usuario | None = None,
+    configuracao_gatilho: dict | None = None,
+    automacao_id: "uuid.UUID | str | None" = None, usuario: Usuario | None = None,
 ) -> Automacao:
-    """Define só o GATILHO da automação do time (upsert). Mantém a cadeia e o nome."""
-    auto = _obter_ou_criar_automacao(sessao, time)
+    """Define o GATILHO de UMA automação do time (`automacao_id` escolhe qual). Mantém
+    a cadeia e o nome."""
+    auto = resolver_automacao(sessao, time, automacao_id)
     auto.tipo_gatilho = tipo_gatilho
     auto.configuracao_gatilho = configuracao_gatilho or {}
     sessao.flush()

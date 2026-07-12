@@ -172,6 +172,76 @@ def test_definir_gatilho_e_malformado(sessao, dados):
     assert _chamar(f, "definir_gatilho", tipo_gatilho="telepatia")["ok"] is False
 
 
+# ───────────── Várias automações por time (a IA cria/edita cada uma por id) ─────────────
+
+_CADEIA_MIN = lambda lider: {  # noqa: E731 (cadeia mínima válida: 1 nó → fim)
+    "inicio": lider, "nos": {lider: {"saidas": [{"rotulo": "1", "quando": "x", "destino": None}]}}
+}
+
+
+def test_varias_automacoes_por_time(sessao, dados):
+    """A IA cria uma 2ª automação SEM sobrescrever a 1ª; o retrato mostra as duas."""
+    _ctx, f = _setup(sessao, dados)
+    _chamar(f, "definir_time", nome="T")
+    lider = _chamar(f, "adicionar_agente", nome="Chefe", papel="lider")["id"]
+    assert _chamar(f, "montar_cadeia", cadeia=_CADEIA_MIN(lider))["ok"]  # cria a 1ª
+    r = _chamar(f, "criar_automacao", nome="Segunda")
+    assert r["ok"] and r["id"]
+    visto = json.loads(f["ver_time"].func())
+    assert len(visto["automacoes"]) == 2
+    assert "Segunda" in {a["nome"] for a in visto["automacoes"]}
+    # compat: 'automacao' (singular, para o canvas) segue sendo a PRIMEIRA
+    assert visto["automacao"]["id"] == visto["automacoes"][0]["id"]
+
+
+def test_definir_gatilho_por_id_nao_toca_a_outra(sessao, dados):
+    _ctx, f = _setup(sessao, dados)
+    _chamar(f, "definir_time", nome="T")
+    lider = _chamar(f, "adicionar_agente", nome="Chefe", papel="lider")["id"]
+    _chamar(f, "montar_cadeia", cadeia=_CADEIA_MIN(lider))
+    id2 = _chamar(f, "criar_automacao", nome="Segunda")["id"]
+    assert _chamar(f, "definir_gatilho", tipo_gatilho="webhook", automacao_id=id2)["ok"]
+    porid = {a["id"]: a for a in json.loads(f["ver_time"].func())["automacoes"]}
+    assert porid[id2]["tipo_gatilho"] == "webhook"
+    id1 = next(i for i in porid if i != id2)
+    assert porid[id1]["tipo_gatilho"] == "manual"  # a 1ª ficou intocada
+
+
+def test_acao_ambigua_com_varias_pede_qual(sessao, dados):
+    """Com mais de uma automação e SEM automacao_id, a ferramenta recusa pedindo qual."""
+    _ctx, f = _setup(sessao, dados)
+    _chamar(f, "definir_time", nome="T")
+    lider = _chamar(f, "adicionar_agente", nome="Chefe", papel="lider")["id"]
+    _chamar(f, "montar_cadeia", cadeia=_CADEIA_MIN(lider))
+    _chamar(f, "criar_automacao", nome="Segunda")
+    r = _chamar(f, "definir_gatilho", tipo_gatilho="webhook")  # ambíguo
+    assert r["ok"] is False
+    assert "automaç" in r["erro"].lower() or "qual" in r["erro"].lower()
+
+
+def test_ativar_desativar_por_id(sessao, dados):
+    _ctx, f = _setup(sessao, dados)
+    _chamar(f, "definir_time", nome="T")
+    lider = _chamar(f, "adicionar_agente", nome="Chefe", papel="lider")["id"]
+    _chamar(f, "montar_cadeia", cadeia=_CADEIA_MIN(lider))
+    id2 = _chamar(f, "criar_automacao", nome="Segunda")["id"]
+    assert _chamar(f, "ativar_time", automacao_id=id2)["ok"]  # liga a 2ª
+    porid = {a["id"]: a for a in json.loads(f["ver_time"].func())["automacoes"]}
+    assert porid[id2]["ativa"] is True
+    assert porid[next(i for i in porid if i != id2)]["ativa"] is False  # 1ª segue off
+    assert _chamar(f, "desativar_time", automacao_id=id2)["ok"]
+
+
+def test_renomear_automacao(sessao, dados):
+    _ctx, f = _setup(sessao, dados)
+    _chamar(f, "definir_time", nome="T")
+    lider = _chamar(f, "adicionar_agente", nome="Chefe", papel="lider")["id"]
+    _chamar(f, "montar_cadeia", cadeia=_CADEIA_MIN(lider))
+    aid = json.loads(f["ver_time"].func())["automacao"]["id"]
+    assert _chamar(f, "renomear_automacao", automacao_id=aid, nome="Postar no blog")["ok"]
+    assert json.loads(f["ver_time"].func())["automacao"]["nome"] == "Postar no blog"
+
+
 def test_estimar_custo_calcula_sem_gravar(sessao, dados):
     _ctx, f = _setup(sessao, dados)
     _chamar(f, "definir_time", nome="T")

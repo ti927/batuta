@@ -60,14 +60,14 @@ def _rodar_turno(
         modelo=modelo,
     )
     sessao.commit()
-    # A IA pode ter ativado a automação ou mudado o gatilho: (re)agenda no relógio.
+    # A IA pode ter criado/ativado automações ou mudado gatilhos: (re)agenda TODAS as
+    # automações do time no relógio (um time pode ter várias).
     if conversa.time_id:
-        auto = sessao.scalars(
+        for auto in sessao.scalars(
             select(Automacao)
             .where(Automacao.time_id == conversa.time_id)
             .order_by(Automacao.criado_em)
-        ).first()
-        if auto is not None:
+        ):
             agendador.sincronizar(auto)
     return resultado
 

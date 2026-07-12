@@ -1538,6 +1538,15 @@ Gatilho: o maestro pediu que o Batuta **transmita ao humano as regras do fluxo**
 
 ---
 
+## FASE — IA criadora gerencia VÁRIAS automações por time + duplicação sem confundir a IA  ✅ (2026-07-12, sem migração, núcleo intocado)
+
+Gatilho: o maestro notou que a IA criadora/companheira só mexia numa automação por time (`.first()`), embora banco+tela já suportem N — pior, o prompt JÁ dizia "há várias, confira no retrato", mas o retrato mostrava uma só e as ferramentas editavam só a primeira → a IA reescrevia a existente / "não via" a 2ª. Agravante do maestro: as DUPLICAÇÕES podem confundir a IA (o time duplicado copiava a conversa LITERAL, com ids do time original embutidos → a IA "criei X" e não achava; e duplicar automação no mesmo time deixava a cópia invisível ao `.first()`). Decisões (AskUserQuestion): duplicação = conversa recomeça limpa + herda a memória durável + nota; com várias e pedido vago, a IA pergunta qual.
+- **Parte 1 — IA ciente de N automações (`criacao/`):** `_snapshot_time` devolve `automacoes` (lista com id/nome/tipo_gatilho/ativa) mantendo `automacao`=primeira (canvas de /criar intocado). `servicos.resolver_automacao(time, automacao_id, permitir_criar)` = fonte única de "qual" (por id / única / cria-a-primeira / recusa-listando quando ambíguo). Novas `servicos.criar_automacao`/`renomear_automacao`; `definir_cadeia`/`definir_gatilho` por `automacao_id`. Ferramentas novas `criar_automacao`/`renomear_automacao` e `montar_cadeia`/`definir_gatilho`/`ativar_time`/`desativar_time` aceitam `automacao_id` (com várias e sem id → erro com a lista → a IA pergunta). `prompt.py` alinhado. `rotas/criacao.py` sincroniza TODAS as automações pós-turno. (Remover automação fica só na tela — é destrutivo: cascateia o histórico.)
+- **Parte 2 — duplicação (`duplicacao_time.py`):** a nova ConversaCriacao nasce com `mensagens=[]` (recomeça limpa, mata os ids stale na origem) + herda a MemoriaProjeto (texto) + grava uma memória de proveniência ("Time duplicado de 'X'."). Duplicar automação no mesmo time já é resolvido pela Parte 1 (a IA vê todas e edita por id).
+- Verificação: **541 testes** (+5 novos: cria 2ª sem sobrescrever; edita/ativa por id sem tocar a outra; pedido ambíguo pede qual; renomear; + duplicação recomeça limpa herdando memória). Núcleo/tela/migração intocados.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.

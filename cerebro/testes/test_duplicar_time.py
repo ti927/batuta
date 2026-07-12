@@ -227,11 +227,17 @@ def test_memoria_da_ia_herdada(cliente, entrar, dados, sessao, time_rico):
             ConversaCriacao.time_id == uuid.UUID(novo["id"])
         )
     ).one()
-    assert conversa.mensagens == [{"papel": "usuario", "texto": "oi"}]
-    memorias = sessao.scalars(
-        select(MemoriaProjeto).where(MemoriaProjeto.conversa_id == conversa.id)
-    ).all()
-    assert {m.conteudo for m in memorias} == {"Tom formal.", "Cliente é fintech."}
+    # A conversa RECOMEÇA LIMPA (o histórico literal carregaria ids do time original e
+    # confundiria a IA); herda a MEMÓRIA durável + ganha uma nota de proveniência.
+    assert conversa.mensagens == []
+    conteudos = {
+        m.conteudo
+        for m in sessao.scalars(
+            select(MemoriaProjeto).where(MemoriaProjeto.conversa_id == conversa.id)
+        ).all()
+    }
+    assert "Tom formal." in conteudos and "Cliente é fintech." in conteudos  # herdadas
+    assert any("duplicado de" in c for c in conteudos)  # proveniência, sem ids stale
 
 
 def test_runtime_nao_copiado(cliente, entrar, dados, sessao, time_rico):

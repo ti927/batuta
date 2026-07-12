@@ -217,9 +217,20 @@ def _snapshot_time(ctx: ContextoCriacao) -> dict:
         tc = tipos_credencial.obter_tipo(tipo) if tipo else None
         return set(tc.nomes_campos) if tc else set()
 
-    auto = sess.scalars(
+    autos = sess.scalars(
         select(Automacao).where(Automacao.time_id == time.id).order_by(Automacao.criado_em)
-    ).first()
+    ).all()
+
+    def _auto_dict(a: Automacao) -> dict:
+        return {
+            "id": str(a.id), "nome": a.nome, "tipo_gatilho": a.tipo_gatilho,
+            "configuracao_gatilho": a.configuracao_gatilho,
+            # cadeia no formato canônico de grafo (lista de nós tipados).
+            "cadeia": grafo.normalizar(a.cadeia or {}),
+            "ativa": a.ativa,
+        }
+
+    automacoes = [_auto_dict(a) for a in autos]
     return {
         "time": {"id": str(time.id), "nome": time.nome, "descricao": time.descricao},
         "agentes": [
@@ -249,13 +260,10 @@ def _snapshot_time(ctx: ContextoCriacao) -> dict:
             }
             for i in instrumentos
         ],
-        "automacao": None if auto is None else {
-            "id": str(auto.id), "nome": auto.nome, "tipo_gatilho": auto.tipo_gatilho,
-            "configuracao_gatilho": auto.configuracao_gatilho,
-            # cadeia no formato canônico de grafo (lista de nós tipados).
-            "cadeia": grafo.normalizar(auto.cadeia or {}),
-            "ativa": auto.ativa,
-        },
+        # TODAS as automações do time — a IA edita cada uma pelo seu `id`.
+        "automacoes": automacoes,
+        # Compat: a PRIMEIRA (o canvas de /criar lê `automacao`). None se não há.
+        "automacao": automacoes[0] if automacoes else None,
     }
 
 
@@ -283,15 +291,6 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         iid = _uuid(instrumento_id)
         inst = sess.get(Instrumento, iid) if iid else None
         return inst if inst and inst.time_id == ctx.conversa.time_id else None
-
-    def _automacao() -> Automacao | None:
-        if ctx.conversa.time_id is None:
-            return None
-        return sess.scalars(
-            select(Automacao)
-            .where(Automacao.time_id == ctx.conversa.time_id)
-            .order_by(Automacao.criado_em)
-        ).first()
 
     def _execucao_do_time(ex: Execucao) -> bool:
         auto = sess.get(Automacao, ex.automacao_id)
@@ -423,8 +422,8 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         servicos.desencaixar(sess, agente.id, iid) if iid else None
         return _ok("Instrumento tirado do cinto.")
 
-    def montar_cadeia(cadeia: dict) -> str:
-        """Define a cadeia (o fluxo) da automação como um GRAFO de nós:
+    def montar_cadeia(cadeia: dict, automacao_id: str | None = None) -> str:
+        """Define a cadeia (o fluxo) de UMA automação como um GRAFO de nós:
         {"inicial": "<id do nó inicial>", "nos": [
           {"id": "<id do nó>", "tipo": "agente", "ref": "<id do agente>",
            "gate": false, "saidas": [
@@ -439,25 +438,33 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         rótulo). Não precisa informar posições, nem criar os nós "gatilho"/"fim" — o
         sistema completa. PORTÃO DE APROVAÇÃO: ponha "gate": true NO NÓ do agente que
         vem ANTES de uma ação irreversível — o fluxo pausa depois dele e espera um
-        humano aprovar antes de seguir para quem publica/envia (a pausa fica no NÓ)."""
+        humano aprovar antes de seguir para quem publica/envia (a pausa fica no NÓ).
+        Se o time tem MAIS DE UMA automação, informe `automacao_id` (pegue no retrato,
+        em `automacoes`); com uma só, pode omitir. NÃO adivinhe qual — se estiver na
+        dúvida, pergunte ao consultor."""
         time = _exigir_time()
         if time is None:
             return _erro("Defina o time primeiro, com definir_time.")
         try:
-            servicos.definir_cadeia(sess, time, cadeia, usuario=ctx.usuario)
+            servicos.definir_cadeia(
+                sess, time, cadeia, automacao_id=automacao_id, usuario=ctx.usuario
+            )
         except ConflitoDominio as e:
             return _erro(str(e))
         return _ok("Cadeia montada.")
 
     def definir_gatilho(
-        tipo_gatilho: str, configuracao_gatilho: dict | None = None
+        tipo_gatilho: str, configuracao_gatilho: dict | None = None,
+        automacao_id: str | None = None,
     ) -> str:
-        """Define o gatilho da automação. Tipos e formato EXATO:
+        """Define o gatilho de UMA automação. Tipos e formato EXATO:
         - 'manual': sem config (o consultor dispara quando quiser).
         - 'webhook': sem config (uma chamada externa dispara).
         - 'agendamento': config = {frequencia: 'diaria'|'semanal'|'mensal',
           hora: 0-23, minuto: 0-59, dia_semana: 0-6 (0=segunda, só semanal),
-          dia_mes: 1-31 (só mensal), entrada?: texto}. Use INTEIROS."""
+          dia_mes: 1-31 (só mensal), entrada?: texto}. Use INTEIROS.
+        Se o time tem mais de uma automação, informe `automacao_id` (do retrato); com
+        uma só, pode omitir."""
         time = _exigir_time()
         if time is None:
             return _erro("Defina o time primeiro, com definir_time.")
@@ -465,9 +472,13 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         erro = _validar_gatilho(tipo_gatilho, config)
         if erro:
             return _erro(erro)
-        servicos.definir_gatilho(
-            sess, time, tipo_gatilho=tipo_gatilho, configuracao_gatilho=config, usuario=ctx.usuario
-        )
+        try:
+            servicos.definir_gatilho(
+                sess, time, tipo_gatilho=tipo_gatilho, configuracao_gatilho=config,
+                automacao_id=automacao_id, usuario=ctx.usuario,
+            )
+        except ConflitoDominio as e:
+            return _erro(str(e))
         return _ok(f"Gatilho '{tipo_gatilho}' definido.")
 
     def estimar_custo(
@@ -495,28 +506,66 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
             por_mes_usd=round(por_execucao * execucoes_por_mes, 2),
         )
 
-    def ativar_time() -> str:
-        """LIGA a automação do time (passa a poder disparar). A PAREDE: se algum
-        agente com instrumento de ação irreversível (publicar/enviar/gravar) não
-        tiver portão de aprovação humana antes na cadeia, a ativação é RECUSADA com a
-        explicação — ajuste a cadeia (pausa_humano no nó anterior) e tente de novo."""
-        auto = _automacao()
-        if auto is None:
-            return _erro("Monte a automação primeiro (cadeia e gatilho).")
+    def criar_automacao(nome: str) -> str:
+        """Cria uma automação NOVA (vazia, desligada) no time — para o time ter MAIS DE
+        UMA. Dê um NOME claro (ex.: 'Postar no Instagram', 'Responder comentários') para
+        distinguir. Não mexe nas outras. Depois monte a cadeia/gatilho passando o
+        `automacao_id` desta (o id volta aqui)."""
+        time = _exigir_time()
+        if time is None:
+            return _erro("Defina o time primeiro, com definir_time.")
         try:
+            auto = servicos.criar_automacao(sess, time, nome=nome, usuario=ctx.usuario)
+        except ConflitoDominio as e:
+            return _erro(str(e))
+        return _ok(f"Automação '{auto.nome}' criada.", id=str(auto.id))
+
+    def renomear_automacao(automacao_id: str, nome: str) -> str:
+        """Renomeia uma automação do time (pegue o `id` no retrato, em `automacoes`).
+        Útil para dar nomes claros quando há várias."""
+        time = _exigir_time()
+        if time is None:
+            return _erro("Defina o time primeiro, com definir_time.")
+        try:
+            auto = servicos.renomear_automacao(
+                sess, time, automacao_id=automacao_id, nome=nome, usuario=ctx.usuario
+            )
+        except ConflitoDominio as e:
+            return _erro(str(e))
+        return _ok(f"Automação renomeada para '{auto.nome}'.", id=str(auto.id))
+
+    def ativar_time(automacao_id: str | None = None) -> str:
+        """LIGA UMA automação do time (passa a poder disparar). Se o time tem mais de
+        uma automação, informe `automacao_id` (do retrato, em `automacoes`); com uma só,
+        pode omitir. A PAREDE: se algum agente com instrumento de ação irreversível
+        (publicar/enviar/gravar) não tiver portão de aprovação humana antes na cadeia, a
+        ativação é RECUSADA com a explicação — ajuste a cadeia e tente de novo."""
+        time = _exigir_time()
+        if time is None:
+            return _erro("Defina o time primeiro, com definir_time.")
+        try:
+            auto = servicos.resolver_automacao(
+                sess, time, automacao_id, permitir_criar=False
+            )
             servicos.ativar(sess, auto, usuario=ctx.usuario)
         except ConflitoDominio as e:
             return _erro(str(e))
-        return _ok("Time ativado: a automação está ligada.")
+        return _ok(f"Automação '{auto.nome}' ativada (ligada).")
 
-    def desativar_time() -> str:
-        """DESLIGA a automação do time (para de disparar). Use para pausar ou ajustar
-        com calma; pode religar depois com ativar_time."""
-        auto = _automacao()
-        if auto is None:
-            return _erro("Este time ainda não tem automação.")
-        servicos.desativar(sess, auto, usuario=ctx.usuario)
-        return _ok("Time desativado: a automação está desligada.")
+    def desativar_time(automacao_id: str | None = None) -> str:
+        """DESLIGA UMA automação do time (para de disparar). Se há mais de uma, informe
+        `automacao_id`. Use para pausar ou ajustar com calma; religa com ativar_time."""
+        time = _exigir_time()
+        if time is None:
+            return _erro("Defina o time primeiro, com definir_time.")
+        try:
+            auto = servicos.resolver_automacao(
+                sess, time, automacao_id, permitir_criar=False
+            )
+            servicos.desativar(sess, auto, usuario=ctx.usuario)
+        except ConflitoDominio as e:
+            return _erro(str(e))
+        return _ok(f"Automação '{auto.nome}' desativada (desligada).")
 
     def ver_time() -> str:
         """Mostra o time REAL inteiro (agentes com seus textos e cinto, instrumentos,
@@ -641,7 +690,8 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
     funcoes = [
         definir_time, adicionar_agente, editar_agente, remover_agente,
         configurar_instrumento, editar_instrumento, encaixar_instrumento,
-        desencaixar_instrumento, montar_cadeia, definir_gatilho, estimar_custo,
+        desencaixar_instrumento, criar_automacao, renomear_automacao,
+        montar_cadeia, definir_gatilho, estimar_custo,
         ativar_time, desativar_time, ver_time, listar_tipos_instrumento,
         listar_execucoes, diagnosticar_execucao,
         sugerir_proximos_passos, lembrar, recordar, esquecer,

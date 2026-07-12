@@ -204,8 +204,12 @@ def duplicar_time(
         sessao.flush()
         agendador.sincronizar(copia)  # inativa → garante que nenhum job fica no relógio
 
-    # 6) Memória da IA companheira (decisão: HERDAR). Cria uma conversa nova amarrada
-    #    ao time novo (copiando o histórico) e duplica as memórias de projeto.
+    # 6) Memória da IA companheira. Cria uma conversa nova amarrada ao time novo. A
+    #    conversa RECOMEÇA LIMPA (mensagens=[]): o histórico literal carrega os IDs do
+    #    time ORIGINAL (agentes/automações) embutidos nas chamadas de ferramenta, e a IA
+    #    se confundiria no time novo ("criei X" e não acha). Herdamos a MEMÓRIA durável
+    #    (fatos/decisões/preferências — texto, sem id) e gravamos uma memória de
+    #    proveniência, para a IA saber a origem sem os ids stale.
     conversa = sessao.scalars(
         select(ConversaCriacao)
         .where(ConversaCriacao.time_id == original.id)
@@ -216,11 +220,19 @@ def duplicar_time(
             organizacao_id=novo.organizacao_id,
             criada_por_id=criada_por_id,
             titulo=nome,
-            mensagens=copy.deepcopy(conversa.mensagens or []),
+            mensagens=[],
             time_id=novo.id,
         )
         sessao.add(nova_conversa)
         sessao.flush()
+        sessao.add(
+            MemoriaProjeto(
+                conversa_id=nova_conversa.id,
+                organizacao_id=novo.organizacao_id,
+                categoria="fato",
+                conteudo=f"Este time foi duplicado de '{original.nome}'.",
+            )
+        )
         for mem in sessao.scalars(
             select(MemoriaProjeto).where(MemoriaProjeto.conversa_id == conversa.id)
         ):
