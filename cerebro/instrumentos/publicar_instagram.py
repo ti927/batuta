@@ -207,7 +207,7 @@ class ArgsPublicarInstagram(BaseModel):
 class PublicarInstagram(TipoInstrumento):
     tipo = "publicar_instagram"
     categoria = "Instagram"
-    nome_exibicao = "Publicar no Instagram"
+    nome_exibicao = "Instagram: publicar"
     descricao = (
         "Publica no Instagram (foto, Reels, Stories ou carrossel) e devolve o id da "
         "mídia publicada. Acione com o tipo de mídia, a(s) URL(s) PÚBLICA(s) da mídia "

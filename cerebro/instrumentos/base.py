@@ -66,6 +66,11 @@ class TipoInstrumento(ABC):
     """Contrato comum a todo tipo de instrumento."""
 
     tipo: str
+    # NOME EXIBIDO no catálogo/seletor. PADRÃO DE NOME (decisão do maestro): para
+    # instrumentos de um SERVIÇO/plataforma específica, use "Serviço: ação"
+    # (ex.: "Instagram: publicar", "Telegram: enviar mensagem", "WordPress: publicar").
+    # Para instrumentos genéricos (busca, imagem, dados), use a ação clara sem prefixo
+    # ("Gerar imagem", "Chamar API REST").
     nome_exibicao: str
     descricao: str
     # CATEGORIA: grupo do instrumento no catálogo (a UI agrupa o dropdown por isto,

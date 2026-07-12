@@ -83,7 +83,7 @@ class ArgsLerPost(BaseModel):
 class InstagramLerPost(TipoInstrumento):
     tipo = "instagram_ler_post"
     categoria = "Instagram"
-    nome_exibicao = "Ler post do Instagram"
+    nome_exibicao = "Instagram: ler post"
     descricao = (
         "Lê o conteúdo de um post do Instagram (legenda, tipo, URL da imagem, link, "
         "curtidas e nº de comentários) a partir do id do post. Use para responder um "

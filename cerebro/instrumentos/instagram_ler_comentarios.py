@@ -80,7 +80,7 @@ class ArgsLerComentarios(BaseModel):
 class InstagramLerComentarios(TipoInstrumento):
     tipo = "instagram_ler_comentarios"
     categoria = "Instagram"
-    nome_exibicao = "Ler comentários do Instagram"
+    nome_exibicao = "Instagram: ler comentários"
     descricao = (
         "Lê os comentários de um post do Instagram (texto, autor, data e curtidas). "
         "Acione com o id do post. Só leitura."

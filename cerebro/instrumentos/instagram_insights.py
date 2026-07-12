@@ -82,7 +82,7 @@ class ArgsInstagramInsights(BaseModel):
 class InstagramInsights(TipoInstrumento):
     tipo = "instagram_insights"
     categoria = "Instagram"
-    nome_exibicao = "Instagram — conteúdo e métricas"
+    nome_exibicao = "Instagram: conta e métricas"
     descricao = (
         "Lê a conta do Instagram e os posts recentes (tipo, legenda, link, data, "
         "curtidas e comentários). Use para acompanhar o desempenho dos posts. Só "

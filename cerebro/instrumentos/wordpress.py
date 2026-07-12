@@ -220,7 +220,7 @@ def _subir_midia(cliente: httpx.Client, base: str, fonte: str) -> int:
 class PublicarWordpress(TipoInstrumento):
     tipo = "publicar_wordpress"
     categoria = "Sites e blogs"
-    nome_exibicao = "Publicar no WordPress"
+    nome_exibicao = "WordPress: publicar"
     descricao = (
         "Publica um artigo no WordPress e devolve o link do post. Acione com o "
         "título e o conteúdo do artigo já pronto; pode passar também tags "

@@ -95,7 +95,7 @@ class ArgsResponderComentario(BaseModel):
 class InstagramResponderComentario(TipoInstrumento):
     tipo = "instagram_responder_comentario"
     categoria = "Instagram"
-    nome_exibicao = "Responder / moderar comentário no Instagram"
+    nome_exibicao = "Instagram: responder ou moderar comentário"
     descricao = (
         "Age sobre um comentário do Instagram: responde (publica uma resposta), "
         "oculta, reexibe ou apaga. Acione com o id do comentário e a ação; para "
