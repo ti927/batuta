@@ -119,9 +119,69 @@ def test_fluxo_completo(monkeypatch):
     assert res["modelo"] == "kling" and res["duracao"] == "5"
     assert salvo["ct"] == "video/mp4" and salvo["conteudo"] == b"MP4"
     submit = next(j for m, u, j in cli.calls if m == "POST")
-    assert submit == {"prompt": "anima", "image_url": "http://x/a.jpg", "duration": "5"}
+    # Kling: manda o freio (negative_prompt + cfg_scale) e NÃO tem quadro final.
+    assert submit["prompt"] == "anima" and submit["image_url"] == "http://x/a.jpg"
+    assert submit["duration"] == "5" and submit["cfg_scale"] == 0.5
+    assert "distorted text" in submit["negative_prompt"]
+    assert "end_image_url" not in submit
     post_url = next(u for m, u, j in cli.calls if m == "POST")
     assert post_url.endswith("fal-ai/kling-video/v2.1/standard/image-to-video")
+
+
+# ───────────────────────── freios por modelo (corpo do job) ─────────────────────────
+
+
+def _corpo_submetido(monkeypatch, config, imagem="http://x/a.jpg"):
+    """Roda o instrumento com a fila dublada e devolve o corpo do POST de submit."""
+
+    def r(metodo, url, json=None):
+        if metodo == "POST":
+            return _Resp({"request_id": "q", "status_url": "S", "response_url": "R"})
+        if url == "S":
+            return _Resp({"status": "COMPLETED"})
+        if url == "R":
+            return _Resp({"video": {"url": "https://v/out.mp4"}})
+        return _Resp(content=b"MP4")
+
+    cli = _instalar(monkeypatch, r)
+    GerarVideoFal().executar(config, ArgsVideoFal(imagem_url=imagem, prompt="anima"))
+    return next(j for m, u, j in cli.calls if m == "POST")
+
+
+def test_luma_trava_composicao_e_proporcao(monkeypatch):
+    corpo = _corpo_submetido(
+        monkeypatch, ConfigVideoFal(modelo="luma", duracao="5s", chave_api="k")
+    )
+    # Trava = quadro final igual à imagem inicial; proporção 9:16 por padrão.
+    assert corpo["end_image_url"] == "http://x/a.jpg"
+    assert corpo["aspect_ratio"] == "9:16"
+    # campos de outro modelo não vazam
+    assert "negative_prompt" not in corpo and "cfg_scale" not in corpo
+
+
+def test_hailuo_trava_desliga_otimizador(monkeypatch):
+    corpo = _corpo_submetido(
+        monkeypatch, ConfigVideoFal(modelo="hailuo", duracao="6", chave_api="k")
+    )
+    assert corpo["end_image_url"] == "http://x/a.jpg"
+    assert corpo["prompt_optimizer"] is False  # travado → não injeta movimento
+
+
+def test_travar_desligado_nao_manda_quadro_final(monkeypatch):
+    corpo = _corpo_submetido(
+        monkeypatch,
+        ConfigVideoFal(modelo="hailuo", duracao="6", chave_api="k", travar_composicao=False),
+    )
+    assert "end_image_url" not in corpo
+    assert corpo["prompt_optimizer"] is True  # sem travar → otimizador ligado (padrão)
+
+
+def test_kling_prompt_negativo_customizado(monkeypatch):
+    corpo = _corpo_submetido(
+        monkeypatch,
+        ConfigVideoFal(modelo="kling", duracao="5", chave_api="k", prompt_negativo="sem gente"),
+    )
+    assert corpo["negative_prompt"] == "sem gente"
 
 
 # ───────────────────────── falhas / idempotência ─────────────────────────

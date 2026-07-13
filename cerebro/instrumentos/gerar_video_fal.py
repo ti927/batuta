@@ -43,28 +43,53 @@ POLL_INTERVALO_S = 5.0
 TENTATIVAS_DOWNLOAD = 3
 
 # ── FONTE ÚNICA DA VERDADE: modelos de imagem→vídeo na fal.ai ──
-# Cada entrada: endpoint (id do modelo) + durações válidas (formato próprio do
-# modelo, passado VERBATIM à API). Todos aceitam `prompt` + `image_url`.
+# Cada entrada: endpoint (id do modelo) + durações válidas (passadas VERBATIM à API)
+# + `aceita` = os campos JSON OPCIONAIS que AQUELE modelo entende. Cada modelo expõe
+# controles diferentes, e mandar um campo que ele não conhece dá erro — por isso o
+# corpo é montado por modelo (`_montar_corpo`). Todos aceitam `prompt`+`image_url`+
+# `duration`. Campos de controle e onde existem:
+#   end_image_url ... quadro FINAL; se = imagem inicial, TRAVA a composição — o vídeo
+#                     começa e termina na arte original e não corta/deriva (Luma, Hailuo)
+#   negative_prompt . o que EVITAR — zoom, corte, texto deformado etc. (só Kling)
+#   cfg_scale ....... o quanto seguir o prompt à risca (só Kling)
+#   aspect_ratio .... proporção do vídeo (só Luma; Kling/Hailuo seguem a foto)
+#   prompt_optimizer  reescritor que costuma INJETAR movimento; ao travar, desligamos (Hailuo)
 CATALOGO_FAL: dict[str, dict] = {
     "kling": {
         "rotulo": "Kling 2.1 (melhor para rosto/pessoa)",
         "endpoint": "fal-ai/kling-video/v2.1/standard/image-to-video",
         "duracoes": ("5", "10"),
+        "aceita": frozenset({"negative_prompt", "cfg_scale"}),
     },
     "luma": {
-        "rotulo": "Luma Ray 2 (cinematográfico)",
+        "rotulo": "Luma Ray 2 (cinematográfico; trava composição)",
         "endpoint": "fal-ai/luma-dream-machine/ray-2/image-to-video",
         "duracoes": ("5s", "9s"),
+        "aceita": frozenset({"end_image_url", "aspect_ratio"}),
     },
     "hailuo": {
-        "rotulo": "Hailuo 02 (movimento dinâmico, econômico)",
+        "rotulo": "Hailuo 02 (econômico; trava composição)",
         "endpoint": "fal-ai/minimax/hailuo-02/standard/image-to-video",
         "duracoes": ("6", "10"),
+        "aceita": frozenset({"end_image_url", "prompt_optimizer"}),
     },
 }
 
 MODELO_PADRAO = "kling"
 DURACAO_PADRAO = "5"
+
+# Proporções que o Luma aceita (Kling e Hailuo seguem a proporção da própria foto).
+PROPORCOES = ("16:9", "9:16", "4:3", "3:4", "21:9", "9:21")
+PROPORCAO_PADRAO = "9:16"
+
+# Padrão do que EVITAR no Kling: bloqueia os defeitos clássicos (zoom, corte, texto
+# deformado, elementos voando) que fazem a arte "escapar" quando o modelo alucina.
+PROMPT_NEGATIVO_PADRAO = (
+    "large motion, fast motion, camera zoom, zoom in, zoom out, cropping, cropped, "
+    "scaling, panning, morphing, warping, distorted text, deformed text, unreadable "
+    "text, flying elements, drifting elements, floating away, shaking, jitter, "
+    "low quality, blur, distort"
+)
 
 
 def _uniao_duracoes() -> list[str]:
@@ -92,6 +117,42 @@ class ConfigVideoFal(BaseModel):
         description="Duração do clipe (as opções dependem do modelo).",
         json_schema_extra={"enum": _uniao_duracoes()},
     )
+    travar_composicao: bool = Field(
+        default=True,
+        title="Travar composição (recomendado)",
+        description=(
+            "Faz o vídeo começar E terminar na imagem original — evita zoom, corte e "
+            "elementos escapando. Vale no Luma e no Hailuo. O Kling padrão não tem esse "
+            "recurso (para o Kling, o freio é o prompt negativo abaixo)."
+        ),
+    )
+    proporcao: str = Field(
+        default=PROPORCAO_PADRAO,
+        title="Proporção (só Luma)",
+        description=(
+            "Formato do vídeo no modelo Luma. 9:16 = vertical (Stories/Reels). O Kling e o "
+            "Hailuo ignoram este campo e seguem a proporção da própria foto."
+        ),
+        json_schema_extra={"enum": list(PROPORCOES)},
+    )
+    prompt_negativo: str = Field(
+        default="",
+        title="Prompt negativo (só Kling)",
+        description=(
+            "Lista do que o Kling deve EVITAR. Em branco, usa um padrão que bloqueia zoom, "
+            "corte, deformação de texto e elementos voando."
+        ),
+    )
+    cfg_scale: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        title="Adesão ao prompt / cfg (só Kling)",
+        description=(
+            "0 a 1. Mais alto = segue o texto mais à risca (respeita mais o 'ficar parado'); "
+            "mais baixo = mais liberdade (mais movimento). Padrão 0.5."
+        ),
+    )
     chave_api: str = Field(
         default="",
         title="Chave da fal.ai (opcional)",
@@ -110,6 +171,11 @@ class ConfigVideoFal(BaseModel):
             raise ValueError(
                 f"A duração '{self.duracao}' não vale para o modelo '{self.modelo}'. "
                 f"Durações válidas: {', '.join(spec['duracoes'])}."
+            )
+        if self.proporcao not in PROPORCOES:
+            raise ValueError(
+                f"Proporção inválida: '{self.proporcao}'. "
+                f"Use uma destas: {', '.join(PROPORCOES)}."
             )
         return self
 
@@ -166,6 +232,33 @@ class GerarVideoFal(TipoInstrumento):
             },
         }
 
+    def _montar_corpo(self, spec: dict, config: ConfigVideoFal, args: ArgsVideoFal) -> dict:
+        """Monta o input do job enviando a CADA modelo só os campos que ele entende
+        (`spec['aceita']`) — os controles variam por modelo e um campo estranho dá erro.
+        O freio mais forte contra 'escapar' é `end_image_url = imagem inicial` (Luma/
+        Hailuo): o vídeo começa e termina na arte original, então não corta nem deriva."""
+        corpo: dict = {
+            "prompt": args.prompt,
+            "image_url": args.imagem_url,
+            "duration": config.duracao,
+        }
+        aceita = spec["aceita"]
+        travar = config.travar_composicao
+        if "end_image_url" in aceita and travar:
+            corpo["end_image_url"] = args.imagem_url
+        if "prompt_optimizer" in aceita:
+            # O otimizador reescreve o prompt e costuma INJETAR movimento; ao travar, desliga.
+            corpo["prompt_optimizer"] = not travar
+        if "negative_prompt" in aceita:
+            corpo["negative_prompt"] = (
+                (config.prompt_negativo or "").strip() or PROMPT_NEGATIVO_PADRAO
+            )
+        if "cfg_scale" in aceita:
+            corpo["cfg_scale"] = config.cfg_scale
+        if "aspect_ratio" in aceita:
+            corpo["aspect_ratio"] = config.proporcao
+        return corpo
+
     def executar(self, config: ConfigVideoFal, args: ArgsVideoFal) -> dict:
         if not config.chave_api:
             raise FalhaInstrumento(
@@ -175,11 +268,7 @@ class GerarVideoFal(TipoInstrumento):
             )
         spec = CATALOGO_FAL[config.modelo]
         headers = {"Authorization": f"Key {config.chave_api}"}
-        corpo = {
-            "prompt": args.prompt,
-            "image_url": args.imagem_url,
-            "duration": config.duracao,
-        }
+        corpo = self._montar_corpo(spec, config, args)
         with httpx.Client(timeout=TIMEOUT_S) as cli:
             # 1) ENVIA o job. Falha ANTES do request_id → nada gerado → pode retentar.
             try:
