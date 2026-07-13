@@ -56,6 +56,17 @@ PRECOS_VIDEO_USD = {
 }
 PRECO_VIDEO_PADRAO_POR_S = 0.10
 
+# Vídeo a partir de foto via fal.ai (imagem→vídeo). Cobrado por VÍDEO (varia por
+# modelo/duração/resolução) — aqui, um valor aproximado POR CLIPE por modelo
+# (informativo, não cobrança; a fila só nos diz o NOME e a config, não os segundos
+# reais). Números do maestro ajustar conforme o plano/uso da fal.ai.
+PRECOS_FAL_VIDEO_USD = {
+    "kling": 0.35,
+    "luma": 0.40,
+    "hailuo": 0.25,
+}
+PRECO_FAL_VIDEO_PADRAO = 0.35
+
 # Rótulos internos das categorias de uso (em que FUNÇÃO a IA paga foi gasta). A
 # interface dá o nome amigável (`interface/lib/uso.ts`). Carimbadas na borda:
 # execucao (disparo), conversa (IA criadora), mensageria/transcricao (atendimento),
@@ -131,6 +142,12 @@ def custo_por_video(modelo: str, tamanho: str = "", segundos="8") -> float:
     except (TypeError, ValueError):
         segs = 0
     return por_s * max(0, segs)
+
+
+def custo_por_video_fal(modelo: str) -> float:
+    """Custo aproximado de UM vídeo da fal.ai (imagem→vídeo), em USD, por modelo.
+    Informativo (a cobrança real varia por duração/resolução). Desconhecido → padrão."""
+    return PRECOS_FAL_VIDEO_USD.get((modelo or "").strip().lower(), PRECO_FAL_VIDEO_PADRAO)
 
 
 def custo_de_entrada(e: dict) -> float:

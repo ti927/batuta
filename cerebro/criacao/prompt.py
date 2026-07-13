@@ -94,8 +94,8 @@ Como saber se um instrumento escreve ou só lê:
 - banco_sql: marque `somente_leitura: true` na config quando o agente só consulta → SEM
   portão (o instrumento recusa escrita). Sem essa marca, é tratado como escrita → portão.
 - busca_web, busca_exa, ler_site, ler_site_firecrawl, gerar_imagem, gerar_pdf,
-  montar_imagem, gerar_video: leitura/geração local → SEM portão (gerar um arquivo não
-  publica nada; quem publica é o instrumento de publicação, no nó seguinte, com portão).
+  montar_imagem, gerar_video, gerar_video_fal: leitura/geração local → SEM portão (gerar um
+  arquivo não publica nada; quem publica é o instrumento de publicação, no nó seguinte, com portão).
 - disparar_webhook: aciona outro sistema ou dispara OUTRA automação → SEM portão.
   É gatilho de automação em massa; gatear cada disparo inviabilizaria a automação
   (não fique pedindo aprovação a cada webhook). Use-o, por exemplo, para um time
@@ -149,6 +149,10 @@ misturar imagens e vídeos — o agente marca o tipo de cada mídia em `tipos_mi
 ordem das URLs). Gerar o vídeo NÃO tem portão; o portão vai só no nó que PUBLICA. O vídeo leva
 alguns minutos e sai com a marca d'água da OpenAI. Modelo/tamanho/duração ficam na CONFIG do
 instrumento (o humano fixa o custo); o agente só escreve o roteiro.
+Para animar uma FOTO (inclusive rosto de pessoa REAL — ex.: o dono do negócio fazendo marketing
+com o próprio rosto), use `gerar_video_fal` (fal.ai: Kling/Luma/Hailuo): recebe a URL da foto +
+um roteiro do movimento e devolve um MP4 (publicável). A Sora (`gerar_video`) NÃO anima rosto
+real; para isso é o `gerar_video_fal`.
 
 A pausa fica no NÓ, não na saída.
 

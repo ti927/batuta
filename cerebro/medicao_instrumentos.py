@@ -29,7 +29,9 @@ from orquestracao.modelos_ia import provedor_do_modelo_seguro
 # agente): os de imagem (gerar do zero e montar a partir de fotos, cobrados por
 # imagem), o de VISÃO (`descrever_imagem`, que lê uma imagem com um modelo de chat)
 # e o de VÍDEO (`gerar_video`, Sora, cobrado por segundo).
-TIPOS_PAGOS = {"gerar_imagem", "montar_imagem", "descrever_imagem", "gerar_video"}
+TIPOS_PAGOS = {
+    "gerar_imagem", "montar_imagem", "descrever_imagem", "gerar_video", "gerar_video_fal",
+}
 
 
 def _id8(nome_ferramenta: str) -> str:
@@ -76,6 +78,16 @@ def _custo_video(cfg: dict) -> dict:
     }
 
 
+def _custo_video_fal(cfg: dict) -> dict:
+    """Entrada de uso de UM vídeo da fal.ai (imagem→vídeo), a partir da config."""
+    modelo = cfg.get("modelo") or "kling"
+    return {
+        "modelo": modelo,
+        "videos": 1,
+        "custo_usd": round(precos.custo_por_video_fal(modelo), 6),
+    }
+
+
 def _entrada_e_servico(inst: Instrumento) -> tuple[dict, str | None]:
     """(entrada de uso, serviço p/ a origem) de um instrumento pago acionado. Para a
     visão, o serviço é o PROVEDOR do modelo escolhido (não há chave compartilhada
@@ -85,6 +97,8 @@ def _entrada_e_servico(inst: Instrumento) -> tuple[dict, str | None]:
         return _custo_descricao(cfg), provedor_do_modelo_seguro(cfg.get("modelo") or "")
     if inst.tipo == "gerar_video":
         return _custo_video(cfg), _servico_do_tipo(inst.tipo)
+    if inst.tipo == "gerar_video_fal":
+        return _custo_video_fal(cfg), _servico_do_tipo(inst.tipo)
     return _custo_imagem(cfg), _servico_do_tipo(inst.tipo)
 
 

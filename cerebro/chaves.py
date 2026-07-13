@@ -33,10 +33,11 @@ from orquestracao.modelos_ia import PROVEDOR_ANTHROPIC, PROVEDORES
 SERVICO_TAVILY = "tavily"  # busca_web + ler_site (Tavily /search e /extract)
 SERVICO_EXA = "exa"  # busca_exa (busca semântica)
 SERVICO_FIRECRAWL = "firecrawl"  # ler_site_firecrawl (leitura de páginas, lê JS)
+SERVICO_FAL = "fal"  # gerar_video_fal (fila da fal.ai: Kling/Luma/Hailuo)
 
 # Todos os serviços resolvidos pelo pool da organização: provedores de IA +
 # serviços compartilháveis de instrumento.
-SERVICOS = (*PROVEDORES, SERVICO_TAVILY, SERVICO_EXA, SERVICO_FIRECRAWL)
+SERVICOS = (*PROVEDORES, SERVICO_TAVILY, SERVICO_EXA, SERVICO_FIRECRAWL, SERVICO_FAL)
 
 # Serviços com queda de legado no `.env` do cérebro (na prática, da consultoria):
 # Anthropic (ANTHROPIC_API_KEY) e Tavily (TAVILY_API_KEY). Os demais (Exa,

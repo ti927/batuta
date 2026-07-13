@@ -23,6 +23,7 @@ export const SERVICOS = [
   "tavily",
   "exa",
   "firecrawl",
+  "fal",
 ] as const;
 export type Servico = (typeof SERVICOS)[number];
 
@@ -33,6 +34,7 @@ export const ROTULO_SERVICO: Record<Servico, string> = {
   tavily: "Tavily (busca e leitura na web)",
   exa: "Exa (busca semântica)",
   firecrawl: "Firecrawl (leitura de sites)",
+  fal: "fal.ai (geração de vídeo: Kling/Luma/Hailuo)",
 };
 
 // Em que funções cada serviço é usado — texto de ajuda na tela de chaves.
@@ -43,6 +45,7 @@ export const USADA_POR: Record<Servico, string> = {
   tavily: "busca na web e leitura de sites dos agentes",
   exa: "busca na web (semântica) dos agentes",
   firecrawl: "leitura de sites dos agentes",
+  fal: "geração de vídeo a partir de foto (instrumento)",
 };
 
 export const MODELOS_POR_PROVEDOR: Record<Provedor, string[]> = {
