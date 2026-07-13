@@ -46,6 +46,16 @@ PRECOS_DESCRICAO_USD = {
 }
 PRECO_DESCRICAO_PADRAO = 0.004
 
+# Geração de VÍDEO (OpenAI/Sora) é cobrada POR SEGUNDO, variando pelo modelo e pela
+# CLASSE de resolução (720p/1080p — só o pro faz 1080p). Aproximado (informativo, não
+# cobrança). A entrada de uso traz `segundos` e um `custo_usd` pré-calculado. Mantida
+# alinhada ao `instrumentos.gerar_video.CATALOGO_VIDEO`.
+PRECOS_VIDEO_USD = {
+    "sora-2": {"720p": 0.10},
+    "sora-2-pro": {"720p": 0.30, "1080p": 0.70},
+}
+PRECO_VIDEO_PADRAO_POR_S = 0.10
+
 # Rótulos internos das categorias de uso (em que FUNÇÃO a IA paga foi gasta). A
 # interface dá o nome amigável (`interface/lib/uso.ts`). Carimbadas na borda:
 # execucao (disparo), conversa (IA criadora), mensageria/transcricao (atendimento),
@@ -97,6 +107,30 @@ def custo_por_descricao(modelo: str) -> float:
         if familia in m:
             return preco
     return PRECO_DESCRICAO_PADRAO
+
+
+def custo_por_video(modelo: str, tamanho: str = "", segundos="8") -> float:
+    """Custo aproximado de UM vídeo, em USD = preço/segundo × segundos. O preço/s vem
+    do modelo e da classe de resolução (1080p quando o `tamanho` tem 1080/1920, senão
+    720p). Modelo desconhecido tenta por família (o 'pro' antes do base, pois 'sora-2'
+    é prefixo de 'sora-2-pro'); nada casando → padrão."""
+    classe = "1080p" if ("1080" in (tamanho or "") or "1920" in (tamanho or "")) else "720p"
+    tabela = PRECOS_VIDEO_USD.get((modelo or "").strip())
+    if tabela is None:
+        for familia in ("sora-2-pro", "sora-2"):
+            if (modelo or "").strip().startswith(familia):
+                tabela = PRECOS_VIDEO_USD[familia]
+                break
+    por_s = (
+        tabela.get(classe, tabela.get("720p", PRECO_VIDEO_PADRAO_POR_S))
+        if tabela
+        else PRECO_VIDEO_PADRAO_POR_S
+    )
+    try:
+        segs = int(str(segundos).strip())
+    except (TypeError, ValueError):
+        segs = 0
+    return por_s * max(0, segs)
 
 
 def custo_de_entrada(e: dict) -> float:

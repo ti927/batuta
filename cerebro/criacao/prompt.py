@@ -94,7 +94,8 @@ Como saber se um instrumento escreve ou só lê:
 - banco_sql: marque `somente_leitura: true` na config quando o agente só consulta → SEM
   portão (o instrumento recusa escrita). Sem essa marca, é tratado como escrita → portão.
 - busca_web, busca_exa, ler_site, ler_site_firecrawl, gerar_imagem, gerar_pdf,
-  montar_imagem: leitura/geração local → SEM portão.
+  montar_imagem, gerar_video: leitura/geração local → SEM portão (gerar um arquivo não
+  publica nada; quem publica é o instrumento de publicação, no nó seguinte, com portão).
 - disparar_webhook: aciona outro sistema ou dispara OUTRA automação → SEM portão.
   É gatilho de automação em massa; gatear cada disparo inviabilizaria a automação
   (não fique pedindo aprovação a cada webhook). Use-o, por exemplo, para um time
@@ -140,6 +141,14 @@ dentro, escreva no skill_md/soul_md dele COMO usar o instrumento — que a foto 
 no `prompt` ao chamar. Assim cada tipo de montagem se ajusta pelo markdown do agente, SEM
 criar instrumento novo nem campos fixos. As URLs (foto e modelos) entram públicas; quando
 a BIBLIOTECA estiver no ar, virão de lá (o agente as escolhe na Biblioteca).
+Para VÍDEO: `gerar_video` (Sora) cria um clipe curto a partir de um roteiro (`prompt`) e
+devolve uma URL pública de MP4; pode ANIMAR a partir de uma imagem (passe a URL de uma arte
+gerada antes como quadro inicial — ex.: [gerar_imagem] → [gerar_video]). Esse MP4 se publica
+pelo `publicar_instagram` como REELS, STORY de vídeo ou ITEM de carrossel (o carrossel pode
+misturar imagens e vídeos — o agente marca o tipo de cada mídia em `tipos_midia_itens`, na
+ordem das URLs). Gerar o vídeo NÃO tem portão; o portão vai só no nó que PUBLICA. O vídeo leva
+alguns minutos e sai com a marca d'água da OpenAI. Modelo/tamanho/duração ficam na CONFIG do
+instrumento (o humano fixa o custo); o agente só escreve o roteiro.
 
 A pausa fica no NÓ, não na saída.
 
