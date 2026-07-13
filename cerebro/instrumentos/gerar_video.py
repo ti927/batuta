@@ -163,6 +163,40 @@ class ArgsVideo(BaseModel):
     )
 
 
+def _dimensoes_imagem(conteudo: bytes) -> tuple[int, int] | None:
+    """Largura×altura de um PNG ou JPEG a partir dos bytes (sem dependência de
+    imagem — lê o cabeçalho). Devolve (w, h) ou None quando não reconhece o formato
+    (aí o pré-check de dimensão é PULADO, e a própria OpenAI valida)."""
+    b = conteudo or b""
+    if b[:8] == b"\x89PNG\r\n\x1a\n" and len(b) >= 24:  # PNG: IHDR em offset 16
+        return int.from_bytes(b[16:20], "big"), int.from_bytes(b[20:24], "big")
+    if b[:2] == b"\xff\xd8":  # JPEG: varre os marcadores até um SOF
+        i, n = 2, len(b)
+        while i + 9 < n:
+            if b[i] != 0xFF:
+                i += 1
+                continue
+            marcador = b[i + 1]
+            # SOF0..SOF15 trazem as dimensões; DHT/JPG/DAC (C4/C8/CC) não.
+            if 0xC0 <= marcador <= 0xCF and marcador not in (0xC4, 0xC8, 0xCC):
+                if i + 9 <= n:
+                    return int.from_bytes(b[i + 7:i + 9], "big"), int.from_bytes(b[i + 5:i + 7], "big")
+                return None
+            if i + 4 > n:
+                break
+            i += 2 + int.from_bytes(b[i + 2:i + 4], "big")  # pula o segmento
+    return None
+
+
+def _tamanho_para_par(tamanho: str) -> tuple[int, int] | None:
+    """'720x1280' → (720, 1280). None se não for 'LxA' de inteiros."""
+    try:
+        w, h = (tamanho or "").lower().split("x")
+        return int(w), int(h)
+    except (ValueError, AttributeError):
+        return None
+
+
 def _erro_openai(status: int, resposta) -> str:
     """Traduz o erro da OpenAI num recado ACIONÁVEL: qual parâmetro, mensagem e
     código a API recusou (o que ajustar no catálogo quando a OpenAI mudar)."""
@@ -235,6 +269,19 @@ class GerarVideo(TipoInstrumento):
         ref = (args.imagem_referencia_url or "").strip()
         if ref:
             conteudo_ref, ct_ref = _baixar(ref)  # falha aqui é retentável (job ainda não existe)
+            # Pré-checa a dimensão: a Sora EXIGE que a imagem de referência tenha
+            # EXATAMENTE o tamanho do vídeo. Falhar aqui (com os números reais) é bem
+            # mais claro do que o erro cru da OpenAI — e evita gastar uma chamada.
+            dims = _dimensoes_imagem(conteudo_ref)
+            alvo = _tamanho_para_par(config.tamanho)
+            if dims is not None and alvo is not None and dims != alvo:
+                raise FalhaInstrumento(
+                    f"a imagem de referência é {dims[0]}×{dims[1]}, mas o vídeo está "
+                    f"configurado para {config.tamanho}. A Sora exige que a imagem tenha "
+                    f"EXATAMENTE o mesmo tamanho do vídeo — gere ou forneça a imagem em "
+                    f"{config.tamanho} (ou ajuste o tamanho do vídeo no instrumento).",
+                    retentavel=False,
+                )
             partes["input_reference"] = ("referencia", conteudo_ref, ct_ref)
 
         with httpx.Client(timeout=TIMEOUT_S) as cli:
@@ -305,8 +352,17 @@ class GerarVideo(TipoInstrumento):
                 if estado == "failed":
                     erro = dados.get("error") or {}
                     detalhe = erro.get("message") or erro.get("code") or "sem detalhe"
+                    codigo = str(erro.get("code") or "")
+                    alvo_moder = f"{detalhe} {codigo}".lower()
+                    dica = ""
+                    if any(t in alvo_moder for t in ("moderation", "moderação", "sentinel", "blocked")):
+                        dica = (
+                            " A Sora recusa pessoas reais, rostos reconhecíveis e figuras "
+                            "públicas — tanto no roteiro quanto na imagem de referência. "
+                            "Ajuste o prompt/imagem e tente de novo."
+                        )
                     raise FalhaInstrumento(
-                        f"a OpenAI não conseguiu gerar o vídeo: {detalhe}",
+                        f"a OpenAI não conseguiu gerar o vídeo: {detalhe}.{dica}",
                         retentavel=False,
                     )
                 # queued / in_progress → continua o laço

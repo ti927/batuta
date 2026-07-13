@@ -137,6 +137,61 @@ def test_fluxo_completo(monkeypatch):
     assert "input_reference" not in create
 
 
+def _png(w: int, h: int) -> bytes:
+    """PNG mínimo (só cabeçalho) com as dimensões dadas, para o pré-check ler."""
+    return b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\x0dIHDR" + w.to_bytes(4, "big") + h.to_bytes(4, "big")
+
+
+def test_referencia_dimensao_errada_falha_cedo(monkeypatch):
+    # Imagem 1024x1024 com vídeo 720x1280 → falha ANTES da API, com os números reais.
+    cli = _instalar(monkeypatch, lambda *a, **k: _Resp({"id": "v"}))
+    monkeypatch.setattr(
+        "instrumentos.gerar_video._baixar", lambda u: (_png(1024, 1024), "image/png")
+    )
+    with pytest.raises(FalhaInstrumento) as e:
+        GerarVideo().executar(
+            ConfigVideo(**CFG),
+            ArgsVideo(prompt="x", imagem_referencia_url="http://x/a.png"),
+        )
+    assert e.value.retentavel is False
+    msg = str(e.value)
+    assert "1024×1024" in msg and "720x1280" in msg
+    assert not cli.calls  # nem chegou a chamar a API
+
+
+def test_referencia_dimensao_certa_prossegue(monkeypatch):
+    def r(metodo, url, files=None, params=None):
+        if metodo == "POST":
+            return _Resp({"id": "v"})
+        if url.endswith("/content"):
+            return _Resp(content=b"MP4")
+        return _Resp({"id": "v", "status": "completed"})
+
+    cli = _instalar(monkeypatch, r)
+    monkeypatch.setattr(
+        "instrumentos.gerar_video._baixar", lambda u: (_png(720, 1280), "image/png")
+    )
+    res = GerarVideo().executar(
+        ConfigVideo(**CFG), ArgsVideo(prompt="x", imagem_referencia_url="http://x/a.png")
+    )
+    assert res["ok"]
+    create = next(f for m, u, f in cli.calls if m == "POST" and u.endswith("/videos"))
+    assert "input_reference" in create
+
+
+def test_moderacao_tem_dica(monkeypatch):
+    def r(metodo, url, files=None, params=None):
+        if metodo == "POST":
+            return _Resp({"id": "v", "status": "queued"})
+        return _Resp({"id": "v", "status": "failed",
+                      "error": {"message": "blocked by moderation", "code": "moderation_blocked"}})
+
+    _instalar(monkeypatch, r)
+    with pytest.raises(FalhaInstrumento) as e:
+        GerarVideo().executar(ConfigVideo(**CFG), ArgsVideo(prompt="x"))
+    assert e.value.retentavel is False and "pessoas reais" in str(e.value)
+
+
 def test_imagem_referencia_vira_input_reference(monkeypatch):
     def r(metodo, url, files=None, params=None):
         if metodo == "POST" and url.endswith("/videos"):
