@@ -51,6 +51,9 @@ type CampoConfig = {
   servico?: string;
 };
 
+// Automação da organização, para o seletor de alvo do `agendar_automacao`.
+type AutomacaoOrg = { id: string; nome: string; time_id: string; time_nome: string };
+
 // Lê o tipo de um campo do JSON Schema, lidando com Optional (anyOf [tipo, null]).
 function tipoDoCampo(prop: Record<string, unknown>): string {
   if (typeof prop.type === "string") return prop.type;
@@ -178,12 +181,14 @@ function CampoConfigInput({
   valor,
   jaGuardado,
   disponiveis,
+  automacoes,
   onChange,
 }: {
   campo: CampoConfig;
   valor: string;
   jaGuardado: string | undefined; // 4 últimos dígitos, se já há segredo guardado
   disponiveis: ProvedoresDisponiveis | undefined; // p/ o seletor de modelo de IA
+  automacoes: AutomacaoOrg[]; // p/ o seletor de automação-alvo (agendar_automacao)
   onChange: (v: string) => void;
 }) {
   let entrada;
@@ -208,6 +213,29 @@ function CampoConfigInput({
             {MODELOS_POR_PROVEDOR[p].map((m) => (
               <option key={m} value={m}>
                 {m}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </Select>
+    );
+  } else if (campo.ui === "automacao_alvo" && !campo.secreto) {
+    // Seletor da automação-alvo do agendamento: as automações da organização,
+    // agrupadas por time (o valor guardado é o id da automação).
+    const porTime = new Map<string, { id: string; nome: string }[]>();
+    for (const a of automacoes) {
+      const lista = porTime.get(a.time_nome) ?? [];
+      lista.push({ id: a.id, nome: a.nome });
+      porTime.set(a.time_nome, lista);
+    }
+    entrada = (
+      <Select value={valor} onChange={(e) => onChange(e.target.value)}>
+        <option value="">(escolha uma automação)</option>
+        {[...porTime.entries()].map(([nomeTime, lista]) => (
+          <optgroup key={nomeTime} label={nomeTime}>
+            {lista.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.nome}
               </option>
             ))}
           </optgroup>
@@ -327,6 +355,8 @@ export function FormularioInstrumento({
   // Provedores com chave na org — para um campo de modelo de IA (ui:modelo_ia) só
   // oferecer modelos cujo provedor tem chave. Fallback (falha/carregando): mostra todos.
   const [disponiveis, setDisponiveis] = useState<ProvedoresDisponiveis>();
+  // Automações da organização — para o campo `ui:automacao_alvo` (agendar_automacao).
+  const [automacoesOrg, setAutomacoesOrg] = useState<AutomacaoOrg[]>([]);
 
   useEffect(() => {
     let vivo = true;
@@ -339,6 +369,21 @@ export function FormularioInstrumento({
       })
       .catch(() => {
         /* sem disponibilidade: o seletor de modelo mostra todos (fallback seguro) */
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [time.organizacao_id]);
+
+  useEffect(() => {
+    let vivo = true;
+    api
+      .get<AutomacaoOrg[]>(`/organizacoes/${time.organizacao_id}/automacoes`)
+      .then((d) => {
+        if (vivo) setAutomacoesOrg(d);
+      })
+      .catch(() => {
+        /* sem automações: o seletor de alvo fica vazio */
       });
     return () => {
       vivo = false;
@@ -552,6 +597,7 @@ export function FormularioInstrumento({
             valor={valores[campo.nome] ?? ""}
             jaGuardado={instrumento?.segredos?.[campo.nome]}
             disponiveis={disponiveis}
+            automacoes={automacoesOrg}
             onChange={(v) =>
               setValores((atual) => {
                 const proximo = { ...atual, [campo.nome]: v };

@@ -19,6 +19,7 @@ from instrumentos.base import (
 )
 
 # Registra os tipos concretos ao importar o pacote.
+from instrumentos import agendar_automacao  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import busca_exa  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import busca_web  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import descrever_imagem  # noqa: E402, F401  (efeito colateral: registro)

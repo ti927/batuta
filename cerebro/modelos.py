@@ -485,6 +485,40 @@ class EventoComentarioInstagram(IdData, Base):
     )
 
 
+class Agendamento(IdData, Base):
+    """Disparo FUTURO de uma automação, criado por um AGENTE em runtime — camada de
+    BORDA (o núcleo de orquestração não conhece esta tabela).
+
+    Ao fim de uma execução e conforme o resultado, um agente pode agendar um disparo
+    da automação-ALVO (a mesma ou a de outro time da MESMA organização — o alvo é
+    fixado na CONFIG do instrumento pelo humano). Um sweeper periódico (agendador)
+    pega os `pendente` com `quando_executar <= agora`, cria a execução (motor) e
+    marca `enfileirado`; alvo sumido/inativo vira `cancelado` (visível). A tela
+    lista/cancela os `pendente`. Aditiva: não toca nenhuma tabela do motor."""
+
+    __tablename__ = "agendamentos"
+    # A automação a DISPARAR no futuro (o alvo).
+    automacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("automacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    quando_executar: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    entrada: Mapped[str | None] = mapped_column(Text, nullable=True)
+    estado: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'pendente'")
+    )  # pendente | enfileirado | cancelado
+    # Preenchido quando o sweeper dispara (auditoria).
+    execucao_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("execucoes.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_agendamentos_pendentes", "estado", "quando_executar"),
+        Index("ix_agendamentos_automacao", "automacao_id", "estado"),
+    )
+
+
 # ───────────────────── IA criadora (Etapa 2, Fase 9) ─────────────────────────
 
 

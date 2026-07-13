@@ -101,6 +101,13 @@ Como saber se um instrumento escreve ou só lê:
   (não fique pedindo aprovação a cada webhook). Use-o, por exemplo, para um time
   acionar outro time pela URL do webhook do outro (a URL vai na CONFIG do
   instrumento; o agente só monta o corpo/payload).
+- agendar_automacao: agenda um disparo FUTURO de uma automação → SEM portão. Serve
+  para, ao fim de um fluxo e conforme o resultado, REPROGRAMAR um próximo passo (ex.:
+  "daqui a 10 dias") — a MESMA automação (reprograma-se) ou a de OUTRO time da
+  organização (departamentos interdependentes). A automação-alvo é fixada na CONFIG
+  pelo humano (um seletor das automações da organização); o agente decide só o SE e o
+  QUANDO (dias/horas/minutos, ou uma data). Dá para ver e cancelar os agendamentos na
+  tela da automação.
 - publicar_wordpress, publicar_instagram, instagram_responder_comentario:
   escrevem/publicam conteúdo para o público → COM portão.
 - instagram_insights, instagram_ler_comentarios: leitura → SEM portão.

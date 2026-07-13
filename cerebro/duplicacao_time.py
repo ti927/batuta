@@ -179,6 +179,7 @@ def duplicar_time(
         str(velho): str(novo_i.id) for velho, novo_i in map_inst_obj.items()
     }
     ids_agentes_novos = {str(a.id) for a in map_ag_obj.values()}
+    map_auto_str: dict[str, str] = {}  # {automacao_velha → nova} p/ o remap do agendar_automacao
     for auto in sessao.scalars(
         select(Automacao).where(Automacao.time_id == original.id)
     ):
@@ -208,7 +209,21 @@ def duplicar_time(
         )
         sessao.add(copia)
         sessao.flush()
+        map_auto_str[str(auto.id)] = str(copia.id)
         agendador.sincronizar(copia)  # inativa → garante que nenhum job fica no relógio
+
+    # 5b) Instrumento `agendar_automacao`: se o ALVO era uma automação DESTE time
+    #     (agora copiada), re-aponta para a cópia; se apontava para FORA, mantém — assim
+    #     a cópia reprograma a si mesma, não o original (footgun do id stale, análogo ao
+    #     canal que nasce sem token).
+    for novo_i in map_inst_obj.values():
+        if novo_i.tipo != "agendar_automacao":
+            continue
+        alvo = (novo_i.configuracao or {}).get("automacao_alvo_id")
+        if alvo and str(alvo) in map_auto_str:
+            cfg = dict(novo_i.configuracao or {})
+            cfg["automacao_alvo_id"] = map_auto_str[str(alvo)]
+            novo_i.configuracao = cfg
 
     # 6) Memória da IA companheira. Cria uma conversa nova amarrada ao time novo. A
     #    conversa RECOMEÇA LIMPA (mensagens=[]): o histórico literal carrega os IDs do

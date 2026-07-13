@@ -20,6 +20,7 @@ import {
   type TipoInstrumento,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
+import { AgendamentosAutomacao } from "@/components/agendamentos-automacao";
 import { AutomacaoBuilder } from "@/components/automacao-builder/builder";
 import { DialogoConfigFluxo } from "@/components/automacao-builder/config-fluxo";
 import { normalizarCadeia } from "@/components/automacao-builder/nucleo";
@@ -419,6 +420,10 @@ function EditorAutomacao({
           meuPapel={meuPapel}
         />
       </div>
+
+      {automacao && (
+        <AgendamentosAutomacao automacaoId={automacao.id} podeOperar={souOperador} />
+      )}
 
       {mostrarConfig && (
         <DialogoConfigFluxo

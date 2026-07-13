@@ -23,7 +23,7 @@ from esquemas import (
     InstrumentoLer,
     TipoInstrumentoLer,
 )
-from modelos import Credencial, Instrumento, Usuario
+from modelos import Automacao, Credencial, Instrumento, Usuario
 from rotas._comum import instrumento_acessivel, time_acessivel
 from sessao import obter_sessao
 
@@ -59,6 +59,32 @@ def _validar_credencial(
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             f"Este instrumento não aceita credencial do tipo '{cred.tipo}'.",
+        )
+
+
+def _validar_alvo_agendamento(
+    sessao: Session,
+    tipo_instrumento: str,
+    organizacao_id: uuid.UUID,
+    configuracao: dict | None,
+) -> None:
+    """Para `agendar_automacao`: a automação-alvo (se informada) precisa ser da MESMA
+    organização — trava o escopo em CÓDIGO, não só no seletor da tela. 422 caso não."""
+    if tipo_instrumento != "agendar_automacao":
+        return
+    alvo = (configuracao or {}).get("automacao_alvo_id")
+    if not alvo:
+        return
+    try:
+        alvo_id = uuid.UUID(str(alvo))
+    except (ValueError, TypeError):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Automação-alvo inválida.")
+    auto = sessao.get(Automacao, alvo_id)
+    org_alvo = auditoria.org_do_time(sessao, auto.time_id) if auto else None
+    if auto is None or org_alvo != organizacao_id:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "A automação a agendar precisa ser da mesma organização.",
         )
 
 
@@ -132,6 +158,7 @@ def criar(
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
     _validar_credencial(sessao, dados.tipo, time.organizacao_id, dados.credencial_id)
+    _validar_alvo_agendamento(sessao, dados.tipo, time.organizacao_id, config_limpa)
     inst = Instrumento(
         time_id=time_id,
         nome=dados.nome,
@@ -178,10 +205,9 @@ def editar(
         )
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
-    _validar_credencial(
-        sessao, inst.tipo,
-        auditoria.org_do_time(sessao, inst.time_id), dados.credencial_id,
-    )
+    org_id_inst = auditoria.org_do_time(sessao, inst.time_id)
+    _validar_credencial(sessao, inst.tipo, org_id_inst, dados.credencial_id)
+    _validar_alvo_agendamento(sessao, inst.tipo, org_id_inst, config_limpa)
     inst.nome = dados.nome
     inst.configuracao = config_limpa
     inst.icone = dados.icone

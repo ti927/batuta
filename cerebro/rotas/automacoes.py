@@ -38,6 +38,7 @@ import portao_ativacao
 import precos
 from auth import usuario_atual
 from modelos import (
+    Agendamento,
     Agente,
     Automacao,
     Conversa,
@@ -62,7 +63,12 @@ from mensageria.config import painel_config
 from orquestracao import grafo
 from orquestracao.cadeia import validar_cadeia
 from orquestracao.disparo import criar_execucao
-from rotas._comum import automacao_acessivel, execucao_acessivel, time_acessivel
+from rotas._comum import (
+    automacao_acessivel,
+    execucao_acessivel,
+    organizacao_acessivel,
+    time_acessivel,
+)
 from sessao import obter_sessao
 
 # Estados em que a execução já encerrou (não há mais o que cancelar).
@@ -353,6 +359,77 @@ def listar_execucoes(
         .where(Execucao.automacao_id == automacao_id)
         .order_by(Execucao.criado_em.desc())
     ).all()
+
+
+# ───────────────────── Agendamentos (disparo futuro por agente) ─────────────────────
+
+
+@rotas.get("/organizacoes/{organizacao_id}/automacoes")
+def listar_automacoes_da_organizacao(
+    organizacao_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Todas as automações da organização (id, nome, time) — alimenta o seletor de
+    'automação a agendar' do instrumento `agendar_automacao` (escopo: mesma org)."""
+    organizacao_acessivel(sessao, usuario, organizacao_id)
+    linhas = sessao.execute(
+        select(Automacao.id, Automacao.nome, Time.id, Time.nome)
+        .join(Time, Time.id == Automacao.time_id)
+        .where(Time.organizacao_id == organizacao_id)
+        .order_by(Time.nome, Automacao.nome)
+    ).all()
+    return [
+        {"id": str(aid), "nome": anome, "time_id": str(tid), "time_nome": tnome}
+        for aid, anome, tid, tnome in linhas
+    ]
+
+
+@rotas.get("/automacoes/{automacao_id}/agendamentos")
+def listar_agendamentos(
+    automacao_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Os agendamentos PENDENTES desta automação (próximas execuções agendadas)."""
+    automacao_acessivel(sessao, usuario, automacao_id)
+    ags = sessao.scalars(
+        select(Agendamento)
+        .where(
+            Agendamento.automacao_id == automacao_id,
+            Agendamento.estado == "pendente",
+        )
+        .order_by(Agendamento.quando_executar)
+    ).all()
+    return [
+        {
+            "id": str(a.id),
+            "quando_executar": a.quando_executar.isoformat(),
+            "criado_em": a.criado_em.isoformat(),
+        }
+        for a in ags
+    ]
+
+
+@rotas.delete("/agendamentos/{agendamento_id}", status_code=status.HTTP_204_NO_CONTENT)
+def cancelar_agendamento(
+    agendamento_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Cancela um agendamento pendente (operador): marca `cancelado` (não apaga)."""
+    ag = sessao.get(Agendamento, agendamento_id)
+    if ag is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Agendamento não encontrado")
+    auto = automacao_acessivel(sessao, usuario, ag.automacao_id, minimo="operador")
+    if ag.estado == "pendente":
+        ag.estado = "cancelado"
+        auditoria.registrar(
+            sessao, usuario=usuario, acao="agendamento.cancelado",
+            recurso_tipo="agendamento", recurso_id=ag.id,
+            organizacao_id=auditoria.org_do_time(sessao, auto.time_id),
+        )
+        sessao.commit()
 
 
 @rotas.get("/times/{time_id}/execucoes", response_model=list[ExecucaoNaLista])

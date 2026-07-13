@@ -19,7 +19,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 
 import fila
-from modelos import Automacao, Credencial
+from modelos import Agendamento, Automacao, Credencial
 from orquestracao.disparo import criar_execucao
 from sessao import CriadorDeSessao
 
@@ -160,6 +160,65 @@ def _refresh_instagram_job() -> None:
         sessao.close()
 
 
+# ─────────────── Agendamentos únicos (disparo futuro por um agente) ───────────────
+# Um agente cria uma linha `pendente` em `agendamentos` (instrumento agendar_automacao);
+# este sweeper dispara os vencidos. Aditivo, na borda — o núcleo não conhece a tabela.
+LIMITE_POR_VARREDURA = 100
+
+
+def varrer_agendamentos(sessao) -> int:
+    """Dispara os agendamentos VENCIDOS (`pendente` com `quando_executar` já passado):
+    cria a execução da automação-alvo e marca `enfileirado`. Alvo ausente/inativo →
+    `cancelado` (visível, nunca em silêncio). CLAIM-FIRST (marca antes de criar) para
+    NUNCA disparar em dobro — no pior caso (falha após o claim) perde-se um disparo, que
+    é preferível a duplicar. Devolve quantos disparou."""
+    agora = datetime.now(timezone.utc)
+    pendentes = sessao.scalars(
+        select(Agendamento)
+        .where(
+            Agendamento.estado == "pendente",
+            Agendamento.quando_executar <= agora,
+        )
+        .order_by(Agendamento.quando_executar)
+        .limit(LIMITE_POR_VARREDURA)
+    ).all()
+    disparados = 0
+    for ag in pendentes:
+        auto = sessao.get(Automacao, ag.automacao_id)
+        if auto is None or not auto.ativa:
+            ag.estado = "cancelado"
+            sessao.commit()
+            logger.warning(
+                "Agendamento %s cancelado: automação-alvo ausente/inativa.", ag.id
+            )
+            continue
+        try:
+            ag.estado = "enfileirado"  # claim: não re-processa nesta nem na próxima varredura
+            sessao.commit()
+            execucao = criar_execucao(sessao, auto, ag.entrada or "")
+            ag.execucao_id = execucao.id
+            sessao.commit()
+            fila.enfileirar()
+            disparados += 1
+            logger.info(
+                "Agendamento %s disparou a execução %s da automação %s.",
+                ag.id, execucao.id, ag.automacao_id,
+            )
+        except Exception:
+            sessao.rollback()
+            logger.exception("Falha ao disparar o agendamento %s", ag.id)
+    return disparados
+
+
+def _varrer_agendamentos_job() -> None:
+    """Entrada do agendador: abre a própria sessão e dispara os agendamentos vencidos."""
+    sessao = CriadorDeSessao()
+    try:
+        varrer_agendamentos(sessao)
+    finally:
+        sessao.close()
+
+
 def iniciar() -> None:
     """Sobe o relógio e reconstrói os jobs a partir do banco."""
     sessao = CriadorDeSessao()
@@ -198,6 +257,14 @@ def iniciar() -> None:
         fila.varrer_presas_job,
         trigger=IntervalTrigger(seconds=120),
         id="execucao_sweeper",
+        replace_existing=True,
+    )
+    # Disparo dos agendamentos únicos vencidos (instrumento agendar_automacao), a
+    # cada minuto. Borda: o núcleo não conhece a tabela `agendamentos`.
+    _scheduler.add_job(
+        _varrer_agendamentos_job,
+        trigger=IntervalTrigger(seconds=60),
+        id="agendamentos_sweeper",
         replace_existing=True,
     )
     if not _scheduler.running:
