@@ -69,6 +69,13 @@ def _fazer_registrador(
                     "instrumentos_acionados": passo["instrumentos_acionados"],
                     "saida_escolhida": passo["saida_escolhida"],
                     "uso": uso,
+                    # Só quando houve falha de instrumento — mantém o passo comum
+                    # idêntico ao de antes (o diagnóstico lê com `.get(...) or []`).
+                    **(
+                        {"erros_instrumentos": passo["erros_instrumentos"]}
+                        if passo.get("erros_instrumentos")
+                        else {}
+                    ),
                 },
                 estado="concluido",
                 iniciado_em=passo["iniciado_em"],

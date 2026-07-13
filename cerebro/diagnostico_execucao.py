@@ -309,6 +309,10 @@ def diagnosticar(sessao: Session, execucao_id, *, seguir_webhook: bool = True) -
             acao={"tipo": "aguardar"},
         ))
 
+    # ── Instrumento que falhou mas o fluxo SEGUIU (leitura/geração) ──
+    # Não fica visível no estado (a execução "concluiu"); o erro cru mora no passo.
+    _verificar_erros_instrumentos(d, passos, avisos)
+
     # ── Seguir o webhook (1 hop, mesma organização) ──
     if seguir_webhook:
         _verificar_webhook(sessao, d, auto, passos, avisos)
@@ -362,6 +366,30 @@ def _verificar_falha(sessao, d, ex, passos, avisos, nomes) -> None:
         _trunc(erro, 220) or "Falhou sem erro registrado.",
         acao={"tipo": "aguardar"},
     ))
+
+
+def _verificar_erros_instrumentos(d, passos, avisos) -> None:
+    """Aviso para cada instrumento de LEITURA/GERAÇÃO que falhou sem derrubar a
+    execução (ex.: `gerar_video` recusado por dimensão/moderação). Esse erro é
+    "engolido" — o agente narra à sua maneira e o estado fica "concluída" —, então
+    aqui trazemos o TEXTO CRU que o instrumento devolveu. Falhas de ação IRREVERSÍVEL
+    já aparecem via `_verificar_falha` (a execução fica 'falhou') — não repetimos."""
+    for p in passos:
+        for e in (p.saida or {}).get("erros_instrumentos") or []:
+            if e.get("irreversivel"):
+                continue
+            avisos.append(_aviso(
+                "instrumento_falhou_seguiu", "alerta",
+                f"O instrumento «{e.get('ferramenta')}» falhou",
+                f"No passo {p.ordem}, «{e.get('ferramenta')}» não concluiu: "
+                f"{_trunc(e.get('erro'), 240)}. O fluxo seguiu (não é ação irreversível), "
+                "mas o resultado desse passo pode estar incompleto.",
+                acao=(
+                    {"tipo": "editar_instrumento", "instrumento_id": e.get("instrumento_id")}
+                    if e.get("instrumento_id") else {"tipo": "aguardar"}
+                ),
+                instrumento_id=_coagir_uuid(e.get("instrumento_id")),
+            ))
 
 
 def _instrumento_da_falha(sessao, passos) -> Instrumento | None:

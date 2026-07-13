@@ -73,11 +73,14 @@ def _exec(sessao, auto, estado, *, resultado=None, criado=None, iniciada=None):
 
 
 def _passo(sessao, ex, *, ordem=1, agente=None, no_id=None, texto="ok", acionados=None,
-           finalizado=None):
+           finalizado=None, erros=None):
+    saida = {"texto": texto, "instrumentos_acionados": acionados or []}
+    if erros:
+        saida["erros_instrumentos"] = erros
     p = PassoExecucao(
         execucao_id=ex.id, ordem=ordem, agente_id=(agente.id if agente else None),
         no_id=no_id, entrada={"texto": "x"},
-        saida={"texto": texto, "instrumentos_acionados": acionados or []},
+        saida=saida,
         estado="concluido", finalizado_em=finalizado,
     )
     sessao.add(p)
@@ -139,6 +142,49 @@ def test_falha_generica(sessao, dados):
     auto = _auto(sessao, dados)
     ex = _exec(sessao, auto, "falhou", resultado={"erro": "Cadeia inválida: nó X ausente."})
     assert "falha_generica" in _codigos(diag.diagnosticar(sessao, ex.id))
+
+
+def test_instrumento_falhou_mas_seguiu(sessao, dados):
+    """Instrumento de LEITURA/GERAÇÃO (ex.: gerar_video recusado por dimensão) falha,
+    mas o fluxo segue → execução 'concluída'. O erro CRU não some: vira aviso."""
+    ag = _agente(sessao, dados, "Ag. gerador video")
+    inst = _instr(sessao, dados, "GerarVideo", "gerar_video")
+    _encaixar(sessao, ag, inst)
+    auto = _auto(sessao, dados)
+    ex = _exec(sessao, auto, "concluida")
+    _passo(
+        sessao, ex, agente=ag, no_id="n1",
+        acionados=[f"GerarVideo_{inst.id.hex[:8]}"],
+        erros=[{
+            "ferramenta": "GerarVideo", "tipo": "gerar_video",
+            "instrumento_id": str(inst.id),
+            "erro": "a imagem de referência é 1024×1024, mas o vídeo está configurado para 720x1280.",
+            "retentavel": False, "irreversivel": False,
+        }],
+    )
+    d = diag.diagnosticar(sessao, ex.id)
+    a = next(a for a in d["avisos"] if a["codigo"] == "instrumento_falhou_seguiu")
+    assert "1024×1024" in a["detalhe"]
+    assert a["referencias"]["instrumento_id"] == str(inst.id)
+    assert a["acao_sugerida"]["tipo"] == "editar_instrumento"
+
+
+def test_erro_irreversivel_nao_duplica_no_aviso(sessao, dados):
+    """Falha de ação IRREVERSÍVEL já aparece via 'falha_instrumento' (estado 'falhou');
+    não deve também virar 'instrumento_falhou_seguiu' (evita aviso em dobro)."""
+    ag = _agente(sessao, dados, "Publicador")
+    inst = _instr(sessao, dados, "Publicar", "publicar_instagram")
+    _encaixar(sessao, ag, inst)
+    auto = _auto(sessao, dados)
+    ex = _exec(sessao, auto, "falhou", resultado={"erro": "O instrumento 'Publicar' falhou: X."})
+    _passo(
+        sessao, ex, agente=ag, no_id="n1",
+        acionados=[f"Publicar_{inst.id.hex[:8]}"],
+        erros=[{"ferramenta": "Publicar", "tipo": "publicar_instagram",
+                "instrumento_id": str(inst.id), "erro": "X", "retentavel": False,
+                "irreversivel": True}],
+    )
+    assert "instrumento_falhou_seguiu" not in _codigos(diag.diagnosticar(sessao, ex.id))
 
 
 # ───────────────────────────── presas ─────────────────────────────

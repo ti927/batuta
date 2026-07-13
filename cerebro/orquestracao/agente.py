@@ -52,7 +52,8 @@ def _nome_de_ferramenta(inst: Instrumento, tipo_fallback: str) -> str:
 
 
 def _ferramenta_unica(
-    inst, tipo, config, falhas: list[str], mensagens_enviadas: dict[str, list[str]]
+    inst, tipo, config, falhas: list[str], mensagens_enviadas: dict[str, list[str]],
+    erros: list[dict],
 ) -> StructuredTool:
     """A ferramenta única derivada do `executar` de um instrumento (o caso comum).
 
@@ -84,6 +85,17 @@ def _ferramenta_unica(
             resultado = acionar_com_retentativa(tipo, config, args)
         except FalhaInstrumento as e:
             msg = f"O instrumento '{inst.nome}' falhou: {e}"
+            # Registra o erro CRU (não só o que a IA vai narrar depois): é o que
+            # permite ao diagnóstico dizer EXATAMENTE o que aconteceu, mesmo quando a
+            # falha é de leitura/geração e o fluxo segue (execução "concluída").
+            erros.append({
+                "ferramenta": inst.nome,
+                "tipo": tipo.tipo,
+                "instrumento_id": str(inst.id),
+                "erro": str(e),
+                "retentavel": e.retentavel,
+                "irreversivel": irreversivel,
+            })
             if irreversivel:
                 falhas.append(msg)
                 return json.dumps({"ok": False, "erro": msg}, ensure_ascii=False)
@@ -112,7 +124,8 @@ def _ferramenta_unica(
 
 
 def _ferramentas_de_instrumento(
-    inst: Instrumento, falhas: list[str], mensagens_enviadas: dict[str, list[str]]
+    inst: Instrumento, falhas: list[str], mensagens_enviadas: dict[str, list[str]],
+    erros: list[dict],
 ) -> list:
     """As ferramentas que um instrumento do cinto oferece à IA pelo encaixe.
 
@@ -130,7 +143,7 @@ def _ferramentas_de_instrumento(
     expandidas = tipo.expandir_ferramentas(config)
     if expandidas is not None:
         return expandidas
-    return [_ferramenta_unica(inst, tipo, config, falhas, mensagens_enviadas)]
+    return [_ferramenta_unica(inst, tipo, config, falhas, mensagens_enviadas, erros)]
 
 
 def _opcoes_das_saidas(saidas: list[dict]) -> str:
@@ -218,11 +231,14 @@ def executar_agente(
     # neste turno. O portão de aprovação usa isto para carregar adiante o que a
     # pessoa viu, em vez do status que o agente narra depois.
     mensagens_enviadas: dict[str, list[str]] = {}
+    # Erros CRUS dos instrumentos neste turno (para o diagnóstico, não só a narração
+    # da IA) — inclui falhas de leitura/geração que não derrubam a execução.
+    erros_instrumentos: list[dict] = []
     escolha: dict[str, str] = {}  # o ramo que o agente declarar via `seguir_para`
     ferramentas = [
         f
         for i in cinto
-        for f in _ferramentas_de_instrumento(i, falhas, mensagens_enviadas)
+        for f in _ferramentas_de_instrumento(i, falhas, mensagens_enviadas, erros_instrumentos)
     ]
     saidas = saidas or []
     instrucoes = montar_instrucoes(agente)
@@ -259,6 +275,7 @@ def executar_agente(
         "saida": texto_da_resposta(mensagens[-1]),
         "instrumentos_acionados": acionados,
         "mensagens_enviadas": mensagens_enviadas,
+        "erros_instrumentos": erros_instrumentos,
         "ramo_escolhido": escolha.get("rotulo"),
         "uso": [
             {

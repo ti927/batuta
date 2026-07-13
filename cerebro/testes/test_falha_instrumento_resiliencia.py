@@ -33,24 +33,30 @@ def _ferramenta(tipo_str: str, configuracao: dict, monkeypatch):
 
     monkeypatch.setattr(agente_mod, "acionar_com_retentativa", explode)
     falhas: list[str] = []
-    return agente_mod._ferramenta_unica(inst, tipo, config, falhas, {}), falhas
+    erros: list[dict] = []
+    tool = agente_mod._ferramenta_unica(inst, tipo, config, falhas, {}, erros)
+    return tool, falhas, erros
 
 
 def test_falha_de_leitura_nao_derruba_execucao(monkeypatch):
     # busca_web = leitura (acao_irreversivel False)
-    tool, falhas = _ferramenta("busca_web", {}, monkeypatch)
+    tool, falhas, erros = _ferramenta("busca_web", {}, monkeypatch)
     saida = json.loads(tool.func(consulta="reforma tributária 2026"))
     assert saida["ok"] is False
     assert "dica" in saida  # o agente é orientado a seguir/tentar de novo
     assert falhas == []  # NÃO entra na lista que derruba a execução
+    # mas o erro CRU é registrado (para o diagnóstico dizer o que aconteceu).
+    assert len(erros) == 1
+    assert erros[0]["irreversivel"] is False and "recusou" in erros[0]["erro"]
 
 
 def test_falha_de_escrita_derruba_execucao(monkeypatch):
     # enviar_telegram = ação irreversível (manda para fora)
-    tool, falhas = _ferramenta("enviar_telegram", {"token_bot": "x"}, monkeypatch)
+    tool, falhas, erros = _ferramenta("enviar_telegram", {"token_bot": "x"}, monkeypatch)
     saida = json.loads(tool.func(destinatario="123", mensagem="oi"))
     assert saida["ok"] is False
     assert len(falhas) == 1  # vira falha fatal e visível
+    assert len(erros) == 1 and erros[0]["irreversivel"] is True
 
 
 def test_turno_misto_so_a_escrita_conta(monkeypatch):
@@ -63,13 +69,14 @@ def test_turno_misto_so_a_escrita_conta(monkeypatch):
 
     monkeypatch.setattr(agente_mod, "acionar_com_retentativa", explode)
     falhas: list[str] = []
+    erros: list[dict] = []
 
     busca = encaixe.obter_tipo("busca_web")
     inst_b = Instrumento(
         time_id=uuid.uuid4(), nome="Busca", tipo="busca_web", configuracao={}
     )
     inst_b.id = uuid.uuid4()
-    tool_b = agente_mod._ferramenta_unica(inst_b, busca, busca.Config(), falhas, {})
+    tool_b = agente_mod._ferramenta_unica(inst_b, busca, busca.Config(), falhas, {}, erros)
 
     tg = encaixe.obter_tipo("enviar_telegram")
     inst_t = Instrumento(
@@ -78,7 +85,7 @@ def test_turno_misto_so_a_escrita_conta(monkeypatch):
     )
     inst_t.id = uuid.uuid4()
     tool_t = agente_mod._ferramenta_unica(
-        inst_t, tg, tg.Config.model_validate({"token_bot": "x"}), falhas, {}
+        inst_t, tg, tg.Config.model_validate({"token_bot": "x"}), falhas, {}, erros
     )
 
     json.loads(tool_b.func(consulta="x"))  # leitura falha → não conta
@@ -86,3 +93,5 @@ def test_turno_misto_so_a_escrita_conta(monkeypatch):
 
     assert len(falhas) == 1
     assert "Telegram" in falhas[0]  # só a escrita derruba
+    # ambos os erros CRUS são registrados para o diagnóstico (leitura + escrita).
+    assert len(erros) == 2 and {e["irreversivel"] for e in erros} == {True, False}

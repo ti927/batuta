@@ -62,6 +62,12 @@ def main(exec_id: str) -> None:
             print(f"ENTRADA: {_txt((p.entrada or {}).get('texto'))}")
             print(f"SAÍDA.texto: {_txt(saida.get('texto'))}")
             print(f"instrumentos_acionados: {saida.get('instrumentos_acionados')}")
+            for e in saida.get("erros_instrumentos") or []:
+                print(
+                    f"ERRO INSTRUMENTO: «{e.get('ferramenta')}» ({e.get('tipo')}, "
+                    f"retentavel={e.get('retentavel')}, irreversivel={e.get('irreversivel')}): "
+                    f"{_txt(e.get('erro'), 500)}"
+                )
             print(f"ramo_escolhido: {saida.get('ramo_escolhido')}")
             if saida.get("mensagens_enviadas"):
                 print(f"mensagens_enviadas: {_txt(saida.get('mensagens_enviadas'))}")

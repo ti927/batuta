@@ -38,7 +38,7 @@ def test_envio_por_canal_registra_a_mensagem_apresentada(monkeypatch):
     )
     enviadas: dict[str, list[str]] = {}
     tool = agente_mod._ferramenta_unica(
-        inst, tg, tg.Config.model_validate({"token_bot": "x"}), [], enviadas
+        inst, tg, tg.Config.model_validate({"token_bot": "x"}), [], enviadas, []
     )
     tool.func(destinatario="123", mensagem="ARTIGO COMPLETO REVISADO")
     assert enviadas == {str(inst.id): ["ARTIGO COMPLETO REVISADO"]}
@@ -55,7 +55,7 @@ def test_instrumento_sem_campo_mensagem_nao_registra(monkeypatch):
         agente_mod, "acionar_com_retentativa", lambda t, c, a: {"resultados": []}
     )
     enviadas: dict[str, list[str]] = {}
-    tool = agente_mod._ferramenta_unica(inst, busca, busca.Config(), [], enviadas)
+    tool = agente_mod._ferramenta_unica(inst, busca, busca.Config(), [], enviadas, [])
     tool.func(consulta="reforma tributária")
     assert enviadas == {}
 

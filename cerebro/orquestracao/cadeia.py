@@ -237,6 +237,7 @@ def executar_cadeia(
             agente_nome = no.get("nome") or "roteador"
             saida_texto = entrada_atual
             instrumentos: list = []
+            erros_instrumentos: list = []
             uso_passo: list = []
         else:  # agente
             ref = no.get("ref")
@@ -256,6 +257,7 @@ def executar_cadeia(
             instrumentos = resultado["instrumentos_acionados"]
             uso_passo = list(resultado.get("uso") or [])
             mensagens_enviadas = resultado.get("mensagens_enviadas") or {}
+            erros_instrumentos = resultado.get("erros_instrumentos") or []
             ramo_declarado = resultado.get("ramo_escolhido")
             agente_id_str = str(agente.id)
             agente_nome = agente.nome
@@ -298,6 +300,7 @@ def executar_cadeia(
             "entrada": entrada_atual,
             "saida": saida_texto,
             "instrumentos_acionados": instrumentos,
+            "erros_instrumentos": erros_instrumentos,
             "saida_escolhida": escolhida["rotulo"] if escolhida else None,
             "uso": uso_passo,
             "iniciado_em": iniciado_em,
