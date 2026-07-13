@@ -184,3 +184,66 @@ def test_falha_de_publicacao_nunca_e_retentavel(monkeypatch):
     with pytest.raises(FalhaInstrumento) as e:
         PublicarInstagram().executar(CFG, ArgsPublicarInstagram(midia_urls=["u"]))
     assert e.value.retentavel is False
+
+
+# ───────────────────── vídeo: carrossel misto e story de vídeo ─────────────────────
+
+
+def test_story_de_video_usa_video_url(monkeypatch):
+    cli = _instalar(monkeypatch, _router_ok)
+    PublicarInstagram().executar(
+        CFG,
+        ArgsPublicarInstagram(
+            tipo_midia="stories", midia_urls=["s.mp4"], tipos_midia_itens=["video"]
+        ),
+    )
+    post_media = next(d for m, u, d in cli.calls if m == "POST" and u.endswith("/media"))
+    assert post_media["media_type"] == "STORIES"
+    assert post_media["video_url"] == "s.mp4"
+    assert "image_url" not in post_media
+
+
+def test_carrossel_misto_imagem_e_video(monkeypatch):
+    estado = {"n": 0}
+
+    def r(metodo, url, dados):
+        if metodo == "POST" and url.endswith("/media_publish"):
+            return _Resp({"id": "MEDIAC"})
+        if metodo == "POST" and url.endswith("/media"):
+            estado["n"] += 1
+            return _Resp({"id": f"C{estado['n']}"})
+        if metodo == "GET":
+            return _Resp({"status_code": "FINISHED"})
+        return _Resp({}, 400)
+
+    cli = _instalar(monkeypatch, r)
+    res = PublicarInstagram().executar(
+        CFG,
+        ArgsPublicarInstagram(
+            tipo_midia="carrossel",
+            midia_urls=["foto.jpg", "clip.mp4"],
+            tipos_midia_itens=["imagem", "video"],
+            legenda="misto",
+        ),
+    )
+    assert res["ok"] and res["tipo_midia"] == "carrossel"
+    itens = [
+        d for m, u, d in cli.calls
+        if m == "POST" and u.endswith("/media") and d.get("is_carousel_item") == "true"
+    ]
+    assert len(itens) == 2
+    img = next(d for d in itens if "image_url" in d)
+    vid = next(d for d in itens if d.get("media_type") == "VIDEO")
+    assert img["image_url"] == "foto.jpg"
+    assert vid["video_url"] == "clip.mp4" and "image_url" not in vid
+
+
+def test_tipos_itens_vazio_mantem_tudo_imagem(monkeypatch):
+    """Regressão: sem `tipos_midia_itens`, story/carrossel seguem só-imagem (image_url)."""
+    cli = _instalar(monkeypatch, _router_ok)
+    PublicarInstagram().executar(
+        CFG, ArgsPublicarInstagram(tipo_midia="stories", midia_urls=["s.jpg"])
+    )
+    post_media = next(d for m, u, d in cli.calls if m == "POST" and u.endswith("/media"))
+    assert post_media["media_type"] == "STORIES" and post_media["image_url"] == "s.jpg"
+    assert "video_url" not in post_media

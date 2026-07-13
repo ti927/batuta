@@ -1,14 +1,21 @@
 """Instrumento "Publicar no Instagram" (Fase 2 — instrumentos de Instagram).
 
-Publica foto, Reels, Stories ou carrossel numa conta Instagram profissional, pela
-Instagram API with Instagram Login (`graph.instagram.com`). O `token` e o
-`ig_user_id` vêm da credencial nomeada `instagram` (caixa-forte) — o agente só
-passa a mídia e a legenda.
+Publica foto, Reels, Stories (imagem OU vídeo) ou carrossel (misturando imagens e
+vídeos) numa conta Instagram profissional, pela Instagram API with Instagram Login
+(`graph.instagram.com`). O `token` e o `ig_user_id` vêm da credencial nomeada
+`instagram` (caixa-forte) — o agente só passa a mídia e a legenda.
 
 Fluxo da Graph (3 passos): cria um CONTÊINER de mídia (POST /{ig-user-id}/media),
 ESPERA processar (GET /{container}?fields=status_code até FINISHED — Reels/vídeo
 demoram) e PUBLICA (POST /{ig-user-id}/media_publish). Carrossel: um contêiner por
 item (is_carousel_item) + um contêiner pai CAROUSEL com os filhos.
+
+TIPO DE CADA MÍDIA: por padrão tudo é IMAGEM. Para VÍDEO — item de vídeo no
+carrossel (`media_type=VIDEO` + `is_carousel_item` + `video_url`; NÃO `REELS`, que
+não entra em carrossel) ou story de vídeo (`media_type=STORIES` + `video_url`) — a
+IA marca o tipo de cada URL em `tipos_midia_itens` (paralelo a `midia_urls`). Todo
+contêiner de vídeo processa de forma assíncrona → o poll até FINISHED (que já roda
+em cada item e no contêiner final) é o que garante a publicação.
 
 IDEMPOTÊNCIA: `media_publish` NÃO é idempotente (re-chamar publica de novo). A
 orquestração reexecuta um instrumento em falha RETENTÁVEL — então aqui TODAS as
@@ -83,13 +90,19 @@ def _get(cli: httpx.Client, url: str, params: dict) -> dict:
     return r.json()
 
 
-def _criar_container(cli, config, tipo_midia: str, url: str, legenda: str) -> str:
+def _criar_container(
+    cli, config, tipo_midia: str, url: str, legenda: str, tipo_item: str = "imagem"
+) -> str:
     dados = {"access_token": config.token}
     if tipo_midia == "reels":
         dados.update(media_type="REELS", video_url=url)
     elif tipo_midia == "stories":
-        dados.update(media_type="STORIES", image_url=url)
-    else:  # imagem (foto no feed)
+        # Story pode ser imagem OU vídeo (o tipo do item decide o campo da mídia).
+        if tipo_item == "video":
+            dados.update(media_type="STORIES", video_url=url)
+        else:
+            dados.update(media_type="STORIES", image_url=url)
+    else:  # imagem (foto no feed) — vídeo de feed é 'reels', não este ramo
         dados["image_url"] = url
     if tipo_midia != "stories" and legenda:  # stories não têm legenda
         dados["caption"] = legenda
@@ -101,12 +114,14 @@ def _criar_container(cli, config, tipo_midia: str, url: str, legenda: str) -> st
     return cid
 
 
-def _criar_item_carrossel(cli, config, url: str) -> str:
-    cid = _post(
-        cli,
-        f"{API}/{config.ig_user_id}/media",
-        {"access_token": config.token, "image_url": url, "is_carousel_item": "true"},
-    ).get("id")
+def _criar_item_carrossel(cli, config, url: str, tipo_item: str = "imagem") -> str:
+    dados = {"access_token": config.token, "is_carousel_item": "true"}
+    if tipo_item == "video":
+        # Item de vídeo no carrossel: media_type=VIDEO (NÃO REELS) + video_url.
+        dados.update(media_type="VIDEO", video_url=url)
+    else:
+        dados["image_url"] = url
+    cid = _post(cli, f"{API}/{config.ig_user_id}/media", dados).get("id")
     if not cid:
         raise FalhaInstrumento(
             "o Instagram não devolveu o id de um item do carrossel.", retentavel=False
@@ -114,10 +129,10 @@ def _criar_item_carrossel(cli, config, url: str) -> str:
     return cid
 
 
-def _montar_carrossel(cli, config, urls: list[str], legenda: str) -> str:
+def _montar_carrossel(cli, config, itens: list[tuple[str, str]], legenda: str) -> str:
     filhos = []
-    for url in urls:
-        item = _criar_item_carrossel(cli, config, url)
+    for url, tipo_item in itens:
+        item = _criar_item_carrossel(cli, config, url, tipo_item)
         _aguardar_finished(cli, config, item)
         filhos.append(item)
     dados = {
@@ -191,13 +206,20 @@ class ArgsPublicarInstagram(BaseModel):
     tipo_midia: Literal["imagem", "reels", "stories", "carrossel"] = Field(
         default="imagem",
         description="O que publicar: imagem (foto no feed), reels (vídeo), stories "
-        "ou carrossel (2 a 10 imagens).",
+        "(imagem ou vídeo) ou carrossel (2 a 10 itens, misturando imagens e vídeos).",
     )
     midia_urls: list[str] = Field(
         default_factory=list,
         description="URL(s) PÚBLICA(s) da mídia. 1 para imagem/reels/stories; 2 a 10 "
         "para carrossel. A Meta baixa a mídia desta URL — ela precisa estar acessível "
-        "na hora da publicação.",
+        "na hora da publicação. Vídeo precisa ser MP4/MOV (H264/HEVC, áudio AAC).",
+    )
+    tipos_midia_itens: list[Literal["imagem", "video"]] = Field(
+        default_factory=list,
+        description="Opcional: o tipo de CADA mídia em `midia_urls`, na MESMA ordem (1 "
+        "entrada por URL). Use 'video' para um item de VÍDEO do carrossel ou para um "
+        "STORY de vídeo; 'imagem' para foto. Se omitido, tudo é tratado como imagem. "
+        "Não se aplica a 'reels' (já é vídeo) nem à foto de feed.",
     )
     legenda: str = Field(
         default="", description="Legenda do post (ignorada em stories)."
@@ -209,9 +231,11 @@ class PublicarInstagram(TipoInstrumento):
     categoria = "Instagram"
     nome_exibicao = "Instagram: publicar"
     descricao = (
-        "Publica no Instagram (foto, Reels, Stories ou carrossel) e devolve o id da "
-        "mídia publicada. Acione com o tipo de mídia, a(s) URL(s) PÚBLICA(s) da mídia "
-        "e a legenda. A conta vem da credencial 'instagram'."
+        "Publica no Instagram (foto no feed, Reels, Stories de imagem OU vídeo, ou "
+        "carrossel de até 10 itens misturando imagens e vídeos) e devolve o id da mídia "
+        "publicada. Acione com o tipo de mídia, a(s) URL(s) PÚBLICA(s) e a legenda; para "
+        "vídeo em carrossel ou story de vídeo, marque o tipo de cada mídia em "
+        "`tipos_midia_itens` (mesma ordem das URLs). A conta vem da credencial 'instagram'."
     )
     Config = ConfigPublicarInstagram
     Args = ArgsPublicarInstagram
@@ -231,8 +255,16 @@ class PublicarInstagram(TipoInstrumento):
                 "(token + conta).",
                 retentavel=False,
             )
-        urls = [u.strip() for u in args.midia_urls if u and u.strip()]
-        if not urls:
+        # Pareia cada URL ao seu tipo (imagem/vídeo), na ORDEM original — filtrando
+        # vazios sem desalinhar os índices de `tipos_midia_itens`. Tipo ausente = imagem.
+        tipos = list(args.tipos_midia_itens or [])
+        itens: list[tuple[str, str]] = []
+        for i, u in enumerate(args.midia_urls or []):
+            if not (u and u.strip()):
+                continue
+            tipo_item = tipos[i] if i < len(tipos) else "imagem"
+            itens.append((u.strip(), tipo_item))
+        if not itens:
             raise FalhaInstrumento(
                 "nenhuma URL de mídia foi informada — passe o link público da "
                 "imagem/vídeo a publicar.",
@@ -241,16 +273,17 @@ class PublicarInstagram(TipoInstrumento):
         legenda = (args.legenda or "")[:MAX_LEGENDA]
         with httpx.Client(timeout=TIMEOUT_S) as cli:
             if args.tipo_midia == "carrossel":
-                if not (MIN_CARROSSEL <= len(urls) <= MAX_CARROSSEL):
+                if not (MIN_CARROSSEL <= len(itens) <= MAX_CARROSSEL):
                     raise FalhaInstrumento(
                         f"um carrossel precisa de {MIN_CARROSSEL} a {MAX_CARROSSEL} "
-                        f"imagens (recebi {len(urls)}).",
+                        f"imagens/vídeos (recebi {len(itens)}).",
                         retentavel=False,
                     )
-                container = _montar_carrossel(cli, config, urls, legenda)
+                container = _montar_carrossel(cli, config, itens, legenda)
             else:
+                url0, tipo0 = itens[0]
                 container = _criar_container(
-                    cli, config, args.tipo_midia, urls[0], legenda
+                    cli, config, args.tipo_midia, url0, legenda, tipo_item=tipo0
                 )
             _aguardar_finished(cli, config, container)
             media_id = _publicar(cli, config, container)
