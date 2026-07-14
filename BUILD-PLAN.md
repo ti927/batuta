@@ -1568,6 +1568,34 @@ Gatilho: o maestro notou que o agente respondia comentários **sem enxergar** a 
 
 ---
 
+## FASE — Vídeo no Batuta: gerar vídeo (Sora) + publicar vídeo no Instagram  ✅ (2026-07-13, sem migração, núcleo intocado)
+
+Gatilho: o maestro quis animação/vídeo no fluxo de conteúdo. Instrumento **`gerar_video`** (OpenAI/Sora, `sora-2`/`sora-2-pro`): texto→vídeo e imagem→vídeo, ciclo assíncrono (create-multipart → poll → baixa o MP4 → Storage), reusa a chave OpenAI do pool, idempotência (pós-id do job tudo não-retentável), poll inline (~10 min < sweeper 15 min); medição por segundo. **`publicar_instagram`** ganhou **carrossel MISTO** (imagem+vídeo) e **story de vídeo** via `tipos_midia_itens`. IA criadora ensinada (catálogo auto + playbook). Diagnóstico de erro melhorado: `gerar_video` faz pré-checagem da dimensão da imagem de referência (lê cabeçalho PNG/JPEG) e dá dica de moderação; o passo guarda o **erro CRU** do instrumento (`saida.erros_instrumentos`) e o diagnóstico o aponta. Commits `6c24ebd` + `e462d09` + `f2fecb4` + `da80f4e`. **FALTA teste ao vivo** (chave OpenAI com acesso à API Sora). Ver [[project-gerar-video-sora-e-publicar-video]].
+
+---
+
+## FASE — Gerar vídeo a partir de foto (fal.ai) + freios de movimento por modelo  ✅ (2026-07-13, sem migração, núcleo intocado)
+
+Gatilho: o maestro precisa de vídeo com o **rosto real** dele (marketing) — a Sora BLOQUEIA rosto de pessoa real. Instrumento **`gerar_video_fal`** (imagem→vídeo via **fal.ai**: Kling/Luma/Hailuo numa **chave só**, serviço novo `fal` no pool): anima uma foto, escolhe o modelo/duração na config, o agente passa a foto (URL) + o roteiro; ciclo da fila (submit→poll→baixa MP4→Storage), medição por vídeo, serve o MP4 ao `publicar_instagram`. Commit `3564f5b` (8 testes).
+- **Freios de movimento (`abb752b`, pós-QA):** no QA a IA "alucinou" (zoom absurdo, corte, elementos animando) numa arte cheia de texto — o instrumento só mandava `prompt`/`image_url`/`duration`, sem os parâmetros de controle. Conferida a doc oficial de cada modelo, `_montar_corpo` passou a enviar **por modelo** só os campos aceitos: **`end_image_url` = imagem inicial** (Luma/Hailuo) TRAVA a composição (começa e termina na arte original → não corta/deriva — o freio mais forte); **`negative_prompt`+`cfg_scale`** (Kling); **`aspect_ratio`** 9:16 (Luma). Config nova com defaults seguros (`travar_composicao`, `proporcao`, `prompt_negativo`, `cfg_scale`). **625 testes** (+4). **FALTA teste ao vivo** (chave fal.ai). Ver [[project-fal-video-e-agendamento]].
+
+---
+
+## FASE — Agendar automação por um agente (disparo futuro)  ✅ (2026-07-13, migração aditiva `agd00agenda001`, núcleo intocado)
+
+Gatilho: ao fim de um fluxo e conforme o resultado, um agente reprograma um disparo **futuro** ("+10 dias"), inclusive de **outro time da MESMA organização** (departamentos interdependentes). Instrumento **`agendar_automacao`**: o **alvo (time+automação) é fixado na CONFIG pelo humano** (seletor da org; validação de mesma-org no save, 422); o agente decide só **se/quando** (dias/horas/minutos ou data ISO, fuso America/Sao_Paulo, piso 1 min, teto 50 pendentes). Como o instrumento não recebe contexto de execução, abre a **própria sessão**. Tabela **`agendamentos`** + **sweeper** `agendador.varrer_agendamentos` (IntervalTrigger 60s, claim-first: dispara os vencidos via `criar_execucao`+`fila`; alvo inativo/ausente → cancelado). Endpoints: picker da org, listar/cancelar. Front: campo `ui:"automacao_alvo"` + seção "Próximas execuções agendadas" (ver/cancelar). Remap do alvo na duplicação de time. Commit `837cc09` (621 testes). **FALTA teste ao vivo.** Ver [[project-fal-video-e-agendamento]].
+
+---
+
+## FASE — Feedback ao vivo na tela de execução ("o que está acontecendo agora" + cronômetro)  ✅ (2026-07-13, migração aditiva `atv00atividade001`, núcleo intocado)
+
+Gatilho: o maestro achou **3× que uma execução travou** quando era só DEMORA — um passo só é gravado DEPOIS que o nó termina, então enquanto um instrumento lento roda (`montar_imagem` até 10 min; `gerar_video` faz poll de minutos) a tela não mostrava nada e parecia congelada. Lição gravada [[feedback-feedback-constante-ao-usuario]]: o usuário precisa saber o que está acontecendo o tempo todo.
+- **Backend:** colunas `atividade`/`atividade_em` em `execucoes` (só informativo). Sinal via ContextVar `orquestracao/atividade.py` (`usar_atividade`/`registrar`, espelha `usar_chaves`; mapa `MENSAGENS_ATIVIDADE` por tipo de instrumento) fixado por `disparo.rodar_execucao`; `_escrever_atividade` grava numa sessão PRÓPRIA/curta (heartbeat) só enquanto `em_andamento`, zera ao sair; `agente.py` emite "Pensando…" no turno + a mensagem do instrumento antes de cada chamada. **`cadeia.py` (núcleo do grafo) INTOCADO.**
+- **Frontend:** componente `<Cronometro>` (setInterval próprio, "há 2m 10s") + o item "rodando" mostra a atividade ao vivo; só quando `em_andamento` (dupla proteção com o backend).
+- Verificação: **632 testes** (+7) + tsc/eslint/build front. Commit `2d7a712`.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
