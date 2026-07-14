@@ -9,6 +9,7 @@ import {
   type PapelAcesso,
   type Time,
   type TimeResumo,
+  type TipoInstrumento,
 } from "@/lib/api";
 import { buscarCerebro, buscarMeuAcesso } from "@/lib/cerebro-servidor";
 
@@ -25,6 +26,7 @@ async function carregar(timeId: string): Promise<{
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
+  tipos: TipoInstrumento[];
   automacoes: Automacao[];
   recentes: ExecucaoNaLista[];
   conversaId: string | null;
@@ -44,8 +46,9 @@ async function carregar(timeId: string): Promise<{
   const meuPapel = eu?.papeis[time.organizacao_id] ?? null;
 
   // Cinto de cada agente (chips + drawer), instrumentos do time (drawer do
-  // cinto), execuções recentes e a conversa companheira — em paralelo.
-  const [cintosPares, instrumentosResp, execResp, conversasResp] =
+  // cinto), o catálogo de tipos (p/ editar a config do instrumento pelo cinto),
+  // execuções recentes e a conversa companheira — em paralelo.
+  const [cintosPares, instrumentosResp, tiposResp, execResp, conversasResp] =
     await Promise.all([
       Promise.all(
         agentes.map(async (a) => {
@@ -54,6 +57,7 @@ async function carregar(timeId: string): Promise<{
         }),
       ),
       buscarCerebro(`/times/${timeId}/instrumentos`),
+      buscarCerebro(`/instrumentos/tipos`),
       buscarCerebro(`/times/${timeId}/execucoes`),
       buscarCerebro(`/organizacoes/${time.organizacao_id}/conversas-criacao`),
     ]);
@@ -66,6 +70,7 @@ async function carregar(timeId: string): Promise<{
     agentes,
     cintos: Object.fromEntries(cintosPares),
     instrumentos: await jsonOu<Instrumento[]>(instrumentosResp, []),
+    tipos: await jsonOu<TipoInstrumento[]>(tiposResp, []),
     automacoes: await jsonOu<Automacao[]>(respAutomacoes, []),
     recentes: await jsonOu<ExecucaoNaLista[]>(execResp, []),
     conversaId: conversas.find((c) => c.time_id === timeId)?.id ?? null,

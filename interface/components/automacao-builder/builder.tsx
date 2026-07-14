@@ -605,6 +605,7 @@ function BuilderInterno({
           instrumentosTime={instrumentosTime}
           time={time}
           meuPapel={meuPapel}
+          tipos={tipos}
           conversaId={null}
           onFechar={() => setEditAgenteId(null)}
         />

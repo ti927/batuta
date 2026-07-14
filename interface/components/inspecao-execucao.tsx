@@ -938,6 +938,7 @@ export function InspecaoExecucao({
           instrumentosTime={instrumentosTime ?? []}
           time={time}
           meuPapel={meuPapel}
+          tipos={tipos}
           conversaId={conversaId ?? null}
           onFechar={() => setEditAgenteId(null)}
         />

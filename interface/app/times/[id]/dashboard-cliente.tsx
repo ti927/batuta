@@ -33,6 +33,7 @@ import {
   type PapelAcesso,
   type Time,
   type TimeResumo,
+  type TipoInstrumento,
 } from "@/lib/api";
 
 // ── Estados de execução: rótulo amigável + variante de cor. ──
@@ -67,6 +68,7 @@ export function DashboardCliente({
   agentes,
   cintos,
   instrumentos,
+  tipos,
   automacoes,
   recentes,
   conversaId,
@@ -77,6 +79,7 @@ export function DashboardCliente({
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
+  tipos: TipoInstrumento[];
   automacoes: Automacao[];
   recentes: ExecucaoNaLista[];
   conversaId: string | null;
@@ -260,6 +263,7 @@ export function DashboardCliente({
           instrumentosTime={instrumentos}
           time={time}
           meuPapel={meuPapel}
+          tipos={tipos}
           conversaId={conversaId}
           onFechar={() => setCriando(false)}
         />
@@ -275,6 +279,7 @@ export function DashboardCliente({
           instrumentosTime={instrumentos}
           time={time}
           meuPapel={meuPapel}
+          tipos={tipos}
           conversaId={conversaId}
           onFechar={() => setAbertoId(null)}
         />

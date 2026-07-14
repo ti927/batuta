@@ -59,18 +59,23 @@ function FormFicha({
 export function MemoriaAgentePainel({
   agente,
   podeOperar,
+  memoriaAtiva,
 }: {
   agente: Agente;
   podeOperar: boolean;
+  // Sobrepõe agente.memoria_ativa: no popup, reflete o toggle do form NA HORA (antes
+  // de salvar). Sem a prop, lê do agente salvo (comportamento do drawer estreito).
+  memoriaAtiva?: boolean;
 }) {
+  const ativa = memoriaAtiva ?? agente.memoria_ativa;
   const [itens, setItens] = useState<MemoriaAgente[]>([]);
   // Só carrega quando a memória está ligada (evita setState síncrono no effect).
-  const [carregando, setCarregando] = useState(agente.memoria_ativa);
+  const [carregando, setCarregando] = useState(ativa);
   const [edicao, setEdicao] = useState<Edicao | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
   useEffect(() => {
-    if (!agente.memoria_ativa) return;
+    if (!ativa) return;
     let vivo = true;
     api
       .get<MemoriaAgente[]>(`/agentes/${agente.id}/memorias`)
@@ -86,7 +91,7 @@ export function MemoriaAgentePainel({
     return () => {
       vivo = false;
     };
-  }, [agente.id, agente.memoria_ativa]);
+  }, [agente.id, ativa]);
 
   async function salvar() {
     if (!edicao) return;
@@ -140,10 +145,10 @@ export function MemoriaAgentePainel({
         </span>
       </div>
 
-      {!agente.memoria_ativa ? (
+      {!ativa ? (
         <p className="text-sm text-muted-foreground">
-          Memória desligada. Ligue em “Editar” para o agente aprender com o próprio
-          trabalho e lembrar entre execuções.
+          Memória desligada. Ligue a “Memória ativa” para o agente aprender com o
+          próprio trabalho e lembrar entre execuções.
         </p>
       ) : carregando ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>

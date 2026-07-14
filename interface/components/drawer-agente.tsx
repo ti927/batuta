@@ -4,15 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import {
-  Maximize2,
-  Minimize2,
-  Pencil,
-  Sparkles,
-  Trash2,
-  Wrench,
-  X,
-} from "lucide-react";
+import { Maximize2, Minimize2, Pencil, Sparkles, Trash2, X } from "lucide-react";
 
 import {
   api,
@@ -21,17 +13,17 @@ import {
   type Instrumento,
   type PapelAcesso,
   type Time,
+  type TipoInstrumento,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { useConversaTime } from "@/components/conversa-ia/painel-time";
 import { FormularioAgente } from "@/components/formulario-agente";
-import { IconeInstrumento } from "@/components/icone-instrumento";
 import { MemoriaAgentePainel } from "@/components/memoria-agente";
+import { PainelCinto } from "@/components/painel-cinto";
 import { RobotFace } from "@/components/robot-face";
 import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 
 const MARKDOWNS: { campo: keyof Agente; rotulo: string; arquivo: string }[] = [
   { campo: "agent_md", rotulo: "Quem é", arquivo: "agent.md" },
@@ -52,6 +44,7 @@ export function DrawerAgente({
   instrumentosTime,
   time,
   meuPapel,
+  tipos,
   conversaId,
   onFechar,
 }: {
@@ -61,6 +54,9 @@ export function DrawerAgente({
   instrumentosTime: Instrumento[];
   time: Time;
   meuPapel: PapelAcesso | null;
+  // Catálogo de tipos de instrumento: quando presente, o cinto vira clicável para
+  // editar a config do instrumento (no popup e na leitura). Opcional (degradação).
+  tipos?: TipoInstrumento[];
   conversaId: string | null;
   onFechar: () => void;
 }) {
@@ -74,56 +70,25 @@ export function DrawerAgente({
   const [editando, setEditando] = useState(criando);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
-  const [selecionado, setSelecionado] = useState("");
-  // Só a edição/criação pode virar popup amplo (80%×80%); a leitura fica no drawer.
+  // Só a edição/criação pode virar popup amplo (90%×90%); a leitura fica no drawer.
   const [amplo, setAmplo] = useState(false);
   const ampliado = amplo && (editando || criando);
+  // Um drawer de instrumento aberto POR CIMA (via PainelCinto). Enquanto isso, o Esc
+  // e o clique no fundo do popup ficam suspensos — o de cima fecha primeiro.
+  const [subAberto, setSubAberto] = useState(false);
 
-  // Esc fecha o drawer; no modo amplo, primeiro volta ao drawer (protege a edição).
+  // Esc: se há drawer por cima, ele trata; no amplo, volta ao drawer (protege a
+  // edição); senão, fecha.
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (subAberto) return;
       if (ampliado) setAmplo(false);
       else onFechar();
     };
     document.addEventListener("keydown", aoTeclar);
     return () => document.removeEventListener("keydown", aoTeclar);
-  }, [onFechar, ampliado]);
-
-  const disponiveis = instrumentosTime.filter(
-    (i) => !cinto.some((c) => c.id === i.id),
-  );
-
-  async function pendurar() {
-    if (!selecionado || !agente) return;
-    setOcupado(true);
-    setErro(null);
-    try {
-      await api.post(`/agentes/${agente.id}/instrumentos`, {
-        instrumento_id: selecionado,
-      });
-      setSelecionado("");
-      router.refresh();
-    } catch (e) {
-      setErro(e instanceof ErroDaApi ? e.message : "Falha ao pendurar instrumento");
-    } finally {
-      setOcupado(false);
-    }
-  }
-
-  async function tirar(instrumentoId: string) {
-    if (!agente) return;
-    setOcupado(true);
-    setErro(null);
-    try {
-      await api.delete(`/agentes/${agente.id}/instrumentos/${instrumentoId}`);
-      router.refresh();
-    } catch (e) {
-      setErro(e instanceof ErroDaApi ? e.message : "Falha ao tirar instrumento");
-    } finally {
-      setOcupado(false);
-    }
-  }
+  }, [onFechar, ampliado, subAberto]);
 
   async function remover() {
     if (!agente) return;
@@ -150,14 +115,18 @@ export function DrawerAgente({
     >
       <button
         className="absolute inset-0 bg-foreground/20"
-        onClick={() => (ampliado ? setAmplo(false) : onFechar())}
+        onClick={() => {
+          if (subAberto) return;
+          if (ampliado) setAmplo(false);
+          else onFechar();
+        }}
         aria-label="Fechar"
       />
       <aside
         className={
           "relative flex flex-col overflow-hidden border-border bg-card shadow-xl " +
           (ampliado
-            ? "h-[80vh] w-[80vw] max-w-[1200px] rounded-xl border"
+            ? "h-[90vh] w-[90vw] max-w-[1400px] rounded-xl border"
             : "h-full w-full max-w-[460px] border-l")
         }
       >
@@ -205,7 +174,12 @@ export function DrawerAgente({
             <FormularioAgente
               time={time}
               agente={agente}
-              amplo={ampliado}
+              abas={ampliado}
+              cinto={cinto}
+              instrumentosTime={instrumentosTime}
+              tipos={tipos}
+              meuPapel={meuPapel}
+              onSubDrawer={setSubAberto}
               onSalvo={() => {
                 toast.success(criando ? "Agente criado" : "Agente salvo");
                 setAmplo(false);
@@ -278,71 +252,16 @@ export function DrawerAgente({
                 );
               })}
 
-              {/* Cinto de instrumentos */}
-              <div>
-                <div className="mb-1.5 flex items-center gap-2">
-                  <Wrench className="size-4 text-primary" />
-                  <span className="text-sm font-medium text-foreground">
-                    Cinto de instrumentos
-                  </span>
-                </div>
-                {cinto.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum instrumento pendurado.
-                  </p>
-                ) : (
-                  <ul className="flex flex-col gap-1.5">
-                    {cinto.map((i) => (
-                      <li
-                        key={i.id}
-                        className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
-                      >
-                        <IconeInstrumento
-                          icone={i.icone}
-                          className="size-3.5 text-muted-foreground"
-                        />
-                        <span className="min-w-0 flex-1 truncate text-foreground">
-                          {i.nome}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{i.tipo}</span>
-                        {souOperador && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => tirar(i.id)}
-                            disabled={ocupado}
-                          >
-                            Tirar
-                          </Button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {souOperador && disponiveis.length > 0 && (
-                  <div className="mt-2 flex gap-2">
-                    <Select
-                      value={selecionado}
-                      onChange={(e) => setSelecionado(e.target.value)}
-                      className="flex-1"
-                    >
-                      <option value="">Pendurar um instrumento…</option>
-                      {disponiveis.map((i) => (
-                        <option key={i.id} value={i.id}>
-                          {i.nome} ({i.tipo})
-                        </option>
-                      ))}
-                    </Select>
-                    <Button
-                      variant="outline"
-                      onClick={pendurar}
-                      disabled={!selecionado || ocupado}
-                    >
-                      Pendurar
-                    </Button>
-                  </div>
-                )}
-              </div>
+              {/* Cinto de instrumentos (fonte única, igual à aba do popup amplo) */}
+              <PainelCinto
+                agente={agente}
+                cinto={cinto}
+                instrumentosTime={instrumentosTime}
+                time={time}
+                meuPapel={meuPapel}
+                tipos={tipos}
+                onSubDrawer={setSubAberto}
+              />
 
               {/* Memórias (aprendizado do próprio trabalho) */}
               <MemoriaAgentePainel agente={agente} podeOperar={souOperador} />

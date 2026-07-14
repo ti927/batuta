@@ -99,6 +99,7 @@ export function AgentesCliente({
           instrumentosTime={instrumentos}
           time={time}
           meuPapel={meuPapel}
+          tipos={tipos}
           conversaId={conversaId}
           onFechar={() => setCriando(false)}
         />
@@ -113,6 +114,7 @@ export function AgentesCliente({
           instrumentosTime={instrumentos}
           time={time}
           meuPapel={meuPapel}
+          tipos={tipos}
           conversaId={conversaId}
           onFechar={() => setAbertoId(null)}
         />
