@@ -111,6 +111,11 @@ def duplicar_time(
             tools_md=ag.tools_md,
             soul_md=ag.soul_md,
             modelo_ia=ag.modelo_ia,
+            # Copia o INTERRUPTOR/modo da memória, mas NÃO as fichas: a memória do agente
+            # é RUNTIME (como execuções/conversas) — a cópia começa com memória limpa,
+            # para não agir com o aprendizado do contexto do time original.
+            memoria_ativa=ag.memoria_ativa,
+            memoria_recall=ag.memoria_recall,
         )
         sessao.add(copia)
         map_ag_obj[ag.id] = copia

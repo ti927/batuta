@@ -8,6 +8,7 @@ import {
   type Agente,
   type ModelosDisponiveis,
   type Papel,
+  type RecallMemoria,
   type Time,
 } from "@/lib/api";
 import {
@@ -37,6 +38,8 @@ type Campos = {
   skill_md: string;
   tools_md: string;
   soul_md: string;
+  memoria_ativa: boolean;
+  memoria_recall: RecallMemoria;
 };
 
 const VAZIO: Campos = {
@@ -47,6 +50,8 @@ const VAZIO: Campos = {
   skill_md: "",
   tools_md: "",
   soul_md: "",
+  memoria_ativa: false,
+  memoria_recall: "sempre",
 };
 
 function deAgente(a: Agente): Campos {
@@ -58,10 +63,14 @@ function deAgente(a: Agente): Campos {
     skill_md: a.skill_md ?? "",
     tools_md: a.tools_md ?? "",
     soul_md: a.soul_md ?? "",
+    memoria_ativa: a.memoria_ativa,
+    memoria_recall: a.memoria_recall ?? "sempre",
   };
 }
 
-const MARKDOWNS: [keyof Campos, string][] = [
+type ChaveMd = "agent_md" | "skill_md" | "tools_md" | "soul_md";
+
+const MARKDOWNS: [ChaveMd, string][] = [
   ["agent_md", "agent.md — quem o agente é, o que faz"],
   ["skill_md", "skill.md — as habilidades dele"],
   ["tools_md", "tools.md — os instrumentos do cinto"],
@@ -124,6 +133,8 @@ export function FormularioAgente({
       skill_md: form.skill_md || null,
       tools_md: form.tools_md || null,
       soul_md: form.soul_md || null,
+      memoria_ativa: form.memoria_ativa,
+      memoria_recall: form.memoria_recall,
     };
   }
 
@@ -187,6 +198,42 @@ export function FormularioAgente({
             ))}
           </Select>
         </Label>
+      </div>
+
+      {/* Memória do agente: aprende com o próprio trabalho e lembra entre execuções.
+          A POLÍTICA (o que guardar/quando buscar) vai nos markdowns; aqui só liga e
+          escolhe como lembra. Sem memória, o agente é stateless (como sempre foi). */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-card px-3 py-2">
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-foreground">
+          <input
+            type="checkbox"
+            checked={form.memoria_ativa}
+            onChange={(e) => campo("memoria_ativa", e.target.checked)}
+            className="size-4 accent-[#6D4AFF]"
+          />
+          Memória ativa
+        </label>
+        {form.memoria_ativa && (
+          <Label className="flex-row items-center gap-2 text-sm">
+            Como lembrar
+            <Select
+              value={form.memoria_recall}
+              onChange={(e) =>
+                campo("memoria_recall", e.target.value as RecallMemoria)
+              }
+            >
+              <option value="sempre">Sempre visível (atendimento)</option>
+              <option value="sob_demanda">Sob demanda (busca quando orientado)</option>
+            </Select>
+          </Label>
+        )}
+        <span className="w-full text-xs text-muted-foreground">
+          O agente guarda fichas por assunto e lembra entre execuções.{" "}
+          {form.memoria_ativa && form.memoria_recall === "sempre"
+            ? "“Sempre visível” injeta a memória no prompt toda vez (mais tokens por execução)."
+            : "“Sob demanda” só busca quando o markdown orientar (mais barato)."}{" "}
+          Edite as fichas na seção “Memórias” do agente.
+        </span>
       </div>
 
       {/* Os 4 markdowns DIVIDEM IGUALMENTE o espaço vertical que sobra na barra

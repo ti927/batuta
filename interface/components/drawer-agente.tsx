@@ -18,6 +18,7 @@ import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { useConversaTime } from "@/components/conversa-ia/painel-time";
 import { FormularioAgente } from "@/components/formulario-agente";
 import { IconeInstrumento } from "@/components/icone-instrumento";
+import { MemoriaAgentePainel } from "@/components/memoria-agente";
 import { RobotFace } from "@/components/robot-face";
 import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
@@ -297,6 +298,9 @@ export function DrawerAgente({
                   </div>
                 )}
               </div>
+
+              {/* Memórias (aprendizado do próprio trabalho) */}
+              <MemoriaAgentePainel agente={agente} podeOperar={souOperador} />
             </div>
             </div>
 

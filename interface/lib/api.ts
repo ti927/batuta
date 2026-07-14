@@ -134,6 +134,8 @@ export type TimeResumo = {
 
 export type Papel = "lider" | "agente";
 
+export type RecallMemoria = "sempre" | "sob_demanda";
+
 export type Agente = {
   id: string;
   time_id: string;
@@ -144,6 +146,18 @@ export type Agente = {
   tools_md: string | null;
   soul_md: string | null;
   modelo_ia: string | null;
+  memoria_ativa: boolean;
+  memoria_recall: RecallMemoria;
+  criado_em: string;
+  atualizado_em: string;
+};
+
+// Uma ficha da memória do agente (aprendizado do próprio trabalho, por assunto).
+export type MemoriaAgente = {
+  id: string;
+  agente_id: string;
+  assunto: string;
+  conteudo: string;
   criado_em: string;
   atualizado_em: string;
 };

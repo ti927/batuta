@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 import diagnostico_execucao
 import instrumentos as encaixe
+import memoria_agente
 import precos
 import segredos_instrumento as segredos
 import tipos_credencial
@@ -641,6 +642,24 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
             return _ok("Memória apagada.")
         return _erro(f"Não há memória com id {memoria_id} neste projeto.")
 
+    def ver_memoria_agente(agente_id: str) -> str:
+        """Mostra as MEMÓRIAS que um agente aprendeu com o próprio trabalho (fichas por
+        assunto — ex.: sobre um cliente, decisões, preferências). É LEITURA: use para
+        SUPERVISIONAR e EXPLICAR ao consultor o que o agente já sabe. Para EDITAR ou
+        APAGAR uma ficha, você NÃO faz aqui — oriente o consultor a abrir o agente na
+        tela (aba Agentes → o agente → seção Memórias). Pegue o `agente_id` no ver_time."""
+        ag = _agente(agente_id)
+        if ag is None:
+            return _erro(f"Não encontrei o agente {agente_id} neste time.")
+        if not ag.memoria_ativa:
+            return _ok(
+                f"O agente '{ag.nome}' está com a memória desligada.", memorias=[]
+            )
+        fichas = memoria_agente.pesquisar(sess, ag.id)
+        return _ok(
+            f"{len(fichas)} ficha(s) na memória de '{ag.nome}'.", memorias=fichas
+        )
+
     def listar_execucoes(
         automacao_id: str | None = None, apenas_problemas: bool = False,
         limite: int = 10,
@@ -717,7 +736,7 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         desencaixar_instrumento, criar_automacao, renomear_automacao,
         montar_cadeia, definir_gatilho, estimar_custo,
         ativar_time, desativar_time, ver_time, listar_tipos_instrumento,
-        listar_execucoes, diagnosticar_execucao,
+        listar_execucoes, diagnosticar_execucao, ver_memoria_agente,
         sugerir_proximos_passos, lembrar, recordar, esquecer,
     ]
 

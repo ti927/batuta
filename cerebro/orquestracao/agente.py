@@ -9,14 +9,16 @@ vira uma ferramenta da IA pelo encaixe (instrumentos/base.py).
 import json
 import re
 import unicodedata
+import uuid
 from typing import Literal
 
 from langchain_core.messages import AIMessage
 from langchain_core.tools import StructuredTool
 from langgraph.prebuilt import create_react_agent
-from pydantic import Field, create_model
+from pydantic import BaseModel, Field, create_model
 
 import instrumentos as encaixe
+import memoria_agente
 from instrumentos.base import (
     FalhaInstrumento,
     acao_irreversivel,
@@ -25,6 +27,7 @@ from instrumentos.base import (
 from modelos import Agente, Instrumento
 from orquestracao import atividade
 from orquestracao.llm import MODELO_PADRAO, construir_modelo, texto_da_resposta
+from sessao import CriadorDeSessao
 
 
 def montar_instrucoes(agente: Agente) -> str:
@@ -210,6 +213,135 @@ def _instrucao_de_fluxo(saidas: list[dict], gate: bool) -> str:
     )
 
 
+class _RegistrarMemoriaArgs(BaseModel):
+    assunto: str = Field(
+        description="Título curto e ESTÁVEL da ficha (ex.: 'Cliente: Padaria do João'). "
+        "Uma ficha por assunto — reuse o mesmo título para ATUALIZAR."
+    )
+    conteudo: str = Field(
+        description="O que lembrar sobre esse assunto — um resumo enxuto, não um documento."
+    )
+
+
+class _PesquisarMemoriaArgs(BaseModel):
+    assunto: str | None = Field(
+        default=None,
+        description="Assunto/termo a buscar. Vazio devolve todas as fichas.",
+    )
+
+
+def _ferramentas_de_memoria(
+    agente_id: uuid.UUID, escritas: dict
+) -> list[StructuredTool]:
+    """As 2 ferramentas de MEMÓRIA do agente (injetadas quando `memoria_ativa`), no
+    mesmo molde do `seguir_para`. Cada uma abre a PRÓPRIA sessão e COMITA — o
+    aprendizado persiste mesmo se o run falhar depois. NUNCA levantam: memória é
+    auxiliar; a falha volta como resultado suave, não derruba a execução. `escritas` é
+    um contador no closure (anti-loop: teto de gravações por execução)."""
+
+    def registrar(**kwargs) -> str:
+        args = _RegistrarMemoriaArgs.model_validate(kwargs)
+        if escritas["n"] >= memoria_agente.MAX_ESCRITAS_POR_RUN:
+            return json.dumps(
+                {"ok": False, "erro": "limite de anotações desta execução atingido."},
+                ensure_ascii=False,
+            )
+        atividade.registrar("Anotando na memória…")
+        s = CriadorDeSessao()
+        try:
+            m, status = memoria_agente.registrar(
+                s, agente_id, args.assunto, args.conteudo
+            )
+            s.commit()
+        except Exception:
+            s.rollback()
+            return json.dumps(
+                {"ok": False, "erro": "não foi possível gravar a memória agora."},
+                ensure_ascii=False,
+            )
+        finally:
+            s.close()
+        if m is None:
+            motivo = (
+                "memória cheia — edite ou remova fichas na tela do agente."
+                if status == "recusada:teto"
+                else "assunto e conteúdo são obrigatórios."
+            )
+            return json.dumps({"ok": False, "erro": motivo}, ensure_ascii=False)
+        escritas["n"] += 1
+        return json.dumps(
+            {"ok": True, "status": status, "assunto": m.assunto}, ensure_ascii=False
+        )
+
+    def pesquisar(**kwargs) -> str:
+        args = _PesquisarMemoriaArgs.model_validate(kwargs)
+        atividade.registrar("Consultando a memória…")
+        s = CriadorDeSessao()
+        try:
+            fichas = memoria_agente.pesquisar(s, agente_id, args.assunto)
+        except Exception:
+            # Falha de LEITURA não derruba nada: segue sem memória (lista vazia).
+            fichas = []
+        finally:
+            s.close()
+        return json.dumps({"ok": True, "memorias": fichas}, ensure_ascii=False)
+
+    return [
+        StructuredTool.from_function(
+            func=registrar,
+            name="registrar_memoria",
+            description=(
+                "Guarda ou ATUALIZA uma ficha da sua memória (uma por assunto). Use para "
+                "lembrar do cliente, de decisões e de fatos entre execuções — não repita o "
+                "que já sabe."
+            ),
+            args_schema=_RegistrarMemoriaArgs,
+        ),
+        StructuredTool.from_function(
+            func=pesquisar,
+            name="pesquisar_memoria",
+            description=(
+                "Lembra o que você já aprendeu. Sem 'assunto' devolve tudo; com 'assunto', "
+                "filtra. Se vier vazio, é a primeira vez — siga normalmente."
+            ),
+            args_schema=_PesquisarMemoriaArgs,
+        ),
+    ]
+
+
+def _instrucao_de_memoria(agente: Agente) -> str:
+    """Apêndice MECÂNICO (não comportamental) da memória: diz que as ferramentas existem
+    e, no modo 'sempre', injeta as fichas atuais (com índice do excedente, p/ não inchar
+    o prompt). A POLÍTICA — o que guardar, quando buscar, criar vs editar — é do markdown
+    do agente (o comportamento vem dos markdowns)."""
+    texto = (
+        "\n\n## Sua memória (aprendizado do próprio trabalho)\n"
+        "Você tem memória entre execuções, em fichas por assunto. Use "
+        "`registrar_memoria(assunto, conteudo)` para guardar/ATUALIZAR uma ficha (uma por "
+        "assunto — edite, não duplique) e `pesquisar_memoria(assunto)` para lembrar. Busca "
+        "vazia = primeira vez."
+    )
+    if getattr(agente, "memoria_recall", "sempre") != "sempre":
+        return texto
+    s = CriadorDeSessao()
+    try:
+        dados = memoria_agente.para_o_prompt(s, agente.id)
+    finally:
+        s.close()
+    if dados["fichas"]:
+        texto += "\nO que você já sabe (fichas):\n" + json.dumps(
+            dados["fichas"], ensure_ascii=False
+        )
+    if dados["indice_extra"]:
+        texto += (
+            "\nOutros assuntos que você conhece (use pesquisar_memoria para o conteúdo): "
+            + ", ".join(dados["indice_extra"])
+        )
+    if not dados["fichas"] and not dados["indice_extra"]:
+        texto += "\n(Você ainda não tem fichas — comece a aprender.)"
+    return texto
+
+
 def executar_agente(
     agente: Agente,
     cinto: list[Instrumento],
@@ -246,6 +378,12 @@ def executar_agente(
     ]
     saidas = saidas or []
     instrucoes = montar_instrucoes(agente)
+    # Memória do agente (quando ligada): 2 ferramentas injetadas + (modo "sempre") as
+    # fichas no prompt. `agente.id` já está aqui; núcleo de cadeia intocado.
+    if getattr(agente, "memoria_ativa", False):
+        escritas = {"n": 0}
+        ferramentas += _ferramentas_de_memoria(agente.id, escritas)
+        instrucoes += _instrucao_de_memoria(agente)
     if len(saidas) >= 2:
         ferramentas.append(_ferramenta_seguir_para(saidas, escolha))
         instrucoes += "\n\n" + _instrucao_de_fluxo(saidas, gate)

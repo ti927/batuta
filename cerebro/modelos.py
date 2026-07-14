@@ -115,6 +115,15 @@ class Agente(IdData, Base):
     tools_md: Mapped[str | None] = mapped_column(Text, nullable=True)
     soul_md: Mapped[str | None] = mapped_column(Text, nullable=True)
     modelo_ia: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Memória do agente (aprende com o próprio trabalho). DESLIGADA por padrão →
+    # comportamento atual preservado. `memoria_recall`: 'sempre' injeta as fichas no
+    # prompt (ideal p/ atendimento); 'sob_demanda' só busca quando o markdown orienta.
+    memoria_ativa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    memoria_recall: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="sempre", server_default=text("'sempre'")
+    )
 
     __table_args__ = (
         Index(
@@ -594,6 +603,32 @@ class MemoriaProjeto(IdData, Base):
     conteudo: Mapped[str] = mapped_column(Text, nullable=False)
 
     __table_args__ = (Index("ix_memoria_projeto_conversa", "conversa_id"),)
+
+
+class MemoriaAgente(IdData, Base):
+    """Memória do AGENTE — o que ele aprende com o PRÓPRIO trabalho (continuidade:
+    'não repetir', 'lembrar do cliente'). Diferente da `MemoriaProjeto` (memória da IA
+    CRIADORA sobre o time, para o consultor): esta é do runtime do agente.
+
+    Formato FICHA POR ASSUNTO com UPSERT: uma ficha por `assunto` (ex.: 'Cliente:
+    Padaria do João') — o agente edita a ficha, não empilha. É o freio principal contra
+    inchar a memória. Abordagem DESTILADA, não vetorial (como a MemoriaProjeto): fichas
+    curtas por assunto, recuperadas por recência/filtro simples, sem embeddings.
+
+    Escopo por agente; CASCADE ao apagar o agente. É RUNTIME → NÃO é copiada ao duplicar
+    o time (só o interruptor)."""
+
+    __tablename__ = "memorias_agente"
+    agente_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agentes.id", ondelete="CASCADE"), nullable=False
+    )
+    assunto: Mapped[str] = mapped_column(String(200), nullable=False)
+    conteudo: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # UNIQUE(agente_id, assunto): uma ficha por assunto (upsert; anti-duplicata).
+    __table_args__ = (
+        Index("uq_memoria_agente_assunto", "agente_id", "assunto", unique=True),
+    )
 
 
 # ───────────────────── Mensageria de mão dupla (Fase 1) ──────────────────────

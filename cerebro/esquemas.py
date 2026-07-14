@@ -142,6 +142,9 @@ class TimeResumoLer(BaseModel):
 # ──────────────────────────── Agentes ────────────────────────────
 
 
+RecallMemoria = Literal["sempre", "sob_demanda"]
+
+
 class AgenteCriar(BaseModel):
     """Dados para criar um agente (Líder ou Agente)."""
 
@@ -152,6 +155,8 @@ class AgenteCriar(BaseModel):
     tools_md: str | None = None
     soul_md: str | None = None
     modelo_ia: str | None = Field(default=None, max_length=100)
+    memoria_ativa: bool = False
+    memoria_recall: RecallMemoria = "sempre"
 
 
 class AgenteEditar(BaseModel):
@@ -164,6 +169,8 @@ class AgenteEditar(BaseModel):
     tools_md: str | None = None
     soul_md: str | None = None
     modelo_ia: str | None = Field(default=None, max_length=100)
+    memoria_ativa: bool = False
+    memoria_recall: RecallMemoria = "sempre"
 
 
 class AgenteLer(BaseModel):
@@ -180,6 +187,35 @@ class AgenteLer(BaseModel):
     tools_md: str | None
     soul_md: str | None
     modelo_ia: str | None
+    memoria_ativa: bool
+    memoria_recall: str
+    criado_em: datetime
+    atualizado_em: datetime
+
+
+class MemoriaAgenteCriar(BaseModel):
+    """Uma ficha de memória do agente (assunto + conteúdo)."""
+
+    assunto: str = Field(min_length=1, max_length=200)
+    conteudo: str = Field(min_length=1, max_length=4000)
+
+
+class MemoriaAgenteEditar(BaseModel):
+    """Edição de uma ficha (assunto e/ou conteúdo)."""
+
+    assunto: str | None = Field(default=None, max_length=200)
+    conteudo: str | None = Field(default=None, max_length=4000)
+
+
+class MemoriaAgenteLer(BaseModel):
+    """Uma ficha de memória do agente como a API a devolve."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    agente_id: uuid.UUID
+    assunto: str
+    conteudo: str
     criado_em: datetime
     atualizado_em: datetime
 
