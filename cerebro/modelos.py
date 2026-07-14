@@ -219,6 +219,14 @@ class Execucao(IdData, Base):
     finalizada_em: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Feedback ao vivo: frase curta do que está acontecendo AGORA (ex.: "Montando a
+    # imagem…") + quando foi atualizada. Um instrumento lento não grava passo enquanto
+    # roda; isto evita a tela parecer travada. Escrita na borda (orquestracao/atividade),
+    # zerada ao sair de `em_andamento`. Só informativo — não é estado do grafo.
+    atividade: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    atividade_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class PassoExecucao(IdData, Base):

@@ -369,6 +369,9 @@ class ExecucaoLer(BaseModel):
     iniciada_em: datetime | None
     finalizada_em: datetime | None
     criado_em: datetime
+    # Feedback ao vivo (só relevante enquanto `em_andamento`): o que o agente faz agora.
+    atividade: str | None = None
+    atividade_em: datetime | None = None
 
 
 class ExecucaoNaLista(ExecucaoLer):

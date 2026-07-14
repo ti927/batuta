@@ -10,15 +10,17 @@ fato roda a cadeia é o pool de trabalhadores da fila (`fila.py`), que chama
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 import medicao_instrumentos
 from chaves import resolver_chaves_por_time
 from modelos import Automacao, Execucao, PassoExecucao
+from orquestracao import atividade
 from orquestracao.cadeia import executar_cadeia
 from orquestracao.llm import usar_chaves
 from orquestracao.modelos_ia import provedor_do_modelo_seguro
+from sessao import CriadorDeSessao
 
 
 def _fazer_registrador(
@@ -101,6 +103,26 @@ def _aplicar_resultado(execucao: Execucao, r: dict) -> None:
         execucao.estado = "concluida"
         execucao.resultado = {"texto": r["resultado"]}
         execucao.finalizada_em = datetime.now(timezone.utc)
+    # Saiu de `em_andamento`: apaga o feedback ao vivo (não deixa texto obsoleto).
+    execucao.atividade = None
+    execucao.atividade_em = None
+
+
+def _escrever_atividade(execucao_id: uuid.UUID, texto: str) -> None:
+    """Publica a atividade ao vivo numa transação PRÓPRIA e curta (como um heartbeat),
+    sem tocar a sessão da cadeia. Só grava se a execução ainda está `em_andamento` —
+    não ressuscita atividade de execução já pausada/finalizada. Best-effort (o chamador
+    em `atividade.registrar` engole erros)."""
+    s = CriadorDeSessao()
+    try:
+        s.execute(
+            update(Execucao)
+            .where(Execucao.id == execucao_id, Execucao.estado == "em_andamento")
+            .values(atividade=(texto or "")[:200], atividade_em=datetime.now(timezone.utc))
+        )
+        s.commit()
+    finally:
+        s.close()
 
 
 def _esta_cancelada(sessao: Session, execucao_id: uuid.UUID) -> bool:
@@ -145,7 +167,13 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
         sessao, automacao.time_id if automacao else None
     )
     try:
-        with usar_chaves(chaves):
+        # `usar_atividade`: publica "o que está acontecendo agora" (feedback ao vivo)
+        # numa sessão própria, para a tela mostrar progresso mesmo quando um instrumento
+        # lento (montar_imagem, gerar_video) prende o passo por minutos. Mesmo padrão
+        # do `usar_chaves`: um ContextVar atravessa o motor sem mudar assinatura nenhuma.
+        with usar_chaves(chaves), atividade.usar_atividade(
+            lambda t: _escrever_atividade(execucao.id, t)
+        ):
             r = executar_cadeia(
                 sessao,
                 (automacao.cadeia if automacao else None) or {},
@@ -163,6 +191,8 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
         execucao.estado = "falhou"
         execucao.resultado = {"erro": str(e)}
         execucao.finalizada_em = datetime.now(timezone.utc)
+        execucao.atividade = None
+        execucao.atividade_em = None
     sessao.commit()
     sessao.refresh(execucao)
     return execucao

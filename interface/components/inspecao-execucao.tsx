@@ -122,6 +122,24 @@ function Dot({ tom }: { tom: TomDot }) {
   );
 }
 
+// Cronômetro ao vivo: "há 2m 10s" desde `desde`, contando a cada segundo. Tem o próprio
+// setInterval — só este pedacinho re-renderiza, sem sacudir a árvore toda. Enquanto um
+// instrumento lento roda (sem gravar passo), é a prova visual de que NÃO travou.
+function Cronometro({ desde }: { desde: string | null | undefined }) {
+  const [agora, setAgora] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setAgora(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  if (!desde) return null;
+  const ms = agora - new Date(desde).getTime();
+  if (Number.isNaN(ms) || ms < 0) return null;
+  const s = Math.floor(ms / 1000);
+  const txt =
+    s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+  return <span className="tabular-nums">há {txt}</span>;
+}
+
 function Bloco({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return (
     <div>
@@ -149,7 +167,13 @@ type ItemPasso =
       cinto: Instrumento[];
       passo: PassoExecucao;
     }
-  | { tipo: "final"; chave: string; tom: TomDot; rotulo: string };
+  | {
+      tipo: "final";
+      chave: string;
+      tom: TomDot;
+      rotulo: string;
+      desde?: string | null; // em_andamento: início da execução, p/ o cronômetro ao vivo
+    };
 
 function construirItens(
   execucao: ExecucaoComPassos,
@@ -172,13 +196,22 @@ function construirItens(
     };
   });
   const finalPorEstado: Record<string, { tom: TomDot; rotulo: string }> = {
-    em_andamento: { tom: "rodando", rotulo: "Rodando o próximo agente…" },
+    // Enquanto roda, o rótulo é a ATIVIDADE ao vivo ("Montando a imagem…") — o motor a
+    // publica antes de cada instrumento/turno; sem ela ainda, um genérico honesto.
+    em_andamento: {
+      tom: "rodando",
+      rotulo: execucao.atividade || "Trabalhando…",
+    },
     aguardando: { tom: "fila", rotulo: "Na fila…" },
     concluida: { tom: "ok", rotulo: "Entrega concluída" },
     falhou: { tom: "falha", rotulo: "Falhou" },
   };
   const f = finalPorEstado[execucao.estado];
-  if (f) itens.push({ tipo: "final", chave: "final", ...f });
+  if (f) {
+    const desde =
+      execucao.estado === "em_andamento" ? execucao.iniciada_em : null;
+    itens.push({ tipo: "final", chave: "final", ...f, desde });
+  }
   return itens;
 }
 
@@ -205,6 +238,11 @@ function LinhaPasso({
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
           {item.rotulo}
         </span>
+        {item.desde && (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            <Cronometro desde={item.desde} />
+          </span>
+        )}
       </button>
     );
   }
@@ -350,9 +388,14 @@ function DetalheItem({
       );
     }
     return (
-      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+      <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
         {item.tom === "rodando" && <Loader2 className="size-4 animate-spin" />}
         {item.rotulo}
+        {item.desde && (
+          <span className="text-xs">
+            · <Cronometro desde={item.desde} />
+          </span>
+        )}
       </p>
     );
   }

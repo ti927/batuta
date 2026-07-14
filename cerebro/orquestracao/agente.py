@@ -23,6 +23,7 @@ from instrumentos.base import (
     acionar_com_retentativa,
 )
 from modelos import Agente, Instrumento
+from orquestracao import atividade
 from orquestracao.llm import MODELO_PADRAO, construir_modelo, texto_da_resposta
 
 
@@ -81,6 +82,9 @@ def _ferramenta_unica(
 
     def executar(**kwargs) -> str:
         args = tipo.Args.model_validate(kwargs)
+        # Feedback ao vivo: publica "o que está acontecendo agora" ANTES da chamada —
+        # é o que evita a tela parecer travada enquanto um instrumento lento roda.
+        atividade.registrar(atividade.mensagem_para(tipo.tipo, inst.nome))
         try:
             resultado = acionar_com_retentativa(tipo, config, args)
         except FalhaInstrumento as e:
@@ -246,6 +250,8 @@ def executar_agente(
         ferramentas.append(_ferramenta_seguir_para(saidas, escolha))
         instrucoes += "\n\n" + _instrucao_de_fluxo(saidas, gate)
     app = create_react_agent(modelo, ferramentas, prompt=instrucoes)
+    # Feedback ao vivo: o turno de LLM pode demorar; avisa que o agente está pensando.
+    atividade.registrar(f"{agente.nome}: pensando…")
     resultado = app.invoke({"messages": [{"role": "user", "content": entrada}]})
 
     # Não confiamos na narração do agente: se uma ação IRREVERSÍVEL falhou,

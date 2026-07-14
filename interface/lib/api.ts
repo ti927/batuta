@@ -512,6 +512,9 @@ export type Execucao = {
   iniciada_em: string | null;
   finalizada_em: string | null;
   criado_em: string;
+  // Feedback ao vivo (só enquanto em_andamento): o que o agente faz agora + quando.
+  atividade?: string | null;
+  atividade_em?: string | null;
 };
 
 export type ExecucaoComPassos = Execucao & {
