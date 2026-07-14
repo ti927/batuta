@@ -1596,6 +1596,18 @@ Gatilho: o maestro achou **3× que uma execução travou** quando era só DEMORA
 
 ---
 
+## FASE — Memória dos agentes: o agente aprende com o próprio trabalho  ✅ (2026-07-14, migração aditiva `mem00memag001`, núcleo intocado)
+
+Gatilho: o agente era stateless entre execuções (comportamento 100% dos markdowns). Com os fluxos complexos, faltava aprender com o próprio trabalho (continuidade: "não repetir", "lembrar do cliente"). Plano profundo (respondendo às 9 perguntas do maestro sobre variáveis/custos/travas/flood/arquivo/criadora/tela) validado; decisões: FLEXÍVEL por agente, FICHA POR ASSUNTO (upsert), controle no markdown, criadora LÊ (não escreve).
+- **Config por agente:** `memoria_ativa` (liga/desliga, padrão DESLIGADO → zero regressão) + `memoria_recall` ("sempre" injeta as fichas no prompt, ideal p/ atendimento; "sob_demanda" só busca quando o markdown orientar). É barato ser flexível — um enum decide só se injeta.
+- **Tabela `memorias_agente`** (mem00memag001): `UNIQUE(agente_id, assunto)` = upsert (uma ficha por assunto — edita, não empilha; freio principal contra flood), CASCADE ao apagar o agente. Módulo `memoria_agente.py` (upsert ATÔMICO `ON CONFLICT`, seguro sob concorrência; tetos de tamanho/nº de fichas/escritas-por-run; `para_o_prompt` = fichas + índice do excedente).
+- **2 ferramentas injetadas** no runtime (`orquestracao/agente.py`, molde `seguir_para`): `registrar_memoria` (sessão própria + commit — persiste mesmo se o run falhar) e `pesquisar_memoria` (vazio = lista vazia, NUNCA `FalhaInstrumento` → não trava o agente). Emitem feedback ao vivo. `cadeia.py` intocado.
+- **Custo:** sem IA/embeddings (destilado); só tokens de entrada a mais no modo "sempre" (bounded pelos tetos + índice). **Criadora LÊ** (`ver_memoria_agente`) e orienta o usuário a editar na tela. **Duplicar time:** copia o interruptor, NÃO as fichas (runtime). **Só texto** na v1 (arquivo = futuro, casa com a Biblioteca).
+- **Frontend:** switch + modo no formulário do agente; painel "Memórias" (ver/criar/editar/apagar) no drawer do agente.
+- Verificação: **644 testes** (+12) + tsc/eslint/build front. Commit `7e70e97`. Fora da v1: busca semântica/embeddings, memória de time/org, expiração, anexos, criadora ESCREVER.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
