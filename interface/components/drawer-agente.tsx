@@ -4,7 +4,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Pencil, Sparkles, Trash2, Wrench, X } from "lucide-react";
+import {
+  Maximize2,
+  Minimize2,
+  Pencil,
+  Sparkles,
+  Trash2,
+  Wrench,
+  X,
+} from "lucide-react";
 
 import {
   api,
@@ -67,15 +75,20 @@ export function DrawerAgente({
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [selecionado, setSelecionado] = useState("");
+  // Só a edição/criação pode virar popup amplo (80%×80%); a leitura fica no drawer.
+  const [amplo, setAmplo] = useState(false);
+  const ampliado = amplo && (editando || criando);
 
-  // Esc fecha o drawer (handoff §4).
+  // Esc fecha o drawer; no modo amplo, primeiro volta ao drawer (protege a edição).
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onFechar();
+      if (e.key !== "Escape") return;
+      if (ampliado) setAmplo(false);
+      else onFechar();
     };
     document.addEventListener("keydown", aoTeclar);
     return () => document.removeEventListener("keydown", aoTeclar);
-  }, [onFechar]);
+  }, [onFechar, ampliado]);
 
   const disponiveis = instrumentosTime.filter(
     (i) => !cinto.some((c) => c.id === i.id),
@@ -129,13 +142,25 @@ export function DrawerAgente({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div
+      className={
+        "fixed inset-0 z-50 flex " +
+        (ampliado ? "items-center justify-center p-4 sm:p-6" : "justify-end")
+      }
+    >
       <button
         className="absolute inset-0 bg-foreground/20"
-        onClick={onFechar}
+        onClick={() => (ampliado ? setAmplo(false) : onFechar())}
         aria-label="Fechar"
       />
-      <aside className="relative flex h-full w-full max-w-[460px] flex-col overflow-hidden border-l border-border bg-card shadow-xl">
+      <aside
+        className={
+          "relative flex flex-col overflow-hidden border-border bg-card shadow-xl " +
+          (ampliado
+            ? "h-[80vh] w-[80vw] max-w-[1200px] rounded-xl border"
+            : "h-full w-full max-w-[460px] border-l")
+        }
+      >
         <header className="flex flex-none items-start gap-3 border-b border-border p-4">
           <RobotFace size={44} indice={indice} lider={agente?.papel === "lider"} />
           <div className="min-w-0 flex-1">
@@ -156,6 +181,20 @@ export function DrawerAgente({
               </p>
             )}
           </div>
+          {(editando || criando) && (
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setAmplo((v) => !v)}
+              aria-label={amplo ? "Minimizar" : "Maximizar"}
+            >
+              {amplo ? (
+                <Minimize2 className="size-4" />
+              ) : (
+                <Maximize2 className="size-4" />
+              )}
+            </Button>
+          )}
           <Button size="icon" variant="ghost" onClick={onFechar} aria-label="Fechar">
             <X className="size-4" />
           </Button>
@@ -166,13 +205,19 @@ export function DrawerAgente({
             <FormularioAgente
               time={time}
               agente={agente}
+              amplo={ampliado}
               onSalvo={() => {
                 toast.success(criando ? "Agente criado" : "Agente salvo");
+                setAmplo(false);
                 if (criando) onFechar();
                 else setEditando(false);
                 router.refresh();
               }}
-              onCancelar={() => (criando ? onFechar() : setEditando(false))}
+              onCancelar={() => {
+                setAmplo(false);
+                if (criando) onFechar();
+                else setEditando(false);
+              }}
             />
           </div>
         ) : (

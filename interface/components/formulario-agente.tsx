@@ -80,11 +80,14 @@ const MARKDOWNS: [ChaveMd, string][] = [
 export function FormularioAgente({
   time,
   agente,
+  amplo = false,
   onSalvo,
   onCancelar,
 }: {
   time: Time;
   agente: Agente | null;
+  // No popup amplo (80%×80%), os 4 markdowns vão numa grade 2×2 em vez de empilhados.
+  amplo?: boolean;
   onSalvo: (salvo: Agente) => void;
   onCancelar: () => void;
 }) {
@@ -236,10 +239,17 @@ export function FormularioAgente({
         </span>
       </div>
 
-      {/* Os 4 markdowns DIVIDEM IGUALMENTE o espaço vertical que sobra na barra
-          (cada Label flex-1), cada textarea rola por dentro quando o texto passa
-          da sua fatia. Salvar/Cancelar (abaixo) ficam sempre visíveis. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* Os 4 markdowns DIVIDEM IGUALMENTE o espaço que sobra (cada Label flex-1),
+          cada textarea rola por dentro quando o texto passa da sua fatia.
+          No popup amplo, vão numa grade 2×2 (cada um bem maior); no drawer estreito,
+          empilhados. Salvar/Cancelar (abaixo) ficam sempre visíveis. */}
+      <div
+        className={
+          amplo
+            ? "grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-3"
+            : "flex min-h-0 flex-1 flex-col gap-3"
+        }
+      >
         {MARKDOWNS.map(([chave, rotulo]) => (
           <Label key={chave} className="min-h-0 flex-1 flex-col items-start gap-1">
             {rotulo}
