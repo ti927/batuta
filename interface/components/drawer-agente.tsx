@@ -76,19 +76,45 @@ export function DrawerAgente({
   // Um drawer de instrumento aberto POR CIMA (via PainelCinto). Enquanto isso, o Esc
   // e o clique no fundo do popup ficam suspensos — o de cima fecha primeiro.
   const [subAberto, setSubAberto] = useState(false);
+  // Há texto/básicos editados e NÃO salvos no formulário? (reportado pelo form.)
+  const [sujo, setSujo] = useState(false);
 
-  // Esc: se há drawer por cima, ele trata; no amplo, volta ao drawer (protege a
-  // edição); senão, fecha.
+  // Fecha protegendo a edição: se está editando com alterações não salvas, confirma
+  // antes de descartar (o botão Salvar é o único caminho que persiste). Cobre X,
+  // Esc e clique no fundo — antes só o botão Cancelar avisava.
+  function fecharGuardado() {
+    if (
+      (editando || criando) &&
+      sujo &&
+      !confirm("Você tem alterações não salvas. Fechar e descartar?")
+    ) {
+      return;
+    }
+    onFechar();
+  }
+
+  // Esc: se há drawer por cima, ele trata; no amplo, só volta ao drawer (não perde a
+  // edição); senão, fecha protegendo a edição não salva (mesma guarda do X/fundo).
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (subAberto) return;
-      if (ampliado) setAmplo(false);
-      else onFechar();
+      if (ampliado) {
+        setAmplo(false);
+        return;
+      }
+      if (
+        (editando || criando) &&
+        sujo &&
+        !confirm("Você tem alterações não salvas. Fechar e descartar?")
+      ) {
+        return;
+      }
+      onFechar();
     };
     document.addEventListener("keydown", aoTeclar);
     return () => document.removeEventListener("keydown", aoTeclar);
-  }, [onFechar, ampliado, subAberto]);
+  }, [onFechar, ampliado, subAberto, editando, criando, sujo]);
 
   async function remover() {
     if (!agente) return;
@@ -118,7 +144,7 @@ export function DrawerAgente({
         onClick={() => {
           if (subAberto) return;
           if (ampliado) setAmplo(false);
-          else onFechar();
+          else fecharGuardado();
         }}
         aria-label="Fechar"
       />
@@ -164,7 +190,12 @@ export function DrawerAgente({
               )}
             </Button>
           )}
-          <Button size="icon" variant="ghost" onClick={onFechar} aria-label="Fechar">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={fecharGuardado}
+            aria-label="Fechar"
+          >
             <X className="size-4" />
           </Button>
         </header>
@@ -180,14 +211,17 @@ export function DrawerAgente({
               tipos={tipos}
               meuPapel={meuPapel}
               onSubDrawer={setSubAberto}
+              onDirtyChange={setSujo}
               onSalvo={() => {
                 toast.success(criando ? "Agente criado" : "Agente salvo");
+                setSujo(false);
                 setAmplo(false);
                 if (criando) onFechar();
                 else setEditando(false);
                 router.refresh();
               }}
               onCancelar={() => {
+                setSujo(false);
                 setAmplo(false);
                 if (criando) onFechar();
                 else setEditando(false);

@@ -147,6 +147,7 @@ export function FormularioAgente({
   tipos,
   meuPapel,
   onSubDrawer,
+  onDirtyChange,
   onSalvo,
   onCancelar,
 }: {
@@ -160,6 +161,9 @@ export function FormularioAgente({
   tipos?: TipoInstrumento[];
   meuPapel?: PapelAcesso | null;
   onSubDrawer?: (aberto: boolean) => void;
+  // Avisa o pai (drawer) que há alterações não salvas, para o X/Esc/fundo confirmarem
+  // antes de descartar (o botão Cancelar já confirma por conta própria).
+  onDirtyChange?: (sujo: boolean) => void;
   onSalvo: (salvo: Agente) => void;
   onCancelar: () => void;
 }) {
@@ -240,6 +244,10 @@ export function FormularioAgente({
   // (o cinto e as fichas salvam ao vivo, à parte). Ao cancelar com texto alterado e
   // não salvo, confirma antes de descartar.
   const sujo = JSON.stringify(form) !== JSON.stringify(inicial);
+  // Reporta o "sujo" ao pai para o X/Esc/fundo também confirmarem antes de fechar.
+  useEffect(() => {
+    onDirtyChange?.(sujo);
+  }, [sujo, onDirtyChange]);
   function cancelar() {
     if (sujo && !confirm("Descartar as alterações não salvas dos textos e básicos?")) {
       return;
