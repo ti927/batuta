@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
   Brain,
   BookOpen,
+  Check,
   IdCard,
   Smile,
   Sparkles,
@@ -23,6 +25,12 @@ import {
   type Time,
   type TipoInstrumento,
 } from "@/lib/api";
+import {
+  chaveRascunho,
+  lerRascunho,
+  limparRascunho,
+  salvarRascunho,
+} from "@/lib/rascunho-agente";
 import {
   MODELOS_POR_PROVEDOR,
   provedorDoModelo,
@@ -84,6 +92,20 @@ function deAgente(a: Agente): Campos {
   };
 }
 
+// Validação leve de um rascunho vindo do localStorage (schema pode ter mudado).
+function ehCampos(x: unknown): x is Campos {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  return (
+    typeof o.nome === "string" &&
+    typeof o.agent_md === "string" &&
+    typeof o.skill_md === "string" &&
+    typeof o.tools_md === "string" &&
+    typeof o.soul_md === "string" &&
+    typeof o.memoria_ativa === "boolean"
+  );
+}
+
 type ChaveMd = "agent_md" | "skill_md" | "tools_md" | "soul_md";
 
 const MARKDOWNS: [ChaveMd, string][] = [
@@ -143,6 +165,7 @@ export function FormularioAgente({
   agente,
   abas = false,
   cinto,
+  onCintoChange,
   instrumentosTime,
   tipos,
   meuPapel,
@@ -157,6 +180,9 @@ export function FormularioAgente({
   // Instrumentos + Memórias). As props abaixo só são usadas nesse modo.
   abas?: boolean;
   cinto?: Instrumento[];
+  // Cópia de trabalho do cinto vive no drawer (sobrevive à troca de abas); o painel
+  // de instrumentos é controlado por ela.
+  onCintoChange?: (novo: Instrumento[]) => void;
   instrumentosTime?: Instrumento[];
   tipos?: TipoInstrumento[];
   meuPapel?: PapelAcesso | null;
@@ -167,13 +193,44 @@ export function FormularioAgente({
   onSalvo: (salvo: Agente) => void;
   onCancelar: () => void;
 }) {
-  const [form, setForm] = useState<Campos>(agente ? deAgente(agente) : VAZIO);
-  // Snapshot inicial estável para detectar "alterações não salvas" (guarda ao cancelar).
-  const [inicial] = useState<Campos>(() => (agente ? deAgente(agente) : VAZIO));
+  const chaveRasc = chaveRascunho(agente?.id ?? null, time.id);
+  // Rascunho do navegador lido UMA vez no mount (client-only): se houver e diferir do
+  // servidor, o editor abre já com ele (rede de segurança contra perda). Feito no
+  // inicializador do useState (não em efeito) para não disparar re-render em cascata.
+  const [rascunhoInicial] = useState<Campos | null>(() => {
+    if (typeof window === "undefined") return null;
+    const d = lerRascunho(chaveRasc);
+    const base = agente ? deAgente(agente) : VAZIO;
+    return d && ehCampos(d) && JSON.stringify(d) !== JSON.stringify(base) ? d : null;
+  });
+  const [form, setForm] = useState<Campos>(
+    rascunhoInicial ?? (agente ? deAgente(agente) : VAZIO),
+  );
+  // Baseline "salvo": estado (não snapshot fixo) porque RESETA a cada Salvar, zerando
+  // o "não salvo" sem fechar o editor.
+  const [inicial, setInicial] = useState<Campos>(() =>
+    agente ? deAgente(agente) : VAZIO,
+  );
+  // Rascunho não salvo restaurado? (mostra a nota de restauração.)
+  const [restaurado, setRestaurado] = useState(rascunhoInicial !== null);
   const [aba, setAba] = useState<AbaChave>("agent_md");
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const souOperador = podeOperar(meuPapel ?? null);
+
+  // Quais campos diferem do baseline (para os marcadores de "não salvo") e o total.
+  const camposSujos = (Object.keys(form) as (keyof Campos)[]).filter(
+    (k) => form[k] !== inicial[k],
+  );
+  const sujo = camposSujos.length > 0;
+  const abaSuja = (chave: AbaChave): boolean => {
+    if (chave === "instrumentos") return false; // cinto é ao vivo
+    if (chave === "memorias")
+      return camposSujos.includes("memoria_ativa") ||
+        camposSujos.includes("memoria_recall");
+    return camposSujos.includes(chave as keyof Campos);
+  };
+
   // Disponibilidade de provedores por chave: só oferecemos modelos cujo provedor
   // tem chave — escolher um sem chave quebraria na execução. A chave é por
   // provedor (unificação 2026-06-15): o mapa já vem achatado.
@@ -221,6 +278,32 @@ export function FormularioAgente({
     };
   }
 
+  // Reporta o "sujo" ao pai para o X/Esc/fundo também confirmarem antes de fechar.
+  useEffect(() => {
+    onDirtyChange?.(sujo);
+  }, [sujo, onDirtyChange]);
+
+  // Autosave do rascunho (debounce): guarda enquanto sujo, apaga quando limpo. Rede
+  // de segurança se a aba fechar/recarregar/travar.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (sujo) salvarRascunho(chaveRasc, form);
+      else limparRascunho(chaveRasc);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [form, sujo, chaveRasc]);
+
+  // Avisa o navegador antes de fechar aba/recarregar com alterações pendentes.
+  useEffect(() => {
+    if (!sujo) return;
+    const aoSair = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", aoSair);
+    return () => window.removeEventListener("beforeunload", aoSair);
+  }, [sujo]);
+
   async function salvar() {
     if (!form.nome.trim()) {
       setErro("O nome é obrigatório.");
@@ -232,7 +315,19 @@ export function FormularioAgente({
         ? await api.put<Agente>(`/agentes/${agente.id}`, corpo())
         : await api.post<Agente>(`/times/${time.id}/agentes`, corpo());
       setErro(null);
-      onSalvo(salvo);
+      limparRascunho(chaveRasc);
+      setRestaurado(false);
+      if (agente) {
+        // Edição: fica no editor e RESETA o baseline (o "não salvo" zera). O pai é
+        // sincronizado só quando o drawer fecha (Pilar 2) — sem refresh aqui.
+        const salvos = { ...form, nome: form.nome.trim() };
+        setForm(salvos);
+        setInicial(salvos);
+        toast.success("Alterações salvas");
+      } else {
+        // Criação: one-shot — o drawer fecha e sincroniza.
+        onSalvo(salvo);
+      }
     } catch (e) {
       setErro(e instanceof ErroDaApi ? e.message : "Falha ao salvar agente");
     } finally {
@@ -240,18 +335,19 @@ export function FormularioAgente({
     }
   }
 
-  // Guarda anti-perda: básicos + 4 markdowns + config de memória salvam pelo botão
-  // (o cinto e as fichas salvam ao vivo, à parte). Ao cancelar com texto alterado e
-  // não salvo, confirma antes de descartar.
-  const sujo = JSON.stringify(form) !== JSON.stringify(inicial);
-  // Reporta o "sujo" ao pai para o X/Esc/fundo também confirmarem antes de fechar.
-  useEffect(() => {
-    onDirtyChange?.(sujo);
-  }, [sujo, onDirtyChange]);
+  // Desfaz as alterações não salvas (volta ao baseline salvo) sem fechar o editor.
+  function descartar() {
+    if (!sujo) return;
+    if (!confirm("Desfazer as alterações não salvas?")) return;
+    setForm(inicial);
+    limparRascunho(chaveRasc);
+    setRestaurado(false);
+  }
+
+  // Cancelar = fechar o editor (o drawer também guarda X/Esc/fundo). Confirma se sujo.
   function cancelar() {
-    if (sujo && !confirm("Descartar as alterações não salvas dos textos e básicos?")) {
-      return;
-    }
+    if (sujo && !confirm("Descartar as alterações não salvas e fechar?")) return;
+    limparRascunho(chaveRasc);
     onCancelar();
   }
 
@@ -323,6 +419,7 @@ export function FormularioAgente({
           <PainelCinto
             agente={agente}
             cinto={cinto ?? []}
+            onCintoChange={onCintoChange ?? (() => {})}
             instrumentosTime={instrumentosTime ?? []}
             time={time}
             meuPapel={meuPapel ?? null}
@@ -344,31 +441,44 @@ export function FormularioAgente({
     );
   }
 
+  // Ponto roxo de "não salvo" ao lado do rótulo de um campo alterado.
+  const marcador = (ch: keyof Campos) =>
+    camposSujos.includes(ch) ? (
+      <span className="text-primary" title="Alteração não salva">
+        •
+      </span>
+    ) : null;
+  const anel = (ch: keyof Campos) =>
+    camposSujos.includes(ch) ? "ring-2 ring-primary/40" : "";
+
   const cabecalho = (
     <div className="flex flex-wrap gap-3">
       <Label className="min-w-40 flex-1 flex-col items-start gap-1">
-        Nome
+        <span>Nome {marcador("nome")}</span>
         <Input
           value={form.nome}
           onChange={(e) => campo("nome", e.target.value)}
+          className={anel("nome")}
           autoFocus
         />
       </Label>
       <Label className="flex-col items-start gap-1">
-        Papel
+        <span>Papel {marcador("papel")}</span>
         <Select
           value={form.papel}
           onChange={(e) => campo("papel", e.target.value as Papel)}
+          className={anel("papel")}
         >
           <option value="agente">Agente</option>
           <option value="lider">Líder</option>
         </Select>
       </Label>
       <Label className="flex-col items-start gap-1">
-        Modelo de IA
+        <span>Modelo de IA {marcador("modelo_ia")}</span>
         <Select
           value={form.modelo_ia}
           onChange={(e) => campo("modelo_ia", e.target.value)}
+          className={anel("modelo_ia")}
         >
           <option value="">(não definido)</option>
           {provedoresVisiveis.map((p) => (
@@ -386,19 +496,54 @@ export function FormularioAgente({
   );
 
   const barraBotoes = (
-    <div className="flex gap-2">
-      <Button onClick={salvar} disabled={salvando}>
-        {salvando ? "Salvando…" : "Salvar"}
+    <div className="flex items-center gap-2">
+      <Button onClick={salvar} disabled={salvando || !sujo}>
+        {salvando ? "Salvando…" : sujo ? "Salvar alterações" : "Salvar"}
       </Button>
       <Button variant="ghost" onClick={cancelar} disabled={salvando}>
         Cancelar
       </Button>
+      <div className="ml-auto flex items-center gap-3 text-xs">
+        {sujo ? (
+          <>
+            <button
+              type="button"
+              onClick={descartar}
+              className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              Desfazer alterações
+            </button>
+            <span className="font-medium text-primary">
+              {camposSujos.length} não salvo{camposSujos.length > 1 ? "s" : ""}
+            </span>
+          </>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-success">
+            <Check className="size-3.5" /> Tudo salvo
+          </span>
+        )}
+      </div>
     </div>
   );
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       {erro && <Aviso>{erro}</Aviso>}
+
+      {restaurado && sujo && (
+        <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-accent px-3 py-2 text-xs text-accent-foreground">
+          <span className="flex-1">
+            Rascunho não salvo restaurado — continue de onde parou e clique em Salvar.
+          </span>
+          <button
+            type="button"
+            onClick={descartar}
+            className="shrink-0 underline underline-offset-2 hover:no-underline"
+          >
+            descartar rascunho
+          </button>
+        </div>
+      )}
 
       {cabecalho}
 
@@ -432,6 +577,12 @@ export function FormularioAgente({
                 >
                   <a.Icone className="size-4" />
                   {a.rotulo}
+                  {abaSuja(a.chave) && (
+                    <span
+                      className="size-1.5 rounded-full bg-primary"
+                      title="Alteração não salva nesta aba"
+                    />
+                  )}
                 </button>
               );
             })}
@@ -451,7 +602,9 @@ export function FormularioAgente({
                 key={chave}
                 className="min-h-0 flex-1 flex-col items-start gap-1"
               >
-                {rotulo}
+                <span>
+                  {rotulo} {marcador(chave)}
+                </span>
                 <Textarea
                   className="min-h-0 w-full flex-1 resize-none font-mono"
                   value={form[chave]}

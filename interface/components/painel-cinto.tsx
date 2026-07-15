@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Wrench } from "lucide-react";
@@ -20,16 +19,21 @@ import { IconeInstrumento } from "@/components/icone-instrumento";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 
-// Cinto de instrumentos do agente: pendurar / tirar (ao vivo, POST/DELETE +
-// router.refresh) e — quando temos o catálogo de `tipos` — clicar num instrumento
-// para editar a configuração dele no DrawerInstrumento (por cima). FONTE ÚNICA:
-// reusado pela read-view do drawer estreito E pela aba "Instrumentos" do popup amplo,
-// para os dois se comportarem igual (evita fontes de verdade divergentes).
+// Cinto de instrumentos do agente: pendurar / tirar (ao vivo, POST/DELETE) e — quando
+// temos o catálogo de `tipos` — clicar num instrumento para editar a configuração dele
+// no DrawerInstrumento (por cima). FONTE ÚNICA: reusado pela read-view do drawer estreito
+// E pela aba "Instrumentos" do popup, para os dois se comportarem igual.
+//
+// IMPORTANTE: o cinto é ESTADO LOCAL e as mutações são OTIMISTAS, SEM `router.refresh()`.
+// Um refresh remontaria a página (a `key={versao}` do pai inclui o cinto) e mataria o
+// popup + o rascunho não salvo dos markdowns. Aqui, pendurar/tirar/editar mexe SÓ nos
+// instrumentos; o pai é sincronizado uma vez quando o drawer fecha.
 // `onSubDrawer` avisa o pai que abriu/fechou um drawer por cima (coordena o Esc).
 
 export function PainelCinto({
   agente,
   cinto,
+  onCintoChange,
   instrumentosTime,
   time,
   meuPapel,
@@ -37,14 +41,16 @@ export function PainelCinto({
   onSubDrawer,
 }: {
   agente: Agente;
+  // CONTROLADO: o cinto vive no pai (DrawerAgente), que sobrevive à troca de abas.
+  // Aqui só mutamos otimista via onCintoChange + API, sem `router.refresh()`.
   cinto: Instrumento[];
+  onCintoChange: (novo: Instrumento[]) => void;
   instrumentosTime: Instrumento[];
   time: Time;
   meuPapel: PapelAcesso | null;
   tipos?: TipoInstrumento[];
   onSubDrawer?: (aberto: boolean) => void;
 }) {
-  const router = useRouter();
   const souOperador = podeOperar(meuPapel);
   const [selecionado, setSelecionado] = useState("");
   const [ocupado, setOcupado] = useState(false);
@@ -68,15 +74,18 @@ export function PainelCinto({
   }
 
   async function pendurar() {
-    if (!selecionado) return;
+    const inst = instrumentosTime.find((i) => i.id === selecionado);
+    if (!inst) return;
+    const anterior = cinto;
     setOcupado(true);
+    onCintoChange([...cinto, inst]); // otimista
+    setSelecionado("");
     try {
       await api.post(`/agentes/${agente.id}/instrumentos`, {
-        instrumento_id: selecionado,
+        instrumento_id: inst.id,
       });
-      setSelecionado("");
-      router.refresh();
     } catch (e) {
+      onCintoChange(anterior); // reverte
       toast.error(
         e instanceof ErroDaApi ? e.message : "Falha ao pendurar instrumento",
       );
@@ -86,11 +95,13 @@ export function PainelCinto({
   }
 
   async function tirar(instrumentoId: string) {
+    const anterior = cinto;
     setOcupado(true);
+    onCintoChange(cinto.filter((x) => x.id !== instrumentoId)); // otimista
     try {
       await api.delete(`/agentes/${agente.id}/instrumentos/${instrumentoId}`);
-      router.refresh();
     } catch (e) {
+      onCintoChange(anterior); // reverte
       toast.error(
         e instanceof ErroDaApi ? e.message : "Falha ao tirar instrumento",
       );
@@ -194,7 +205,8 @@ export function PainelCinto({
           onFechar={fecharEditor}
           onSalvou={(salvo) => {
             setEditando(salvo);
-            router.refresh();
+            // Atualiza o item no cinto (nome/config), sem refresh.
+            onCintoChange(cinto.map((x) => (x.id === salvo.id ? salvo : x)));
           }}
         />
       )}

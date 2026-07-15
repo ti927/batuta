@@ -16,6 +16,7 @@ import {
   type TipoInstrumento,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
+import { chaveRascunho, limparRascunho } from "@/lib/rascunho-agente";
 import { useConversaTime } from "@/components/conversa-ia/painel-time";
 import { FormularioAgente } from "@/components/formulario-agente";
 import { MemoriaAgentePainel } from "@/components/memoria-agente";
@@ -78,6 +79,22 @@ export function DrawerAgente({
   const [subAberto, setSubAberto] = useState(false);
   // Há texto/básicos editados e NÃO salvos no formulário? (reportado pelo form.)
   const [sujo, setSujo] = useState(false);
+  // Cópia de trabalho do cinto: DONO ÚNICO aqui (sobrevive à troca de abas e ao
+  // toggle leitura/edição). O PainelCinto (leitura e aba Instrumentos) é controlado
+  // por ela; mutações são otimistas + API, sem refresh. Ver Pilar 1/2 do plano.
+  const [cintoLocal, setCintoLocal] = useState(cinto);
+
+  // Fecha DE FATO: sincroniza o pai (cards/lista) com a verdade do servidor uma única
+  // vez — durante a sessão nada dá refresh (Pilar 2), então isto acontece só aqui.
+  // Fechar a partir do EDITOR apaga o rascunho (a sessão terminou de propósito); fechar
+  // a LEITURA não apaga (pode haver rascunho ainda não visto de uma sessão anterior).
+  function fecharComSync() {
+    if (editando || criando) {
+      limparRascunho(chaveRascunho(agente?.id ?? null, time.id));
+    }
+    router.refresh();
+    onFechar();
+  }
 
   // Fecha protegendo a edição: se está editando com alterações não salvas, confirma
   // antes de descartar (o botão Salvar é o único caminho que persiste). Cobre X,
@@ -90,7 +107,7 @@ export function DrawerAgente({
     ) {
       return;
     }
-    onFechar();
+    fecharComSync();
   }
 
   // Esc: se há drawer por cima, ele trata; no amplo, só volta ao drawer (não perde a
@@ -110,11 +127,12 @@ export function DrawerAgente({
       ) {
         return;
       }
+      router.refresh();
       onFechar();
     };
     document.addEventListener("keydown", aoTeclar);
     return () => document.removeEventListener("keydown", aoTeclar);
-  }, [onFechar, ampliado, subAberto, editando, criando, sujo]);
+  }, [router, onFechar, ampliado, subAberto, editando, criando, sujo]);
 
   async function remover() {
     if (!agente) return;
@@ -206,25 +224,24 @@ export function DrawerAgente({
               time={time}
               agente={agente}
               abas={ampliado}
-              cinto={cinto}
+              cinto={cintoLocal}
+              onCintoChange={setCintoLocal}
               instrumentosTime={instrumentosTime}
               tipos={tipos}
               meuPapel={meuPapel}
               onSubDrawer={setSubAberto}
               onDirtyChange={setSujo}
+              // O formulário só chama onSalvo na CRIAÇÃO (one-shot: fecha + sincroniza).
+              // Na edição ele fica aberto, reseta o baseline e não dá refresh (Pilar 2).
               onSalvo={() => {
-                toast.success(criando ? "Agente criado" : "Agente salvo");
+                toast.success("Agente criado");
                 setSujo(false);
-                setAmplo(false);
-                if (criando) onFechar();
-                else setEditando(false);
-                router.refresh();
+                fecharComSync();
               }}
+              // Cancelar/fechar o editor: o formulário já confirma se há pendência.
               onCancelar={() => {
                 setSujo(false);
-                setAmplo(false);
-                if (criando) onFechar();
-                else setEditando(false);
+                fecharComSync();
               }}
             />
           </div>
@@ -289,7 +306,8 @@ export function DrawerAgente({
               {/* Cinto de instrumentos (fonte única, igual à aba do popup amplo) */}
               <PainelCinto
                 agente={agente}
-                cinto={cinto}
+                cinto={cintoLocal}
+                onCintoChange={setCintoLocal}
                 instrumentosTime={instrumentosTime}
                 time={time}
                 meuPapel={meuPapel}
