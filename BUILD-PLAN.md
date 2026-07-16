@@ -1453,6 +1453,31 @@ Escopo a definir (ideação): um repositório de conhecimento estruturado (por i
 
 **1ª ENTRADA já identificada** (o gatilho desta fase) — regra do Telegram (verificada no código): um bot = **um webhook = um canal** (`enviar_telegram`); **ENVIAR** pode ser compartilhado entre agentes, mas **RECEBER** (atender conversa ou receber aprovação) é exclusivo — um canal tem **um atendente** (o mais antigo, `mensageria/servico.py::agente_atendente`); e **dois portões** pedindo aprovação ao mesmo aprovador, pelo mesmo bot, **ao mesmo tempo COLIDEM** (a resposta casa por *(bot, chat)*; há só uma conversa viva por *(bot, contato)* — índice `uq_conversa_viva` em `modelos.py` — e a 2ª pausa sobrescreve o vínculo, `mensageria/aprovacao.py::vincular_pausa`). Orientação a dar: **um bot por canal de aprovação** (ou aprovadores/chats diferentes, ou aprovar pela tela em concorrência); conectar bot/token é pela tela (cofre), a criadora não faz. A trava real (HTTP 409 ao conectar 2 instrumentos com o mesmo token, `rotas/mensageria.py::ativar_canal`) só age na UI — a criadora nunca a vê.
 
+**2ª ENTRADA — instrumento `publicar_instagram` ("Instagram: publicar")** (`cerebro/instrumentos/publicar_instagram.py`). As "variáveis" desse instrumento são os **`Args`**, que o AGENTE preenche ao acionar — **não aparecem no formulário** do instrumento (lá só fica a credencial `instagram`, que dá conta + token). Por isso o agente é instruído pelo **markdown**, e a orquestração precisa entregar a mídia **pronta** (URL pública) ao passo que publica.
+
+- **Tipos** (`tipo_midia`): `imagem` (foto no feed), `reels` (vídeo no feed — **não há "vídeo de feed" à parte; vídeo de feed = Reels**), `stories` (imagem OU vídeo) e `carrossel` (2 a 10 itens, podendo **misturar** fotos e vídeos). Não faz DM (fase futura).
+- **Args (o que o agente manda):** `midia_urls` (1+ URLs **PÚBLICAS** — a Meta baixa de lá, não há upload); `tipos_midia_itens` (lista paralela `"imagem"`/`"video"`, na mesma ordem — usar para item de VÍDEO em carrossel ou STORY de vídeo; omitir = tudo imagem; não se aplica a reels nem foto de feed); `legenda` (≤ 2200 chars; **IGNORADA em stories**).
+- **Por tipo:** imagem → 1 URL de foto + legenda. reels → 1 URL de MP4/MOV + legenda. stories → 1 URL (+ `tipos_midia_itens=["video"]` se vídeo); sem legenda. carrossel → 2 a 10 URLs + `tipos_midia_itens` na mesma ordem + legenda.
+- **Regras:** a mídia vem sempre por URL pública (de `gerar_imagem`/`gerar_video`/`gerar_video_fal` num passo anterior); vídeo = MP4/MOV (H264/HEVC, áudio AAC); é `acao_irreversivel` → **exige PORTÃO no passo anterior** (o publicador fica no nó seguinte, sem portão); conta/token vêm da credencial `instagram` (o humano conecta).
+- **Padrão "agente publicador" (publica todo tipo, recebendo tudo PRONTO do passo anterior):** o conteúdo (tipo + URL(s) pública(s) + legenda) chega mastigado; o publicador só mapeia para os Args, não decide conteúdo. Instruções-modelo para colar no `skill.md`:
+
+  ```markdown
+  ## Publicar no FEED
+  Você recebe PRONTO: o tipo, a(s) URL(s) pública(s) da mídia e a legenda.
+  Não invente URL nem reescreva a legenda — use exatamente o que chegou.
+  - 1 foto → tipo_midia="imagem", midia_urls=[<URL>], legenda=<legenda>.
+  - 1 vídeo → tipo_midia="reels", midia_urls=[<URL do MP4>], legenda=<legenda>.
+  - 2 a 10 mídias → tipo_midia="carrossel", midia_urls=[<URL1>,<URL2>,...],
+    tipos_midia_itens=[ "imagem" ou "video" para CADA URL, na mesma ordem ], legenda=<legenda>.
+  Legenda: máx. 2200 caracteres; vídeo = MP4/MOV. Se faltar URL ou legenda, PARE e peça — nunca publique incompleto.
+
+  ## Publicar STORY
+  Você recebe PRONTO: a URL pública da mídia e se é imagem ou vídeo. Story NÃO tem legenda.
+  - Story de imagem → tipo_midia="stories", midia_urls=[<URL>].
+  - Story de vídeo → tipo_midia="stories", midia_urls=[<URL do MP4>], tipos_midia_itens=["video"].
+  Se faltar a URL, PARE e peça — nunca publique incompleto.
+  ```
+
 O **fix pontual** (ensinar via `prompt.py` + `descricao` + aviso automático não-bloqueante no `_snapshot_time`) foi **desenhado e CANCELADO em favor desta fase** — o conhecimento entra na **base**, não em remendo de prompt. (Nota do desenho arquivado: NÃO bloquear em `encaixar`/`montar_cadeia`, pois sobre-restringe usos válidos — compartilhar um bot só para ENVIAR, e portões em SÉRIE, são legítimos; aviso > proibição.)
 
 ---
