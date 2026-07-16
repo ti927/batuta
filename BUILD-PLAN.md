@@ -1445,6 +1445,18 @@ QUALQUER instrumento com segredo, não só Instagram. Duas partes:
 
 ---
 
+## FASE — Base de conhecimento centralizada da IA criadora  📋 PLANEJADA (anotado 2026-07-16, não iniciar sem o sinal do maestro)
+
+Gatilho: investigando a dúvida do maestro "dois agentes ligados ao mesmo bot do Telegram para aprovação dá problema?" (2026-07-16), descobriu-se que a IA criadora **NÃO conhece** regras operacionais importantes que ela deveria (a) **respeitar** ao montar times e (b) **explicar** ao consultor. Hoje o conhecimento da criadora está **espalhado e hardcoded** no `criacao/prompt.py` + na `descricao` de cada instrumento; regras não-óbvias (limitações conhecidas, gotchas, "cobrir todos os cenários") não têm lugar próprio. Decisão do maestro: em vez de ir **remendando o prompt caso a caso**, montar uma **BASE DE CONHECIMENTO CENTRALIZADA** que a criadora consulta — de todas as funções, instrumentos, regras de mensageria/portão/gatilho, limitações, etc.
+
+Escopo a definir (ideação): um repositório de conhecimento estruturado (por instrumento / por tema) que a criadora lê **sob demanda** — candidato a casar com a Biblioteca/RAG, ou um catálogo curado versionado. Cada entrada = um fato operacional com **"quando aplica"** e **"como orientar o usuário"**. Núcleo de orquestração congelado; é conhecimento da **borda de criação**.
+
+**1ª ENTRADA já identificada** (o gatilho desta fase) — regra do Telegram (verificada no código): um bot = **um webhook = um canal** (`enviar_telegram`); **ENVIAR** pode ser compartilhado entre agentes, mas **RECEBER** (atender conversa ou receber aprovação) é exclusivo — um canal tem **um atendente** (o mais antigo, `mensageria/servico.py::agente_atendente`); e **dois portões** pedindo aprovação ao mesmo aprovador, pelo mesmo bot, **ao mesmo tempo COLIDEM** (a resposta casa por *(bot, chat)*; há só uma conversa viva por *(bot, contato)* — índice `uq_conversa_viva` em `modelos.py` — e a 2ª pausa sobrescreve o vínculo, `mensageria/aprovacao.py::vincular_pausa`). Orientação a dar: **um bot por canal de aprovação** (ou aprovadores/chats diferentes, ou aprovar pela tela em concorrência); conectar bot/token é pela tela (cofre), a criadora não faz. A trava real (HTTP 409 ao conectar 2 instrumentos com o mesmo token, `rotas/mensageria.py::ativar_canal`) só age na UI — a criadora nunca a vê.
+
+O **fix pontual** (ensinar via `prompt.py` + `descricao` + aviso automático não-bloqueante no `_snapshot_time`) foi **desenhado e CANCELADO em favor desta fase** — o conhecimento entra na **base**, não em remendo de prompt. (Nota do desenho arquivado: NÃO bloquear em `encaixar`/`montar_cadeia`, pois sobre-restringe usos válidos — compartilhar um bot só para ENVIAR, e portões em SÉRIE, são legítimos; aviso > proibição.)
+
+---
+
 ## FASE — Instagram self-serve: OAuth "Conectar Instagram"  ✅ NO AR (2026-06-30, deploys `2d9c937` + `e5360f9`, sem migração, núcleo intocado)
 
 Gatilho: o instrumento de Instagram só servia contas adicionadas como **testador** (app em modo dev; teto ~50 + token colado por conta). Ao seguir o App Review, o formulário da permissão `instagram_business_basic` escancarou o muro: o screencast/descrição exigem que o **analista conecte a PRÓPRIA conta** por um fluxo no app — que o token colado não tem. Decisão do maestro: **construir o OAuth agora** (o teto de testadores estoura rápido).
