@@ -20,6 +20,7 @@ import {
   ROTULO_PROVEDOR,
   type ProvedoresDisponiveis,
 } from "@/lib/modelos";
+import { IlustracaoProporcao } from "@/components/ilustracao-proporcao";
 import { SeletorIcone } from "@/components/seletor-icone";
 import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,16 @@ function tipoDoCampo(prop: Record<string, unknown>): string {
   const anyOf = prop.anyOf as Array<Record<string, unknown>> | undefined;
   const achado = anyOf?.find((p) => p.type && p.type !== "null");
   return (achado?.type as string) ?? "string";
+}
+
+// Um campo enum é de RESOLUÇÃO quando TODAS as opções batem "LxA", "L×A" ou "L:A"
+// (ex.: 864x1536, 9:16). Nesse caso mostramos a ilustração da proporção ao lado do
+// dropdown — vale para qualquer instrumento de imagem/vídeo, sem tag no backend.
+const RE_RESOLUCAO = /^\d+\s*[x×:]\s*\d+$/i;
+function ehEnumResolucao(opcoes: string[] | undefined): boolean {
+  return (
+    !!opcoes && opcoes.length > 0 && opcoes.every((o) => RE_RESOLUCAO.test(o.trim()))
+  );
 }
 
 // Valores fixos de um campo (Literal/enum), inclusive dentro de anyOf (Optional).
@@ -241,6 +252,21 @@ function CampoConfigInput({
           </optgroup>
         ))}
       </Select>
+    );
+  } else if (ehEnumResolucao(campo.opcoes) && !campo.secreto) {
+    // Enum de resolução: dropdown normal + ilustração da proporção do valor atual.
+    entrada = (
+      <div className="flex flex-col gap-2">
+        <Select value={valor} onChange={(e) => onChange(e.target.value)}>
+          {!campo.obrigatorio && <option value="">(padrão)</option>}
+          {(campo.opcoes ?? []).map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </Select>
+        <IlustracaoProporcao valor={valor} />
+      </div>
     );
   } else if (campo.opcoes && !campo.secreto) {
     entrada = (
