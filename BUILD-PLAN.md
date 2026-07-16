@@ -1645,6 +1645,23 @@ Gatilho: o agente era stateless entre execuções (comportamento 100% dos markdo
 
 ---
 
+## FASE — Editor profissional do agente (popup com abas, feedback de não-salvo, rascunho à prova de perda)  ✅ (2026-07-16, sem migração, só frontend)
+
+Gatilho: com o agente crescendo (4 markdowns + cinto + memórias), editar no drawer estreito ficou apertado; e o popup com abas tinha UX destrutiva — pendurar um instrumento dava `router.refresh()` e, como a página de agentes usa `key={versao}` que **inclui o cinto**, remontava tudo → o popup fechava e o **rascunho dos markdowns não salvos se perdia** (o maestro perdeu vários mds digitados).
+- **Popup ampliável (90×90) com abas:** botão maximizar leva o drawer a um popup com uma aba por markdown + aba **Instrumentos** (pendurar/tirar/editar a config no sub-drawer) + aba **Memórias**.
+- **Cinto independente e não-disruptivo:** `PainelCinto` virou **controlado** (a cópia de trabalho do cinto vive no `DrawerAgente`, dono único, sobrevive à troca de abas); pendurar/tirar/editar é **otimista + API, SEM refresh** → o popup não fecha e os markdowns ficam intactos. O pai só sincroniza uma vez, ao fechar de fato.
+- **Feedback de não-salvo:** marcadores (ponto nas abas / realce nos básicos) + barra "N não salvo(s)" / "Desfazer alterações" / "Tudo salvo ✓"; **Salvar (edição) grava e MANTÉM aberto** (reseta o baseline, zera o sujo).
+- **Rascunho à prova de perda:** autosave em `localStorage` (novo `interface/lib/rascunho-agente.ts`) + restauração ao reabrir + aviso `beforeunload`; **X / Esc / clique-fora confirmam** antes de descartar edição não salva.
+- Arquivos: `formulario-agente.tsx`, `painel-cinto.tsx`, `drawer-agente.tsx`, `memoria-agente.tsx`, novo `lib/rascunho-agente.ts`. Commits `692e0ca` → `a005515` → `b03d2b0` → `279d245`. tsc/eslint/build verdes.
+
+---
+
+## FASE — Ilustração de proporção (aspect ratio) nos campos de resolução de imagem/vídeo  ✅ (2026-07-16, sem migração, só frontend, núcleo intocado)
+
+Gatilho: para escolher o tamanho certo (ex.: 9:16 para Story/Reels) o usuário tinha que saber qual "LxA" corresponde a qual formato. Agora **todo campo enum de resolução** mostra, abaixo do dropdown, um **retângulo proporcional** que redesenha conforme a opção escolhida + um **rótulo amigável** (razão simplificada, orientação e dica de uso: `9:16` Story/Reels, `4:5` Feed retrato, `1:1` Feed quadrado). **Detecção no próprio front** (todas as opções batem `^\d+[x×:]\d+$`), **sem tag no backend** → vale para `gerar_imagem`, `montar_imagem`, `gerar_video` (Sora), `gerar_video_fal` (campo `proporcao` "9:16") **e qualquer instrumento de mídia futuro**; respeita o dropdown dependente do modelo (`opcoesAtivas`). Layout escolhido pelo maestro: dropdown + forma ao lado (menor mudança, robusto em espaço estreito). Novo `interface/components/ilustracao-proporcao.tsx` (componente puro) + ramo novo em `CampoConfigInput` (`formulario-instrumento.tsx`). Frontend puro; backend e núcleo intocados. Commit `f3cf69d`. tsc/eslint/build verdes.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
