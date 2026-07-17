@@ -730,6 +730,30 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         diag = diagnostico_execucao.diagnosticar(sess, ex.id)
         return _ok("Diagnóstico pronto.", diagnostico=diag)
 
+    def consultar_conhecimento(topico: str) -> str:
+        """Consulta a Central de Conhecimento do Batuta — o manual dos recursos
+        (instrumentos, automações, gatilhos, portão de aprovação, chaves, credenciais,
+        mensageria/Telegram, memória do agente, etc.). USE quando não souber COMO um
+        recurso funciona ou COMO orientar o consultor sobre ele — em vez de adivinhar de
+        memória. Devolve os capítulos mais relevantes ao `topico`; cada um traz uma seção
+        'Para a IA' com as regras operacionais e como orientar o usuário."""
+        import conhecimento
+
+        achados = conhecimento.buscar(topico, limite=3)
+        if not achados:
+            return _ok(
+                "Nada encontrado na Central para esse tópico. Responda pelo que já sabe, "
+                "com honestidade — não invente regras.",
+                capitulos=[],
+            )
+        return _ok(
+            "Capítulos da Central encontrados.",
+            capitulos=[
+                {"titulo": c.titulo, "slug": c.slug, "conteudo": c.corpo}
+                for c in achados
+            ],
+        )
+
     funcoes = [
         definir_time, adicionar_agente, editar_agente, remover_agente,
         configurar_instrumento, editar_instrumento, encaixar_instrumento,
@@ -738,6 +762,7 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         ativar_time, desativar_time, ver_time, listar_tipos_instrumento,
         listar_execucoes, diagnosticar_execucao, ver_memoria_agente,
         sugerir_proximos_passos, lembrar, recordar, esquecer,
+        consultar_conhecimento,
     ]
 
     # O react agent do LangGraph roda as ferramentas de UM turno EM PARALELO (pool de

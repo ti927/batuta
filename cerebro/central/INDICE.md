@@ -10,11 +10,16 @@ fontes: ["PRODUTO.md", "cerebro/modelos.py"]
 # Central de Conhecimento — índice
 
 Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a IA criadora
-(consulta sob demanda). Cada capítulo é um arquivo em `docs/central/<area>/<slug>.md`, no formato do
-[[gabarito]].
+(consulta sob demanda). Cada capítulo é um arquivo em `cerebro/central/<area>/<slug>.md`, no formato do
+[[gabarito]] (fica dentro do backend para ir ao container em produção; o front lê via API).
 
 **Legenda:** ✅ recurso no ar · 📋 planejado · 🧩 conceito. Coluna "capítulo" = status de ESCRITA:
 ✍️ escrito · ⬜ a escrever.
+
+> **Escritos (Onda A, 2026-07-17):** `o-que-e-o-batuta`, `hierarquia`, `agente`, `cinto`, `automacao`,
+> `gatilhos`, `portao-de-aprovacao`, `chaves-de-ia`, `credenciais-nomeadas`, `canal-telegram`,
+> `gerar-imagem`, `enviar-telegram`, `agendar-automacao`, `publicar-instagram`. O que vale na tela e
+> para a IA são os arquivos existentes; esta tabela é o plano.
 
 > Este índice é a **Fase 1** do roadmap (arquitetura da informação). A granularidade de instrumentos
 > foi decidida assim: **1 capítulo de conceito** ("O cinto e os instrumentos") **+ 1 mini-capítulo por

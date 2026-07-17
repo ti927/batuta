@@ -10,6 +10,7 @@ vem dos markdowns, CLAUDE.md §14). Como o roteador de cadeia, ela tem prompt em
 
 import json
 
+import conhecimento
 from criacao.ferramentas import catalogo_de_instrumentos
 
 _BASE = """\
@@ -292,6 +293,13 @@ def montar_prompt_criadora(
         "perguntar — públicos você coleta e preenche, secretos vão para o cofre; "
         "'acao_irreversivel' exige portão humano antes):\n"
         + json.dumps(catalogo_de_instrumentos(), ensure_ascii=False)
+    )
+    partes.append(
+        "# Central de Conhecimento (o manual dos recursos do Batuta). Quando NÃO souber "
+        "COMO um recurso funciona ou COMO orientar o consultor sobre ele, CHAME a "
+        "ferramenta consultar_conhecimento(topico) e responda a partir do capítulo — não "
+        "adivinhe de memória. Capítulos disponíveis:\n"
+        + json.dumps(conhecimento.indice_titulos(), ensure_ascii=False)
     )
     if snapshot_time:
         partes.append(

@@ -10,10 +10,12 @@ fontes: []
 # Gabarito de capítulo — como escrever um capítulo da Central de Conhecimento
 
 Este arquivo **não é um capítulo de verdade** — é o molde. Copie a estrutura abaixo para criar
-qualquer capítulo novo em `docs/central/<area>/<slug>.md`.
+qualquer capítulo novo em `cerebro/central/<area>/<slug>.md`.
 
 A Central serve **dois leitores** com **um só documento**: a pessoa lê o capítulo inteiro; a IA
 criadora recupera o mesmo capítulo (priorizando a seção **Para a IA**). Uma fonte só — nunca diverge.
+Os capítulos vivem em `cerebro/central/` (dentro do backend, para irem ao container em produção); o
+módulo `cerebro/conhecimento.py` os lê e serve tanto ao /ajuda quanto à IA.
 
 ## Frontmatter (obrigatório, no topo)
 

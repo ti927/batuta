@@ -10,6 +10,7 @@ import fila
 from arquivos import DIRETORIO_ARQUIVOS
 from rotas import (
     agentes,
+    ajuda,
     automacoes,
     chaves_api,
     cinto,
@@ -78,6 +79,7 @@ app.include_router(instagram.rotas)
 app.include_router(instagram_webhook.rotas)
 app.include_router(webhooks.rotas)
 app.include_router(mensageria.rotas)
+app.include_router(ajuda.rotas)
 
 # Arquivos gerados (ex.: PDFs do instrumento gerar_pdf), servidos localmente.
 app.mount("/arquivos", StaticFiles(directory=DIRETORIO_ARQUIVOS), name="arquivos")
