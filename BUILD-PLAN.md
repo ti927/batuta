@@ -1445,7 +1445,9 @@ QUALQUER instrumento com segredo, não só Instagram. Duas partes:
 
 ---
 
-## FASE — Base de conhecimento centralizada da IA criadora  📋 PLANEJADA (anotado 2026-07-16, não iniciar sem o sinal do maestro)
+## FASE — Central de Conhecimento (manual do humano + base da IA)  🚧 EM ANDAMENTO (Fase 1 entregue 2026-07-17)
+
+> **Evoluiu** da "Base de conhecimento centralizada da IA criadora": virou UMA base para DOIS leitores — a pessoa (manual em `/ajuda`, dentro do app) e a IA criadora (consulta sob demanda). Roadmap de 5 fases no plano `~/.claude/plans/a-anthropic-acabou-de-elegant-meerkat.md`. **Decisões do maestro (2026-07-17):** um documento por capítulo com seção "Para a IA"; área `/ajuda` desde já; a IA consulta via ferramenta (sem embeddings — acervo pequeno e curado). **Fase 1 (arquitetura da informação) ENTREGUE:** `docs/central/INDICE.md` (~40 capítulos em 8 áreas) + `docs/central/_GABARITO.md` (molde) + capítulo-piloto `docs/central/instrumentos/publicar-instagram.md`. As 2 entradas-semente abaixo (Telegram; `publicar_instagram`) viram conteúdo dos capítulos.
 
 Gatilho: investigando a dúvida do maestro "dois agentes ligados ao mesmo bot do Telegram para aprovação dá problema?" (2026-07-16), descobriu-se que a IA criadora **NÃO conhece** regras operacionais importantes que ela deveria (a) **respeitar** ao montar times e (b) **explicar** ao consultor. Hoje o conhecimento da criadora está **espalhado e hardcoded** no `criacao/prompt.py` + na `descricao` de cada instrumento; regras não-óbvias (limitações conhecidas, gotchas, "cobrir todos os cenários") não têm lugar próprio. Decisão do maestro: em vez de ir **remendando o prompt caso a caso**, montar uma **BASE DE CONHECIMENTO CENTRALIZADA** que a criadora consulta — de todas as funções, instrumentos, regras de mensageria/portão/gatilho, limitações, etc.
 
