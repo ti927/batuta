@@ -52,6 +52,7 @@ export function CofreCredenciais({
   // aqui (página dinâmica, atrás de login).
   const params = useSearchParams();
   const igRetorno = params.get("instagram");
+  const googleRetorno = params.get("google");
   const igConta = params.get("conta");
   const igMotivo = params.get("motivo");
 
@@ -93,6 +94,19 @@ export function CofreCredenciais({
       {igRetorno === "erro" && (
         <Aviso variant="atencao">
           Não foi possível conectar o Instagram
+          {igMotivo ? `: ${igMotivo}` : "."}
+        </Aviso>
+      )}
+
+      {googleRetorno === "ok" && (
+        <Aviso variant="sucesso">
+          Conta {igConta ? igConta : "do Google"} conectada. Ela já aparece na
+          lista abaixo.
+        </Aviso>
+      )}
+      {googleRetorno === "erro" && (
+        <Aviso variant="atencao">
+          Não foi possível conectar o Google
           {igMotivo ? `: ${igMotivo}` : "."}
         </Aviso>
       )}
@@ -243,6 +257,29 @@ function FormularioCredencial({
       setConectando(false);
     }
   }
+
+  // Conectar Google por OAuth (Gmail/Agenda/Drive/Search Console): pede a URL de
+  // consentimento e manda o navegador para lá. No retorno, a credencial vem
+  // preenchida. Não há colar token à mão (o token do Google vence em ~1h e precisa
+  // do refresh token, que só o fluxo OAuth entrega). Só na org, não na consultoria.
+  async function conectarGoogle() {
+    if (!organizacaoId) return;
+    setConectando(true);
+    try {
+      const { url } = await api.post<{ url: string }>(
+        `/organizacoes/${organizacaoId}/google/iniciar`,
+        {},
+      );
+      window.location.href = url;
+    } catch (e) {
+      onErro(
+        e instanceof ErroDaApi
+          ? e.message
+          : "Não foi possível iniciar a conexão com o Google.",
+      );
+      setConectando(false);
+    }
+  }
   const [tipoSel, setTipoSel] = useState(credencial?.tipo ?? tipos[0]?.tipo ?? "");
   const [nome, setNome] = useState(credencial?.nome ?? "");
   const [compartilhavel, setCompartilhavel] = useState(
@@ -356,7 +393,28 @@ function FormularioCredencial({
         </div>
       )}
 
-      {tipo?.campos.map((campo) => (
+      {tipoSel === "google" && !ehConsultoria && organizacaoId && (
+        <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3">
+          <Button
+            type="button"
+            className="self-start"
+            disabled={conectando}
+            onClick={conectarGoogle}
+          >
+            {conectando ? "Abrindo o Google…" : "Conectar Google"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Você faz login na conta na própria tela do Google e autoriza os serviços
+            (Gmail, Agenda, Drive, Search Console). O Batuta guarda o acesso e o
+            renova sozinho — sem colar token.
+          </p>
+        </div>
+      )}
+
+      {/* Google é OAuth-only: os campos (tokens/e-mail/escopos) vêm do fluxo de
+          conexão, não são digitados. */}
+      {tipoSel !== "google" &&
+        tipo?.campos.map((campo) => (
         <div key={campo.nome} className="flex flex-col gap-1">
           <Label htmlFor={`cred-${campo.nome}`}>{campo.rotulo}</Label>
           <Input
@@ -389,9 +447,13 @@ function FormularioCredencial({
       )}
 
       <div className="flex gap-2">
-        <Button disabled={salvando} onClick={salvar}>
-          {salvando ? "Salvando…" : "Salvar"}
-        </Button>
+        {/* Google novo é criado pelo fluxo "Conectar Google" (não há o que salvar).
+            Ao editar (renomear) uma credencial Google, o Salvar volta a valer. */}
+        {!(tipoSel === "google" && !editando) && (
+          <Button disabled={salvando} onClick={salvar}>
+            {salvando ? "Salvando…" : "Salvar"}
+          </Button>
+        )}
         <Button variant="ghost" disabled={salvando} onClick={onCancelar}>
           Cancelar
         </Button>

@@ -16,6 +16,7 @@ from rotas import (
     cinto,
     credenciais,
     criacao,
+    google,
     instagram,
     instagram_webhook,
     instrumentos,
@@ -75,6 +76,7 @@ app.include_router(automacoes.rotas)
 app.include_router(chaves_api.rotas)
 app.include_router(credenciais.rotas)
 app.include_router(criacao.rotas)
+app.include_router(google.rotas)
 app.include_router(instagram.rotas)
 app.include_router(instagram_webhook.rotas)
 app.include_router(webhooks.rotas)

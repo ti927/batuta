@@ -116,10 +116,18 @@ def anexar_aos_instrumentos(sessao: Session, instrumentos: list) -> None:
     }
     por_credencial: dict[uuid.UUID, dict[str, str]] = {}
     if cred_ids:
+        import google_oauth
+
         for c in sessao.scalars(
             select(Credencial).where(Credencial.id.in_(cred_ids))
         ):
-            por_credencial[c.id] = credenciais_cofre.decifrar(c)
+            valores_cred = credenciais_cofre.decifrar(c)
+            # Credencial `google` (OAuth): o access_token dura ~1h. Garante um token
+            # fresco sob demanda (renova pelo refresh_token e persiste), para o
+            # instrumento sempre receber um token válido. Nunca levanta.
+            if c.tipo == "google":
+                valores_cred["access_token"] = google_oauth.garantir_token(c)
+            por_credencial[c.id] = valores_cred
 
     pool = chaves_atuais()
     for inst in instrumentos:

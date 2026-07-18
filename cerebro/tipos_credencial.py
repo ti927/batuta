@@ -118,3 +118,24 @@ registrar(
         ),
     )
 )
+# Google (Gmail/Agenda/Drive/Search Console) — conta conectada por OAuth (balde 3).
+# O usuário NÃO cola nada: o fluxo "Conectar Google" preenche todos os campos. O
+# `access_token` (~1h) é renovado sob demanda pela borda a partir do `refresh_token`
+# (durável); `email` e `escopos` são identidade (preenchidos automaticamente).
+registrar(
+    TipoCredencial(
+        "google",
+        "Google (Gmail/Agenda/Drive/Search Console)",
+        (
+            CampoCredencial("access_token", "Token de acesso (renovado automaticamente)"),
+            CampoCredencial("refresh_token", "Token de renovação"),
+            CampoCredencial(
+                "email", "Conta Google (preenchida automaticamente)", secreto=False
+            ),
+            CampoCredencial(
+                "escopos", "Permissões concedidas (preenchidas automaticamente)",
+                secreto=False,
+            ),
+        ),
+    )
+)
