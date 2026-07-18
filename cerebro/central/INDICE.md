@@ -83,6 +83,12 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Agendar automação | `instrumentos/agendar-automacao` | Um agente reprograma um disparo futuro (alvo manual+ativa) | ✅ | ✍️ |
 | **Mensageria** | | | | |
 | Enviar no Telegram | `instrumentos/enviar-telegram` | Enviar mensagem por um bot | ✅ | ✍️ |
+| **Google (OAuth)** | | | | |
+| Search Console | `instrumentos/search-console` | Desempenho no Google (cliques/impressões/posição) | ✅ | ✍️ |
+| Gmail: ler | `instrumentos/gmail-ler` | Ler e-mails | 📋 | ⬜ |
+| Gmail: enviar | `instrumentos/gmail-enviar` | Enviar e-mail (portão) | 📋 | ⬜ |
+| Agenda: listar/criar | `instrumentos/agenda` | Eventos do Google Agenda | 📋 | ⬜ |
+| Drive: listar/subir | `instrumentos/drive` | Arquivos do Google Drive | 📋 | ⬜ |
 
 ## 5. Segredos & Conexões
 | Capítulo | slug | O que cobre | Recurso | Escrita |
@@ -90,6 +96,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Chaves de IA | `segredos/chaves-de-ia` | Pool por provedor (org → consultoria) | ✅ | ✍️ |
 | Credenciais nomeadas | `segredos/credenciais-nomeadas` | Caixa-forte tipada; reuso entre instrumentos | ✅ | ✍️ |
 | Segredos de instrumento | `segredos/segredos-de-instrumento` | Inline × credencial × pool | ✅ | ✍️ |
+| Conectar Google (OAuth) | `segredos/conectar-google` | Conta Google por OAuth (Gmail/Agenda/Drive/Search Console) | ✅ | ✍️ |
 
 ## 6. Mensageria & Conversação
 | Capítulo | slug | O que cobre | Recurso | Escrita |
