@@ -3,7 +3,7 @@ titulo: "Instrumento — WordPress: publicar"
 area: "instrumentos"
 slug: "publicar-wordpress"
 tags: ["wordpress", "publicar", "blog", "artigo", "post", "imagem-destacada", "instrumento"]
-revisado_em: "2026-07-17"
+revisado_em: "2026-07-18"
 fontes: ["cerebro/instrumentos/wordpress.py"]
 ---
 
@@ -31,6 +31,10 @@ no ar). A imagem destacada pode vir de um passo de [[instrumentos/gerar-imagem]]
 - É `acao_irreversivel = true` → exige portão antes.
 - A **senha de aplicativo** é a do WordPress (não a senha de login); o usuário precisa de permissão para
   publicar e enviar mídia (papel Autor ou superior).
+- **Plugin Wordfence instalado?** Ele costuma **desligar as senhas de aplicativo** por padrão, e aí a
+  autenticação falha (401/403) por mais correta que a senha esteja. Solução: no WordPress, vá em
+  **Wordfence → Firewall → Todas as opções do Firewall → Proteção contra força bruta** e **desmarque**
+  "Desativar senhas de aplicação do WordPress". Sem isso, o instrumento não consegue publicar.
 - **Categorias inexistentes são ignoradas**; **tags** são criadas se ainda não existirem.
 - A **imagem destacada** é subida antes e ligada ao post; se você pediu imagem e o upload falha, não
   publica sem ela (a falha sobe clara).
@@ -39,6 +43,10 @@ no ar). A imagem destacada pode vir de um passo de [[instrumentos/gerar-imagem]]
 Parâmetros no catálogo (`publicar_wordpress`): `titulo`, `conteudo` (texto/HTML), `tags`, `resumo`,
 `imagem_url` (link da imagem gerada antes). A **categoria** e o **status** são da configuração do humano,
 não seus. Monte com portão antes; o nó que publica recebe o artigo **pronto**.
+
+Se a publicação falhar com **autenticação recusada (401/403)** e a senha estiver correta, oriente o
+consultor a checar o **Wordfence**: em Firewall → Proteção contra força bruta, precisa **desmarcar**
+"Desativar senhas de aplicação do WordPress" (o plugin costuma bloqueá-las).
 
 ## Relacionado
 - [[instrumentos/gerar-imagem]]
