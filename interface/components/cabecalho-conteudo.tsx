@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CircleHelp } from "lucide-react";
 
 // Header da área de conteúdo (handoff §5): 56px, branco, borda inferior. Mostra um
 // rótulo da rota atual (breadcrumb v1: o nome amigável da seção, derivado do
-// caminho — sem exigir o nome da entidade ainda) + "Como funciona" à direita.
+// caminho — sem exigir o nome da entidade ainda) + "Como funciona" à direita, que
+// leva à Central de Conhecimento (/ajuda) — o manual do Batuta.
 
 function tituloDaRota(pathname: string): string {
   const p = pathname.replace(/\/+$/, "") || "/";
@@ -37,13 +39,14 @@ export function CabecalhoConteudo() {
       <span className="text-sm font-medium text-foreground">
         {tituloDaRota(pathname)}
       </span>
-      <span
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"
-        title="Em breve"
+      <Link
+        href="/ajuda"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        title="Central de conhecimento — o manual do Batuta"
       >
         <CircleHelp className="size-4" />
         <span className="hidden sm:inline">Como funciona</span>
-      </span>
+      </Link>
     </header>
   );
 }

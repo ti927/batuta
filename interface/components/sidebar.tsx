@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
-  BookOpen,
   ChevronDown,
   Coins,
   Gauge,
@@ -164,9 +163,6 @@ export function Sidebar({
 
         <ItemNav href="/biblioteca" Icone={Library} ativo={ativo("/biblioteca")}>
           Biblioteca
-        </ItemNav>
-        <ItemNav href="/ajuda" Icone={BookOpen} ativo={ativo("/ajuda")}>
-          Central de conhecimento
         </ItemNav>
         <ItemNav href="/uso" Icone={Gauge} ativo={ativo("/uso")}>
           Uso e custos
