@@ -7,7 +7,7 @@ import { ChevronLeft } from "lucide-react";
 
 import {
   api,
-  ErroDaApi,
+  mensagemDeErro,
   type ConversaComMensagens,
   type MensagemDaConversa,
   type PapelAcesso,
@@ -65,7 +65,7 @@ export function ConversaCliente({
   }, [conversa.mensagens.length]);
 
   function tratar(e: unknown, padrao: string) {
-    setErro(e instanceof ErroDaApi ? e.message : padrao);
+    setErro(mensagemDeErro(e, padrao));
   }
 
   async function acao(caminho: string, padrao: string, corpo?: unknown) {

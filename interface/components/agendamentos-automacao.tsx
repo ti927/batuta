@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import { CalendarClock, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { api, ErroDaApi } from "@/lib/api";
+import {
+  api,
+  mensagemDeErro,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 // Seção "Próximas execuções agendadas" da automação: lista os agendamentos PENDENTES
@@ -55,7 +58,7 @@ export function AgendamentosAutomacao({
       setItens((l) => l.filter((a) => a.id !== id));
       toast.success("Agendamento cancelado.");
     } catch (e) {
-      toast.error(e instanceof ErroDaApi ? e.message : "Falha ao cancelar.");
+      toast.error(mensagemDeErro(e, "Falha ao cancelar."));
     } finally {
       setCancelando(null);
     }

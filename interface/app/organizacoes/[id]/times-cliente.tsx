@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 import {
   api,
-  ErroDaApi,
+  mensagemDeErro,
   type Organizacao,
   type PapelAcesso,
   type Time,
@@ -49,7 +49,7 @@ export function TimesCliente({
   const [salvandoDupla, setSalvandoDupla] = useState(false);
 
   function tratar(e: unknown, padrao: string) {
-    setErro(e instanceof ErroDaApi ? e.message : padrao);
+    setErro(mensagemDeErro(e, padrao));
   }
 
   function abrirDuplicar(time: Time) {
@@ -73,7 +73,7 @@ export function TimesCliente({
       toast.success(`Time copiado: “${novo.nome}”.`);
       router.push(`/times/${novo.id}`);
     } catch (e) {
-      const msg = e instanceof ErroDaApi ? e.message : "Falha ao duplicar o time";
+      const msg = mensagemDeErro(e, "Falha ao duplicar o time");
       setErroDupla(msg);
       toast.error(msg);
       setSalvandoDupla(false);

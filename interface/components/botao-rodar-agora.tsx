@@ -4,7 +4,11 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Play, X } from "lucide-react";
 
-import { api, ErroDaApi, type ExecucaoComPassos } from "@/lib/api";
+import {
+  api,
+  mensagemDeErro,
+  type ExecucaoComPassos,
+} from "@/lib/api";
 import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -56,7 +60,7 @@ export function BotaoRodarAgora({
       router.push(`/times/${timeId}/execucoes/${r.id}`);
       router.refresh();
     } catch (e) {
-      setErro(e instanceof ErroDaApi ? e.message : "Falha ao disparar");
+      setErro(mensagemDeErro(e, "Falha ao disparar"));
     } finally {
       setDisparando(false);
     }

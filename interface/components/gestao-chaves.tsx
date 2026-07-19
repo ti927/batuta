@@ -12,7 +12,11 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { api, ErroDaApi, type ChaveApiLer } from "@/lib/api";
+import {
+  api,
+  mensagemDeErro,
+  type ChaveApiLer,
+} from "@/lib/api";
 import {
   ROTULO_SERVICO,
   SERVICOS,
@@ -46,7 +50,7 @@ export function GestaoChaves({
   const jaTem = chavesIniciais.some((c) => c.provedor === servico);
 
   function tratar(e: unknown, padrao: string) {
-    setErro(e instanceof ErroDaApi ? e.message : padrao);
+    setErro(mensagemDeErro(e, padrao));
   }
 
   async function salvar() {

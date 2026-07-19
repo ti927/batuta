@@ -7,7 +7,7 @@ import { Building2, KeyRound } from "lucide-react";
 
 import {
   api,
-  ErroDaApi,
+  mensagemDeErro,
   type Organizacao,
   type PapelAcesso,
 } from "@/lib/api";
@@ -50,7 +50,7 @@ export function OrganizacoesCliente({
       setErro(null);
       router.refresh();
     } catch (e) {
-      setErro(e instanceof ErroDaApi ? e.message : "Falha ao remover");
+      setErro(mensagemDeErro(e, "Falha ao remover"));
     }
   }
 

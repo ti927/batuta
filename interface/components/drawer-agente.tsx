@@ -8,7 +8,7 @@ import { Maximize2, Minimize2, Pencil, Sparkles, Trash2, X } from "lucide-react"
 
 import {
   api,
-  ErroDaApi,
+  mensagemDeErro,
   type Agente,
   type Instrumento,
   type PapelAcesso,
@@ -145,7 +145,7 @@ export function DrawerAgente({
       onFechar();
       router.refresh();
     } catch (e) {
-      setErro(e instanceof ErroDaApi ? e.message : "Falha ao remover agente");
+      setErro(mensagemDeErro(e, "Falha ao remover agente"));
       setOcupado(false);
     }
   }

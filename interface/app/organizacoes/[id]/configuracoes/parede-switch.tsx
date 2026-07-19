@@ -7,7 +7,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { api, ErroDaApi } from "@/lib/api";
+import {
+  api,
+  mensagemDeErro,
+} from "@/lib/api";
 
 export function ParedeSwitch({
   organizacaoId,
@@ -35,7 +38,7 @@ export function ParedeSwitch({
       router.refresh();
     } catch (e) {
       setOn(!novo); // reverte o otimista
-      toast.error(e instanceof ErroDaApi ? e.message : "Falha ao salvar");
+      toast.error(mensagemDeErro(e, "Falha ao salvar"));
     } finally {
       setSalvando(false);
     }

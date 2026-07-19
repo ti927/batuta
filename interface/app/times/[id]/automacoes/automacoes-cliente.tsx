@@ -6,9 +6,9 @@ import { Activity, Copy, Layers, Plus, Sliders, Trash2, X, Zap } from "lucide-re
 import { toast } from "sonner";
 
 import {
-  api,
-  ErroDaApi,
   URL_CEREBRO,
+  api,
+  mensagemDeErro,
   type Agente,
   type Automacao,
   type Cadeia,
@@ -193,7 +193,7 @@ function EditorAutomacao({
       router.refresh();
       onCriou(copia); // adiciona à lista e seleciona a cópia (remonta o editor)
     } catch (e) {
-      const msg = e instanceof ErroDaApi ? e.message : "Falha ao duplicar a automação";
+      const msg = mensagemDeErro(e, "Falha ao duplicar a automação");
       setErroDupla(msg);
       toast.error(msg);
       setDuplicando(false);
@@ -201,7 +201,7 @@ function EditorAutomacao({
   }
 
   function tratar(e: unknown, padrao: string) {
-    setErro(e instanceof ErroDaApi ? e.message : padrao);
+    setErro(mensagemDeErro(e, padrao));
   }
 
   function montarConfigGatilho(): Record<string, unknown> {

@@ -151,6 +151,16 @@ Uma tarefa só está concluída quando todas são verdade:
 4. O repositório está num estado consistente.
 5. Você relatou ao maestro com clareza.
 
+## 12-A. Experiência do usuário: sem erro genérico, sem travar, sem silêncio
+
+Isto é para cliente — não pode quebrar feio. **Nada que o usuário dispara** pode: **(a)** ficar preso num único request longo e bloqueante; **(b)** morrer com mensagem genérica ("Falha ao…", "Ocorreu um erro", "Erro 502"); nem **(c)** rodar sem sinal de vida. Já foi assim que a conversa da IA quebrou (um POST de minutos cortado por timeout de proxy virou um "Falha ao enviar" mudo, e a mensagem sumiu). Não repita o padrão.
+
+- **Operação que pode demorar = trabalho de segundo plano + heartbeat de atividade + polling na tela, com cronômetro.** Nunca um request que fica minutos aberto (um proxy/rede o corta no meio e vira erro mudo). Padrões de referência já no código: a tela de execução (`orquestracao/atividade.py` + `fila.py` + polling) e a conversa da IA criadora (`fila_turnos.py`). Sempre com recuperação de trabalho **órfão** (boot) e **preso** (sweeper) — a falha nunca fica em silêncio.
+- **Erro honesto, sempre.** A mensagem diz **o quê** aconteceu e **o que fazer** (ex.: "a conexão caiu — sua mensagem foi preservada, toque em Reenviar"). No front, use `mensagemDeErro(e, …)` (`lib/api.ts`), que distingue queda de rede (`ErroDeRede`) de erro do servidor e traduz status feios em frase humana — nunca "Erro 502" cru nem "Falha ao X" seco. A ação que falhou **nunca some sem rastro**: fica marcada e reenviável.
+- **Timeout curto é proibido** onde a operação real é longa. Não estrangule o usuário; prefira segundo plano + heartbeat + sweeper de presos.
+
+Vale para **toda tela nova** e para toda revisão de tela existente. É Definition of Done implícito de qualquer coisa que o usuário toca.
+
 ## 13. No início de toda sessão de trabalho
 
 1. Leia o `PRODUTO.md` (ou releia as partes relevantes), o `CLAUDE.md`, o `MIGRACAO.md` (Etapa 2) e o ponto atual do `BUILD-PLAN.md`.

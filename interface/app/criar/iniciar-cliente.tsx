@@ -8,7 +8,12 @@ import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
-import { api, ErroDaApi, type ConversaCriacao, type Organizacao } from "@/lib/api";
+import {
+  api,
+  mensagemDeErro,
+  type ConversaCriacao,
+  type Organizacao,
+} from "@/lib/api";
 
 // Abre uma conversa com a IA criadora numa organização escolhida. Com a primeira
 // mensagem já enviada, o cérebro roda o primeiro turno; redirecionamos para a
@@ -106,7 +111,7 @@ export function IniciarCliente({
       );
     } catch (e) {
       setErro(
-        e instanceof ErroDaApi ? e.message : "Não consegui abrir a conversa.",
+        mensagemDeErro(e, "Não consegui abrir a conversa."),
       );
       setIniciando(false);
     }

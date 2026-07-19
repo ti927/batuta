@@ -6,7 +6,7 @@ import { Wrench } from "lucide-react";
 
 import {
   api,
-  ErroDaApi,
+  mensagemDeErro,
   type Agente,
   type Instrumento,
   type PapelAcesso,
@@ -87,7 +87,7 @@ export function PainelCinto({
     } catch (e) {
       onCintoChange(anterior); // reverte
       toast.error(
-        e instanceof ErroDaApi ? e.message : "Falha ao pendurar instrumento",
+        mensagemDeErro(e, "Falha ao pendurar instrumento"),
       );
     } finally {
       setOcupado(false);
@@ -103,7 +103,7 @@ export function PainelCinto({
     } catch (e) {
       onCintoChange(anterior); // reverte
       toast.error(
-        e instanceof ErroDaApi ? e.message : "Falha ao tirar instrumento",
+        mensagemDeErro(e, "Falha ao tirar instrumento"),
       );
     } finally {
       setOcupado(false);

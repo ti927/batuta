@@ -7,7 +7,7 @@ import { ChevronLeft } from "lucide-react";
 
 import {
   api,
-  ErroDaApi,
+  mensagemDeErro,
   type ConviteCriado,
   type ConviteLer,
   type MembroLer,
@@ -49,7 +49,7 @@ export function AcessoCliente({
   const [aviso, setAviso] = useState<string | null>(null);
 
   function tratar(e: unknown, padrao: string) {
-    setErro(e instanceof ErroDaApi ? e.message : padrao);
+    setErro(mensagemDeErro(e, padrao));
   }
 
   async function alterarPapel(usuarioId: string, papel: PapelAcesso) {

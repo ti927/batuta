@@ -3,7 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { api, ErroDaApi } from "@/lib/api";
+import {
+  api,
+  mensagemDeErro,
+} from "@/lib/api";
 import { criarClienteNavegador } from "@/lib/supabase/cliente-navegador";
 import { SimboloBatuta } from "@/components/logo";
 import { Aviso } from "@/components/ui/aviso";
@@ -46,7 +49,7 @@ export function ConviteCliente({ email }: { email: string }) {
       await api.post("/convites/aceitar", {});
     } catch (e) {
       setErro(
-        e instanceof ErroDaApi ? e.message : "Falha ao aceitar o convite.",
+        mensagemDeErro(e, "Falha ao aceitar o convite."),
       );
       setEnviando(false);
       return;

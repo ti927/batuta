@@ -5,13 +5,13 @@ import { Lock } from "lucide-react";
 
 import {
   api,
-  ErroDaApi,
+  mensagemDeErro,
   type Credencial,
   type Instrumento,
   type ModelosDisponiveis,
+  type Time,
   type TipoCredencial,
   type TipoInstrumento,
-  type Time,
 } from "@/lib/api";
 import {
   MODELOS_POR_PROVEDOR,
@@ -522,7 +522,7 @@ export function FormularioInstrumento({
       setErro(null);
       onSalvo(salvo);
     } catch (e) {
-      setErro(e instanceof ErroDaApi ? e.message : "Falha ao salvar instrumento");
+      setErro(mensagemDeErro(e, "Falha ao salvar instrumento"));
     } finally {
       setSalvando(false);
     }

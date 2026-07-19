@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Brain, Pencil, Plus, Trash2 } from "lucide-react";
 
-import { api, ErroDaApi, type Agente, type MemoriaAgente } from "@/lib/api";
+import {
+  api,
+  mensagemDeErro,
+  type Agente,
+  type MemoriaAgente,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -119,7 +124,7 @@ export function MemoriaAgentePainel({
       setEdicao(null);
       toast.success("Memória salva.");
     } catch (e) {
-      toast.error(e instanceof ErroDaApi ? e.message : "Falha ao salvar.");
+      toast.error(mensagemDeErro(e, "Falha ao salvar."));
     } finally {
       setOcupado(false);
     }
@@ -132,7 +137,7 @@ export function MemoriaAgentePainel({
       setItens((l) => l.filter((x) => x.id !== id));
       toast.success("Ficha apagada.");
     } catch (e) {
-      toast.error(e instanceof ErroDaApi ? e.message : "Falha ao apagar.");
+      toast.error(mensagemDeErro(e, "Falha ao apagar."));
     }
   }
 

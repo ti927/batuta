@@ -7,13 +7,13 @@ import { FlaskConical, Radio, Trash2, X } from "lucide-react";
 
 import {
   api,
-  ErroDaApi,
+  mensagemDeErro,
   type AlcanceCanal,
   type Instrumento,
   type PapelAcesso,
   type StatusCanal,
-  type TipoInstrumento,
   type Time,
+  type TipoInstrumento,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { FormularioInstrumento } from "@/components/formulario-instrumento";
@@ -151,7 +151,7 @@ export function DrawerInstrumento({
   }, [onFechar]);
 
   function tratar(e: unknown, padrao: string) {
-    setErro(e instanceof ErroDaApi ? e.message : padrao);
+    setErro(mensagemDeErro(e, padrao));
   }
 
   async function remover() {

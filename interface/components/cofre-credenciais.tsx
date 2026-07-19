@@ -17,8 +17,9 @@ import { useState } from "react";
 import { KeyRound } from "lucide-react";
 
 import {
-  api,
   ErroDaApi,
+  api,
+  mensagemDeErro,
   type Credencial,
   type TipoCredencial,
 } from "@/lib/api";
@@ -77,7 +78,7 @@ export function CofreCredenciais({
       setErro(null);
       router.refresh();
     } catch (e) {
-      setErro(e instanceof ErroDaApi ? e.message : "Falha ao apagar a credencial");
+      setErro(mensagemDeErro(e, "Falha ao apagar a credencial"));
     }
   }
 
@@ -329,7 +330,7 @@ function FormularioCredencial({
       onErro(null);
       onPronto();
     } catch (e) {
-      onErro(e instanceof ErroDaApi ? e.message : "Falha ao salvar a credencial");
+      onErro(mensagemDeErro(e, "Falha ao salvar a credencial"));
     } finally {
       setSalvando(false);
     }

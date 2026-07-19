@@ -5,7 +5,10 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { BookOpen, Search } from "lucide-react";
 
-import { api, ErroDaApi } from "@/lib/api";
+import {
+  api,
+  mensagemDeErro,
+} from "@/lib/api";
 import { Input } from "@/components/ui/input";
 
 export type CapituloResumo = {
@@ -89,7 +92,7 @@ export function AjudaCliente({ capitulos }: { capitulos: CapituloResumo[] }) {
       .catch((e) => {
         if (!vivo) return;
         setErro(
-          e instanceof ErroDaApi ? e.message : "Não consegui carregar o capítulo.",
+          mensagemDeErro(e, "Não consegui carregar o capítulo."),
         );
         setCap(null);
       })

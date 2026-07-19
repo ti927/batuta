@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { api, ErroDaApi, type Organizacao } from "@/lib/api";
+import {
+  api,
+  mensagemDeErro,
+  type Organizacao,
+} from "@/lib/api";
 import { lerImagemRedimensionada } from "@/lib/imagem";
 import { AvatarOrg } from "@/components/avatar-org";
 import { Aviso } from "@/components/ui/aviso";
@@ -65,7 +69,7 @@ export function FormularioOrganizacao({
       setErro(null);
       onSalvo(salva);
     } catch (err) {
-      setErro(err instanceof ErroDaApi ? err.message : "Falha ao salvar");
+      setErro(mensagemDeErro(err, "Falha ao salvar"));
     } finally {
       setSalvando(false);
     }

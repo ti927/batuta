@@ -15,7 +15,7 @@ import {
 
 import {
   api,
-  ErroDaApi,
+  mensagemDeErro,
   type Agente,
   type Instrumento,
   type ModelosDisponiveis,
@@ -329,7 +329,7 @@ export function FormularioAgente({
         onSalvo(salvo);
       }
     } catch (e) {
-      setErro(e instanceof ErroDaApi ? e.message : "Falha ao salvar agente");
+      setErro(mensagemDeErro(e, "Falha ao salvar agente"));
     } finally {
       setSalvando(false);
     }

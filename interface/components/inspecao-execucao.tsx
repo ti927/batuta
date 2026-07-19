@@ -18,8 +18,8 @@ import {
 
 import {
   api,
-  ErroDaApi,
   indexarCadeia,
+  mensagemDeErro,
   type Agente,
   type Automacao,
   type ExecucaoComPassos,
@@ -845,7 +845,7 @@ export function InspecaoExecucao({
         ultimoEstadoRef.current = r.estado; // prime: abrir a tela não dispara refresh
         if (!ESTADOS_FINAIS.includes(r.estado)) acompanhar(r.id);
       } catch (e) {
-        if (vivo) setErro(e instanceof ErroDaApi ? e.message : "Falha ao carregar a execução");
+        if (vivo) setErro(mensagemDeErro(e, "Falha ao carregar a execução"));
       }
     })();
     return () => {
@@ -872,7 +872,7 @@ export function InspecaoExecucao({
       avisarPaiSeTransicao(r.estado);
       if (!ESTADOS_FINAIS.includes(r.estado)) acompanhar(r.id);
     } catch (e) {
-      setErro(e instanceof ErroDaApi ? e.message : "Falha ao responder");
+      setErro(mensagemDeErro(e, "Falha ao responder"));
     } finally {
       setRespondendo(false);
     }
@@ -892,7 +892,7 @@ export function InspecaoExecucao({
       toast.success("Execução cancelada");
       avisarPaiSeTransicao(r.estado);
     } catch (e) {
-      setErro(e instanceof ErroDaApi ? e.message : "Falha ao cancelar");
+      setErro(mensagemDeErro(e, "Falha ao cancelar"));
     } finally {
       setCancelando(false);
     }

@@ -3,7 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { api, ErroDaApi, type ConvitePendente } from "@/lib/api";
+import {
+  api,
+  mensagemDeErro,
+  type ConvitePendente,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 // Aviso de convite dentro do Batuta: quem já tem conta e foi (re)convidado não
@@ -23,7 +27,7 @@ export function BannerConvites({ convites }: { convites: ConvitePendente[] }) {
       // A home re-renderiza (Server Component) e a lista de pendentes esvazia.
       router.refresh();
     } catch (e) {
-      setErro(e instanceof ErroDaApi ? e.message : "Falha ao aceitar o convite.");
+      setErro(mensagemDeErro(e, "Falha ao aceitar o convite."));
       setEnviando(false);
     }
   }

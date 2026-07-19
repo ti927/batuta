@@ -8,7 +8,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { api, ErroDaApi } from "@/lib/api";
+import {
+  api,
+  mensagemDeErro,
+} from "@/lib/api";
 import {
   MODELOS_POR_PROVEDOR,
   NOTA_MODELO_CONVERSA,
@@ -50,7 +53,7 @@ export function SeletorModeloConversa({
       router.refresh();
     } catch (e) {
       toast.error(
-        e instanceof ErroDaApi ? e.message : "Falha ao salvar o modelo",
+        mensagemDeErro(e, "Falha ao salvar o modelo"),
       );
     } finally {
       setSalvando(false);
