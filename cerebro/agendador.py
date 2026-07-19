@@ -19,6 +19,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 
 import fila
+import fila_turnos
 from modelos import Agendamento, Automacao, Credencial
 from orquestracao.disparo import criar_execucao
 from sessao import CriadorDeSessao
@@ -257,6 +258,15 @@ def iniciar() -> None:
         fila.varrer_presas_job,
         trigger=IntervalTrigger(seconds=120),
         id="execucao_sweeper",
+        replace_existing=True,
+    )
+    # Recuperação periódica de TURNOS da IA criadora presos em `em_andamento` (worker
+    # travado sem reinício). Espelha o sweeper de execuções; usa heartbeat de atividade
+    # (não mata turno em progresso). Complementa o `fila_turnos._recuperar_orfas` do boot.
+    _scheduler.add_job(
+        fila_turnos.varrer_presos_job,
+        trigger=IntervalTrigger(seconds=120),
+        id="turno_criacao_sweeper",
         replace_existing=True,
     )
     # Disparo dos agendamentos únicos vencidos (instrumento agendar_automacao), a

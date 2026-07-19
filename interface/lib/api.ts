@@ -16,6 +16,7 @@ const BASE =
 // Endereço do cérebro, exposto para montar URLs públicas (ex.: webhook de entrada).
 export const URL_CEREBRO = BASE;
 
+// O servidor RESPONDEU, mas com status de erro (4xx/5xx). Traz o motivo já em texto.
 export class ErroDaApi extends Error {
   constructor(
     public status: number,
@@ -23,6 +24,44 @@ export class ErroDaApi extends Error {
   ) {
     super(mensagem);
   }
+}
+
+// Falha de REDE: o fetch NÃO completou uma ida-e-volta (conexão caiu, offline, servidor
+// reiniciando sem responder, ou resposta ilegível). Distinta de ErroDaApi (que teve
+// resposta HTTP): a ação pode nem ter chegado ao servidor. A UI mostra isto como "a
+// conexão caiu, tente de novo" — nunca um "Falha ao X" genérico e mudo.
+export class ErroDeRede extends Error {
+  constructor(
+    mensagem = "A conexão caiu antes de completar. Verifique sua internet e tente de novo.",
+  ) {
+    super(mensagem);
+  }
+}
+
+// Frase HUMANA por status quando o corpo do erro não é JSON (ex.: página HTML de um
+// proxy/gateway) — nunca deixa "Erro 502" cru vazar para o usuário.
+function mensagemPorStatus(status: number): string {
+  if (status === 502 || status === 503 || status === 504)
+    return "O Batuta está reiniciando ou sobrecarregado. Tente de novo em instantes.";
+  if (status === 401 || status === 403)
+    return "Sua sessão expirou ou você não tem acesso a isto. Entre de novo, se preciso.";
+  if (status === 404) return "Não encontrei o que você pediu (pode ter sido removido).";
+  if (status === 429)
+    return "Muitas ações em pouco tempo. Espere um instante e tente de novo.";
+  if (status >= 500)
+    return "Algo deu errado no Batuta. Tente de novo; se persistir, me avise.";
+  return `Não consegui completar (erro ${status}).`;
+}
+
+// Texto humano de QUALQUER erro para a tela — evita "Falha ao X" genérico quando dá para
+// ser específico. ErroDaApi/ErroDeRede já trazem a mensagem pronta.
+export function mensagemDeErro(
+  e: unknown,
+  padrao = "Não consegui completar a ação. Tente de novo.",
+): string {
+  if (e instanceof ErroDaApi || e instanceof ErroDeRede) return e.message;
+  if (e instanceof Error && e.message) return e.message;
+  return padrao;
 }
 
 // Núcleo compartilhado: faz a requisição e anexa o token quando houver.
@@ -36,11 +75,19 @@ export async function requisitar<T>(
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const resposta = await fetch(`${BASE}${caminho}`, { ...opcoes, headers });
+  let resposta: Response;
+  try {
+    resposta = await fetch(`${BASE}${caminho}`, { ...opcoes, headers });
+  } catch {
+    // fetch só lança em falha de REDE (não em status HTTP de erro): conexão caiu,
+    // offline, servidor sem responder. Vira um erro tipado, com mensagem honesta.
+    throw new ErroDeRede();
+  }
 
   if (!resposta.ok) {
-    // O FastAPI devolve o motivo em { detail: ... }; traduzimos para mensagem.
-    let mensagem = `Erro ${resposta.status}`;
+    // O FastAPI devolve o motivo em { detail: ... }; traduzimos para mensagem. Sem JSON
+    // (HTML de proxy), caímos numa frase humana por status — nunca "Erro 502" cru.
+    let mensagem: string | null = null;
     try {
       const corpo = await resposta.json();
       if (corpo?.detail) {
@@ -50,13 +97,19 @@ export async function requisitar<T>(
             : JSON.stringify(corpo.detail);
       }
     } catch {
-      // resposta sem corpo JSON — mantém a mensagem padrão
+      // resposta sem corpo JSON — usa a frase por status abaixo
     }
-    throw new ErroDaApi(resposta.status, mensagem);
+    throw new ErroDaApi(resposta.status, mensagem ?? mensagemPorStatus(resposta.status));
   }
 
   if (resposta.status === 204) return undefined as T;
-  return resposta.json() as Promise<T>;
+  try {
+    return (await resposta.json()) as T;
+  } catch {
+    // resposta OK mas corpo ilegível (conexão cortada no meio do download): não sobe
+    // um erro cru de parse — trata como queda de rede, com mensagem honesta.
+    throw new ErroDeRede("Recebi uma resposta incompleta do Batuta. Tente de novo.");
+  }
 }
 
 // Token da sessão no NAVEGADOR (cookies/local storage do Supabase).
@@ -663,6 +716,29 @@ export type MensagemConversa = {
   conteudo: string;
   chips?: string[];
   uso?: UsoChamada & { origem?: string };
+  // Estado LOCAL (só no cliente) de uma fala otimista do usuário: "pendente" enquanto o
+  // turno roda, "falhou" se caiu (com botão Reenviar). Ausente = confirmada/histórico.
+  estado?: "pendente" | "falhou";
+};
+
+// A resposta imediata de POST /mensagens: o turno foi enfileirado (roda em segundo plano).
+export type TurnoEnfileirado = {
+  turno_id: string;
+  estado: string;
+};
+
+// O andamento de um turno da IA criadora (GET /conversas-criacao/{id}/turnos/{turno_id}),
+// consultado ~1,5s: atividade ao vivo enquanto roda, resultado ao concluir, mensagem
+// humana ao falhar. `pergunta` deixa a tela mostrar a fala pendente ao retomar após reload.
+export type TurnoCriacaoLer = {
+  id: string;
+  estado: "aguardando" | "em_andamento" | "concluido" | "erro";
+  pergunta: string;
+  atividade: string | null;
+  atividade_em: string | null;
+  resultado: RespostaTurno | null;
+  erro_mensagem: string | null;
+  criado_em: string;
 };
 
 // Memória de longo prazo do projeto (Fase 10): o que a IA aprendeu e lembra entre
@@ -686,6 +762,8 @@ export type ConversaCriacao = {
   mensagens: MensagemConversa[];
   time: SnapshotTime | null;
   memoria: MemoriaProjeto[];
+  // Turno ainda em andamento (se houver) — a tela RETOMA o acompanhamento após reload.
+  turno_em_andamento?: TurnoCriacaoLer | null;
 };
 
 // Conversa na listagem (para retomar um projeto): sem o histórico, com o nome do

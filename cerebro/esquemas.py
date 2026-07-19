@@ -641,6 +641,34 @@ class RespostaTurno(BaseModel):
     uso: dict
 
 
+class TurnoEnfileirado(BaseModel):
+    """A resposta IMEDIATA do POST /mensagens: o turno foi enfileirado e roda em segundo
+    plano. A tela acompanha por `GET .../turnos/{turno_id}` (não bloqueia mais numa
+    requisição longa que um timeout/queda cortaria no meio)."""
+
+    turno_id: uuid.UUID
+    estado: str  # aguardando (recém-criado) | em_andamento
+
+
+class TurnoCriacaoLer(BaseModel):
+    """O andamento de um turno, para a tela consultar (~1,5s). Enquanto roda, traz a
+    `atividade` ao vivo ('o que a IA está fazendo agora'); ao concluir, o `resultado`
+    no formato de RespostaTurno; se falhar, a `erro_mensagem` HUMANA (nunca crua)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    estado: str  # aguardando | em_andamento | concluido | erro
+    # A fala do usuário (para a tela mostrar a mensagem pendente ao RETOMAR após reload —
+    # a pergunta só entra no histórico quando o turno conclui).
+    pergunta: str
+    atividade: str | None = None
+    atividade_em: datetime | None = None
+    resultado: RespostaTurno | None = None
+    erro_mensagem: str | None = None
+    criado_em: datetime
+
+
 class ConversaCriacaoResumo(BaseModel):
     """Uma conversa de criação na listagem (sem o histórico inteiro). `time_nome` é o
     nome do time que esta conversa mantém (nulo se ela ainda não criou um), para a
@@ -665,6 +693,9 @@ class ConversaCriacaoLer(ConversaCriacaoResumo):
     mensagens: list
     time: dict | None = None
     memoria: list = []
+    # Turno ainda em andamento (aguardando/em_andamento), se houver — para a tela
+    # RETOMAR o acompanhamento após um reload, sem perder o turno em voo.
+    turno_em_andamento: TurnoCriacaoLer | None = None
 
 
 # ─────────────────── Mensageria / Conversas (Fase 1) ─────────────────────────

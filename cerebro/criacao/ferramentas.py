@@ -31,7 +31,7 @@ import segredos_instrumento as segredos
 import tipos_credencial
 from criacao import memoria, servicos
 from criacao.servicos import ConflitoDominio
-from orquestracao import grafo
+from orquestracao import atividade, grafo
 from modelos import (
     Agente,
     AgenteInstrumento,
@@ -296,6 +296,38 @@ def snapshot_time(sessao: Session, conversa: ConversaCriacao) -> dict | None:
     """Fotografia do time real de uma conversa (ou None se ainda não há time).
     Conveniência pública para o loop e as rotas redesenharem o canvas."""
     return _snapshot_time(ContextoCriacao(sessao=sessao, conversa=conversa)) or None
+
+
+# Frase de atividade ao vivo por ferramenta ("o que a IA está fazendo agora"), para a
+# tela mostrar durante um turno longo — mesmo espírito de atividade.MENSAGENS_ATIVIDADE.
+# Ferramenta sem entrada aqui cai no fallback genérico.
+MENSAGENS_CRIADORA: dict[str, str] = {
+    "definir_time": "Definindo o time…",
+    "adicionar_agente": "Adicionando um agente…",
+    "editar_agente": "Ajustando o agente…",
+    "remover_agente": "Removendo um agente…",
+    "configurar_instrumento": "Configurando um instrumento…",
+    "editar_instrumento": "Ajustando um instrumento…",
+    "encaixar_instrumento": "Encaixando o instrumento no agente…",
+    "desencaixar_instrumento": "Removendo o instrumento do agente…",
+    "criar_automacao": "Criando a automação…",
+    "renomear_automacao": "Renomeando a automação…",
+    "montar_cadeia": "Montando o fluxo da automação…",
+    "definir_gatilho": "Definindo o gatilho…",
+    "estimar_custo": "Estimando o custo…",
+    "ativar_time": "Ativando o time…",
+    "desativar_time": "Desativando o time…",
+    "ver_time": "Revendo o time…",
+    "listar_tipos_instrumento": "Consultando os instrumentos disponíveis…",
+    "listar_execucoes": "Consultando as execuções…",
+    "diagnosticar_execucao": "Diagnosticando a execução…",
+    "ver_memoria_agente": "Consultando a memória do agente…",
+    "sugerir_proximos_passos": "Pensando nos próximos passos…",
+    "lembrar": "Anotando o que aprendi…",
+    "recordar": "Consultando o que sei do projeto…",
+    "esquecer": "Atualizando o que sei…",
+    "consultar_conhecimento": "Consultando a base de conhecimento…",
+}
 
 
 def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
@@ -772,8 +804,13 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
     trava = threading.Lock()
 
     def _serial(f):
+        # Feedback ao vivo: antes de rodar a ferramenta, publica 'o que a IA faz agora'.
+        # NO-OP fora de um bloco `usar_atividade` (testes chamam a ferramenta direto).
+        frase = MENSAGENS_CRIADORA.get(f.__name__, "Trabalhando no time…")
+
         @functools.wraps(f)  # preserva nome/assinatura (StructuredTool infere o schema)
         def wrapper(*args, **kwargs):
+            atividade.registrar(frase)
             with trava:
                 return f(*args, **kwargs)
         return wrapper

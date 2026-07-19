@@ -57,6 +57,7 @@ export function CriacaoCliente({
     memoriaInicial: conversaInicial.memoria ?? [],
     podeConversar,
     primeiraMensagem,
+    turnoInicial: conversaInicial.turno_em_andamento,
   });
 
   const time = conversa.time;
@@ -80,6 +81,10 @@ export function CriacaoCliente({
           podeConversar={podeConversar}
           enviar={conversa.enviar}
           alternarAtivacao={conversa.alternarAtivacao}
+          atividadeAtual={conversa.atividadeAtual}
+          turnoIniciadoEm={conversa.turnoIniciadoEm}
+          reconectando={conversa.reconectando}
+          reenviar={conversa.reenviar}
         />
       </section>
 

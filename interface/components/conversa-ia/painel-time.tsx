@@ -6,7 +6,7 @@ import { Brain, ChevronDown, Loader2, Sparkles } from "lucide-react";
 
 import {
   api,
-  ErroDaApi,
+  mensagemDeErro,
   type ConversaCriacao,
   type Execucao,
 } from "@/lib/api";
@@ -137,7 +137,7 @@ function PainelConversaTime() {
         }
       } catch (e) {
         if (vivo) {
-          setErro(e instanceof ErroDaApi ? e.message : "Falha ao carregar a conversa.");
+          setErro(mensagemDeErro(e, "Não consegui carregar a conversa. Tente de novo."));
         }
       } finally {
         if (vivo) setCarregando(false);
@@ -198,6 +198,7 @@ function ConversaCarregada({
     timeInicial: conversa.time,
     memoriaInicial: conversa.memoria ?? [],
     podeConversar,
+    turnoInicial: conversa.turno_em_andamento,
     // Cada turno pode ter mexido no time → atualiza o dashboard/cadeia da aba ao vivo.
     aoMudar: () => router.refresh(),
   });
@@ -239,6 +240,10 @@ function ConversaCarregada({
       podeConversar={podeConversar}
       enviar={c.enviar}
       alternarAtivacao={c.alternarAtivacao}
+      atividadeAtual={c.atividadeAtual}
+      turnoIniciadoEm={c.turnoIniciadoEm}
+      reconectando={c.reconectando}
+      reenviar={c.reenviar}
       titulo="IA do time"
       subtitulo="Converse para ajustar este time"
       aoFechar={fechar}

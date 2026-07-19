@@ -2,31 +2,16 @@
 
 Cobrem o gating por papel (observador vê; operador conversa), o isolamento entre
 organizações, e o ciclo iniciar → conversar. Não há mais aprovar/descartar/rascunho:
-a IA escreve no time real e o consultor ativa pela tela do time. O turno é MOCKADO
-(sem LLM): aqui se testa a rota e a transação, não o modelo."""
+a IA escreve no time real e o consultor ativa pela tela do time.
+
+O turno agora roda em SEGUNDO PLANO: o POST /mensagens só ENFILEIRA (cria o turno
+`aguardando`) e devolve na hora — quem roda é o pool de `fila_turnos` (testado à parte,
+em test_fila_turnos.py). Aqui se testa a rota: enfileirar, a guarda de concorrência e o
+acompanhamento, sem LLM."""
 
 import uuid
 
-import pytest
-
-from modelos import ConversaCriacao
-
-
-@pytest.fixture
-def turno_falso(monkeypatch):
-    """Substitui o turno da IA por um que só registra a fala, sem LLM nem time."""
-
-    def _fake(sessao, conversa, mensagem, *, usuario=None, chaves=None, origem="legado", **kw):
-        conversa.mensagens = (conversa.mensagens or []) + [
-            {"papel": "usuario", "conteudo": mensagem},
-            {"papel": "ia", "conteudo": "Proposta montada!", "chips": ["Sim", "Ajustar"], "uso": {}},
-        ]
-        return {
-            "resposta": "Proposta montada!", "chips": ["Sim", "Ajustar"],
-            "time_id": None, "time": None, "uso": {},
-        }
-
-    monkeypatch.setattr("rotas.criacao.responder_turno", _fake)
+from modelos import ConversaCriacao, TurnoCriacao
 
 
 def _conversa(sessao, org, usuario) -> uuid.UUID:
@@ -45,14 +30,18 @@ def test_iniciar_sem_mensagem(cliente, entrar, dados):
     assert corpo["time_id"] is None and corpo["time"] is None
 
 
-def test_iniciar_com_mensagem_roda_turno(cliente, entrar, dados, turno_falso):
+def test_iniciar_com_mensagem_enfileira_turno(cliente, entrar, dados):
     entrar(dados["operador"])
     resp = cliente.post(
         f"/organizacoes/{dados['orgA'].id}/conversas-criacao",
         json={"mensagem_inicial": "Quero um time de blog"},
     )
     assert resp.status_code == 201
-    assert len(resp.json()["mensagens"]) == 2
+    # O turno roda em segundo plano: a conversa abre já com um turno em andamento, para a
+    # tela acompanhar (não bloqueia a abertura numa requisição longa).
+    corpo = resp.json()
+    assert corpo["turno_em_andamento"] is not None
+    assert corpo["turno_em_andamento"]["estado"] == "aguardando"
 
 
 def test_observador_nao_inicia(cliente, entrar, dados):
@@ -67,15 +56,62 @@ def test_estranho_nao_enxerga_organizacao(cliente, entrar, dados):
     assert resp.status_code == 404
 
 
-def test_enviar_mensagem_operador(cliente, entrar, dados, turno_falso, sessao):
+def test_enviar_mensagem_operador_enfileira(cliente, entrar, dados, sessao):
     entrar(dados["operador"])
     cid = _conversa(sessao, dados["orgA"], dados["operador"])
     resp = cliente.post(
         f"/conversas-criacao/{cid}/mensagens", json={"mensagem": "Adiciona um redator"}
     )
+    assert resp.status_code == 202
+    corpo = resp.json()
+    assert corpo["estado"] == "aguardando"
+    # O turno foi criado e aguarda o worker (a fala não se perde — está persistida).
+    turno = sessao.get(TurnoCriacao, uuid.UUID(corpo["turno_id"]))
+    assert turno is not None and turno.pergunta == "Adiciona um redator"
+    assert turno.usuario_id == dados["operador"].id
+
+
+def test_segundo_envio_bloqueia_enquanto_o_primeiro_roda(cliente, entrar, dados, sessao):
+    """Um turno de cada vez por conversa (a história é compartilhada): o segundo envio
+    enquanto o primeiro ainda roda é recusado com 409, não vira dois turnos concorrentes."""
+    entrar(dados["operador"])
+    cid = _conversa(sessao, dados["orgA"], dados["operador"])
+    primeiro = cliente.post(f"/conversas-criacao/{cid}/mensagens", json={"mensagem": "um"})
+    assert primeiro.status_code == 202
+    segundo = cliente.post(f"/conversas-criacao/{cid}/mensagens", json={"mensagem": "dois"})
+    assert segundo.status_code == 409
+
+
+def test_acompanhar_turno(cliente, entrar, dados, sessao):
+    entrar(dados["operador"])
+    cid = _conversa(sessao, dados["orgA"], dados["operador"])
+    turno = TurnoCriacao(
+        conversa_id=cid, usuario_id=dados["operador"].id, pergunta="oi",
+        estado="concluido",
+        resultado={"resposta": "Pronto!", "chips": ["Ok"], "uso": {}},
+    )
+    sessao.add(turno)
+    sessao.commit()
+    resp = cliente.get(f"/conversas-criacao/{cid}/turnos/{turno.id}")
     assert resp.status_code == 200
-    assert resp.json()["resposta"] == "Proposta montada!"
-    assert resp.json()["chips"] == ["Sim", "Ajustar"]
+    corpo = resp.json()
+    assert corpo["estado"] == "concluido"
+    assert corpo["resultado"]["resposta"] == "Pronto!"
+
+
+def test_acompanhar_turno_de_outra_conversa_404(cliente, entrar, dados, sessao):
+    entrar(dados["operador"])
+    cid = _conversa(sessao, dados["orgA"], dados["operador"])
+    outra = _conversa(sessao, dados["orgA"], dados["operador"])
+    turno = TurnoCriacao(
+        conversa_id=outra, usuario_id=dados["operador"].id, pergunta="oi",
+        estado="aguardando",
+    )
+    sessao.add(turno)
+    sessao.commit()
+    # o turno existe, mas não pertence a `cid` → 404
+    resp = cliente.get(f"/conversas-criacao/{cid}/turnos/{turno.id}")
+    assert resp.status_code == 404
 
 
 def test_observador_nao_envia_mensagem(cliente, entrar, dados, sessao):

@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 import agendador
 import fila
+import fila_turnos
 from arquivos import DIRETORIO_ARQUIVOS
 from rotas import (
     agentes,
@@ -30,12 +31,15 @@ from rotas import (
 
 @asynccontextmanager
 async def ciclo_de_vida(app: FastAPI):
-    """Sobe a fila de execuções (pool de trabalhadores) e o relógio dos gatilhos
-    por agendamento ao iniciar; desliga ambos ao parar."""
+    """Sobe a fila de execuções, a fila de turnos da IA criadora (ambas pools de
+    trabalhadores) e o relógio dos gatilhos por agendamento ao iniciar; desliga tudo
+    ao parar."""
     fila.iniciar()
+    fila_turnos.iniciar()
     agendador.iniciar()
     yield
     agendador.desligar()
+    fila_turnos.desligar()
     fila.desligar()
 
 

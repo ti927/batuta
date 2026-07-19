@@ -11,26 +11,24 @@ IA). Criar/editar via IA é equiparado ao CRUD de operador.
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-import agendador
 import auditoria
+import fila_turnos
 from auth import usuario_atual
-from chaves import ORIGEM_LEGADO, resolver_chaves_por_organizacao
 from criacao import memoria
 from criacao.ferramentas import snapshot_time
-from criacao.loop import MODELO_CRIADORA, responder_turno
 from esquemas import (
     ConversaCriacaoLer,
     ConversaCriacaoResumo,
     IniciarConversaCriacao,
     MensagemTurno,
-    RespostaTurno,
+    TurnoCriacaoLer,
+    TurnoEnfileirado,
 )
-from modelos import Automacao, ConversaCriacao, Organizacao, Time, Usuario
-from orquestracao.modelos_ia import provedor_do_modelo
+from modelos import ConversaCriacao, Time, TurnoCriacao, Usuario
 from rotas._comum import (
     conversa_criacao_acessivel,
     organizacao_acessivel,
@@ -41,43 +39,54 @@ from sessao import obter_sessao
 rotas = APIRouter(tags=["criacao"])
 
 
-def _rodar_turno(
+def _turno_em_voo(sessao: Session, conversa_id: uuid.UUID) -> TurnoCriacao | None:
+    """O turno ainda não-terminal (aguardando/em_andamento) desta conversa, se houver.
+    É a base tanto da guarda de concorrência quanto da retomada após reload."""
+    return sessao.scalars(
+        select(TurnoCriacao)
+        .where(
+            TurnoCriacao.conversa_id == conversa_id,
+            TurnoCriacao.estado.in_(("aguardando", "em_andamento")),
+        )
+        .order_by(TurnoCriacao.criado_em.desc())
+    ).first()
+
+
+def _enfileirar_turno(
     sessao: Session, conversa: ConversaCriacao, mensagem: str, usuario: Usuario
-) -> dict:
-    """Resolve a chave da criadora (por organização) e roda um turno, persistindo a
-    conversa e o time real. Depois, sincroniza o agendador (a IA pode ter ativado/
-    mudado o gatilho). Devolve {resposta, chips, time_id, time, uso}."""
-    chaves, origens = resolver_chaves_por_organizacao(
-        sessao, conversa.organizacao_id
+) -> TurnoCriacao:
+    """Cria o turno `aguardando` e cutuca a fila de fundo — devolve NA HORA (o turno roda
+    em segundo plano, sem prender a requisição). Recusa 409 se já há um turno em voo nesta
+    conversa: a história é compartilhada, então um turno de cada vez (a trava de banco
+    `uq_turno_ativo_por_conversa` fecha a corrida de dois envios simultâneos)."""
+    if _turno_em_voo(sessao, conversa.id) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A IA ainda está respondendo à mensagem anterior. Aguarde ela terminar.",
+        )
+    turno = TurnoCriacao(
+        conversa_id=conversa.id,
+        usuario_id=usuario.id,
+        pergunta=mensagem,
+        estado="aguardando",
     )
-    # O modelo da conversa é escolhido por organização (nulo = padrão Opus). A origem
-    # da medição sai do provedor DESSE modelo, não mais fixa no de Opus.
-    org = sessao.get(Organizacao, conversa.organizacao_id)
-    modelo = (org.modelo_criadora if org else None) or MODELO_CRIADORA
-    origem = origens.get(provedor_do_modelo(modelo), ORIGEM_LEGADO)
-    resultado = responder_turno(
-        sessao, conversa, mensagem, usuario=usuario, chaves=chaves, origem=origem,
-        modelo=modelo,
-    )
+    sessao.add(turno)
     sessao.commit()
-    # A IA pode ter criado/ativado automações ou mudado gatilhos: (re)agenda TODAS as
-    # automações do time no relógio (um time pode ter várias).
-    if conversa.time_id:
-        for auto in sessao.scalars(
-            select(Automacao)
-            .where(Automacao.time_id == conversa.time_id)
-            .order_by(Automacao.criado_em)
-        ):
-            agendador.sincronizar(auto)
-    return resultado
+    sessao.refresh(turno)
+    fila_turnos.enfileirar()
+    return turno
 
 
 def _ler(sessao: Session, conversa: ConversaCriacao) -> ConversaCriacaoLer:
-    """A conversa + a fotografia do time real + a memória de longo prazo (para o
-    front desenhar o canvas e o painel 'O que eu sei deste projeto')."""
+    """A conversa + a fotografia do time real + a memória de longo prazo (para o front
+    desenhar o canvas e o painel 'O que eu sei deste projeto') + o turno em andamento (se
+    houver), para a tela RETOMAR o acompanhamento após um reload."""
     lido = ConversaCriacaoLer.model_validate(conversa)
     lido.time = snapshot_time(sessao, conversa)
     lido.memoria = memoria.para_o_prompt(sessao, conversa)
+    em_voo = _turno_em_voo(sessao, conversa.id)
+    if em_voo is not None:
+        lido.turno_em_andamento = TurnoCriacaoLer.model_validate(em_voo)
     return lido
 
 
@@ -104,7 +113,9 @@ def iniciar(
         organizacao_id=organizacao_id,
     )
     if dados.mensagem_inicial:
-        _rodar_turno(sessao, conversa, dados.mensagem_inicial, usuario)
+        # Enfileira o primeiro turno (roda em segundo plano); a tela abre na hora e
+        # acompanha por `turno_em_andamento`.
+        _enfileirar_turno(sessao, conversa, dados.mensagem_inicial, usuario)
     else:
         sessao.commit()
     sessao.refresh(conversa)
@@ -187,12 +198,40 @@ def obter(
     return _ler(sessao, conversa)
 
 
-@rotas.post("/conversas-criacao/{conversa_id}/mensagens", response_model=RespostaTurno)
+@rotas.post(
+    "/conversas-criacao/{conversa_id}/mensagens",
+    response_model=TurnoEnfileirado,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def enviar_mensagem(
     conversa_id: uuid.UUID,
     dados: MensagemTurno,
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
-    conversa = conversa_criacao_acessivel(sessao, usuario, conversa_id, minimo="operador")
-    return _rodar_turno(sessao, conversa, dados.mensagem, usuario)
+    """Enfileira o turno e devolve NA HORA (roda em segundo plano). A tela acompanha o
+    andamento — atividade ao vivo + resultado — por `GET .../turnos/{turno_id}`."""
+    conversa = conversa_criacao_acessivel(
+        sessao, usuario, conversa_id, minimo="operador"
+    )
+    turno = _enfileirar_turno(sessao, conversa, dados.mensagem, usuario)
+    return TurnoEnfileirado(turno_id=turno.id, estado=turno.estado)
+
+
+@rotas.get(
+    "/conversas-criacao/{conversa_id}/turnos/{turno_id}",
+    response_model=TurnoCriacaoLer,
+)
+def acompanhar_turno(
+    conversa_id: uuid.UUID,
+    turno_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """O andamento de um turno (a tela consulta ~1,5s): atividade ao vivo enquanto roda,
+    resultado ao concluir, mensagem humana ao falhar. Acesso de leitura (observador vê)."""
+    conversa = conversa_criacao_acessivel(sessao, usuario, conversa_id)
+    turno = sessao.get(TurnoCriacao, turno_id)
+    if turno is None or turno.conversa_id != conversa.id:
+        raise HTTPException(status_code=404, detail="Turno não encontrado.")
+    return turno

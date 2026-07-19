@@ -576,6 +576,65 @@ class ConversaCriacao(IdData, Base):
     __table_args__ = (Index("ix_conversa_criacao_org", "organizacao_id"),)
 
 
+class TurnoCriacao(IdData, Base):
+    """Um turno da conversa da IA criadora, rodado em SEGUNDO PLANO.
+
+    Antes, o turno rodava DENTRO do POST /mensagens — uma requisição longa e
+    bloqueante (a IA raciocina e usa ferramentas por minutos). Qualquer timeout de
+    proxy ou oscilação de rede cortava a conexão no meio, sem resposta: a tela via só
+    um erro genérico e a mensagem se perdia. Agora o POST só ENFILEIRA (cria o turno
+    `aguardando`) e devolve na hora; o pool de `fila_turnos` puxa e roda, publicando
+    `atividade` ao vivo (a tela acompanha com um cronômetro). No fim, `resultado`
+    (sucesso, no formato de RespostaTurno) ou `erro_mensagem` (falha HUMANA, nunca
+    stack trace cru) — sempre visível. Espelha o ciclo de `execucoes`.
+
+    A própria tabela É a fila. Aditiva/borda: o núcleo de orquestração não a conhece."""
+
+    __tablename__ = "turnos_criacao"
+    conversa_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("conversas_criacao.id", ondelete="CASCADE"), nullable=False
+    )
+    # Quem falou (para as ferramentas atribuírem autoria na auditoria). SET NULL para
+    # o turno sobreviver à desativação do usuário.
+    usuario_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
+    )
+    pergunta: Mapped[str] = mapped_column(Text, nullable=False)
+    estado: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'aguardando'")
+    )  # aguardando | em_andamento | concluido | erro
+    # Feedback ao vivo (mesmo padrão de Execucao): a frase do que a IA faz AGORA.
+    atividade: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    atividade_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # A resposta pronta (dict no formato de RespostaTurno) quando `concluido`.
+    resultado: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Mensagem HUMANA de falha quando `erro`.
+    erro_mensagem: Mapped[str | None] = mapped_column(Text, nullable=True)
+    iniciado_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finalizado_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_turnos_criacao_fila", "estado", "criado_em"),
+        Index("ix_turnos_criacao_conversa", "conversa_id", "estado"),
+        # Invariante: no MÁXIMO um turno NÃO-terminal por conversa (a história é
+        # compartilhada; dois turnos simultâneos da mesma conversa a corromperiam).
+        # Índice único PARCIAL — a rota já recusa 409 antes; isto é a trava de banco
+        # que fecha a corrida de dois envios quase simultâneos (2 abas / clique duplo).
+        Index(
+            "uq_turno_ativo_por_conversa",
+            "conversa_id",
+            unique=True,
+            postgresql_where=text("estado in ('aguardando', 'em_andamento')"),
+        ),
+    )
+
+
 class MemoriaProjeto(IdData, Base):
     """Memória de LONGO PRAZO da IA sobre um projeto (Fase 10).
 

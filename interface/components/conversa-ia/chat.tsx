@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Power, Send, Sparkles, X } from "lucide-react";
+import { Loader2, Power, RotateCcw, Send, Sparkles, X } from "lucide-react";
 
 import { type MensagemConversa, type SnapshotTime } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,10 @@ export function ChatCriacao({
   podeConversar,
   enviar,
   alternarAtivacao,
+  atividadeAtual,
+  turnoIniciadoEm,
+  reconectando,
+  reenviar,
   titulo = "IA criadora",
   subtitulo = "Monta e cuida do seu time por conversa",
   aoFechar,
@@ -35,6 +39,12 @@ export function ChatCriacao({
   podeConversar: boolean;
   enviar: (conteudo: string) => void;
   alternarAtivacao: () => Promise<boolean | undefined>;
+  /** Feedback ao vivo: o que a IA está fazendo agora + quando o turno começou. */
+  atividadeAtual?: string | null;
+  turnoIniciadoEm?: string | null;
+  reconectando?: boolean;
+  /** Reenvia a última fala do usuário que falhou. */
+  reenviar?: () => void;
   titulo?: string;
   subtitulo?: string;
   aoFechar?: () => void;
@@ -107,11 +117,25 @@ export function ChatCriacao({
         {mensagens.map((m, i) => (
           <Bolha key={i} mensagem={m} />
         ))}
-        {enviando && <Digitando />}
+        {enviando && (
+          <Digitando
+            atividade={reconectando ? "Reconectando…" : (atividadeAtual ?? "Pensando…")}
+            desde={turnoIniciadoEm}
+          />
+        )}
         {erro && (
-          <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {erro}
-          </p>
+          <div className="space-y-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <p>{erro}</p>
+            {reenviar && (
+              <button
+                type="button"
+                onClick={reenviar}
+                className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-2 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
+              >
+                <RotateCcw className="size-3" /> Reenviar
+              </button>
+            )}
+          </div>
         )}
         <div ref={fimDoChat} />
       </div>
@@ -200,37 +224,70 @@ export function ChatCriacao({
 
 function Bolha({ mensagem }: { mensagem: MensagemConversa }) {
   const ehIA = mensagem.papel === "ia";
+  const falhou = mensagem.estado === "falhou";
   return (
-    <div className={ehIA ? "flex" : "flex justify-end"}>
+    <div className={ehIA ? "flex flex-col items-start" : "flex flex-col items-end"}>
       <p
         className="max-w-[88%] whitespace-pre-wrap px-3.5 py-2 text-sm leading-relaxed"
-        style={
-          ehIA
+        style={{
+          ...(ehIA
             ? { background: "#F4F1FE", color: "#2A2150", borderRadius: "4px 14px 14px 14px" }
-            : { background: "#1A1730", color: "#fff", borderRadius: "14px 14px 4px 14px" }
-        }
+            : { background: "#1A1730", color: "#fff", borderRadius: "14px 14px 4px 14px" }),
+          ...(falhou ? { opacity: 0.55 } : {}),
+        }}
       >
         {mensagem.conteudo}
       </p>
+      {falhou && (
+        <span className="mt-0.5 text-xs text-destructive">não enviada</span>
+      )}
     </div>
   );
 }
 
-function Digitando() {
+// Status ao vivo do turno: "o que a IA está fazendo agora" + um cronômetro correndo, no
+// lugar das três bolinhas mudas — a prova visual de que NÃO travou num turno longo.
+function Digitando({
+  atividade,
+  desde,
+}: {
+  atividade: string;
+  desde?: string | null;
+}) {
   return (
     <div className="flex">
       <span
-        className="flex items-center gap-1 px-3.5 py-3"
+        className="flex items-center gap-2 px-3.5 py-2.5 text-sm text-[#5B4B9E]"
         style={{ background: "#F4F1FE", borderRadius: "4px 14px 14px 14px" }}
       >
-        {[0, 0.15, 0.3].map((d) => (
-          <span
-            key={d}
-            className="size-1.5 animate-bounce rounded-full"
-            style={{ background: "#B7A8F0", animationDelay: `${d}s` }}
-          />
-        ))}
+        <span className="flex items-center gap-1">
+          {[0, 0.15, 0.3].map((d) => (
+            <span
+              key={d}
+              className="size-1.5 animate-bounce rounded-full"
+              style={{ background: "#B7A8F0", animationDelay: `${d}s` }}
+            />
+          ))}
+        </span>
+        <span>{atividade}</span>
+        <Cronometro desde={desde} />
       </span>
     </div>
   );
+}
+
+// Cronômetro ao vivo ("· 12s") desde `desde`, a cada segundo. Só este pedaço re-renderiza.
+function Cronometro({ desde }: { desde?: string | null }) {
+  const [agora, setAgora] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setAgora(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  if (!desde) return null;
+  const ms = agora - new Date(desde).getTime();
+  if (Number.isNaN(ms) || ms < 0) return null;
+  const s = Math.floor(ms / 1000);
+  const txt =
+    s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+  return <span className="tabular-nums text-xs text-[#8A7BC8]">· {txt}</span>;
 }
