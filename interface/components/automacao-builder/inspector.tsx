@@ -2,6 +2,7 @@
 // É onde nascem as bifurcações (saídas com rótulo + destino + tom) e o portão de
 // aprovação — incluindo o canal de aprovação por mensageria (decisão do maestro).
 
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -19,16 +20,44 @@ import {
 import type {
   Agente,
   Cadeia,
+  CampoConfigFluxo,
+  ConfiguracaoFluxo,
   Credencial,
   Instrumento,
   NoCadeia,
+  PainelConfigFluxo,
   SaidaCadeia,
   ToneSaida,
 } from "@/lib/api";
+import { api } from "@/lib/api";
 import { RobotFace } from "@/components/robot-face";
 import { UrlCopiavel } from "@/components/url-copiavel";
 
+import { CampoConfig, efetivoDoFluxo } from "./config-fluxo";
 import { TONE_KEYS, tone } from "./nucleo";
+
+// As chaves de config que fazem sentido AJUSTAR por-portão (e que o backend honra
+// por-nó via `com_ajuste_do_no`). Fora daqui: atendimento (saudação/horário) e chaves
+// internas — essas ficam só no Tipo de fluxo.
+const CHAVES_PORTAO = [
+  "portao_forma",
+  "portao_acao_abandono",
+  "portao_max_rodadas",
+  "timeout_min",
+  "nudge_timeout_min",
+  "encerrar_por_inatividade",
+  "max_turnos",
+  "teto_usd",
+];
+
+function semChave(
+  obj: Record<string, unknown>,
+  chave: string,
+): Record<string, unknown> {
+  const resto = { ...obj };
+  delete resto[chave];
+  return resto;
+}
 
 // índice 0 = segunda, alinhado ao agendador do cérebro (agendador.py)
 const DIAS_SEMANA = [
@@ -184,6 +213,7 @@ export function Inspector({
   setGatilho,
   webhookUrl,
   credenciaisInstagram,
+  configFluxo,
   onDefinirInicial,
   onPatchNode,
   onPatchSaida,
@@ -200,6 +230,7 @@ export function Inspector({
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
   webhookUrl?: string | null;
   credenciaisInstagram: Credencial[];
+  configFluxo: ConfiguracaoFluxo;
   onDefinirInicial: (nodeId: string) => void;
   onPatchNode: (id: string, patch: Partial<NoCadeia>) => void;
   onPatchSaida: (id: string, sid: string, patch: Partial<SaidaCadeia>) => void;
@@ -207,6 +238,15 @@ export function Inspector({
   onRemoveSaida: (id: string, sid: string) => void;
   onDeleteNode: (id: string) => void;
 }) {
+  // Metadados de config (perfis/campos/defaults) — fonte única do backend, p/ o drawer
+  // do portão herdar do Tipo de fluxo e sobrepor por-nó. Buscado uma vez.
+  const [painel, setPainel] = useState<PainelConfigFluxo | null>(null);
+  useEffect(() => {
+    api.get<PainelConfigFluxo>("/config/fluxo").then(setPainel).catch(() => {});
+  }, []);
+  const campoPorChave: Record<string, CampoConfigFluxo> = {};
+  for (const g of painel?.grupos ?? [])
+    for (const c of g.campos) campoPorChave[c.chave] = c;
   if (!no) {
     return (
       <div className="p-7 text-[#6B6880]">
@@ -663,6 +703,46 @@ export function Inspector({
                     aprovar por mensagem.
                   </span>
                 )}
+              </div>
+            )}
+
+            {/* Regras DESTE portão (sobrepõem o Tipo de fluxo — cascata `no.config`) */}
+            {no.gate && painel && (
+              <div className="flex flex-col gap-3 rounded-[10px] border border-[#E8E6F0] p-3">
+                <div>
+                  <div className="text-[12.5px] font-medium text-[#1A1730]">
+                    Regras deste portão
+                  </div>
+                  <p className="mt-0.5 text-[11px] leading-snug text-[#6B6880]">
+                    Este portão segue o <strong>Tipo de fluxo</strong>. Ajuste abaixo só
+                    o que quiser valer <strong>só neste portão</strong>.
+                  </p>
+                </div>
+                {CHAVES_PORTAO.map((chave) => {
+                  const campo = campoPorChave[chave];
+                  if (!campo) return null;
+                  const cfg = no.config ?? {};
+                  const ajustado = chave in cfg;
+                  const valor = ajustado
+                    ? cfg[chave]
+                    : efetivoDoFluxo(painel, configFluxo, chave);
+                  return (
+                    <CampoConfig
+                      key={chave}
+                      campo={campo}
+                      valor={valor}
+                      ajustado={ajustado}
+                      podeEditar={podeEditar}
+                      rotuloHerdado="herdado do fluxo"
+                      onChange={(v) =>
+                        onPatchNode(no.id, { config: { ...cfg, [chave]: v } })
+                      }
+                      onReset={() =>
+                        onPatchNode(no.id, { config: semChave(cfg, chave) })
+                      }
+                    />
+                  );
+                })}
               </div>
             )}
           </div>

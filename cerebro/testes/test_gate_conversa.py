@@ -156,13 +156,42 @@ def test_tela_agente_decide_e_o_fluxo_anda(sessao, dados, monkeypatch):
 def test_tela_teto_de_rodadas_cai_no_roteador(sessao, dados, monkeypatch):
     canal = _canal(sessao, dados)
     ag = _agente(sessao, dados)
-    auto = _automacao(sessao, dados, ag, canal)
+    # Teto DIRIGIDO PELA CONFIG (Tipo de fluxo): `portao_max_rodadas` agora VALE (antes
+    # o teste monkeypatchava a constante `MAX_RODADAS_GATE`, que virou só o default).
+    auto = _automacao(
+        sessao, dados, ag, canal, configuracao={"ajustes": {"portao_max_rodadas": 1}}
+    )
     execucao = _exec_pausada(sessao, auto, ag)
-
-    monkeypatch.setattr(retoma, "MAX_RODADAS_GATE", 1)
 
     def explode(*a, **k):
         raise AssertionError("não devia re-rodar o agente após o teto")
+    monkeypatch.setattr(retoma, "executar_agente", explode)
+    monkeypatch.setattr(
+        retoma, "_escolher_saida",
+        lambda resp, saidas: ({"rotulo": "aprovado", "destino": "fim"}, {}),
+    )
+    retoma.retomar_execucao(sessao, execucao, "aprovado", chaves={}, origens={})
+
+    sessao.refresh(execucao)
+    assert execucao.estado == "concluida"
+
+
+def test_tela_teto_de_rodadas_do_no_vence_o_fluxo(sessao, dados, monkeypatch):
+    """O teto DESTE portão (`no.config.portao_max_rodadas`) sobrepõe o do Tipo de fluxo:
+    com 1 no nó (e o fluxo no default 8), a 1ª resposta já cai no roteador — não re-roda
+    o agente. É o ganho da Onda 1: ajuste por-nó honrado também na retoma pela tela."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    canal = _canal(sessao, dados)
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal)  # fluxo sem teto → default 8
+    auto.cadeia["nos"][0]["config"] = {"portao_max_rodadas": 1}
+    flag_modified(auto, "cadeia")
+    sessao.flush()
+    execucao = _exec_pausada(sessao, auto, ag)
+
+    def explode(*a, **k):
+        raise AssertionError("não devia re-rodar o agente após o teto do nó")
     monkeypatch.setattr(retoma, "executar_agente", explode)
     monkeypatch.setattr(
         retoma, "_escolher_saida",
@@ -528,6 +557,63 @@ def test_sweeper_cancela_portao_quando_configurado(sessao, dados, monkeypatch):
     assert execucao.estado == "cancelada"
     assert conv.execucao_id is None
     assert any("cancelando o fluxo" in t for t in enviados)  # despedida avisa o cancelamento
+
+
+def test_sweeper_respeita_no_config(sessao, dados, monkeypatch):
+    """Ganho da Onda 1: o sweeper honra o ajuste DESTE portão (`no.config`). O fluxo está
+    no default (estacionar), mas o NÓ manda cancelar → a varredura cancela a execução."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from mensageria import sweeper
+
+    enviados = []
+    monkeypatch.setattr(
+        "mensageria.telegram.enviar", lambda t, c, x: enviados.append(x) or {"ok": True}
+    )
+    canal = _canal(sessao, dados)
+    si.salvar_segredos(sessao, canal.id, {"token_bot": "tok"})
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal)  # fluxo sem ajuste → estacionar
+    auto.cadeia["nos"][0]["config"] = {"portao_acao_abandono": "cancelar"}
+    flag_modified(auto, "cadeia")
+    sessao.flush()
+    execucao = _exec_pausada(sessao, auto, ag)
+    aprovacao.vincular_pausa(sessao, execucao)
+    conv = _conv(sessao, execucao.id)
+    conv.nudge_enviado = True
+    conv.aguardando_ate = datetime.now(timezone.utc) - timedelta(minutes=1)
+    sessao.commit()
+
+    sweeper.varrer(sessao)
+
+    sessao.refresh(conv)
+    sessao.refresh(execucao)
+    assert conv.estado == "fechada"
+    assert execucao.estado == "cancelada"  # o ajuste do NÓ venceu o default do fluxo
+    assert any("cancelando o fluxo" in t for t in enviados)
+
+
+def test_vincular_pausa_respeita_no_config_timeout(sessao, dados, monkeypatch):
+    """O relógio de inatividade do portão usa o `timeout_min` DESTE nó quando ajustado
+    (Onda 1). Fluxo no default (60 min); o nó pede 5 → `aguardando_ate` ~= agora + 5 min."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    monkeypatch.setattr("mensageria.telegram.enviar", lambda t, c, x: {"ok": True})
+    canal = _canal(sessao, dados)
+    si.salvar_segredos(sessao, canal.id, {"token_bot": "tok"})
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal)  # fluxo default (60 min)
+    auto.cadeia["nos"][0]["config"] = {"timeout_min": 5}
+    flag_modified(auto, "cadeia")
+    sessao.flush()
+    execucao = _exec_pausada(sessao, auto, ag)
+
+    antes = datetime.now(timezone.utc)
+    aprovacao.vincular_pausa(sessao, execucao)
+    conv = _conv(sessao, execucao.id)
+
+    delta_min = (conv.aguardando_ate - antes).total_seconds() / 60
+    assert 4 <= delta_min <= 6  # ~5 min do nó, não os 60 do default do fluxo
 
 
 # ─────── Aviso de expectativa do portão (derivado do Tipo de fluxo) ───────

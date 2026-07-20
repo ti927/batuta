@@ -23,6 +23,7 @@ import { ChevronDown, Layers, Plus } from "lucide-react";
 import type {
   Agente,
   Cadeia,
+  ConfiguracaoFluxo,
   Credencial,
   Instrumento,
   NoCadeia,
@@ -63,6 +64,8 @@ type BuilderProps = {
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
   webhookUrl?: string | null;
   credenciaisInstagram: Credencial[];
+  // Config do fluxo (Tipo de fluxo) — o drawer do portão herda dela e sobrepõe por-nó.
+  configFluxo: ConfiguracaoFluxo;
   // Para editar o agente/instrumento de um nó pelo drawer flutuante (sem trocar de aba).
   cintos: Record<string, Instrumento[]>;
   instrumentosTime: Instrumento[];
@@ -91,6 +94,7 @@ function BuilderInterno({
   setGatilho,
   webhookUrl,
   credenciaisInstagram,
+  configFluxo,
   cintos,
   instrumentosTime,
   tipos,
@@ -585,6 +589,7 @@ function BuilderInterno({
           setGatilho={setGatilho}
           webhookUrl={webhookUrl}
           credenciaisInstagram={credenciaisInstagram}
+          configFluxo={configFluxo}
           onDefinirInicial={definirInicial}
           onPatchNode={patchNode}
           onPatchSaida={patchSaida}

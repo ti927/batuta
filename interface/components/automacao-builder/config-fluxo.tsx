@@ -33,13 +33,36 @@ function semChave(
   return resto;
 }
 
-function CampoConfig({
+// Defaults efetivos do FLUXO (perfil escolhido, ou o padrão geral). Fonte única para
+// quem precisa do "herdado" — o diálogo do fluxo e o drawer do portão.
+export function defaultsDoPerfil(
+  painel: PainelConfigFluxo,
+  configFluxo: ConfiguracaoFluxo,
+): Record<string, unknown> {
+  const perfilObj = painel.perfis.find((p) => p.id === configFluxo.perfil);
+  return perfilObj?.defaults ?? painel.padrao_global ?? {};
+}
+
+// O valor EFETIVO de uma chave no nível do fluxo (ajuste do fluxo vence o default do
+// perfil). É o "herdado" que um portão sobrepõe com o seu `no.config`.
+export function efetivoDoFluxo(
+  painel: PainelConfigFluxo,
+  configFluxo: ConfiguracaoFluxo,
+  chave: string,
+): unknown {
+  const ajustes = configFluxo.ajustes ?? {};
+  if (chave in ajustes) return ajustes[chave];
+  return defaultsDoPerfil(painel, configFluxo)[chave];
+}
+
+export function CampoConfig({
   campo,
   valor,
   ajustado,
   podeEditar,
   onChange,
   onReset,
+  rotuloHerdado = "herdado do tipo",
 }: {
   campo: CampoConfigFluxo;
   valor: unknown;
@@ -47,9 +70,10 @@ function CampoConfig({
   podeEditar: boolean;
   onChange: (v: unknown) => void;
   onReset: () => void;
+  rotuloHerdado?: string;
 }) {
-  // Marcador "herdado do tipo" / "ajustado — voltar ao padrão" (o afinado vence o
-  // tipo; deixamos isso visível e reversível).
+  // Marcador "herdado" / "ajustado — voltar ao padrão" (o afinado vence o herdado;
+  // deixamos isso visível e reversível).
   const marcador =
     ajustado && podeEditar ? (
       <button
@@ -62,7 +86,7 @@ function CampoConfig({
     ) : ajustado ? (
       <span className="text-[11px] text-primary">ajustado</span>
     ) : (
-      <span className="text-[11px] text-muted-foreground/60">herdado do tipo</span>
+      <span className="text-[11px] text-muted-foreground/60">{rotuloHerdado}</span>
     );
 
   if (campo.tipo === "bool") {

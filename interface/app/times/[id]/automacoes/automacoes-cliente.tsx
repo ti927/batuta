@@ -441,6 +441,7 @@ function EditorAutomacao({
               : null
           }
           credenciaisInstagram={credenciaisInstagram}
+          configFluxo={configFluxo}
           cintos={cintos}
           instrumentosTime={instrumentos}
           tipos={tipos}

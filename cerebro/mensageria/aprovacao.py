@@ -23,7 +23,11 @@ from sqlalchemy.orm import Session
 
 import segredos_instrumento
 from mensageria import telegram
-from mensageria.config import aviso_expectativa_portao, resolver_config
+from mensageria.config import (
+    aviso_expectativa_portao,
+    com_ajuste_do_no,
+    resolver_config,
+)
 from modelos import (
     Agente,
     AgenteInstrumento,
@@ -40,10 +44,11 @@ from orquestracao import grafo
 CANAIS_TIPOS = {"enviar_telegram", "enviar_whatsapp"}
 
 
-def _config_aprovacao_do_no(sessao: Session, execucao: Execucao) -> dict | None:
-    """A config de aprovação do nó pausado desta execução (`{instrumento_id,
-    destinatario}`), ou None se o nó não tem portão por canal. O nó é localizado pelo
-    último passo (`no_id`, com fallback ao agente, p/ execuções antigas)."""
+def no_pausado(sessao: Session, execucao: Execucao) -> dict | None:
+    """O NÓ do grafo onde a execução pausou (último passo → `no_id` → nó normalizado),
+    ou None se não há passo/nó. FONTE ÚNICA do lookup para quem precisa aplicar ajustes
+    POR-NÓ (`com_ajuste_do_no`) a um portão parado — sweeper, retoma e aqui. Fica neste
+    módulo (folha da borda: não importa sweeper/retoma/servico) para não criar ciclo."""
     auto = sessao.get(Automacao, execucao.automacao_id)
     if auto is None:
         return None
@@ -57,7 +62,14 @@ def _config_aprovacao_do_no(sessao: Session, execucao: Execucao) -> dict | None:
     )
     if not no_id:
         return None
-    no = grafo.indexar(grafo.normalizar(auto.cadeia or {})).no(no_id) or {}
+    return grafo.indexar(grafo.normalizar(auto.cadeia or {})).no(no_id)
+
+
+def _config_aprovacao_do_no(sessao: Session, execucao: Execucao) -> dict | None:
+    """A config de aprovação do nó pausado desta execução (`{instrumento_id,
+    destinatario}`), ou None se o nó não tem portão por canal. O nó é localizado pelo
+    último passo (`no_id`, com fallback ao agente, p/ execuções antigas)."""
+    no = no_pausado(sessao, execucao) or {}
     aprovacao = no.get("aprovacao") or {}
     return aprovacao if aprovacao.get("instrumento_id") else None
 
@@ -139,8 +151,9 @@ def vincular_pausa(sessao: Session, execucao: Execucao) -> None:
     conversa viva. O PEDIDO em si é do agente (já enviado); aqui a borda só acrescenta UM
     aviso de expectativa derivado do Tipo de fluxo (`_avisar_expectativa`, à prova de falha
     e idempotente) — o que acontece se o humano não responder."""
-    cfg = _config_aprovacao_do_no(sessao, execucao)
-    if cfg is None:
+    no = no_pausado(sessao, execucao) or {}
+    cfg = no.get("aprovacao") or {}
+    if not cfg.get("instrumento_id"):
         return
     inst = sessao.get(Instrumento, uuid.UUID(str(cfg["instrumento_id"])))
     auto = sessao.get(Automacao, execucao.automacao_id)
@@ -176,7 +189,9 @@ def vincular_pausa(sessao: Session, execucao: Execucao) -> None:
     # Relógio de inatividade: o portão por canal também é varrido pelo sweeper
     # (regra geral de mensageria) — antes ficava "aberto para sempre". Cutuca e,
     # persistindo o silêncio, encerra (cancelando/estacionando a execução).
-    conf = resolver_config(sessao, conversa)
+    # `com_ajuste_do_no`: o prazo/ação DESTE portão (`no.config`) vence o do Tipo de
+    # fluxo — mesma cascata do turno por canal (`servico._turno_de_portao`).
+    conf = com_ajuste_do_no(resolver_config(sessao, conversa), no)
     # Ordem natural na thread: primeiro o PEDIDO apresentado, depois o aviso de expectativa.
     _registrar_apresentado(sessao, conversa, execucao)
     if conf["encerrar_por_inatividade"] and conversa.estado not in (

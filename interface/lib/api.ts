@@ -399,6 +399,9 @@ export type NoCadeia = {
   inicial?: boolean; // marca visual do nó inicial
   gate?: boolean; // portão de aprovação (pausa após este nó)
   aprovacao?: AprovacaoNo | null;
+  // Ajustes de config DESTE portão (sobrepõem o Tipo de fluxo — cascata do backend
+  // `no.config`). Só as chaves ajustadas ficam aqui; o resto herda do fluxo.
+  config?: Record<string, unknown>;
   gatilho?: TipoGatilho; // tipo 'gatilho'
   x?: number;
   y?: number;

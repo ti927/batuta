@@ -81,7 +81,9 @@ GLOBAL: dict = {
     # `acao_ao_encerrar`, que podia divergir desta — unificadas.)
     "portao_acao_abandono": "estacionar",
     "portao_max_rodadas": 8,
-    # E. Motor (avançado/raro)
+    # E. Motor (avançado/raro) — NÃO lidos em produção hoje: o motor usa o fixo
+    # `MAX_PASSOS` (cadeia.py) e o roteador usa sempre `MODELO_PADRAO`. Mantidos como
+    # trilho/documentação; NÃO expostos em `CAMPOS` (nada visível sem efeito real).
     "max_passos": 25,
     "modelo_roteador": None,             # None = MODELO_PADRAO
 }
@@ -178,6 +180,7 @@ CAMPOS = [
     {"grupo": "Portão de aprovação", "campos": [
         {"chave": "portao_forma", "rotulo": "Como o agente conduz o portão", "tipo": "escolha"},
         {"chave": "portao_acao_abandono", "rotulo": "Se o aprovador abandona a conversa", "tipo": "escolha"},
+        {"chave": "portao_max_rodadas", "rotulo": "Máx. de idas-e-vindas no portão (tela)", "tipo": "int"},
     ]},
 ]
 

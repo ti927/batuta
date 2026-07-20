@@ -13,12 +13,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import segredos_instrumento
-from mensageria import telegram
+from mensageria import aprovacao, telegram
 from mensageria.config import (  # noqa: F401 (compat sweeper.X)
     DESPEDIDA_MSG,
     DESPEDIDA_PORTAO_CANCELA_MSG,
     DESPEDIDA_PORTAO_MSG,
     NUDGE_MSG,
+    com_ajuste_do_no,
     complemento_nudge_portao,
     resolver_config,
 )
@@ -61,6 +62,14 @@ def varrer(sessao: Session) -> int:
             else None
         )
         conf = resolver_config(sessao, conversa)  # fonte única (perfil do fluxo inclusive)
+        # Portão parado: o ajuste DESTE portão (`no.config`) vence o do Tipo de fluxo —
+        # mesma cascata do vínculo (`aprovacao.vincular_pausa`) e do turno por canal. Só
+        # no ramo portão (`execucao_id`); atendimento puro segue sem nó (sem regressão).
+        execucao = (
+            sessao.get(Execucao, conversa.execucao_id) if conversa.execucao_id else None
+        )
+        if execucao is not None:
+            conf = com_ajuste_do_no(conf, aprovacao.no_pausado(sessao, execucao))
         if not conf["encerrar_por_inatividade"]:
             continue  # este fluxo não encerra por silêncio (ex.: deixa vivo de propósito)
         if not conversa.nudge_enviado:
@@ -93,7 +102,6 @@ def varrer(sessao: Session) -> int:
             # fica `aguardando_humano` e uma resposta tardia a religa (via
             # `servico.registrar_entrada`) — antes ficava órfã para sempre.
             if eh_portao:
-                execucao = sessao.get(Execucao, conversa.execucao_id)
                 if (
                     execucao is not None
                     and execucao.estado == "aguardando_humano"

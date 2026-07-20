@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from mensageria.config import com_ajuste_do_no, config_da_automacao
 from modelos import Agente, Automacao, Execucao, PassoExecucao
 from orquestracao import grafo
 from orquestracao.agente import executar_agente
@@ -140,11 +141,20 @@ def retomar_execucao(
     ultimo, no, no_id, cadeia, idx = localizar_no_pausado(sessao, execucao)
     saidas = no.get("saidas") or []
 
+    # Teto de idas-e-vindas do portão na TELA: DERIVADO da config (Tipo de fluxo <
+    # ajuste do nó). Antes era só o fixo `MAX_RODADAS_GATE`; agora `portao_max_rodadas`
+    # passa a valer (a tela não tem conversa/canal → `config_da_automacao`). O fixo é o
+    # default. Cura a chave morta apontada na varredura.
+    auto = sessao.get(Automacao, execucao.automacao_id)
+    max_rodadas = com_ajuste_do_no(config_da_automacao(auto), no).get(
+        "portao_max_rodadas", MAX_RODADAS_GATE
+    )
+
     eh_gate_agente = bool(no.get("gate") and no.get("ref") and len(saidas) >= 2)
     if (
         permitir_conversa
         and eh_gate_agente
-        and rodadas_no_gate(sessao, execucao.id, no_id) < MAX_RODADAS_GATE
+        and rodadas_no_gate(sessao, execucao.id, no_id) < max_rodadas
     ):
         return _retomar_conversando_tela(
             sessao, execucao, resposta,
