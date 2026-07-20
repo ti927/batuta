@@ -291,7 +291,7 @@ def disparar(
     """Disparo manual (botão de teste): roda independente do gatilho da
     automação. Não bloqueia: enfileira a execução e devolve o id na hora."""
     auto = automacao_acessivel(sessao, usuario, automacao_id, minimo="operador")
-    execucao = criar_execucao(sessao, auto, dados.entrada)
+    execucao = criar_execucao(sessao, auto, dados.entrada, origem="manual")
     fila.enfileirar()
     return _montar_com_passos(sessao, execucao)
 

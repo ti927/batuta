@@ -14,6 +14,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from modelos import Auditoria, Time, Usuario
+from observabilidade.escritor import registrar_evento
 
 
 def registrar(
@@ -35,6 +36,17 @@ def registrar(
             organizacao_id=organizacao_id,
             detalhe=detalhe,
         )
+    )
+    # Espelha no banco de logs (busca unificada). Best-effort e em transação própria — a
+    # `Auditoria` acima segue sendo a fonte atômica (entra/sai com a transação da ação).
+    registrar_evento(
+        categoria="escrita",
+        acao=acao,
+        usuario_id=usuario.id if usuario else None,
+        organizacao_id=organizacao_id,
+        recurso_tipo=recurso_tipo,
+        recurso_id=recurso_id,
+        detalhe=detalhe,
     )
 
 

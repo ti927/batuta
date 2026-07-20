@@ -232,7 +232,7 @@ def _registrar_e_disparar(
 
     # Dispara a execução (mesmo caminho do webhook genérico; `criar_execucao`
     # comita). Guarda o vínculo comentário→execução para auditoria.
-    execucao = criar_execucao(sessao, auto, ig.montar_entrada(comentario))
+    execucao = criar_execucao(sessao, auto, ig.montar_entrada(comentario), origem="webhook")
     evento.execucao_id = execucao.id
     sessao.commit()
     return True

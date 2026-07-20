@@ -9,6 +9,8 @@ import agendador
 import fila
 import fila_turnos
 from arquivos import DIRETORIO_ARQUIVOS
+from observabilidade.log import configurar_logging
+from observabilidade.middleware import MiddlewareLog
 from rotas import (
     agentes,
     ajuda,
@@ -21,6 +23,7 @@ from rotas import (
     instagram,
     instagram_webhook,
     instrumentos,
+    logs,
     membros,
     mensageria,
     organizacoes,
@@ -34,6 +37,7 @@ async def ciclo_de_vida(app: FastAPI):
     """Sobe a fila de execuções, a fila de turnos da IA criadora (ambas pools de
     trabalhadores) e o relógio dos gatilhos por agendamento ao iniciar; desliga tudo
     ao parar."""
+    configurar_logging()  # logs estruturados (JSON) com identidade de servidor
     fila.iniciar()
     fila_turnos.iniciar()
     agendador.iniciar()
@@ -58,6 +62,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Observabilidade: adicionado por ÚLTIMO para ser o mais externo — envolve todo request
+# (inclusive o CORS), fixando o contexto de log e registrando status/latência.
+app.add_middleware(MiddlewareLog)
 
 
 @app.get("/saude")
@@ -86,6 +94,7 @@ app.include_router(instagram_webhook.rotas)
 app.include_router(webhooks.rotas)
 app.include_router(mensageria.rotas)
 app.include_router(ajuda.rotas)
+app.include_router(logs.rotas)
 
 # Arquivos gerados (ex.: PDFs do instrumento gerar_pdf), servidos localmente.
 app.mount("/arquivos", StaticFiles(directory=DIRETORIO_ARQUIVOS), name="arquivos")

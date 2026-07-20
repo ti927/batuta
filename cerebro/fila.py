@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select, update
 
 from modelos import Execucao, PassoExecucao
+from observabilidade.escritor import registrar_evento
 from orquestracao.disparo import rodar_execucao
 from sessao import CriadorDeSessao
 
@@ -95,8 +96,12 @@ def _ciclo_trabalhador(n: int) -> None:
                 logger.info(
                     "Trabalhador %d concluiu execução %s (%s)", n, eid, execucao.estado
                 )
-        except Exception:
+        except Exception as e:
             logger.exception("Trabalhador %d falhou ao rodar execução %s", n, eid)
+            registrar_evento(
+                categoria="fila", acao="worker.falhou", nivel="error", resultado="falha",
+                erro=e, recurso_tipo="execucao", recurso_id=eid,
+            )
         finally:
             sessao.close()
 
@@ -121,6 +126,10 @@ def _recuperar_orfas() -> None:
         if r.rowcount:
             logger.warning(
                 "%d execução(ões) órfã(s) marcada(s) como falhou no boot.", r.rowcount
+            )
+            registrar_evento(
+                categoria="fila", acao="execucao.orfas_recuperadas", nivel="warning",
+                origem="boot", detalhe={"quantidade": r.rowcount},
             )
     finally:
         sessao.close()
@@ -161,6 +170,10 @@ def recuperar_execucoes_presas(sessao) -> int:
     if presas:
         sessao.commit()
         logger.warning("%d execução(ões) presa(s) recuperada(s) (falhou).", len(presas))
+        registrar_evento(
+            categoria="fila", acao="execucao.presas_recuperadas", nivel="warning",
+            detalhe={"quantidade": len(presas)},
+        )
     return len(presas)
 
 

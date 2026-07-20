@@ -17,6 +17,8 @@ from sqlalchemy.orm import Session
 
 from auth_supabase import TokenInvalido, validar_token
 from modelos import Membro, Usuario
+from observabilidade import contexto
+from observabilidade.escritor import registrar_evento
 from sessao import obter_sessao
 
 # Hierarquia de papéis: um papel "contém" os de ordem menor.
@@ -42,6 +44,10 @@ def usuario_atual(
     try:
         claims = validar_token(token)
     except TokenInvalido as e:
+        registrar_evento(
+            categoria="auth", acao="auth.negado", nivel="warning", resultado="falha",
+            detalhe={"motivo": "token_invalido", "status": 401},
+        )
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"Token inválido: {e}")
 
     sub = claims.get("sub")
@@ -50,6 +56,10 @@ def usuario_atual(
     except (ValueError, TypeError):
         auth_id = None
     if auth_id is None:
+        registrar_evento(
+            categoria="auth", acao="auth.negado", nivel="warning", resultado="falha",
+            detalhe={"motivo": "sem_sub", "status": 401},
+        )
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED, "Token sem identificação de usuário."
         )
@@ -58,12 +68,25 @@ def usuario_atual(
         select(Usuario).where(Usuario.auth_id == auth_id)
     ).first()
     if usuario is None:
+        registrar_evento(
+            categoria="auth", acao="auth.negado", nivel="warning", resultado="falha",
+            detalhe={"motivo": "sem_cadastro", "status": 403},
+        )
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             "Sem acesso ao Batuta. Peça um convite a um administrador.",
         )
     if not usuario.ativo:
+        registrar_evento(
+            categoria="auth", acao="auth.negado", nivel="warning", resultado="falha",
+            usuario_id=usuario.id,
+            detalhe={"motivo": "desativado", "status": 403},
+        )
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Seu acesso foi desativado.")
+    # Sucesso: fixa o "quem" no contexto (eventos do endpoint) e em request.state (o
+    # middleware, num contexto-pai, lê de lá para o evento http).
+    request.state.usuario_id = usuario.id
+    contexto.completar(usuario_id=usuario.id)
     return usuario
 
 

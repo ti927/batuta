@@ -55,6 +55,6 @@ async def receber(
 
     entrada = _extrair_entrada(await request.body())
     # Enfileira e responde na hora (ack ao sistema externo); a fila roda a cadeia.
-    execucao = criar_execucao(sessao, auto, entrada)
+    execucao = criar_execucao(sessao, auto, entrada, origem="webhook")
     fila.enfileirar()
     return {"execucao_id": str(execucao.id), "estado": execucao.estado}

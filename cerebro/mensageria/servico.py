@@ -38,6 +38,7 @@ from modelos import (
     Instrumento,
     MensagemConversa,
 )
+from observabilidade.escritor import registrar_evento
 from orquestracao.agente import executar_agente
 from orquestracao.llm import usar_chaves
 from orquestracao.modelos_ia import provedor_do_modelo_seguro
@@ -248,6 +249,11 @@ def _passar_para_humano(sessao: Session, conversa: Conversa, nota: str) -> None:
     conversa.estado = "humano_assumiu"
     sessao.add(
         MensagemConversa(conversa_id=conversa.id, papel="sistema", conteudo=nota)
+    )
+    registrar_evento(
+        categoria="mensageria", acao="conversa.transferida_humano", nivel="warning",
+        recurso_tipo="conversa", recurso_id=conversa.id,
+        detalhe={"nota": nota, "canal": conversa.canal},
     )
 
 
@@ -534,6 +540,11 @@ def _rodar_turno(
         )
         conversa.estado = "aberta"
         sessao.commit()
+        registrar_evento(
+            categoria="mensageria", acao="turno.falhou", nivel="error", resultado="falha",
+            erro=e, recurso_tipo="conversa", recurso_id=conversa.id,
+            detalhe={"canal": conversa.canal, "gate": gate},
+        )
         return None
 
     saida = (resultado.get("saida") or "").strip()

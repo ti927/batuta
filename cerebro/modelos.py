@@ -335,6 +335,63 @@ class Auditoria(IdData, Base):
     detalhe: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
+class EventoLog(IdData, Base):
+    """Banco de logs pesquisável (observabilidade). UM registro por evento relevante do
+    sistema — requisições com erro, disparos, ciclo de execução, agendamentos, mensageria,
+    turnos da IA, ações de escrita, falhas de auth. Coexiste com `Auditoria`: aquela é o
+    rastro atômico/nominal (entra na MESMA transação da ação); ESTE é best-effort, gravado
+    numa transação própria e curta pela borda (`observabilidade.escritor`), que NUNCA
+    derruba o request.
+
+    Carimba a IDENTIDADE DO SERVIDOR (`host`/`pid`/`commit`/`ambiente`) em todo evento — o
+    dado que faltou no incidente do cérebro local: um evento com `ambiente=local` num banco
+    de produção é o alarme. `usuario_id` é SET NULL (sobrevive à exclusão do usuário);
+    `organizacao_id`/`time_id`/`recurso_id` são UUID soltos (sobrevivem à exclusão do
+    recurso). `request_id` correlaciona todos os eventos de uma mesma requisição."""
+
+    __tablename__ = "evento_log"
+    nivel: Mapped[str] = mapped_column(String(10), nullable=False)  # debug|info|warning|error|critical
+    categoria: Mapped[str] = mapped_column(String(30), nullable=False)  # http|auth|disparo|execucao|...
+    acao: Mapped[str] = mapped_column(String(80), nullable=False)
+    resultado: Mapped[str | None] = mapped_column(String(10), nullable=True)  # sucesso|falha
+    usuario_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
+    )
+    organizacao_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    time_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    recurso_tipo: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    recurso_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # Identidade do servidor que gerou o evento (o carimbo do caso do cérebro local).
+    host: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    commit: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ambiente: Mapped[str | None] = mapped_column(String(10), nullable=True)  # railway|local
+    ip_cliente: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    origem: Mapped[str | None] = mapped_column(String(40), nullable=True)  # manual|agendamento|webhook|cron|fila|sistema
+    http_metodo: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    rota: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    latencia_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    erro_texto: Mapped[str | None] = mapped_column(Text, nullable=True)
+    detalhe: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    __table_args__ = (
+        Index("ix_log_org_tempo", "organizacao_id", "criado_em"),
+        Index("ix_log_usuario_tempo", "usuario_id", "criado_em"),
+        Index("ix_log_categoria_tempo", "categoria", "criado_em"),
+        Index("ix_log_request", "request_id"),
+        Index("ix_log_ambiente_tempo", "ambiente", "criado_em"),
+        Index(
+            "ix_log_erros_tempo",
+            "nivel",
+            "criado_em",
+            postgresql_where=text("nivel IN ('error', 'critical')"),
+        ),
+        Index("ix_log_detalhe_gin", "detalhe", postgresql_using="gin"),
+    )
+
+
 # ───────────────────── Cofre de chaves (Etapa 2, Fase 7) ─────────────────────
 
 

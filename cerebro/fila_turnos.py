@@ -24,6 +24,8 @@ from sqlalchemy.orm import Session
 
 from criacao.loop import MODELO_CRIADORA, responder_turno
 from modelos import Automacao, ConversaCriacao, Organizacao, TurnoCriacao, Usuario
+from observabilidade import contexto
+from observabilidade.escritor import registrar_evento
 from orquestracao import atividade
 from sessao import CriadorDeSessao
 
@@ -170,36 +172,48 @@ def executar_turno(sessao: Session, turno: TurnoCriacao) -> None:
         return
     turno_id = turno.id
     usuario = sessao.get(Usuario, turno.usuario_id) if turno.usuario_id else None
-    try:
-        chaves, origens = resolver_chaves_por_organizacao(sessao, conversa.organizacao_id)
-        org = sessao.get(Organizacao, conversa.organizacao_id)
-        modelo = (org.modelo_criadora if org else None) or MODELO_CRIADORA
-        origem = origens.get(provedor_do_modelo(modelo), ORIGEM_LEGADO)
-        # `usar_atividade`: publica "o que a IA está fazendo agora" (as ferramentas
-        # chamam `atividade.registrar` no wrapper `_serial`) numa sessão própria, para
-        # a tela mostrar progresso mesmo num turno longo. Mesmo padrão do disparo.
-        with atividade.usar_atividade(lambda t: _escrever_atividade(turno_id, t)):
-            resultado = responder_turno(
-                sessao,
-                conversa,
-                turno.pergunta,
-                usuario=usuario,
-                chaves=chaves,
-                origem=origem,
-                modelo=modelo,
+    # Fixa o contexto de log do turno (org/usuário/correlação) — o worker roda fora de um
+    # request. `request_id` = id do turno, para correlacionar todos os seus eventos.
+    with contexto.usar_contexto(
+        origem="criacao",
+        organizacao_id=conversa.organizacao_id,
+        usuario_id=turno.usuario_id,
+        request_id=str(turno_id),
+    ):
+        try:
+            chaves, origens = resolver_chaves_por_organizacao(sessao, conversa.organizacao_id)
+            org = sessao.get(Organizacao, conversa.organizacao_id)
+            modelo = (org.modelo_criadora if org else None) or MODELO_CRIADORA
+            origem = origens.get(provedor_do_modelo(modelo), ORIGEM_LEGADO)
+            # `usar_atividade`: publica "o que a IA está fazendo agora" (as ferramentas
+            # chamam `atividade.registrar` no wrapper `_serial`) numa sessão própria, para
+            # a tela mostrar progresso mesmo num turno longo. Mesmo padrão do disparo.
+            with atividade.usar_atividade(lambda t: _escrever_atividade(turno_id, t)):
+                resultado = responder_turno(
+                    sessao,
+                    conversa,
+                    turno.pergunta,
+                    usuario=usuario,
+                    chaves=chaves,
+                    origem=origem,
+                    modelo=modelo,
+                )
+            sessao.commit()
+            _sincronizar_agendador(sessao, conversa)
+            turno.estado = "concluido"
+            turno.resultado = resultado
+            turno.atividade = None
+            turno.atividade_em = None
+            turno.finalizado_em = datetime.now(timezone.utc)
+            sessao.commit()
+        except Exception as e:  # falha de LLM/rede/ferramenta — registra VISÍVEL e segue
+            sessao.rollback()
+            _marcar_erro(sessao, turno_id, _mensagem_humana(e))
+            logger.exception("Turno %s falhou", turno_id)
+            registrar_evento(
+                categoria="criacao", acao="turno.falhou", nivel="error", resultado="falha",
+                erro=e, recurso_tipo="turno_criacao", recurso_id=turno_id,
             )
-        sessao.commit()
-        _sincronizar_agendador(sessao, conversa)
-        turno.estado = "concluido"
-        turno.resultado = resultado
-        turno.atividade = None
-        turno.atividade_em = None
-        turno.finalizado_em = datetime.now(timezone.utc)
-        sessao.commit()
-    except Exception as e:  # falha de LLM/rede/ferramenta — registra VISÍVEL e segue
-        sessao.rollback()
-        _marcar_erro(sessao, turno_id, _mensagem_humana(e))
-        logger.exception("Turno %s falhou", turno_id)
 
 
 def processar_turno(turno_id: uuid.UUID) -> None:
@@ -264,6 +278,10 @@ def _recuperar_orfas() -> None:
         n = marcar_orfas(sessao)
         if n:
             logger.warning("%d turno(s) órfão(s) marcado(s) como erro no boot.", n)
+            registrar_evento(
+                categoria="criacao", acao="turno.orfaos_recuperados", nivel="warning",
+                origem="boot", detalhe={"quantidade": n},
+            )
     finally:
         sessao.close()
 
@@ -295,6 +313,10 @@ def recuperar_turnos_presos(sessao: Session) -> int:
     if presos:
         sessao.commit()
         logger.warning("%d turno(s) preso(s) recuperado(s) (erro).", len(presos))
+        registrar_evento(
+            categoria="criacao", acao="turno.presos_recuperados", nivel="warning",
+            detalhe={"quantidade": len(presos)},
+        )
     return len(presos)
 
 

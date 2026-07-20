@@ -16,11 +16,11 @@ from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy import select
+from sqlalchemy import and_, delete, or_, select
 
 import fila
 import fila_turnos
-from modelos import Agendamento, Automacao, Credencial
+from modelos import Agendamento, Automacao, Credencial, EventoLog
 from orquestracao.disparo import criar_execucao
 from sessao import CriadorDeSessao
 
@@ -70,7 +70,7 @@ def _rodar(automacao_id_str: str) -> None:
         if auto is None or not auto.ativa or auto.tipo_gatilho != TIPO_AGENDAMENTO:
             return  # desativada/removida/trocou de gatilho — não dispara
         entrada = (auto.configuracao_gatilho or {}).get("entrada") or ""
-        criar_execucao(sessao, auto, entrada)  # enfileira; a fila roda
+        criar_execucao(sessao, auto, entrada, origem="agendamento")  # enfileira; a fila roda
         fila.enfileirar()
         logger.info("Automação agendada %s enfileirada.", automacao_id_str)
     except Exception:
@@ -203,7 +203,7 @@ def varrer_agendamentos(sessao) -> int:
         try:
             ag.estado = "enfileirado"  # claim: não re-processa nesta nem na próxima varredura
             sessao.commit()
-            execucao = criar_execucao(sessao, auto, ag.entrada or "")
+            execucao = criar_execucao(sessao, auto, ag.entrada or "", origem="agendamento")
             ag.execucao_id = execucao.id
             sessao.commit()
             fila.enfileirar()
@@ -223,6 +223,55 @@ def _varrer_agendamentos_job() -> None:
     sessao = CriadorDeSessao()
     try:
         varrer_agendamentos(sessao)
+    finally:
+        sessao.close()
+
+
+# ─────────────── Poda do banco de logs (observabilidade) ───────────────
+# Mantém a tabela `evento_log` enxuta no Postgres compartilhado: eventos rotineiros
+# (info/warning) vivem pouco; erros ficam bem mais tempo para diagnóstico tardio.
+RETENCAO_INFO_DIAS = 14
+RETENCAO_ERRO_DIAS = 90
+LIMITE_PODA_LOTE = 5000
+
+
+def podar_evento_log(sessao) -> int:
+    """Apaga eventos vencidos do banco de logs, em LOTES (não trava o Postgres). Devolve
+    o total removido. info/warning além de RETENCAO_INFO_DIAS; error/critical além de
+    RETENCAO_ERRO_DIAS."""
+    agora = datetime.now(timezone.utc)
+    corte_info = agora - timedelta(days=RETENCAO_INFO_DIAS)
+    corte_erro = agora - timedelta(days=RETENCAO_ERRO_DIAS)
+    graves = ["error", "critical"]
+    total = 0
+    while True:
+        ids = sessao.scalars(
+            select(EventoLog.id)
+            .where(
+                or_(
+                    and_(EventoLog.nivel.notin_(graves), EventoLog.criado_em < corte_info),
+                    and_(EventoLog.nivel.in_(graves), EventoLog.criado_em < corte_erro),
+                )
+            )
+            .limit(LIMITE_PODA_LOTE)
+        ).all()
+        if not ids:
+            break
+        sessao.execute(delete(EventoLog).where(EventoLog.id.in_(ids)))
+        sessao.commit()
+        total += len(ids)
+        if len(ids) < LIMITE_PODA_LOTE:
+            break
+    if total:
+        logger.info("Poda do banco de logs: %d evento(s) removido(s).", total)
+    return total
+
+
+def _podar_evento_log_job() -> None:
+    """Entrada do agendador: abre a própria sessão e poda o banco de logs."""
+    sessao = CriadorDeSessao()
+    try:
+        podar_evento_log(sessao)
     finally:
         sessao.close()
 
@@ -282,6 +331,13 @@ def iniciar() -> None:
         _varrer_agendamentos_job,
         trigger=IntervalTrigger(seconds=60),
         id="agendamentos_sweeper",
+        replace_existing=True,
+    )
+    # Poda diária do banco de logs (observabilidade), de madrugada (BRT), fora do pico.
+    _scheduler.add_job(
+        _podar_evento_log_job,
+        trigger=CronTrigger(hour=4, minute=15, timezone=FUSO),
+        id="poda_evento_log",
         replace_existing=True,
     )
     if not _scheduler.running:
