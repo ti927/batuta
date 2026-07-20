@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import {
   URL_CEREBRO,
   api,
+  ErroDaApi,
   mensagemDeErro,
   type Agente,
   type Automacao,
@@ -125,9 +126,10 @@ function EditorAutomacao({
   const [gatilho, setGatilhoEstado] = useState<ConfigGatilho>(() =>
     gatilhoDe(automacao),
   );
-  const [ativa, setAtiva] = useState(
-    automacao ? (automacao.tipo_gatilho === "manual" ? true : automacao.ativa) : true,
-  );
+  // Estado real da automação (inclui as MANUAIS): antes, manual era forçada a inativa e
+  // não dava para ligar pela tela — mas o agendamento SÓ dispara automação ativa, então
+  // uma manual agendada nunca rodava. Agora toda automação mostra e controla o seu estado.
+  const [ativa, setAtiva] = useState(automacao?.ativa ?? false);
   const [cadeia, setCadeia] = useState<Cadeia>(() =>
     normalizarCadeia(
       automacao && (automacao.cadeia?.nos?.length ?? 0) > 0
@@ -201,6 +203,19 @@ function EditorAutomacao({
   }
 
   function tratar(e: unknown, padrao: string) {
+    // Parede de ativação: ligar uma automação com ação irreversível sem portão devolve
+    // 422 {problemas:[...]} — traduz para texto humano, nunca o JSON cru.
+    if (e instanceof ErroDaApi) {
+      try {
+        const corpo = JSON.parse(e.message);
+        if (Array.isArray(corpo?.problemas)) {
+          setErro("Não dá para ativar ainda: " + corpo.problemas.join(" "));
+          return;
+        }
+      } catch {
+        /* não era JSON de parede */
+      }
+    }
     setErro(mensagemDeErro(e, padrao));
   }
 
@@ -254,7 +269,7 @@ function EditorAutomacao({
       tipo_gatilho: gatilho.tipo,
       configuracao_gatilho: montarConfigGatilho(),
       cadeia: normalizarCadeia(cadeia),
-      ativa: gatilho.tipo === "manual" ? false : ativa,
+      ativa,
       configuracao: configFluxo,
     };
     setSalvando(true);
@@ -303,18 +318,31 @@ function EditorAutomacao({
           disabled={!souOperador}
           className="h-9 w-64"
         />
+        {/* Estado da PRÓPRIA automação (não do time): pílula sempre visível + interruptor
+            para o operador. Vale para TODO gatilho, inclusive Manual — que pode ser
+            disparada por agendamento e por isso também precisa poder ficar "ativa". */}
+        <Badge variant={ativa ? "success" : "neutral"}>
+          {ativa ? "ativa" : "em repouso"}
+        </Badge>
         <Badge variant="neutral" className="gap-1">
           <Layers className="size-3" /> {nAgentes} agentes · {nBifurca} bifurcações
         </Badge>
-        {gatilho.tipo !== "manual" && souOperador && (
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        {souOperador && (
+          <label
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+            title={
+              gatilho.tipo === "manual"
+                ? "Ativa: fica no ar para ser disparada por agendamento. O botão “Rodar” sempre funciona, mesmo em repouso."
+                : "Ativa: o gatilho fica armado e a automação pode disparar."
+            }
+          >
             <input
               type="checkbox"
               className="accent-primary"
               checked={ativa}
               onChange={(e) => setAtiva(e.target.checked)}
             />
-            gatilho ativo
+            Ativa
           </label>
         )}
         <div className="flex-1" />
