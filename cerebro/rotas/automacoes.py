@@ -12,10 +12,10 @@ espera-por-humano (portão de aprovação) é ação de observador (MIGRACAO §3
 
 import copy
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from esquemas import (
@@ -411,6 +411,47 @@ def listar_agendamentos(
     ]
 
 
+@rotas.get("/times/{time_id}/agendamentos")
+def listar_agendamentos_do_time(
+    time_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Agendamentos de TODAS as automações do time: os PENDENTES (próximos disparos, "no
+    ar") + os CANCELADOS recentes (7 dias) com o MOTIVO — para nada falhar em silêncio
+    (§12-A). Alimenta a aba 'Agendadas' das Execuções: o lugar central para ver o que
+    vai/ia rodar, sem caçar automação por automação."""
+    time_acessivel(sessao, usuario, time_id)
+    corte = datetime.now(timezone.utc) - timedelta(days=7)
+    linhas = sessao.execute(
+        select(Agendamento, Automacao.nome)
+        .join(Automacao, Automacao.id == Agendamento.automacao_id)
+        .where(
+            Automacao.time_id == time_id,
+            or_(
+                Agendamento.estado == "pendente",
+                and_(
+                    Agendamento.estado == "cancelado",
+                    Agendamento.quando_executar >= corte,
+                ),
+            ),
+        )
+        .order_by(Agendamento.quando_executar)
+    ).all()
+    return [
+        {
+            "id": str(a.id),
+            "automacao_id": str(a.automacao_id),
+            "automacao_nome": nome,
+            "quando_executar": a.quando_executar.isoformat(),
+            "estado": a.estado,
+            "motivo": a.motivo,
+            "criado_em": a.criado_em.isoformat(),
+        }
+        for a, nome in linhas
+    ]
+
+
 @rotas.delete("/agendamentos/{agendamento_id}", status_code=status.HTTP_204_NO_CONTENT)
 def cancelar_agendamento(
     agendamento_id: uuid.UUID,
@@ -424,6 +465,7 @@ def cancelar_agendamento(
     auto = automacao_acessivel(sessao, usuario, ag.automacao_id, minimo="operador")
     if ag.estado == "pendente":
         ag.estado = "cancelado"
+        ag.motivo = "Cancelado por você."
         auditoria.registrar(
             sessao, usuario=usuario, acao="agendamento.cancelado",
             recurso_tipo="agendamento", recurso_id=ag.id,

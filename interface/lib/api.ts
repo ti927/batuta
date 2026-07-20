@@ -596,6 +596,19 @@ export type ExecucaoNaLista = Execucao & {
   organizacao_id: string;
 };
 
+// Um agendamento do time na aba "Agendadas" das Execuções: disparo FUTURO de uma
+// automação — `pendente` (no ar, vai rodar) ou `cancelado` (não disparou; `motivo`
+// explica: você cancelou, ou a automação-alvo estava desativada/removida na hora).
+export type AgendamentoDoTime = {
+  id: string;
+  automacao_id: string;
+  automacao_nome: string;
+  quando_executar: string;
+  estado: "pendente" | "cancelado";
+  motivo: string | null;
+  criado_em: string;
+};
+
 // ─────────────────── Acesso: papéis, membros, convites ───────────────────
 
 export type PapelAcesso = "admin" | "operador" | "observador";

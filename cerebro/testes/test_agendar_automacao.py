@@ -165,6 +165,8 @@ def test_sweeper_cancela_alvo_inativo(sessao, dados):
     assert agendador.varrer_agendamentos(sessao) == 0
     sessao.refresh(ag)
     assert ag.estado == "cancelado"
+    # Motivo HUMANO gravado (nada em silêncio, §12-A).
+    assert "desativada" in (ag.motivo or "").lower()
 
 
 # ───────────────────────── endpoints ─────────────────────────
@@ -195,7 +197,46 @@ def test_listar_e_cancelar_agendamento(cliente, entrar, dados, sessao):
     r = cliente.delete(f"/agendamentos/{ag.id}")
     assert r.status_code == 204
     sessao.refresh(ag)
-    assert ag.estado == "cancelado"
+    assert ag.estado == "cancelado" and ag.motivo == "Cancelado por você."
+
+
+def test_listar_agendamentos_do_time(cliente, entrar, dados, sessao):
+    """A aba 'Agendadas': pendentes + cancelados recentes (com motivo), do TIME inteiro,
+    excluindo cancelados antigos e agendamentos de outro time."""
+    entrar(dados["operador"])
+    alvo = _auto(sessao, dados, nome="Publicador")
+    agora = datetime.now(timezone.utc)
+    pend = Agendamento(
+        automacao_id=alvo.id, quando_executar=agora + timedelta(hours=1), estado="pendente"
+    )
+    canc = Agendamento(
+        automacao_id=alvo.id, quando_executar=agora - timedelta(hours=1),
+        estado="cancelado",
+        motivo="A automação-alvo estava desativada (em repouso) quando chegou a hora.",
+    )
+    velho = Agendamento(
+        automacao_id=alvo.id, quando_executar=agora - timedelta(days=30),
+        estado="cancelado", motivo="antigo",
+    )
+    # agendamento de OUTRO time da mesma org: não deve aparecer sob timeA.
+    time2 = Time(organizacao_id=dados["orgA"].id, nome="Time 2")
+    sessao.add(time2)
+    sessao.flush()
+    auto2 = _auto(sessao, dados, time=time2, nome="Outro")
+    ag2 = Agendamento(
+        automacao_id=auto2.id, quando_executar=agora + timedelta(hours=2), estado="pendente"
+    )
+    sessao.add_all([pend, canc, velho, ag2])
+    sessao.flush()
+
+    r = cliente.get(f"/times/{dados['timeA'].id}/agendamentos")
+    assert r.status_code == 200
+    ids = {a["id"]: a for a in r.json()}
+    assert ids[str(pend.id)]["estado"] == "pendente"
+    assert ids[str(pend.id)]["automacao_nome"] == "Publicador"
+    assert ids[str(canc.id)]["motivo"].lower().startswith("a automa")
+    assert str(velho.id) not in ids  # cancelado antigo (>7 dias) some
+    assert str(ag2.id) not in ids  # é de outro time
 
 
 def test_alvo_de_outra_org_recusado(cliente, entrar, dados, sessao):

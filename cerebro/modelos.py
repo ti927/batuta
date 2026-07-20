@@ -525,6 +525,10 @@ class Agendamento(IdData, Base):
     estado: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default=text("'pendente'")
     )  # pendente | enfileirado | cancelado
+    # Por que foi cancelado — frase HUMANA (nunca em silêncio, §12-A): "você cancelou"
+    # (manual) OU "a automação-alvo estava desativada/removida" (sweeper). Nulo enquanto
+    # pendente/enfileirado. A aba "Agendadas" das Execuções mostra isto.
+    motivo: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Preenchido quando o sweeper dispara (auditoria).
     execucao_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("execucoes.id", ondelete="SET NULL"), nullable=True

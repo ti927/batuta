@@ -188,6 +188,13 @@ def varrer_agendamentos(sessao) -> int:
         auto = sessao.get(Automacao, ag.automacao_id)
         if auto is None or not auto.ativa:
             ag.estado = "cancelado"
+            # Motivo HUMANO (nunca em silêncio, §12-A) — a aba "Agendadas" mostra.
+            ag.motivo = (
+                "A automação-alvo foi removida."
+                if auto is None
+                else "A automação-alvo estava desativada (em repouso) quando chegou a hora. "
+                "Ative-a para os próximos agendamentos dispararem."
+            )
             sessao.commit()
             logger.warning(
                 "Agendamento %s cancelado: automação-alvo ausente/inativa.", ag.id

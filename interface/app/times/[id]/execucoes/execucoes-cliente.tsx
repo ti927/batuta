@@ -1,13 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { Activity, ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Activity, CalendarClock, ChevronRight, Clock, X } from "lucide-react";
+import { toast } from "sonner";
 
-import { type ExecucaoNaLista, type Time, type TimeResumo } from "@/lib/api";
+import {
+  api,
+  mensagemDeErro,
+  type AgendamentoDoTime,
+  type ExecucaoNaLista,
+  type PapelAcesso,
+  type Time,
+  type TimeResumo,
+} from "@/lib/api";
+import { podeOperar } from "@/lib/permissoes";
 import { ESTADO, formatarData } from "@/components/inspecao-execucao";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
+
+// Horário sempre em Brasília (os prazos são pensados no Brasil).
+const FMT_BRT = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  dateStyle: "short",
+  timeStyle: "short",
+});
 
 const FILTROS: { valor: string; rotulo: string; casa: (e: string) => boolean }[] = [
   { valor: "todas", rotulo: "Todas", casa: () => true },
@@ -54,13 +72,51 @@ export function ExecucoesCliente({
   time,
   inicial,
   resumo,
+  meuPapel,
 }: {
   time: Time;
   inicial: ExecucaoNaLista[];
   resumo: TimeResumo | null;
+  meuPapel: PapelAcesso | null;
 }) {
+  const souOperador = podeOperar(meuPapel);
   const [filtro, setFiltro] = useState("todas");
-  const lista = inicial.filter((e) => FILTROS.find((f) => f.valor === filtro)!.casa(e.estado));
+  // Agendamentos do time (aba "Agendadas") — outra tabela, buscada no cliente (dinâmica).
+  const [agendamentos, setAgendamentos] = useState<AgendamentoDoTime[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    api
+      .get<AgendamentoDoTime[]>(`/times/${time.id}/agendamentos`)
+      .then((d) => vivo && setAgendamentos(d))
+      .catch(() => {
+        /* seção complementar: silencia se falhar (a aba fica vazia) */
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [time.id]);
+  const pendentes = agendamentos.filter((a) => a.estado === "pendente");
+  const cancelados = agendamentos.filter((a) => a.estado === "cancelado");
+
+  async function cancelarAgendamento(id: string) {
+    try {
+      await api.delete(`/agendamentos/${id}`);
+      setAgendamentos((l) =>
+        l.map((a) =>
+          a.id === id
+            ? { ...a, estado: "cancelado", motivo: "Cancelado por você." }
+            : a,
+        ),
+      );
+      toast.success("Agendamento cancelado.");
+    } catch (e) {
+      toast.error(mensagemDeErro(e, "Não consegui cancelar o agendamento."));
+    }
+  }
+
+  // "agendadas" não é um estado de execução — não está em FILTROS.
+  const filtroExec = FILTROS.find((f) => f.valor === filtro);
+  const lista = filtroExec ? inicial.filter((e) => filtroExec.casa(e.estado)) : [];
 
   // Agregados dos 4 stat cards.
   const total = inicial.length;
@@ -133,9 +189,28 @@ export function ExecucoesCliente({
             </button>
           );
         })}
+        {/* "Agendadas": disparos FUTUROS (outra tabela). Completa o ciclo de vida —
+            agendada → aguardando → em andamento → concluída/cancelada. */}
+        <button
+          onClick={() => setFiltro("agendadas")}
+          className={`rounded-full border px-3 py-1 text-sm transition-colors ${
+            filtro === "agendadas"
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-card text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Agendadas ({pendentes.length})
+        </button>
       </div>
 
-      {lista.length === 0 ? (
+      {filtro === "agendadas" ? (
+        <Agendadas
+          pendentes={pendentes}
+          cancelados={cancelados}
+          souOperador={souOperador}
+          onCancelar={cancelarAgendamento}
+        />
+      ) : lista.length === 0 ? (
         <EstadoVazio icone={Activity} titulo="Nenhuma execução neste filtro.">
           Quando o time rodar, as execuções aparecem aqui.
         </EstadoVazio>
@@ -177,5 +252,99 @@ export function ExecucoesCliente({
         </div>
       )}
     </main>
+  );
+}
+
+// Aba "Agendadas": os próximos disparos (pendentes, "no ar") + os que NÃO dispararam
+// (cancelados, com o MOTIVO — §12-A: nada em silêncio). Um agendamento ainda não é uma
+// execução (não há passo a passo), então a linha é só informativa + Cancelar.
+function Agendadas({
+  pendentes,
+  cancelados,
+  souOperador,
+  onCancelar,
+}: {
+  pendentes: AgendamentoDoTime[];
+  cancelados: AgendamentoDoTime[];
+  souOperador: boolean;
+  onCancelar: (id: string) => void;
+}) {
+  if (pendentes.length === 0 && cancelados.length === 0) {
+    return (
+      <EstadoVazio icone={CalendarClock} titulo="Nenhum disparo agendado.">
+        Quando um agente agendar uma automação (instrumento “Agendar automação”), o
+        próximo disparo aparece aqui.
+      </EstadoVazio>
+    );
+  }
+  const cancDesc = [...cancelados].sort(
+    (a, b) =>
+      new Date(b.quando_executar).getTime() - new Date(a.quando_executar).getTime(),
+  );
+  return (
+    <div className="space-y-6">
+      {pendentes.length > 0 && (
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          {pendentes.map((a, i) => (
+            <div
+              key={a.id}
+              className={`flex items-center gap-3 px-4 py-3 ${
+                i > 0 ? "border-t border-border" : ""
+              }`}
+            >
+              <Badge variant="info" className="gap-1">
+                <Clock className="size-3" /> agendada
+              </Badge>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-foreground">
+                  {a.automacao_nome}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  dispara {FMT_BRT.format(new Date(a.quando_executar))}
+                </span>
+              </span>
+              {souOperador && (
+                <Button size="sm" variant="ghost" onClick={() => onCancelar(a.id)}>
+                  <X className="size-4" /> Cancelar
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {cancDesc.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            Não dispararam (últimos 7 dias)
+          </p>
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            {cancDesc.map((a, i) => (
+              <div
+                key={a.id}
+                className={`flex items-start gap-3 px-4 py-3 ${
+                  i > 0 ? "border-t border-border" : ""
+                }`}
+              >
+                <Badge variant="warning">cancelada</Badge>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-foreground">
+                    {a.automacao_nome}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    era para {FMT_BRT.format(new Date(a.quando_executar))}
+                  </span>
+                  {a.motivo && (
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      {a.motivo}
+                    </span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
