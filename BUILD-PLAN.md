@@ -1712,6 +1712,20 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
+## FASE FUTURA — Unificação do Runtime (remodelagem simplificadora do motor)  📋 ESTUDO APROVADO, NÃO INICIAR sem o sinal do maestro (2026-07-21)
+
+**Documento-fonte:** [`docs/REMODELAGEM-MOTOR.md`](docs/REMODELAGEM-MOTOR.md) (estudo sincero completo). Aqui só o resumo.
+
+**Gatilho:** um time de atendimento por Telegram que faz lançamento no Bubble.io "fez tudo certo" mas **não lançou**, e o maestro **não teve como inspecionar** — um agente conversacional **não gera execução**. Ao investigar, o maestro pediu um estudo profundo e sincero para **simplificar o motor** ("tá uma zona, um monte de amarração sem fim… a intenção era instruir agentes e direcionar os passos A/B; virou burocracia infernal").
+
+**Diagnóstico (a doença):** existem **DOIS motores** que fazem a mesma coisa de formas incompatíveis — **orquestração** (`disparo`→`cadeia`→`agente`, cria `Execucao`+`PassoExecucao`, rastro rico) e **conversa** (`mensageria/servico._rodar_turno` roda `executar_agente` **direto**, sem execução, e **descarta** `erros_instrumentos`). O **portão** é a **solda** entre os dois (por isso "coloca nó no meio" e vive rachando: 2 turnos com reset, instrução escondida `_instrucao_de_fluxo`, retomada partida tela×canal). A **cascata de config de 5 camadas** e as **5 "histórias"** fragmentadas são subprodutos dessa divisão. **Causa-raiz:** o **congelamento do núcleo** (`MIGRACAO §6.1`) empurrou tudo para a borda → a mensageria virou um 2º motor inteiro na borda.
+
+**Tese/alvo:** **um motor só, uma timeline só.** Todo fluxo (botão/hora/webhook/mensagem) é UMA `Execucao` com UMA linha do tempo; "esperar um humano" (aprovação de portão **ou** resposta de chat) vira UM tipo de passo `espera_humano` que o motor sabe pausar e retomar. Config colapsa (5→2 presets + 3 dimensões, mata chaves mortas). Uma superfície de história só.
+
+**Caminho (estrangulador, sem dia-D):** **Fatia 1** ⭐ (maior valor/menor risco, NÃO toca o portão) — conversa nasce com `Execucao` sombra `modo=conversa` e grava passo pelo mesmo registrador do disparo, incluindo `erros_instrumentos`; **resolve JÁ a dor de inspecionar o agente lançador**. → Fatia 2 (medição/limites na timeline) → Fatia 3 (config por dimensão) → **Fatia 4 ⚠️** (portão vira passo `espera_humano`; **exige suspensão dirigida do congelamento** — precedente 2026-06-16) → Fatia 5 (conversa vira `modo=conversa` de 1ª classe; sweepers convergem; cuidado com "conversa eterna × preso") → Fatia 6 opcional (UI). **Não remover** (essencial/lei): bifurcação `seguir_para`, HITL antes do irreversível, heartbeat/sweeper/recuperação (CLAUDE.md §12-A), "apresentado vs. narrado".
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
