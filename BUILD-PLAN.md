@@ -1698,6 +1698,20 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
+## FASE — Portão de aprovação configurável por-nó + `portao.md` editável  ✅ NO AR (2026-07-20, deploys `cac1c5e`+`e1c88ff`, sem migração; 1 linha aditiva no núcleo autorizada pelo maestro)
+
+**Motivação:** trabalhando a automação **COF Post Instagram**, o maestro viu o agente do portão, ao APROVAR, **encaminhar ao próximo agente mas NÃO executar `agendar_automacao`**. Diagnóstico: o portão (flag `no.gate` num nó de agente + maquinaria da borda) injetava no agente uma instrução ESCONDIDA e fixa (`_instrucao_de_fluxo`, ramo gate) que dominava o turno pós-aprovação e o fazia só rotear; e entre os dois turnos (apresenta → retoma) o agente RENASCE (só texto atravessa). Havia ainda uma REDUNDÂNCIA: os parâmetros do portão viviam no "Tipo de fluxo" (config da automação), gerando a dúvida do maestro "o portão obedece qual?". Plano aprovado em 2 ondas (o maestro AUTORIZOU 1 linha aditiva no núcleo congelado para a abertura).
+
+**Onda 1 — config por-portão + fim da redundância (merge `cac1c5e`):** a cascata já era `GLOBAL < canal < perfil(Tipo de fluxo) < ajustes < no.config`, mas `no.config` só era honrado num consumidor (`servico._turno_de_portao`). Agora é honrado também no **sweeper**, na **retoma pela tela** e em **`aprovacao.vincular_pausa`** — via o helper único `aprovacao.no_pausado(sessao, execucao)` (fica em `aprovacao.py`, folha, sem ciclo de import). Decisão: **Tipo de fluxo = padrão; o portão sobrepõe** (o mais específico vence, sem ambiguidade). Chave morta curada: `portao_max_rodadas` passa a ser lida na retoma (o fixo `MAX_RODADAS_GATE=8` vira default); `max_passos`/`modelo_roteador` marcados não-lidos. UI: drawer ganhou **"Regras deste portão"** (reusa `CampoConfig` de `config-fluxo.tsx`; marca "herdado do fluxo" × "ajustado só aqui"); `configFluxo` threadado até o `Inspector`; `NoCadeia.config` novo.
+
+**Onda 2 — `portao.md` editável (merge `e1c88ff`):** um nó de portão pode ter `instrucoes: {abertura, fechamento}` — o roteiro do agente ao APRESENTAR o pedido e ao AGIR depois da resposta. `_instrucao_de_fluxo(saidas, gate, texto_portao)`: com texto, SUBSTITUI o preâmbulo comportamental; sem (None/vazio), cai no texto padrão (portões existentes não mudam). O **trilho mecânico** (`seguir_para` + lista de Caminhos) é SEMPRE anexado — o criador controla o COMPORTAMENTO, não a mecânica que faz o grafo andar. Injetado nos 3 pontos: **abertura** = 1 linha aditiva em `cadeia.py` (lê `no.instrucoes.abertura`); **fechamento tela** = `retoma._retomar_conversando_tela`; **fechamento canal** = `servico._rodar_turno` (param novo `texto_portao`). A IA criadora aprendeu (`criacao/prompt.py` + docstring de `montar_cadeia`). UI: 2 textareas (abertura/fechamento) no drawer + aviso quando a forma é "direto" (o fechamento não roda). `NoCadeia.instrucoes` novo.
+
+**Como conserta o bug:** no portão, campo **"Depois da resposta (fechamento)"**, escrever ex.: *"Ao aprovar, agende a próxima automação com o Agendar_Story e siga pela saída 'aprovado'; ao reprovar, volte com o motivo."*
+
+**Verificação:** suíte completa **701 testes** (8 novos: teto/sweeper/vincular por-nó; `_instrucao_de_fluxo` usa/fallback do md; injeção no prompt; fechamento chega pela tela e pelo canal) + `tsc`/`eslint`/`next build` verdes; `/saude` de produção confirma `e1c88ff`. **Retrocompatível** (sem `config`/`instrucoes` = idêntico a hoje). Núcleo quase intocado (só a 1 linha aditiva autorizada). **PENDÊNCIA:** teste ao vivo do maestro (COF Post Instagram).
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
