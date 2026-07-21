@@ -23,7 +23,7 @@ import medicao_instrumentos
 import precos
 import segredos_instrumento
 from chaves import resolver_chaves_por_time
-from mensageria import aprovacao, retoma, telegram, transcricao
+from mensageria import aprovacao, retoma, telegram, transcricao, visao
 from mensageria.config import (  # MSG_LIMITE: compat servico.X
     MSG_LIMITE,
     com_ajuste_do_no,
@@ -40,7 +40,7 @@ from modelos import (
 )
 from observabilidade.escritor import registrar_evento
 from orquestracao.agente import executar_agente
-from orquestracao.llm import usar_chaves
+from orquestracao.llm import MODELO_PADRAO, usar_chaves
 from orquestracao.modelos_ia import provedor_do_modelo_seguro
 from sessao import CriadorDeSessao
 
@@ -181,10 +181,11 @@ def registrar_entrada(
     elif msg.contato_nome and conversa.contato_nome != msg.contato_nome:
         conversa.contato_nome = msg.contato_nome
 
-    # Conteúdo do contato. Voz fica SEM texto (conteudo=None): é transcrita no
-    # turno (Fase H), em segundo plano. Outras mídias viram um aviso gentil.
+    # Conteúdo do contato. Voz e IMAGEM ficam SEM texto (conteudo=None): a voz é
+    # transcrita e a imagem é LIDA por visão no turno, em segundo plano. Outras mídias
+    # (documento não-imagem, sticker, vídeo, localização) viram um aviso gentil.
     conteudo = msg.texto
-    if conteudo is None and (msg.midia or {}).get("tipo") != "voz":
+    if conteudo is None and (msg.midia or {}).get("tipo") not in ("voz", "imagem"):
         conteudo = "[conteúdo não textual — ainda não consigo ler]"
     sessao.add(
         MensagemConversa(
@@ -377,6 +378,71 @@ def _transcrever_pendentes(
     return usos
 
 
+def _descrever_imagens_pendentes(
+    sessao: Session,
+    conversa: Conversa,
+    token: str,
+    chaves: dict,
+    origens: dict,
+    modelo: str,
+) -> list:
+    """Lê por VISÃO as imagens ainda sem texto da conversa, para o agente recebê-las
+    como descrição (transcreve texto/números legíveis). Espelha `_transcrever_pendentes`
+    (áudio): sem chave/modelo ou em falha, deixa um aviso gentil no lugar — nunca trava o
+    atendimento. Devolve a LISTA de entradas de uso (categoria 'visao'; custo por
+    descrição) das leituras que de fato rodaram, para a contabilização."""
+    pendentes = sessao.scalars(
+        select(MensagemConversa)
+        .where(
+            MensagemConversa.conversa_id == conversa.id,
+            MensagemConversa.papel == "contato",
+            MensagemConversa.conteudo.is_(None),
+        )
+        .order_by(MensagemConversa.criado_em.desc())
+        .limit(5)
+    ).all()
+    mexeu = False
+    usos: list = []
+    for m in pendentes:
+        midia = m.midia or {}
+        if midia.get("tipo") != "imagem":
+            continue
+        texto = None
+        file_id = midia.get("file_id")
+        if token and file_id:
+            try:
+                dados = telegram.baixar_arquivo(token, file_id)
+                with usar_chaves(chaves):
+                    texto, _uso = visao.descrever(dados, modelo)
+            except Exception:
+                texto = None
+        corpo = (
+            f"[imagem recebida]\n{texto}"
+            if texto
+            else "[imagem recebida — não consegui ler agora]"
+        )
+        legenda = (midia.get("legenda") or "").strip()
+        if legenda:  # o texto que o cliente mandou JUNTO da foto — nunca se perde
+            corpo += f"\n(Legenda do cliente: {legenda})"
+        m.conteudo = corpo
+        m.midia = {**midia, "descrito": bool(texto)}
+        mexeu = True
+        if texto:  # só contabiliza a imagem que foi de fato lida
+            provedor = provedor_do_modelo_seguro(modelo or "")
+            usos.append(
+                {
+                    "modelo": modelo,
+                    "custo_usd": round(precos.custo_por_descricao(modelo), 6),
+                    "origem": (origens.get(provedor) if provedor else None)
+                    or "desconhecida",
+                    "categoria": "visao",
+                }
+            )
+    if mexeu:
+        sessao.commit()
+    return usos
+
+
 def _execucao_pausada(sessao: Session, conversa: Conversa) -> Execucao | None:
     """A execução que esta conversa conduz, se estiver pausada aguardando humano
     (aprovação por canal). None caso contrário (segue o modo conversacional)."""
@@ -525,6 +591,11 @@ def _rodar_turno(
     uso_transcricao = _transcrever_pendentes(
         sessao, conversa, token, chaves.get("openai"), origens.get("openai")
     )
+    # Visão: uma imagem que o contato mandou vira DESCRIÇÃO (texto) que o agente lê —
+    # mesma ideia da transcrição de áudio. Usa o modelo do próprio agente (multimodal).
+    uso_visao = _descrever_imagens_pendentes(
+        sessao, conversa, token, chaves, origens, agente.modelo_ia or MODELO_PADRAO
+    )
     with usar_chaves(chaves):
         cinto = _cinto_sem_canais(sessao, agente.id)
     entrada = _montar_entrada(sessao, conversa, gate=gate)
@@ -582,6 +653,7 @@ def _rodar_turno(
     uso_turno = (
         _carimbar_uso_agente(resultado.get("uso"), origens)
         + uso_transcricao
+        + uso_visao
         + medicao_instrumentos.uso_de_instrumentos_pagos(
             sessao, agente.id, resultado.get("instrumentos_acionados"), origens=origens
         )

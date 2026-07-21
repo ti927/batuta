@@ -85,6 +85,40 @@ def test_extrair_update_voz_marca_midia():
     assert m.midia == {"tipo": "voz", "file_id": "abc", "duracao_s": 0}
 
 
+def test_extrair_update_foto_pega_o_maior_tamanho():
+    m = telegram.extrair_update(
+        {"message": {"chat": {"id": 9}, "photo": [
+            {"file_id": "pequeno"}, {"file_id": "grande"},
+        ]}}
+    )
+    assert m and m.texto is None
+    assert m.midia == {"tipo": "imagem", "file_id": "grande"}  # o último = o maior
+
+
+def test_extrair_update_imagem_como_documento():
+    m = telegram.extrair_update(
+        {"message": {"chat": {"id": 9},
+                     "document": {"file_id": "D", "mime_type": "image/png"}}}
+    )
+    assert m and m.midia == {"tipo": "imagem", "file_id": "D"}
+
+
+def test_extrair_update_foto_com_legenda_guarda_o_caption():
+    m = telegram.extrair_update(
+        {"message": {"chat": {"id": 9}, "photo": [{"file_id": "G"}],
+                     "caption": "segue o comprovante"}}
+    )
+    assert m.midia == {"tipo": "imagem", "file_id": "G", "legenda": "segue o comprovante"}
+
+
+def test_extrair_update_documento_nao_imagem_vira_outro():
+    m = telegram.extrair_update(
+        {"message": {"chat": {"id": 9},
+                     "document": {"file_id": "D", "mime_type": "application/pdf"}}}
+    )
+    assert m and m.midia == {"tipo": "outro"}
+
+
 def test_extrair_update_ignora_nao_mensagem():
     assert telegram.extrair_update({"my_chat_member": {}}) is None
     assert telegram.extrair_update({}) is None
@@ -396,6 +430,127 @@ def test_processar_turno_contabiliza_transcricao(sessao, dados, monkeypatch):
     assert len(transc) == 1
     assert transc[0]["origem"] == "consultoria"
     assert transc[0]["custo_usd"] == round(servico.precos.custo_whisper(120), 6)
+
+
+# ───────────────────────── imagem → texto (visão) ────────────────────────────
+
+
+def test_imagem_fica_sem_texto_ate_o_turno(sessao, dados):
+    inst = _bot(sessao, dados)
+    _agente_com(sessao, dados, inst)
+    img = telegram.MensagemEntrante("555", "João", None, {"tipo": "imagem", "file_id": "F"})
+    conversa, _ = servico.registrar_entrada(sessao, inst, img)
+    m = sessao.scalars(
+        select(MensagemConversa).where(MensagemConversa.conversa_id == conversa.id)
+    ).first()
+    # imagem entra SEM texto (a visão preenche no turno) — não vira o aviso genérico.
+    assert m.conteudo is None and (m.midia or {}).get("tipo") == "imagem"
+
+
+def test_imagem_descrita_entra_no_turno(sessao, dados, monkeypatch):
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "T"})
+    _agente_com(sessao, dados, inst)
+    img = telegram.MensagemEntrante("555", "João", None, {"tipo": "imagem", "file_id": "F"})
+    conversa, _ = servico.registrar_entrada(sessao, inst, img)
+
+    entradas = []
+    monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
+    monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
+    monkeypatch.setattr(
+        servico, "resolver_chaves_por_time", lambda s, t: ({"anthropic": "K"}, {})
+    )
+    monkeypatch.setattr("mensageria.telegram.baixar_arquivo", lambda token, fid: b"\xff\xd8\xffimg")
+    monkeypatch.setattr(
+        "mensageria.visao.descrever", lambda dados, modelo, **k: ("Nota fiscal de R$ 250,00", {})
+    )
+    monkeypatch.setattr(
+        servico, "executar_agente",
+        lambda ag, cinto, entrada, **k: entradas.append(entrada) or {"saida": "Recebi a nota."},
+    )
+    monkeypatch.setattr(servico.telegram, "enviar", lambda *a: {"ok": True})
+
+    servico.processar_turno(conversa.id)
+
+    # a imagem virou descrição e entrou no enquadramento do turno
+    assert entradas and "Nota fiscal de R$ 250,00" in entradas[0]
+    m = sessao.scalars(
+        select(MensagemConversa).where(
+            MensagemConversa.conversa_id == conversa.id,
+            MensagemConversa.papel == "contato",
+        )
+    ).first()
+    assert "Nota fiscal de R$ 250,00" in (m.conteudo or "")
+    assert (m.midia or {}).get("descrito") is True
+
+
+def test_imagem_com_legenda_preserva_o_texto_do_cliente(sessao, dados, monkeypatch):
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "T"})
+    _agente_com(sessao, dados, inst)
+    img = telegram.MensagemEntrante(
+        "555", "João", None,
+        {"tipo": "imagem", "file_id": "F", "legenda": "esse foi o pix de hoje"},
+    )
+    conversa, _ = servico.registrar_entrada(sessao, inst, img)
+
+    entradas = []
+    monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
+    monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
+    monkeypatch.setattr(
+        servico, "resolver_chaves_por_time", lambda s, t: ({"anthropic": "K"}, {})
+    )
+    monkeypatch.setattr("mensageria.telegram.baixar_arquivo", lambda token, fid: b"\xff\xd8\xffimg")
+    monkeypatch.setattr(
+        "mensageria.visao.descrever", lambda dados, modelo, **k: ("comprovante de R$ 90", {})
+    )
+    monkeypatch.setattr(
+        servico, "executar_agente",
+        lambda ag, cinto, entrada, **k: entradas.append(entrada) or {"saida": "ok"},
+    )
+    monkeypatch.setattr(servico.telegram, "enviar", lambda *a: {"ok": True})
+
+    servico.processar_turno(conversa.id)
+
+    # a descrição E a legenda do cliente entram no turno (a legenda nunca se perde)
+    assert entradas and "comprovante de R$ 90" in entradas[0]
+    assert "esse foi o pix de hoje" in entradas[0]
+
+
+def test_processar_turno_contabiliza_visao(sessao, dados, monkeypatch):
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "T"})
+    _agente_com(sessao, dados, inst)
+    img = telegram.MensagemEntrante("555", "João", None, {"tipo": "imagem", "file_id": "F"})
+    conversa, _ = servico.registrar_entrada(sessao, inst, img)
+
+    monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
+    monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
+    monkeypatch.setattr(
+        servico, "resolver_chaves_por_time",
+        lambda s, t: ({"anthropic": "K"}, {"anthropic": "consultoria"}),
+    )
+    monkeypatch.setattr(
+        "mensageria.telegram.baixar_arquivo", lambda token, fid: b"\x89PNG\r\n\x1a\nimg"
+    )
+    monkeypatch.setattr("mensageria.visao.descrever", lambda dados, modelo, **k: ("um recibo", {}))
+    monkeypatch.setattr(servico, "executar_agente", lambda *a, **k: {"saida": "ok", "uso": []})
+    monkeypatch.setattr(servico.telegram, "enviar", lambda *a: {"ok": True})
+
+    servico.processar_turno(conversa.id)
+
+    do_agente = sessao.scalars(
+        select(MensagemConversa).where(
+            MensagemConversa.conversa_id == conversa.id,
+            MensagemConversa.papel == "agente",
+        )
+    ).first()
+    # uma entrada de leitura por visão (categoria 'visao'), custo por descrição pré-calc
+    # e origem carimbada.
+    vis = [e for e in (do_agente.uso or []) if e.get("categoria") == "visao"]
+    assert len(vis) == 1
+    assert vis[0]["origem"] == "consultoria"
+    assert vis[0]["custo_usd"] == round(servico.precos.custo_por_descricao(vis[0]["modelo"]), 6)
 
 
 # ───────────────────── inatividade: cutucar e encerrar (Fase J) ──────────────

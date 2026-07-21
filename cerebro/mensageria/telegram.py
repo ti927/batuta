@@ -69,7 +69,24 @@ def extrair_update(corpo: dict) -> MensagemEntrante | None:
                 "duracao_s": voz.get("duration") or 0,
             },
         )
-    if any(k in msg for k in ("photo", "document", "sticker", "video", "location")):
+    # Imagem: FOTO (comprimida — `photo` é uma lista de tamanhos, o ÚLTIMO é o maior)
+    # ou imagem enviada como DOCUMENTO (sem compressão, `document` com mime image/*).
+    # Guarda o `file_id` para a leitura por visão (a IA descreve a imagem no turno) e a
+    # LEGENDA (`caption`), se houver — o texto que o cliente mandou junto da foto.
+    foto = msg.get("photo")
+    doc = msg.get("document") or {}
+    file_id = None
+    if isinstance(foto, list) and foto:
+        file_id = (foto[-1] or {}).get("file_id")
+    elif str(doc.get("mime_type") or "").startswith("image/"):
+        file_id = doc.get("file_id")
+    if file_id:
+        midia = {"tipo": "imagem", "file_id": file_id}
+        legenda = msg.get("caption")
+        if legenda:
+            midia["legenda"] = legenda
+        return MensagemEntrante(str(chat_id), nome, None, midia)
+    if any(k in msg for k in ("document", "sticker", "video", "location")):
         return MensagemEntrante(str(chat_id), nome, None, {"tipo": "outro"})
     return None
 
