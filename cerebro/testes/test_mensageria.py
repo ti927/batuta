@@ -517,6 +517,41 @@ def test_imagem_com_legenda_preserva_o_texto_do_cliente(sessao, dados, monkeypat
     assert "esse foi o pix de hoje" in entradas[0]
 
 
+def test_imagem_recebida_disponivel_para_arquivar_no_turno(sessao, dados, monkeypatch):
+    """A imagem baixada fica disponível no contexto do turno (`midia_recebida`), para o
+    instrumento `arquivar_imagem` GUARDAR sob demanda — o agente decide pelo markdown."""
+    import midia_recebida
+
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "T"})
+    _agente_com(sessao, dados, inst)
+    img = telegram.MensagemEntrante("555", "João", None, {"tipo": "imagem", "file_id": "F"})
+    conversa, _ = servico.registrar_entrada(sessao, inst, img)
+
+    visto = {}
+    monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
+    monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
+    monkeypatch.setattr(
+        servico, "resolver_chaves_por_time", lambda s, t: ({"anthropic": "K"}, {})
+    )
+    monkeypatch.setattr("mensageria.telegram.baixar_arquivo", lambda token, fid: b"\xff\xd8\xffimg")
+    monkeypatch.setattr("mensageria.visao.descrever", lambda dados, modelo, **k: ("desc", {}))
+
+    def fake_agente(ag, cinto, entrada, **k):
+        visto["imagens"] = list(midia_recebida.imagens_recebidas_atuais())
+        return {"saida": "ok"}
+
+    monkeypatch.setattr(servico, "executar_agente", fake_agente)
+    monkeypatch.setattr(servico.telegram, "enviar", lambda *a: {"ok": True})
+
+    servico.processar_turno(conversa.id)
+
+    # durante o turno do agente, a imagem recebida esteve disponível para guardar
+    assert visto.get("imagens") and visto["imagens"][0]["mime"] == "image/jpeg"
+    # e fora do turno o contexto volta a ficar vazio (não vaza)
+    assert midia_recebida.imagens_recebidas_atuais() == []
+
+
 def test_processar_turno_contabiliza_visao(sessao, dados, monkeypatch):
     inst = _bot(sessao, dados)
     si.salvar_segredos(sessao, inst.id, {"token_bot": "T"})

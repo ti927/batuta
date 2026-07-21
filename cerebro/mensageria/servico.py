@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import medicao_instrumentos
+import midia_recebida
 import precos
 import segredos_instrumento
 from chaves import resolver_chaves_por_time
@@ -385,12 +386,14 @@ def _descrever_imagens_pendentes(
     chaves: dict,
     origens: dict,
     modelo: str,
-) -> list:
+) -> tuple[list, list]:
     """Lê por VISÃO as imagens ainda sem texto da conversa, para o agente recebê-las
     como descrição (transcreve texto/números legíveis). Espelha `_transcrever_pendentes`
     (áudio): sem chave/modelo ou em falha, deixa um aviso gentil no lugar — nunca trava o
-    atendimento. Devolve a LISTA de entradas de uso (categoria 'visao'; custo por
-    descrição) das leituras que de fato rodaram, para a contabilização."""
+    atendimento. Devolve `(usos, imagens)`: `usos` = entradas de uso (categoria 'visao';
+    custo por descrição) das leituras que rodaram; `imagens` = os bytes baixados neste
+    turno (`{bytes, mime, legenda}`), para o instrumento `arquivar_imagem` GUARDAR sob
+    demanda (o agente decide pelo markdown). Baixa uma vez e reusa para as duas coisas."""
     pendentes = sessao.scalars(
         select(MensagemConversa)
         .where(
@@ -403,15 +406,25 @@ def _descrever_imagens_pendentes(
     ).all()
     mexeu = False
     usos: list = []
+    imagens: list = []  # {bytes, mime, legenda} — p/ o instrumento arquivar_imagem
     for m in pendentes:
         midia = m.midia or {}
         if midia.get("tipo") != "imagem":
             continue
-        texto = None
-        file_id = midia.get("file_id")
-        if token and file_id:
+        legenda = (midia.get("legenda") or "").strip()
+        # Baixa os bytes SEPARADO da leitura: assim a imagem fica disponível para
+        # GUARDAR mesmo se a visão falhar (o agente ainda pode arquivá-la).
+        dados = None
+        if token and midia.get("file_id"):
             try:
-                dados = telegram.baixar_arquivo(token, file_id)
+                dados = telegram.baixar_arquivo(token, midia["file_id"])
+            except Exception:
+                dados = None
+        texto = None
+        if dados is not None:
+            mime = visao._mime(dados) or "application/octet-stream"
+            imagens.append({"bytes": dados, "mime": mime, "legenda": legenda})
+            try:
                 with usar_chaves(chaves):
                     texto, _uso = visao.descrever(dados, modelo)
             except Exception:
@@ -421,7 +434,6 @@ def _descrever_imagens_pendentes(
             if texto
             else "[imagem recebida — não consegui ler agora]"
         )
-        legenda = (midia.get("legenda") or "").strip()
         if legenda:  # o texto que o cliente mandou JUNTO da foto — nunca se perde
             corpo += f"\n(Legenda do cliente: {legenda})"
         m.conteudo = corpo
@@ -440,7 +452,7 @@ def _descrever_imagens_pendentes(
             )
     if mexeu:
         sessao.commit()
-    return usos
+    return usos, imagens
 
 
 def _execucao_pausada(sessao: Session, conversa: Conversa) -> Execucao | None:
@@ -593,7 +605,9 @@ def _rodar_turno(
     )
     # Visão: uma imagem que o contato mandou vira DESCRIÇÃO (texto) que o agente lê —
     # mesma ideia da transcrição de áudio. Usa o modelo do próprio agente (multimodal).
-    uso_visao = _descrever_imagens_pendentes(
+    # Os bytes baixados ficam disponíveis para o instrumento `arquivar_imagem` GUARDAR
+    # sob demanda (o agente decide pelo markdown se guarda ou descarta).
+    uso_visao, imagens_recebidas = _descrever_imagens_pendentes(
         sessao, conversa, token, chaves, origens, agente.modelo_ia or MODELO_PADRAO
     )
     with usar_chaves(chaves):
@@ -601,7 +615,7 @@ def _rodar_turno(
     entrada = _montar_entrada(sessao, conversa, gate=gate)
 
     try:
-        with usar_chaves(chaves):
+        with usar_chaves(chaves), midia_recebida.usar_imagens_recebidas(imagens_recebidas):
             resultado = executar_agente(
                 agente, cinto, entrada, saidas=saidas, gate=gate,
                 texto_portao=texto_portao,

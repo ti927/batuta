@@ -123,6 +123,13 @@ Como saber se um instrumento escreve ou só lê:
 - publicar_wordpress, publicar_instagram, instagram_responder_comentario:
   escrevem/publicam conteúdo para o público → COM portão.
 - instagram_insights, instagram_ler_comentarios: leitura → SEM portão.
+- arquivar_imagem: no ATENDIMENTO, quando o contato ENVIA uma foto pelo canal (ex.:
+  Telegram), o agente já LÊ a imagem automaticamente (ela vira descrição no histórico).
+  Este instrumento GUARDA a foto e devolve a URL pública — use SÓ quando precisar
+  PRESERVAR a imagem (ex.: registrar um comprovante para lançar noutro sistema). Se a
+  foto é descartável (só interessa o texto), o agente NÃO chama. Grava no nosso storage
+  → SEM portão. Instrua no markdown do agente QUANDO guardar e o que fazer com a URL
+  (ex.: repassá-la a um endpoint via chamar_api_rest).
 DESCOBRIR ≠ LER. Para ACHAR páginas use uma busca: `busca_web` (Tavily, palavra-chave) ou
 `busca_exa` (semântica, traz ângulos mais diversos — boa contra "sempre a mesma pauta").
 Para LER o conteúdo completo de uma URL que a busca achou, dê ao agente um instrumento de
