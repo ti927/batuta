@@ -1726,6 +1726,18 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
+## FASE FUTURA — Economia de tokens da IA criadora (resumo rolante `projeto.md` + iceberg + cache)  📋 PLANO APROVADO, NÃO INICIAR sem o sinal do maestro (2026-07-21)
+
+**Documento-fonte:** [`docs/ECONOMIA-TOKENS-IA-CRIADORA.md`](docs/ECONOMIA-TOKENS-IA-CRIADORA.md). Aqui só o resumo.
+
+**Gatilho:** o maestro notou que acionar a IA criadora de um time **antigo** gasta MUITOS tokens. Confirmado no código: a cada turno o `criacao/loop.py` **remonta e reenvia a conversa inteira** (`conversa.mensagens`, JSONB append-only nunca podado) + o prompt de sistema cheio (catálogo + fotografia do time + memória). Num time de ~100 turnos: ~75k tokens de histórico + ~15–40k do prompt fixo, TODO turno.
+
+**Decisões do maestro:** (1) o resumo (`projeto.md`, "na linguagem da IA") é **visível e editável** — documentação viva; (2) o histórico completo é um **"iceberg"** guardado, com **ferramenta de busca sob demanda**.
+
+**Plano (5 partes, borda de criação — núcleo intocado):** **A ⭐** resumo rolante + janela dos últimos N turnos (2 colunas aditivas `ConversaCriacao.resumo`/`resumo_ate`; dobra os turnos antigos via Haiku; envia `mensagens[resumo_ate:]` mantendo `lc` p/ preservar o padrão de tool-use). **B** painel "Sobre este time" (GET/PUT do resumo). **C** ferramenta `buscar_no_historico(consulta)` no histórico completo. **D** cache de prompt Anthropic no prefixo estável (ganho grande na mesma sessão, exige spike da fiação langchain; não resolve o "abrir time frio" — isso é a Parte A). **E** fotografia enxuta (só estrutura) + `ver_agente`/`ver_automacao` sob demanda (ganho em times grandes). Migração aditiva, retrocompatível (`resumo_ate=0` = comportamento de hoje).
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
