@@ -190,11 +190,30 @@ def _ferramenta_seguir_para(saidas: list[dict], escolha: dict) -> StructuredTool
     )
 
 
-def _instrucao_de_fluxo(saidas: list[dict], gate: bool) -> str:
-    """Apêndice mecânico (não comportamental) que diz ao agente quais saídas o nó
-    tem e como declarar a escolha. É a topologia que antes ficava ESCONDIDA dele."""
+def _instrucao_de_fluxo(
+    saidas: list[dict], gate: bool, texto_portao: str | None = None
+) -> str:
+    """Apêndice do nó: quais saídas existem e como declarar a escolha. É a topologia
+    que antes ficava ESCONDIDA do agente.
+
+    O TRILHO MECÂNICO — declarar um caminho com `seguir_para` — é SEMPRE anexado; sem
+    ele o fluxo não anda. Num portão (`gate`), a parte COMPORTAMENTAL (como conduzir a
+    aprovação) vem do `texto_portao` editável (as instruções de portão do nó, o
+    "portao.md") quando houver; senão, do texto padrão de hoje (fallback → portões
+    existentes não mudam). Assim o criador controla o que o agente FAZ/diz na abertura e
+    no fechamento do portão, sem poder remover o trilho que faz o grafo andar."""
     opcoes = _opcoes_das_saidas(saidas)
     if gate:
+        if (texto_portao or "").strip():
+            return (
+                "## Caminhos do fluxo (este passo aguarda uma pessoa)\n"
+                f"{texto_portao.strip()}\n\n"
+                "IMPORTANTE (mecânica do fluxo): para o fluxo AVANÇAR você PRECISA "
+                "declarar o caminho chamando a ferramenta `seguir_para` com um dos "
+                "rótulos abaixo. Enquanto não chamar `seguir_para`, o fluxo continua "
+                "aguardando a pessoa (use isso quando ainda precisar falar com ela).\n"
+                f"Caminhos:\n{opcoes}"
+            )
         return (
             "## Caminhos do fluxo (este passo aguarda uma pessoa)\n"
             "Quando você tiver a decisão da pessoa, chame a ferramenta `seguir_para` "
@@ -349,6 +368,7 @@ def executar_agente(
     *,
     saidas: list[dict] | None = None,
     gate: bool = False,
+    texto_portao: str | None = None,
 ) -> dict:
     """Roda um agente sozinho sobre uma entrada. Devolve a saída em texto e a
     lista de instrumentos que ele acionou (para inspeção).
@@ -386,7 +406,7 @@ def executar_agente(
         instrucoes += _instrucao_de_memoria(agente)
     if len(saidas) >= 2:
         ferramentas.append(_ferramenta_seguir_para(saidas, escolha))
-        instrucoes += "\n\n" + _instrucao_de_fluxo(saidas, gate)
+        instrucoes += "\n\n" + _instrucao_de_fluxo(saidas, gate, texto_portao)
     app = create_react_agent(modelo, ferramentas, prompt=instrucoes)
     # Feedback ao vivo: o turno de LLM pode demorar; avisa que o agente está pensando.
     atividade.registrar(f"{agente.nome}: pensando…")

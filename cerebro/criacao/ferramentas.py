@@ -495,7 +495,12 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         rótulo). Não precisa informar posições, nem criar os nós "gatilho"/"fim" — o
         sistema completa. PORTÃO DE APROVAÇÃO: ponha "gate": true NO NÓ do agente que
         vem ANTES de uma ação irreversível — o fluxo pausa depois dele e espera um
-        humano aprovar antes de seguir para quem publica/envia (a pausa fica no NÓ).
+        humano aprovar antes de seguir para quem publica/envia (a pausa fica no NÓ). Um
+        nó de portão pode trazer, opcionalmente, "instrucoes": {"abertura": "...",
+        "fechamento": "..."} — o roteiro do agente ao apresentar o pedido e ao AGIR
+        após a resposta (ex.: "ao aprovar, agende com agendar_automacao E encaminhe"). E
+        "config": {...} para ajustar SÓ neste portão regras do Tipo de fluxo (ex.:
+        {"timeout_min": 30}). Ambos são opcionais; sem eles, valem os padrões.
         Se o time tem MAIS DE UMA automação, informe `automacao_id` (pegue no retrato,
         em `automacoes`); com uma só, pode omitir. NÃO adivinhe qual — se estiver na
         dúvida, pergunte ao consultor."""

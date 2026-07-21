@@ -616,6 +616,58 @@ def test_vincular_pausa_respeita_no_config_timeout(sessao, dados, monkeypatch):
     assert 4 <= delta_min <= 6  # ~5 min do nó, não os 60 do default do fluxo
 
 
+# ── portao.md: instruções de FECHAMENTO chegam ao agente (Onda 2) ────────────
+
+def test_tela_fechamento_injeta_portao_md(sessao, dados, monkeypatch):
+    """Fechamento pela TELA: as instruções de FECHAMENTO do nó chegam ao agente
+    (`texto_portao`). É o que faz o agente agendar E encaminhar ao aprovar."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    canal = _canal(sessao, dados)
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal)
+    auto.cadeia["nos"][0]["instrucoes"] = {"fechamento": "AO APROVAR, AGENDE E SIGA"}
+    flag_modified(auto, "cadeia")
+    sessao.flush()
+    execucao = _exec_pausada(sessao, auto, ag)
+
+    capturado: dict = {}
+
+    def fake(agente, cinto, entrada, **kwargs):
+        capturado.update(kwargs)
+        return {
+            "saida": "ok", "instrumentos_acionados": [], "uso": [],
+            "mensagens_enviadas": {}, "ramo_escolhido": "aprovado",
+        }
+
+    monkeypatch.setattr(retoma, "executar_agente", fake)
+    retoma.retomar_execucao(sessao, execucao, "ok", chaves={}, origens={})
+    assert capturado.get("texto_portao") == "AO APROVAR, AGENDE E SIGA"
+
+
+def test_canal_fechamento_injeta_portao_md(sessao, dados, monkeypatch):
+    """Fechamento por CANAL: idem, pela borda (`_turno_de_portao` → `_rodar_turno`)."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    enviados: list = []
+    capturado: dict = {}
+
+    def fake(agente, cinto, entrada, **k):
+        capturado.update(k)
+        return {
+            "saida": "", "instrumentos_acionados": [], "uso": [],
+            "mensagens_enviadas": {}, "ramo_escolhido": "aprovado",
+        }
+
+    canal, ag, auto, execucao = _setup_canal(sessao, dados, monkeypatch, enviados)
+    auto.cadeia["nos"][0]["instrucoes"] = {"fechamento": "AO APROVAR, AGENDE PELO CANAL"}
+    flag_modified(auto, "cadeia")
+    sessao.flush()
+    monkeypatch.setattr(servico, "executar_agente", fake)
+    _responder(sessao, canal, "pode aprovar")
+    assert capturado.get("texto_portao") == "AO APROVAR, AGENDE PELO CANAL"
+
+
 # ─────── Aviso de expectativa do portão (derivado do Tipo de fluxo) ───────
 # O agente manda o pedido; a borda (`vincular_pausa`) acrescenta UM aviso do que acontece
 # se o humano não responder — prazo + destino da aprovação — montado dos parâmetros reais.

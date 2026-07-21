@@ -402,6 +402,10 @@ export type NoCadeia = {
   // Ajustes de config DESTE portão (sobrepõem o Tipo de fluxo — cascata do backend
   // `no.config`). Só as chaves ajustadas ficam aqui; o resto herda do fluxo.
   config?: Record<string, unknown>;
+  // Roteiro editável do portão (o "portao.md"): o que o agente faz na abertura (como
+  // apresentar o pedido) e no fechamento (o que fazer após a resposta). Ambos opcionais
+  // — sem eles, vale o comportamento padrão.
+  instrucoes?: { abertura?: string; fechamento?: string };
   gatilho?: TipoGatilho; // tipo 'gatilho'
   x?: number;
   y?: number;

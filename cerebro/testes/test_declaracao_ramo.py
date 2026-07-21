@@ -80,3 +80,47 @@ def test_rotulo_fora_do_enum_e_rejeitado(monkeypatch):
     seguir.func(rotulo="ok")  # rótulo válido: passa
     with pytest.raises(ValidationError):
         seguir.func(rotulo="inexistente")  # fora do enum: rejeitado
+
+
+# ── portao.md: instruções editáveis do portão (Onda 2) ──────────────────────
+
+def test_instrucao_de_fluxo_usa_portao_md():
+    """Com portao.md, o preâmbulo COMPORTAMENTAL vira o texto do nó; o TRILHO mecânico
+    (`seguir_para` + a lista de Caminhos) continua SEMPRE — o criador não o remove."""
+    txt = agente_mod._instrucao_de_fluxo(
+        _saidas_duas(), True, "AO APROVAR, AGENDE E ENCAMINHE"
+    )
+    assert "AO APROVAR, AGENDE E ENCAMINHE" in txt
+    assert "seguir_para" in txt and "Caminhos:" in txt
+    assert "Quando você tiver a decisão da pessoa" not in txt  # padrão substituído
+
+
+def test_instrucao_de_fluxo_fallback_sem_md():
+    """Sem portao.md (None ou só espaços), vale o texto padrão — portões existentes
+    não mudam."""
+    padrao = agente_mod._instrucao_de_fluxo(_saidas_duas(), True, None)
+    assert "Quando você tiver a decisão da pessoa" in padrao
+    assert agente_mod._instrucao_de_fluxo(_saidas_duas(), True, "   ") == padrao
+
+
+def test_executar_agente_injeta_portao_md_no_prompt(monkeypatch):
+    """O `texto_portao` chega ao PROMPT do agente, com o trilho `seguir_para` intacto."""
+    prompts: list = []
+
+    def fake_create(modelo, ferramentas, prompt):
+        prompts.append(prompt)
+
+        class App:
+            def invoke(self, _):
+                return {"messages": [AIMessage(content="feito")]}
+
+        return App()
+
+    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m: object())
+    monkeypatch.setattr(agente_mod, "create_react_agent", fake_create)
+    agente_mod.executar_agente(
+        _agente(), [], "entrada", saidas=_saidas_duas(), gate=True,
+        texto_portao="AGENDE E ENCAMINHE",
+    )
+    assert "AGENDE E ENCAMINHE" in prompts[0]
+    assert "seguir_para" in prompts[0]  # trilho mecânico preservado

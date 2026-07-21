@@ -515,6 +515,7 @@ def _rodar_turno(
     gate: bool,
     chaves: dict,
     origens: dict,
+    texto_portao: str | None = None,
 ):
     """Roda UM turno do agente e ENTREGA pela borda (canal filtrado do cinto), grava
     na thread com uso, conta turno/custo e rearma o relógio de inatividade. Reusado
@@ -530,7 +531,10 @@ def _rodar_turno(
 
     try:
         with usar_chaves(chaves):
-            resultado = executar_agente(agente, cinto, entrada, saidas=saidas, gate=gate)
+            resultado = executar_agente(
+                agente, cinto, entrada, saidas=saidas, gate=gate,
+                texto_portao=texto_portao,
+            )
     except Exception as e:  # falha de LLM/instrumento — não morre em silêncio
         sessao.add(
             MensagemConversa(
@@ -660,6 +664,7 @@ def _turno_de_portao(
     resultado = _rodar_turno(
         sessao, conversa, token, agente, conf,
         saidas=saidas, gate=True, chaves=chaves, origens=origens,
+        texto_portao=(no.get("instrucoes") or {}).get("fechamento"),
     )
     if resultado is None:
         return  # falha dura (já tratada: conversa "aberta") — a bola é nossa, retoma depois

@@ -249,9 +249,13 @@ def executar_cadeia(
                 )
             cinto = _carregar_cinto(sessao, agente.id)
             # O agente enxerga as saídas e DECLARA o ramo (em vez de o roteador
-            # adivinhar pela prosa). Passar gate dá a ele a instrução certa.
+            # adivinhar pela prosa). Passar gate dá a ele a instrução certa. Num portão,
+            # as instruções de ABERTURA do nó (o "portao.md") guiam como ele apresenta o
+            # pedido — aditivo, com fallback ao texto padrão (portões sem isso não mudam).
+            texto_portao = (no.get("instrucoes") or {}).get("abertura") if gate else None
             resultado = executar_agente(
-                agente, cinto, entrada_atual, saidas=saidas, gate=gate
+                agente, cinto, entrada_atual, saidas=saidas, gate=gate,
+                texto_portao=texto_portao,
             )
             saida_texto = resultado["saida"]
             instrumentos = resultado["instrumentos_acionados"]

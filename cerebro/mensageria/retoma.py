@@ -203,9 +203,15 @@ def _retomar_conversando_tela(
     ).strip()
 
     iniciado = datetime.now(timezone.utc)
+    # Instruções de FECHAMENTO do portão (o "portao.md"): o que o agente deve FAZER
+    # depois que a pessoa respondeu (ex.: agendar E encaminhar). Fallback ao texto padrão.
+    texto_portao = (no.get("instrucoes") or {}).get("fechamento")
     with usar_chaves(chaves):
         cinto = _carregar_cinto(sessao, agente.id)
-        resultado = executar_agente(agente, cinto, entrada_rerun, saidas=saidas, gate=True)
+        resultado = executar_agente(
+            agente, cinto, entrada_rerun, saidas=saidas, gate=True,
+            texto_portao=texto_portao,
+        )
     finalizado = datetime.now(timezone.utc)
 
     saida_texto = resultado["saida"]

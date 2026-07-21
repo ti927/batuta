@@ -175,6 +175,18 @@ real; para isso é o `gerar_video_fal`.
 
 A pausa fica no NÓ, não na saída.
 
+INSTRUÇÕES DO PORTÃO (opcional, poderoso): um nó com "gate": true pode trazer
+"instrucoes": {"abertura": "...", "fechamento": "..."} — um roteiro em texto para o
+agente naquele portão. "abertura" = COMO apresentar o pedido (o que mostrar, o que
+perguntar). "fechamento" = o que o agente deve FAZER depois que a pessoa respondeu,
+INCLUSIVE ações além de encaminhar. É AQUI que se resolve o caso "ao aprovar, também
+agende" — ex.: "ao aprovar, agende a próxima automação com agendar_automacao E siga
+pela saída 'aprovado'; ao reprovar, volte com o motivo". Sem "instrucoes", vale o
+comportamento padrão (ao aprovar, escolher o caminho + confirmar em uma frase). O
+agente SEMPRE precisa declarar o caminho — a mecânica do fluxo é garantida pelo
+sistema; você só descreve o COMPORTAMENTO. (As instruções de fechamento valem quando
+o portão é conversacional; num portão de decisão direta, use as de abertura.)
+
 CANCELAR é embutido (não é uma saída que você desenha): em QUALQUER portão, além de
 aprovar/reprovar, a pessoa pode ENCERRAR o fluxo — na tela há um botão, e pelo canal ela
 responde "cancelar". Você não precisa criar saída de cancelar. Quando o agente do portão

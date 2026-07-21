@@ -280,6 +280,13 @@ export function Inspector({
     (canalAprovacao?.configuracao?.destinatario_padrao as string | undefined) ?? ""
   ).trim();
 
+  // Forma efetiva DESTE portão (ajuste do nó vence o fluxo): em "decisão direta" o
+  // agente não re-roda ao aprovar, então as instruções de FECHAMENTO não valem.
+  const formaPortao =
+    (no.config?.portao_forma as string | undefined) ??
+    (painel ? String(efetivoDoFluxo(painel, configFluxo, "portao_forma") ?? "") : "");
+  const formaDireto = formaPortao === "direto";
+
   return (
     <div className="flex h-full flex-col">
       {/* cabeçalho */}
@@ -701,6 +708,62 @@ export function Inspector({
                   <span className="text-[11px]" style={{ color: "#A09DB8" }}>
                     Sem canais no time. Crie um instrumento de canal (Telegram) para
                     aprovar por mensagem.
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Instruções DESTE portão (o "portao.md" editável) */}
+            {no.gate && (
+              <div className="flex flex-col gap-2 rounded-[10px] border border-[#E8E6F0] p-3">
+                <div>
+                  <div className="text-[12.5px] font-medium text-[#1A1730]">
+                    Instruções do portão
+                  </div>
+                  <p className="mt-0.5 text-[11px] leading-snug text-[#6B6880]">
+                    O roteiro do agente neste portão. Deixe em branco para o
+                    comportamento padrão.
+                  </p>
+                </div>
+                <label className="text-[11px]" style={{ color: "#6B6880" }}>
+                  Ao PEDIR aprovação (abertura)
+                  <textarea
+                    className={`${inputCls} mt-1 min-h-16`}
+                    placeholder="Ex.: Apresente a arte e a legenda e pergunte se pode publicar."
+                    value={no.instrucoes?.abertura ?? ""}
+                    disabled={!podeEditar}
+                    onChange={(e) =>
+                      onPatchNode(no.id, {
+                        instrucoes: {
+                          ...(no.instrucoes ?? {}),
+                          abertura: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </label>
+                <label className="text-[11px]" style={{ color: "#6B6880" }}>
+                  Depois da RESPOSTA (fechamento)
+                  <textarea
+                    className={`${inputCls} mt-1 min-h-16`}
+                    placeholder="Ex.: Ao aprovar, agende a próxima automação e siga pela saída 'aprovado'; ao reprovar, volte com o motivo."
+                    value={no.instrucoes?.fechamento ?? ""}
+                    disabled={!podeEditar}
+                    onChange={(e) =>
+                      onPatchNode(no.id, {
+                        instrucoes: {
+                          ...(no.instrucoes ?? {}),
+                          fechamento: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </label>
+                {formaDireto && (no.instrucoes?.fechamento ?? "").trim() !== "" && (
+                  <span className="text-[11px] text-warning">
+                    ⚠ Este portão está em “decisão direta” — as instruções de fechamento
+                    não valem aqui (o agente não conduz a conversa ao aprovar). Elas
+                    valem quando “o agente conversa”.
                   </span>
                 )}
               </div>
