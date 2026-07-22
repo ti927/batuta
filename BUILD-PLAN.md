@@ -1738,6 +1738,16 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
+## CORREÇÃO FUTURA — o agente da mensageria não sabe a data de hoje  📋 DIAGNÓSTICO + SOLUÇÃO APROVADOS, NÃO INICIAR sem o sinal do maestro (2026-07-21)
+
+**Gatilho:** testando o time de reembolsos, o agente **ficou perguntando (e insistindo) a data de hoje ao consultor** ("qual o ano de hoje?"), num fluxo que dependia de contar as segundas-feiras entre 1/7 e "hoje". O maestro estranhou: "ele sabe a data, tem que saber!".
+
+**Causa-raiz:** um LLM **não tem relógio** — só sabe "hoje" se a data for **injetada** no contexto, e o Batuta **não injeta data/hora em lugar nenhum** do agente da mensageria (confirmado: nada em `mensageria/servico.py` nem `orquestracao/agente.py`). Nos testes que "funcionaram", o agente só sabia a data porque o **usuário a digitou**. Então o agente estava sendo honesto — o Batuta o deixou cego para o tempo.
+
+**Solução (borda; núcleo intocado):** injetar a **data/hora atual em horário de Brasília** no enquadramento de `mensageria/servico.py::_montar_entrada` (reusar `FUSO_BR` que já existe; Brasil sem horário de verão → offset fixo), com a instrução "trate como hoje/agora; NUNCA pergunte a data ao contato". Vale para chat e portão (ambos passam por `_montar_entrada`). Dia da semana em português. **Fora de escopo:** agentes de orquestração (entrada vem do fluxo, não de `_montar_entrada`) — se precisarem, a injeção seria em `montar_instrucoes` (núcleo, autorização à parte). +1 teste em `test_mensageria.py`.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
