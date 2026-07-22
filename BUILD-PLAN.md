@@ -1714,7 +1714,7 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ## FASE FUTURA — Unificação do Runtime (remodelagem simplificadora do motor)  📋 ESTUDO APROVADO, NÃO INICIAR sem o sinal do maestro (2026-07-21)
 
-**Documento-fonte:** [`docs/REMODELAGEM-MOTOR.md`](docs/REMODELAGEM-MOTOR.md) (estudo sincero completo). Aqui só o resumo.
+**Documento-fonte:** [`docs/REMODELAGEM-MOTOR.md`](docs/REMODELAGEM-MOTOR.md) (estudo sincero completo). **Benchmark de mercado:** [`docs/BENCHMARK-MENSAGERIA-MOTORES.md`](docs/BENCHMARK-MENSAGERIA-MOTORES.md) — confirma o alvo e mostra o caminho: **o Batuta já usa LangGraph mas SEM o checkpointer**; "dar memória à conversa" = ligar `PostgresSaver` + `thread_id` + `interrupt()` (portão nativo), não reescrever do zero. LangGraph/OpenAI Threads/OpenClaw todos persistem o estado da conversa (incl. tool results). Aqui só o resumo.
 
 **Gatilho:** um time de atendimento por Telegram que faz lançamento no Bubble.io "fez tudo certo" mas **não lançou**, e o maestro **não teve como inspecionar** — um agente conversacional **não gera execução**. Ao investigar, o maestro pediu um estudo profundo e sincero para **simplificar o motor** ("tá uma zona, um monte de amarração sem fim… a intenção era instruir agentes e direcionar os passos A/B; virou burocracia infernal").
 
