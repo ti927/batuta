@@ -10,6 +10,8 @@ vem dos markdowns, CLAUDE.md §14). Como o roteador de cadeia, ela tem prompt em
 
 import json
 
+from langchain_core.messages import SystemMessage
+
 import conhecimento
 from criacao.ferramentas import catalogo_de_instrumentos
 
@@ -299,36 +301,75 @@ contexto; recordar busca por um trecho específico.
 chamando sugerir_proximos_passos com 1 a 4 respostas curtas que o consultor poderia dar."""
 
 
-def montar_prompt_criadora(
-    snapshot_time: dict | None = None, memorias: list[dict] | None = None
-) -> str:
-    """Monta o prompt de sistema da IA criadora. Injeta o catálogo RICO de
-    instrumentos, a fotografia do TIME REAL atual (quando já existe) e a MEMÓRIA de
-    longo prazo do projeto, para a IA agir sobre o estado de verdade — não sobre
-    memória solta de modelo."""
-    partes = [_BASE]
-    partes.append(
-        "# Catálogo de instrumentos (só proponha destes; os 'campos' dizem o que "
-        "perguntar — públicos você coleta e preenche, secretos vão para o cofre; "
-        "'acao_irreversivel' exige portão humano antes):\n"
-        + json.dumps(catalogo_de_instrumentos(), ensure_ascii=False)
+def _blocos_criadora(
+    snapshot_time: dict | None, memorias: list[dict] | None
+) -> tuple[str, str]:
+    """Divide o prompt de sistema em (ESTÁVEL, VOLÁTIL), para o cache (Parte D).
+
+    - **estável**: base + catálogo de instrumentos + índice da Central. Não muda no
+      curso da conversa → é o prefixo cacheável ENTRE turnos.
+    - **volátil**: fotografia do time + memória de longo prazo. Muda quando a IA edita
+      o time → só se aproveita DENTRO do mesmo turno (o laço interno repete o sistema).
+
+    A junção das duas com "\\n\\n" é IDÊNTICA ao prompt de antes — só o ponto de corte é
+    novo, para marcar o cache sem alterar uma vírgula do conteúdo."""
+    estavel = "\n\n".join(
+        [
+            _BASE,
+            "# Catálogo de instrumentos (só proponha destes; os 'campos' dizem o que "
+            "perguntar — públicos você coleta e preenche, secretos vão para o cofre; "
+            "'acao_irreversivel' exige portão humano antes):\n"
+            + json.dumps(catalogo_de_instrumentos(), ensure_ascii=False),
+            "# Central de Conhecimento (o manual dos recursos do Batuta). Quando NÃO souber "
+            "COMO um recurso funciona ou COMO orientar o consultor sobre ele, CHAME a "
+            "ferramenta consultar_conhecimento(topico) e responda a partir do capítulo — não "
+            "adivinhe de memória. Capítulos disponíveis:\n"
+            + json.dumps(conhecimento.indice_titulos(), ensure_ascii=False),
+        ]
     )
-    partes.append(
-        "# Central de Conhecimento (o manual dos recursos do Batuta). Quando NÃO souber "
-        "COMO um recurso funciona ou COMO orientar o consultor sobre ele, CHAME a "
-        "ferramenta consultar_conhecimento(topico) e responda a partir do capítulo — não "
-        "adivinhe de memória. Capítulos disponíveis:\n"
-        + json.dumps(conhecimento.indice_titulos(), ensure_ascii=False)
-    )
+    volateis = []
     if snapshot_time:
-        partes.append(
+        volateis.append(
             "# Time atual (estado REAL — o que já existe; use os id ao encaixar e na "
             "cadeia):\n" + json.dumps(snapshot_time, ensure_ascii=False)
         )
     if memorias:
-        partes.append(
+        volateis.append(
             "# O que você já sabe deste projeto (memória de longo prazo — fatos, "
             "decisões e preferências que você guardou; apague com esquecer o que "
             "mudar):\n" + json.dumps(memorias, ensure_ascii=False)
         )
-    return "\n\n".join(partes)
+    return estavel, "\n\n".join(volateis)
+
+
+def montar_prompt_criadora(
+    snapshot_time: dict | None = None, memorias: list[dict] | None = None
+) -> str:
+    """Monta o prompt de sistema da IA criadora (texto puro). Injeta o catálogo RICO de
+    instrumentos, a fotografia do TIME REAL atual (quando já existe) e a MEMÓRIA de
+    longo prazo do projeto, para a IA agir sobre o estado de verdade — não sobre
+    memória solta de modelo. (Para o cache, use `montar_system_criadora`.)"""
+    estavel, volatil = _blocos_criadora(snapshot_time, memorias)
+    return "\n\n".join([estavel, volatil]) if volatil else estavel
+
+
+def montar_system_criadora(
+    snapshot_time: dict | None = None, memorias: list[dict] | None = None
+) -> SystemMessage:
+    """O MESMO prompt de sistema, mas como `SystemMessage` com PONTOS DE CACHE
+    (`cache_control: ephemeral`) — a Parte D da economia de tokens (Frente B).
+
+    Bloco 1 (estável) é marcado para a Anthropic reaproveitá-lo ENTRE turnos da mesma
+    sessão (releitura a ~10% do preço); bloco 2 (volátil) é marcado para a economia
+    DENTRO do turno (o laço de ferramentas repete o sistema). Zero perda de informação —
+    o conteúdo é o de `montar_prompt_criadora`. Fora do TTL do cache (poucos minutos),
+    cai no custo normal; abrir um time frio é a Parte A (resumo/janela) que resolve."""
+    estavel, volatil = _blocos_criadora(snapshot_time, memorias)
+    blocos: list[dict] = [
+        {"type": "text", "text": estavel, "cache_control": {"type": "ephemeral"}}
+    ]
+    if volatil:
+        blocos.append(
+            {"type": "text", "text": volatil, "cache_control": {"type": "ephemeral"}}
+        )
+    return SystemMessage(content=blocos)

@@ -6,6 +6,8 @@ consolidado `/uso/resumo`, incluindo o isolamento entre organizações.
 
 from types import SimpleNamespace
 
+import pytest
+
 import precos
 from modelos import Automacao, Execucao, PassoExecucao
 
@@ -57,6 +59,32 @@ def test_custo_de_entrada_honra_precalc():
     # Sem custo_usd, estima por token (haiku entrada = 1.0/Mtok).
     por_token = {"modelo": "haiku", "tokens_entrada": 1_000_000, "tokens_saida": 0}
     assert precos.custo_de_entrada(por_token) == 1.0
+
+
+def test_opus_preco_atualizado():
+    # Opus 4.x = $5/$25 (corrigido 2026-07-26; o antigo $15/$75 inflava a tela ~2,3×).
+    assert precos.custo_usd("claude-opus-4-8", 1_000_000, 0) == pytest.approx(5.0)
+    assert precos.custo_usd("claude-opus-4-8", 0, 1_000_000) == pytest.approx(25.0)
+
+
+def test_custo_usd_desconta_cache():
+    # `tokens_entrada` inclui o cacheado; a releitura sai a ~10% e a criação a ~1,25×.
+    # 1M lido do cache (haiku, entrada 1.0/Mtok) → 0,10.
+    assert precos.custo_usd("haiku", 1_000_000, 0, tokens_cache_read=1_000_000) == pytest.approx(0.10)
+    # 1M criando cache → 1,25.
+    assert precos.custo_usd("haiku", 1_000_000, 0, tokens_cache_write=1_000_000) == pytest.approx(1.25)
+    # Mistura: 200k a preço cheio + 800k lidos do cache = 0,2 + 0,08 = 0,28.
+    assert precos.custo_usd("haiku", 1_000_000, 0, tokens_cache_read=800_000) == pytest.approx(0.28)
+    # Pelo caminho real da agregação (custo_de_entrada lê os campos de cache do uso).
+    e = {
+        "modelo": "claude-sonnet-5", "tokens_entrada": 1_000_000, "tokens_saida": 0,
+        "tokens_cache_read": 1_000_000,
+    }
+    assert precos.custo_de_entrada(e) == pytest.approx(0.30)  # sonnet entrada 3.0 × 10%
+    # Sem campos de cache, nada muda (compat. com uso antigo).
+    assert precos.custo_de_entrada(
+        {"modelo": "haiku", "tokens_entrada": 1_000_000, "tokens_saida": 0}
+    ) == pytest.approx(1.0)
 
 
 def test_resumir_uso_separa_por_categoria_e_inclui_mensageria():

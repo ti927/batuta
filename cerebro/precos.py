@@ -6,11 +6,19 @@ desatualizados — a tela deixa claro que é uma estimativa.
 """
 
 # (preço de entrada, preço de saída) em USD por 1 milhão de tokens — aproximado.
+# Opus 4.x = $5/$25 (o antigo $15/$75 aqui inflava a tela /uso ~2,3× — corrigido
+# 2026-07-26, achado do estudo de tokens `docs/ESTUDO-TOKENS-MARCO-0.md`).
 PRECOS_USD_POR_MTOK = {
-    "opus": (15.0, 75.0),
+    "opus": (5.0, 25.0),
     "sonnet": (3.0, 15.0),
     "haiku": (1.0, 5.0),
 }
+
+# Multiplicadores do cache de prompt (Anthropic, Parte D): a RELEITURA do prefixo
+# cacheado custa ~10% do preço de entrada; a CRIAÇÃO do cache custa ~1,25×. O resto da
+# entrada e a saída seguem a preço cheio.
+CACHE_READ_MULT = 0.10
+CACHE_WRITE_MULT = 1.25
 # Usado quando o modelo não casa com nenhuma família conhecida.
 PRECO_PADRAO = (1.0, 5.0)
 
@@ -82,10 +90,23 @@ def _preco(modelo: str) -> tuple[float, float]:
     return PRECO_PADRAO
 
 
-def custo_usd(modelo: str, tokens_entrada: int, tokens_saida: int) -> float:
-    """Custo aproximado de uma chamada, em USD."""
+def custo_usd(
+    modelo: str,
+    tokens_entrada: int,
+    tokens_saida: int,
+    tokens_cache_read: int = 0,
+    tokens_cache_write: int = 0,
+) -> float:
+    """Custo aproximado de uma chamada, em USD. `tokens_entrada` JÁ inclui o que veio do
+    cache (convenção do usage_metadata): descontamos a parte lida/criada no cache e a
+    cobramos aos multiplicadores do cache (releitura ~10%, criação ~1,25×). Sem campos de
+    cache (default 0), é o cálculo de sempre — chamadas antigas não mudam."""
     pe, ps = _preco(modelo)
-    return (tokens_entrada / 1_000_000) * pe + (tokens_saida / 1_000_000) * ps
+    cr = tokens_cache_read or 0
+    cw = tokens_cache_write or 0
+    regular = max(0, (tokens_entrada or 0) - cr - cw)
+    entrada = (regular + cr * CACHE_READ_MULT + cw * CACHE_WRITE_MULT) / 1_000_000 * pe
+    return entrada + (tokens_saida or 0) / 1_000_000 * ps
 
 
 def custo_whisper(segundos: float) -> float:
@@ -157,7 +178,11 @@ def custo_de_entrada(e: dict) -> float:
     if pre is not None:
         return float(pre)
     return custo_usd(
-        e.get("modelo", ""), e.get("tokens_entrada", 0) or 0, e.get("tokens_saida", 0) or 0
+        e.get("modelo", ""),
+        e.get("tokens_entrada", 0) or 0,
+        e.get("tokens_saida", 0) or 0,
+        e.get("tokens_cache_read", 0) or 0,
+        e.get("tokens_cache_write", 0) or 0,
     )
 
 

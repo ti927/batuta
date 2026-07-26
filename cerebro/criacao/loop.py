@@ -36,7 +36,7 @@ from criacao.ferramentas import (
     montar_ferramentas,
     snapshot_time,
 )
-from criacao.prompt import montar_prompt_criadora
+from criacao.prompt import montar_system_criadora
 from orquestracao.llm import construir_modelo, texto_da_resposta, usar_chaves
 
 # Modelo padrão da IA de conversa: Sonnet 5 — forte e econômico (perto do Opus por
@@ -102,7 +102,9 @@ def responder_turno(
     commit) e devolve {resposta, chips, time_id, time, uso}."""
     ctx = ContextoCriacao(sessao=sessao, conversa=conversa, usuario=usuario)
     ferramentas = montar_ferramentas(ctx)
-    prompt = montar_prompt_criadora(
+    # SystemMessage com pontos de cache (Parte D): o prefixo fixo é reaproveitado a ~10%
+    # entre turnos da mesma sessão, em vez de pagar preço cheio todo turno.
+    prompt = montar_system_criadora(
         snapshot_time(sessao, conversa), memoria.para_o_prompt(sessao, conversa)
     )
 
@@ -123,6 +125,7 @@ def responder_turno(
     # por isso juntamos o texto de TODOS os turnos do modelo deste turno.
     textos: list[str] = []
     tokens_entrada = tokens_saida = 0
+    cache_read = cache_write = 0
     for m in novas:
         if isinstance(m, AIMessage):
             trecho = texto_da_resposta(m).strip()
@@ -131,11 +134,19 @@ def responder_turno(
             u = m.usage_metadata or {}
             tokens_entrada += u.get("input_tokens", 0)
             tokens_saida += u.get("output_tokens", 0)
+            # Detalhe do cache (Parte D): `input_tokens` JÁ inclui o que veio do cache;
+            # guardamos quanto foi LIDO e CRIADO no cache para a medição cobrar a ~10%
+            # (releitura) e ~1,25× (criação), em vez de tudo a preço cheio.
+            det = u.get("input_token_details") or {}
+            cache_read += det.get("cache_read", 0) or 0
+            cache_write += det.get("cache_creation", 0) or 0
     resposta_texto = "\n\n".join(textos) if textos else "Pronto, atualizei o time."
     uso = {
         "modelo": modelo,
         "tokens_entrada": tokens_entrada,
         "tokens_saida": tokens_saida,
+        "tokens_cache_read": cache_read,
+        "tokens_cache_write": cache_write,
         "origem": origem,
         "categoria": "conversa",
     }
