@@ -303,17 +303,19 @@ chamando sugerir_proximos_passos com 1 a 4 respostas curtas que o consultor pode
 
 
 def _blocos_criadora(
-    snapshot_time: dict | None, memorias: list[dict] | None
+    snapshot_time: dict | None,
+    memorias: list[dict] | None,
+    resumo: str | None = None,
 ) -> tuple[str, str]:
     """Divide o prompt de sistema em (ESTÁVEL, VOLÁTIL), para o cache (Parte D).
 
     - **estável**: base + catálogo de instrumentos + índice da Central. Não muda no
       curso da conversa → é o prefixo cacheável ENTRE turnos.
-    - **volátil**: fotografia do time + memória de longo prazo. Muda quando a IA edita
-      o time → só se aproveita DENTRO do mesmo turno (o laço interno repete o sistema).
+    - **volátil**: resumo do projeto (Parte A) + fotografia do time + memória de longo
+      prazo. Muda ao longo da conversa → só se aproveita DENTRO do mesmo turno.
 
-    A junção das duas com "\\n\\n" é IDÊNTICA ao prompt de antes — só o ponto de corte é
-    novo, para marcar o cache sem alterar uma vírgula do conteúdo."""
+    Sem `resumo`/snapshot/memórias, a junção das duas com "\\n\\n" é IDÊNTICA ao prompt
+    de antes — o ponto de corte só existe para marcar o cache sem alterar o conteúdo."""
     estavel = "\n\n".join(
         [
             _BASE,
@@ -329,6 +331,13 @@ def _blocos_criadora(
         ]
     )
     volateis = []
+    if resumo:
+        volateis.append(
+            "# Resumo deste projeto (o que já foi feito e combinado até aqui — os turnos "
+            "antigos foram dobrados neste resumo; os mais recentes seguem na íntegra na "
+            "conversa abaixo). Tenha-o em mente e, se algo mudar, aja pela ferramenta:\n"
+            + resumo
+        )
     if snapshot_time:
         volateis.append(
             "# Time atual (estado REAL — o que já existe; use os id ao encaixar e na "
@@ -344,18 +353,22 @@ def _blocos_criadora(
 
 
 def montar_prompt_criadora(
-    snapshot_time: dict | None = None, memorias: list[dict] | None = None
+    snapshot_time: dict | None = None,
+    memorias: list[dict] | None = None,
+    resumo: str | None = None,
 ) -> str:
     """Monta o prompt de sistema da IA criadora (texto puro). Injeta o catálogo RICO de
-    instrumentos, a fotografia do TIME REAL atual (quando já existe) e a MEMÓRIA de
-    longo prazo do projeto, para a IA agir sobre o estado de verdade — não sobre
-    memória solta de modelo. (Para o cache, use `montar_system_criadora`.)"""
-    estavel, volatil = _blocos_criadora(snapshot_time, memorias)
+    instrumentos, a fotografia do TIME REAL atual (quando já existe), a MEMÓRIA de longo
+    prazo e o RESUMO do projeto (Parte A), para a IA agir sobre o estado de verdade — não
+    sobre memória solta de modelo. (Para o cache, use `montar_system_criadora`.)"""
+    estavel, volatil = _blocos_criadora(snapshot_time, memorias, resumo)
     return "\n\n".join([estavel, volatil]) if volatil else estavel
 
 
 def montar_system_criadora(
-    snapshot_time: dict | None = None, memorias: list[dict] | None = None
+    snapshot_time: dict | None = None,
+    memorias: list[dict] | None = None,
+    resumo: str | None = None,
 ) -> SystemMessage:
     """O MESMO prompt de sistema, mas como `SystemMessage` com PONTOS DE CACHE
     (`cache_control: ephemeral`) — a Parte D da economia de tokens (Frente B).
@@ -365,7 +378,7 @@ def montar_system_criadora(
     DENTRO do turno (o laço de ferramentas repete o sistema). Zero perda de informação —
     o conteúdo é o de `montar_prompt_criadora`. Fora do TTL do cache (poucos minutos),
     cai no custo normal; abrir um time frio é a Parte A (resumo/janela) que resolve."""
-    estavel, volatil = _blocos_criadora(snapshot_time, memorias)
+    estavel, volatil = _blocos_criadora(snapshot_time, memorias, resumo)
     blocos: list[dict] = [
         {"type": "text", "text": estavel, "cache_control": {"type": "ephemeral"}}
     ]
@@ -380,6 +393,7 @@ def prompt_criadora(
     modelo: str,
     snapshot_time: dict | None = None,
     memorias: list[dict] | None = None,
+    resumo: str | None = None,
 ) -> "SystemMessage | str":
     """O prompt de sistema no formato certo para o PROVEDOR do `modelo`:
 
@@ -392,5 +406,5 @@ def prompt_criadora(
 
     É o ponto único que evita o cache vazar para um provedor que não o entende."""
     if provedor_do_modelo_seguro(modelo) == PROVEDOR_ANTHROPIC:
-        return montar_system_criadora(snapshot_time, memorias)
-    return montar_prompt_criadora(snapshot_time, memorias)
+        return montar_system_criadora(snapshot_time, memorias, resumo)
+    return montar_prompt_criadora(snapshot_time, memorias, resumo)

@@ -206,6 +206,19 @@ def executar_turno(sessao: Session, turno: TurnoCriacao) -> None:
             turno.atividade_em = None
             turno.finalizado_em = datetime.now(timezone.utc)
             sessao.commit()
+            # Manutenção do resumo rolante (Parte A) — DEPOIS de entregar a resposta, então
+            # não atrasa o usuário. Best-effort e isolado: se falhar, o turno segue
+            # concluído (a conversa só não encolheu desta vez; nada se perde).
+            try:
+                from criacao.resumo import manter_resumo
+
+                if manter_resumo(conversa, chaves=chaves):
+                    sessao.commit()
+            except Exception:
+                sessao.rollback()
+                logger.warning(
+                    "Resumo do turno %s não pôde ser mantido — seguindo.", turno_id
+                )
         except Exception as e:  # falha de LLM/rede/ferramenta — registra VISÍVEL e segue
             sessao.rollback()
             _marcar_erro(sessao, turno_id, _mensagem_humana(e))

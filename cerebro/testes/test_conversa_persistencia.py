@@ -125,6 +125,57 @@ def test_turno_recebe_o_historico_anterior(monkeypatch, sessao, dados):
     assert capturado["messages"][-1].content == "segunda mensagem"
 
 
+def test_janela_envia_so_a_partir_de_resumo_ate_e_injeta_o_resumo(
+    monkeypatch, sessao, dados
+):
+    """Parte A: com `resumo_ate`>0, o modelo recebe SÓ a janela (mensagens[resumo_ate:]) +
+    a nova pergunta — não a conversa inteira — e o `resumo` entra no prompt de sistema."""
+    capturado = {}
+
+    def fake_create(modelo, ferramentas, prompt=None):
+        class App:
+            def invoke(self, payload):
+                capturado["messages"] = payload["messages"]
+                capturado["prompt"] = prompt
+                return {"messages": payload["messages"]
+                        + [AIMessage(content="ok", usage_metadata=_uso(0, 0))]}
+
+        return App()
+
+    monkeypatch.setattr(loop, "create_react_agent", fake_create)
+    monkeypatch.setattr(loop, "construir_modelo", lambda *a, **k: object())
+
+    conversa = ConversaCriacao(
+        organizacao_id=dados["orgA"].id,
+        resumo="Resumo do que já foi feito.",
+        resumo_ate=4,  # os 4 primeiros já estão dobrados no resumo
+        mensagens=[
+            {"papel": "usuario", "conteudo": "t1-antigo"},
+            {"papel": "ia", "conteudo": "r1-antigo"},
+            {"papel": "usuario", "conteudo": "t2-antigo"},
+            {"papel": "ia", "conteudo": "r2-antigo"},
+            {"papel": "usuario", "conteudo": "t3-recente"},
+            {"papel": "ia", "conteudo": "r3-recente"},
+        ],
+    )
+    sessao.add(conversa)
+    sessao.flush()
+
+    responder_turno(sessao, conversa, "nova pergunta", usuario=dados["admin"])
+    conteudos = [getattr(m, "content", "") for m in capturado["messages"]]
+    # Os antigos (dentro do resumo) NÃO vão; só a janela recente + a nova pergunta.
+    assert "t1-antigo" not in conteudos and "t2-antigo" not in conteudos
+    assert "t3-recente" in conteudos and "nova pergunta" in conteudos
+    # E o resumo entrou no prompt de sistema (SystemMessage, criadora Anthropic padrão).
+    prompt = capturado["prompt"]
+    texto = (
+        prompt.content
+        if isinstance(prompt.content, str)
+        else " ".join(b.get("text", "") for b in prompt.content)
+    )
+    assert "Resumo do que já foi feito." in texto
+
+
 def test_historico_preserva_chamadas_de_ferramenta_entre_turnos(monkeypatch, sessao, dados):
     """A correção da confabulação: o turno que chama ferramenta guarda a sequência
     real (`lc`), e o turno seguinte a REPRODUZ no histórico — assim o modelo continua

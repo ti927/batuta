@@ -105,11 +105,20 @@ def responder_turno(
     # Prompt no formato do provedor do modelo: na Anthropic, SystemMessage com pontos de
     # cache (Parte D) — o prefixo fixo é reaproveitado a ~10% entre turnos; em OpenAI/
     # Google (que a criadora também aceita), texto puro (cache_control é só da Anthropic).
+    # O `resumo` (Parte A) entra no prompt como visão do que já foi feito.
     prompt = prompt_criadora(
-        modelo, snapshot_time(sessao, conversa), memoria.para_o_prompt(sessao, conversa)
+        modelo,
+        snapshot_time(sessao, conversa),
+        memoria.para_o_prompt(sessao, conversa),
+        resumo=conversa.resumo,
     )
 
-    historico = _historico_para_mensagens(conversa.mensagens) + [
+    # Janela (Parte A): envia só os turnos a partir de `resumo_ate` (os antigos já estão
+    # dobrados no `resumo`). `resumo_ate=0` → conversa inteira, como antes. A janela mantém
+    # os turnos recentes com o `lc` (as chamadas de ferramenta reais) — é o que segura o
+    # padrão "nesta conversa, agir = chamar ferramenta" numa conversa longa.
+    inicio = conversa.resumo_ate or 0
+    historico = _historico_para_mensagens(conversa.mensagens[inicio:]) + [
         HumanMessage(content=mensagem_usuario)
     ]
     with usar_chaves(chaves):

@@ -633,6 +633,15 @@ class ConversaCriacao(IdData, Base):
     time_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("times.id", ondelete="SET NULL"), nullable=True
     )
+    # Economia de tokens (Frente B, Parte A): em vez de reenviar a conversa INTEIRA todo
+    # turno, envia-se `resumo` (o que já foi feito, dobrado do histórico) + a janela dos
+    # últimos turnos (`mensagens[resumo_ate:]`). `resumo_ate` = quantas MENSAGENS iniciais
+    # já foram dobradas no resumo. Aditivas e retrocompatíveis: `resumo_ate=0` (o default)
+    # reproduz o comportamento de antes — a conversa inteira — até a janela encher.
+    resumo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resumo_ate: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
 
     __table_args__ = (Index("ix_conversa_criacao_org", "organizacao_id"),)
 
