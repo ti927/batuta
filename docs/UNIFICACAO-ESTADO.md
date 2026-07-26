@@ -117,6 +117,13 @@ provar que "iceberg durável + janela/resumo" (§4) concilia persistência e com
 decisão adiada (§ abaixo) tomada com número na mão, e a sequência das fatias travada. Não escreve motor;
 é planejamento com evidência.
 
+**Três eixos de medição** (o 2º e o 3º foram adicionados em 2026-07-26 — detalhe e números em `docs/BENCHMARK-MENSAGERIA-MOTORES.md` § "Economia por PROVEDOR"):
+1. **Arquitetura** (o Programa): consumo antes × depois de *persistir estado* (fim da re-busca, Frente A) + *compactar* (resumo/janela, Frente B). **Provedor-agnóstico** — é o ganho estrutural.
+2. **Modelo por agente** (preço-base, **spread de 5×** Haiku↔Opus): cada agente e a criadora estão superdimensionados para o que fazem? **Já disponível hoje** (`Agente.modelo_ia` / `Organizacao.modelo_criadora`), sem tocar o motor — possivelmente a economia mais barata. Ressalva: modelo mais barato pode custar qualidade (a criadora quer um modelo forte) → **right-size por agente**, não "tudo no Haiku".
+3. **Cache por provedor:** na Anthropic o Batuta hoje **não** liga `cache_control` → paga cheio; OpenAI/Gemini dão **auto-cache de ~90%** do contexto repetido de graça. Medir o ganho de ligar o cache na Anthropic (Frente B, Parte D) × o que já se ganharia noutro provedor.
+
+**Nuance:** cache só vale dentro da janela (5 min / 24h / implícito); "abrir time frio" quem resolve é o resumo rolante (Parte A). Os Eixos 2 e 3 economizam **sem** o rewrite; o Eixo 1 é o ganho de fundo do Programa.
+
 ### Frente A — as fatias do runtime (do `REMODELAGEM-MOTOR.md §5`)
 - **Fatia 1 — Unificar o RASTRO** (maior valor / menor risco; **NÃO toca o portão**). Toda conversa nasce
   com uma `Execucao` sombra `modo=conversa`; o turno grava o passo pelo mesmo registrador do disparo,
