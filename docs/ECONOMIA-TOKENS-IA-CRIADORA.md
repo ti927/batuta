@@ -18,7 +18,14 @@ A IA criadora/companheira é **uma conversa eterna por time**. Hoje, a cada turn
 
 ## Abordagem recomendada
 
-### Parte A — Resumo rolante + janela de turnos recentes  ⭐ (núcleo)
+### Parte A — Resumo rolante + janela de turnos recentes  ✅ **NO AR (2026-07-26, commit `3621138`)**
+> **Como ficou:** migração aditiva `res00rolante01` (`ConversaCriacao.resumo`/`resumo_ate`); `loop.py`
+> envia `mensagens[resumo_ate:]` (mantendo `lc` dos turnos recentes) + injeta o resumo no bloco VOLÁTIL do
+> prompt (não estraga o cache da Parte D); `criacao/resumo.py` dobra os turnos antigos via **Haiku**,
+> chamado em `fila_turnos` **depois** de entregar a resposta (best-effort — se falhar, o turno segue e nada
+> se perde). Janela = 16 msgs (~8 turnos). **Prova real: −62% do histórico** (47k→18k) numa conversa de 32
+> turnos; 724 testes verdes. Retrocompatível: `resumo_ate=0` = comportamento de antes.
+
 Parar de enviar a conversa inteira. Enviar **`resumo` + os últimos N turnos na íntegra**.
 - **Modelo:** 2 colunas aditivas em `ConversaCriacao` (`modelos.py:620`): `resumo` (Text, nullable) e `resumo_ate` (Int, default 0 — quantos turnos iniciais já estão dobrados no resumo). Migração **aditiva** (padrão do projeto).
 - **Envio** (`responder_turno` + `_historico_para_mensagens`): montar histórico = **`mensagens[resumo_ate:]`** (janela recente, mantendo o campo `lc` — as chamadas de ferramenta reais). O `resumo` entra como bloco no prompt de sistema (Parte B). Janela N ≈ 6–8 turnos (constante ajustável).

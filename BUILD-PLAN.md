@@ -1714,7 +1714,7 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
-## PROGRAMA — Unificação de Estado (motor + IA criadora)  🔨 PRIORIDADE Nº 1 — Marco 0 ✅ + DECISÃO ✅ (dois trilhos, Frente B primeiro) + Frente B Parte D (cache da criadora) ✅ NO AR (2026-07-26, commit `b28d091`; ~88% de economia/turno provada). Próximas fatias com aprovação, uma por vez
+## PROGRAMA — Unificação de Estado (motor + IA criadora)  🔨 PRIORIDADE Nº 1 — Marco 0 ✅ + DECISÃO ✅ (dois trilhos, Frente B primeiro) + Frente B Partes **D (cache)** e **A (resumo+janela)** ✅ NO AR (2026-07-26; cache ~88%/turno, janela −62% do histórico). Próximas fatias (B/C/E; Frente A) com aprovação, uma por vez
 
 **Documento-âncora:** [`docs/UNIFICACAO-ESTADO.md`](docs/UNIFICACAO-ESTADO.md) — junta as duas frentes abaixo numa fundação só (**memória entre turnos**), hospeda o **estudo de tokens (Marco 0)** e a **decisão adiada** (um só programa × dois trilhos coordenados). **Por que prioridade nº 1:** o app não está performando; a raiz é o **turno sem memória** (cada interação começa do zero → re-busca, portão que "renasce", custo alto de tokens) presente nos **dois** motores e na IA criadora. **Governança:** o motor deixou de ser "intocável" e passou a **evolução dirigida** (`MIGRACAO §6.1`). **Marco 0 (primeiro passo, o mais barato):** medir o consumo real e **provar** que *persistir estado* (Frente A) e *enviar menos* (Frente B) se conciliam — guardar o fio completo como iceberg durável, alimentar o modelo só com janela+resumo — e só então travar a forma de execução.
 
@@ -1734,7 +1734,7 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
-### Frente B — Economia de tokens da IA criadora (resumo rolante `projeto.md` + iceberg + cache)  🔨 EM EXECUÇÃO — Parte D (cache) ✅ NO AR (2026-07-26); A/B/C/E pendentes
+### Frente B — Economia de tokens da IA criadora (resumo rolante `projeto.md` + iceberg + cache)  🔨 EM EXECUÇÃO — Partes D (cache) + A (resumo/janela) ✅ NO AR (2026-07-26); B/C/E pendentes
 
 **Documento-fonte:** [`docs/ECONOMIA-TOKENS-IA-CRIADORA.md`](docs/ECONOMIA-TOKENS-IA-CRIADORA.md). Aqui só o resumo. **É a Frente B do Programa de Unificação de Estado (acima)** — mesma doença-raiz da Frente A (turno sem memória).
 
@@ -1742,7 +1742,7 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 **Decisões do maestro:** (1) o resumo (`projeto.md`, "na linguagem da IA") é **visível e editável** — documentação viva; (2) o histórico completo é um **"iceberg"** guardado, com **ferramenta de busca sob demanda**.
 
-**Plano (5 partes, borda de criação — núcleo intocado):** **A ⭐** resumo rolante + janela dos últimos N turnos (2 colunas aditivas `ConversaCriacao.resumo`/`resumo_ate`; dobra os turnos antigos via Haiku; envia `mensagens[resumo_ate:]` mantendo `lc` p/ preservar o padrão de tool-use). **B** painel "Sobre este time" (GET/PUT do resumo). **C** ferramenta `buscar_no_historico(consulta)` no histórico completo. **D ✅ NO AR (2026-07-26, commit `b28d091`)** cache de prompt Anthropic no prefixo estável — `criacao/prompt.py::montar_system_criadora`/`prompt_criadora` (cache só na Anthropic; OpenAI/Google usam texto puro) + medição cache-aware e correção do preço do Opus ($15/$75→$5/$25) em `precos.py`. Prova real: ~88% de economia por turno; 719 testes verdes. Não resolve o "abrir time frio" — isso é a Parte A. **E** fotografia enxuta (só estrutura) + `ver_agente`/`ver_automacao` sob demanda (ganho em times grandes). Migração aditiva, retrocompatível (`resumo_ate=0` = comportamento de hoje).
+**Plano (5 partes, borda de criação — núcleo intocado):** **A ✅ NO AR (2026-07-26, commit `3621138`)** resumo rolante + janela dos últimos N turnos (2 colunas aditivas `ConversaCriacao.resumo`/`resumo_ate` via migração `res00rolante01`; `criacao/resumo.py` dobra os turnos antigos via Haiku em `fila_turnos`, best-effort, DEPOIS da resposta; `loop.py` envia `mensagens[resumo_ate:]` mantendo `lc` p/ preservar o padrão de tool-use + injeta o resumo no prompt; prova real −62% do histórico numa conversa de 32 turnos). **B** painel "Sobre este time" (GET/PUT do resumo). **C** ferramenta `buscar_no_historico(consulta)` no histórico completo. **D ✅ NO AR (2026-07-26, commit `b28d091`)** cache de prompt Anthropic no prefixo estável — `criacao/prompt.py::montar_system_criadora`/`prompt_criadora` (cache só na Anthropic; OpenAI/Google usam texto puro) + medição cache-aware e correção do preço do Opus ($15/$75→$5/$25) em `precos.py`. Prova real: ~88% de economia por turno; 719 testes verdes. Não resolve o "abrir time frio" — isso é a Parte A. **E** fotografia enxuta (só estrutura) + `ver_agente`/`ver_automacao` sob demanda (ganho em times grandes). Migração aditiva, retrocompatível (`resumo_ate=0` = comportamento de hoje).
 
 ---
 
