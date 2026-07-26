@@ -1714,9 +1714,11 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
-## PROGRAMA — Unificação de Estado (motor + IA criadora)  📋 PRIORIDADE Nº 1 — documentação consolidada; execução de código NÃO iniciada sem o sinal do maestro (2026-07-26)
+## PROGRAMA — Unificação de Estado (motor + IA criadora)  📋 PRIORIDADE Nº 1 — Marco 0 (estudo) ✅ FEITO 2026-07-26; execução de código AINDA NÃO iniciada sem o sinal do maestro
 
 **Documento-âncora:** [`docs/UNIFICACAO-ESTADO.md`](docs/UNIFICACAO-ESTADO.md) — junta as duas frentes abaixo numa fundação só (**memória entre turnos**), hospeda o **estudo de tokens (Marco 0)** e a **decisão adiada** (um só programa × dois trilhos coordenados). **Por que prioridade nº 1:** o app não está performando; a raiz é o **turno sem memória** (cada interação começa do zero → re-busca, portão que "renasce", custo alto de tokens) presente nos **dois** motores e na IA criadora. **Governança:** o motor deixou de ser "intocável" e passou a **evolução dirigida** (`MIGRACAO §6.1`). **Marco 0 (primeiro passo, o mais barato):** medir o consumo real e **provar** que *persistir estado* (Frente A) e *enviar menos* (Frente B) se conciliam — guardar o fio completo como iceberg durável, alimentar o modelo só com janela+resumo — e só então travar a forma de execução.
+
+> **✅ MARCO 0 EXECUTADO (2026-07-26, commit `38c1a58`) — [`docs/ESTUDO-TOKENS-MARCO-0.md`](docs/ESTUDO-TOKENS-MARCO-0.md).** Medição real (somente-leitura) no snapshot de produção. **Achados:** (1) a **IA criadora é ~70% do custo** de tokens; a **mensageria < 3%** → o runtime **não** é problema de custo, é de **rastro/HITL**. (2) O custo/turno da criadora sobe **6,3×** (19,7k→300k+) por reenviar a conversa inteira. (3) Janela+resumo cortam **~40–51%** e o cache Anthropic (hoje **não ligado**) evita **+~4,3M tokens** → combinado **50–70%** da maior categoria, **sem tocar o motor**. (4) `precos.py` tem Opus a $15/$75 (real $5/$25) → a tela `/uso` superestima ~2,3× (correção de 1 linha). **RECOMENDAÇÃO do estudo (§9):** **dois trilhos coordenados, Frente B primeiro** (dinheiro + não precisa descongelar o motor); Frente A depois (rastro/HITL, precisa da suspensão dirigida só na Fatia 4). **A DECISÃO DA FORMA continua com o maestro — ainda não batida.** Nada de código foi tocado; a execução (de qualquer frente) **aguarda o sinal**.
 
 ### Frente A — Unificação do Runtime (remodelagem simplificadora do motor)  📋 ESTUDO APROVADO (2026-07-21)
 
