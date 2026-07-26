@@ -35,7 +35,12 @@ Parar de enviar a conversa inteira. Enviar **`resumo` + os últimos N turnos na 
 - O `conversa.mensagens` **continua guardando tudo** (nada é apagado — só não é tudo enviado).
 - Nova ferramenta em `montar_ferramentas` (`ferramentas.py:333`): **`buscar_no_historico(consulta)`** — procura nos turnos **anteriores à janela** (`mensagens[:resumo_ate]`) por palavra/trecho e devolve os turnos casados (texto). Entrada em `MENSAGENS_CRIADORA` (`ferramentas.py:304`) para o feedback ao vivo. Assim o maestro instrui: *"procura no histórico o que combinamos sobre X"*.
 
-### Parte D — Cache de prompt (Anthropic)  (ganho "de graça", exige spike)
+### Parte D — Cache de prompt (Anthropic)  ✅ **NO AR (2026-07-26, commit `b28d091`)**
+> **Como ficou:** o spike confirmou que `langchain-anthropic 1.4.4` propaga `cache_control` e que
+> `create_react_agent` o preserva. Implementado em `criacao/prompt.py` (`montar_system_criadora` +
+> `prompt_criadora`, que **só cacheia na Anthropic** — OpenAI/Google recebem texto puro), `criacao/loop.py`
+> (capta `cache_read`/`cache_creation` na medição) e `precos.py` (custo cache-aware + correção do preço do
+> Opus). **Prova real: ~88% de economia por turno** numa conversa da criadora. 719 testes verdes.
 - Marcar o **prefixo estável** do prompt de sistema como cacheável: passar ao `create_react_agent` um `SystemMessage` com blocos de conteúdo levando `cache_control: {"type":"ephemeral"}` — um breakpoint após a parte fixa (base + catálogo + índice de conhecimento) e outro após fotografia + memória + resumo (Anthropic permite até 4). Turnos seguintes na **mesma sessão** pagam ~10% nesse prefixo. **Zero perda de informação.**
 - **Viabilidade:** `langchain-anthropic` 1.4.4 propaga `cache_control` em blocos de conteúdo e o `create_react_agent` aceita `SystemMessage` como `prompt` — **confirmar com um spike curto**; fallback: cachear só o prompt de sistema, ou baixar ao SDK `anthropic` neste laço.
 - **Opcional:** `precos.py` ler `cache_read_input_tokens`/`cache_creation_input_tokens` do `usage_metadata` para a medição refletir o cache (hoje conta tudo como entrada normal — informativo).

@@ -149,7 +149,7 @@ decisão adiada (§ abaixo) tomada com número na mão, e a sequência das fatia
 
 ### Frente B — as partes da economia (do `ECONOMIA-TOKENS-IA-CRIADORA.md`)
 - **A** — Resumo rolante + janela de turnos recentes (núcleo).  **B** — `projeto.md` visível/editável (UI).
-- **C** — Iceberg + `buscar_no_historico` (tool).  **D** — Cache de prompt Anthropic (ganho rápido).
+- **C** — Iceberg + `buscar_no_historico` (tool).  **D ✅ NO AR (2026-07-26)** — Cache de prompt Anthropic (~88%/turno provado; commit `b28d091`; ver [`ESTUDO-TOKENS-MARCO-0.md`](ESTUDO-TOKENS-MARCO-0.md)).
 - **E** — Foto enxuta + detalhe sob demanda (`ver_agente`/`ver_automacao`).
 
 **Onde as frentes se tocam:** a Fatia 1 (parar de descartar o rastro/tool results) e a Parte C (iceberg
@@ -180,9 +180,10 @@ licença para absorver a borda de conversa para dentro dele, faseado e testado.*
 ## 7. DECISÃO DE FORMA — ✅ **TOMADA pelo maestro (2026-07-26)**
 
 > **DECISÃO:** **dois trilhos coordenados, Frente B (IA criadora) primeiro** — conforme a recomendação do
-> Marco 0 (§9 do estudo). O maestro autorizou **iniciar a execução**. Primeira fatia: **Frente B, Parte D
-> (cache da criadora) + medição honesta**. A execução segue a disciplina de sempre (fatia pequena,
-> testável, produção verde, aprovada antes de cada código). O histórico da deliberação fica abaixo.
+> Marco 0 (§9 do estudo). O maestro autorizou **iniciar a execução**. **Primeira fatia — Frente B, Parte D
+> (cache da criadora) + medição honesta — ✅ NO AR (2026-07-26, commit `b28d091`; ~88% de economia por
+> turno provada, 719 testes verdes).** A execução segue a disciplina de sempre (fatia pequena, testável,
+> produção verde, aprovada antes de cada código). O histórico da deliberação fica abaixo.
 
 **Um só programa × dois trilhos** — as duas frentes viram um único programa de trabalho (planejadas e
 executadas juntas sobre uma fundação comum de persistência), ou dois trilhos separados que apenas se
