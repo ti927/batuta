@@ -111,11 +111,21 @@ isso ele é o **primeiro marco** do plano (§5) e a decisão de forma depende de
 > há troca simultânea dos dois mundos. Se o maestro parar em qualquer ponto, o sistema fica coerente.
 > (É a migração **estranguladora** do `REMODELAGEM-MOTOR.md §5`.)
 
-### Marco 0 — ESTUDO DE TOKENS + decisão de forma ⭐ (o primeiro, e o mais barato)
+### Marco 0 — ESTUDO DE TOKENS + decisão de forma ⭐ (o primeiro, e o mais barato) — ✅ **EXECUTADO**
 Medir, numa conversa longa real, o consumo **antes** e projetar o **depois** para as duas combinações;
 provar que "iceberg durável + janela/resumo" (§4) concilia persistência e compactação. **Saída:** a
 decisão adiada (§ abaixo) tomada com número na mão, e a sequência das fatias travada. Não escreve motor;
 é planejamento com evidência.
+
+> **✅ Estudo feito (2026-07-26) — [`ESTUDO-TOKENS-MARCO-0.md`](ESTUDO-TOKENS-MARCO-0.md).** Medição
+> real (somente-leitura) no snapshot de produção. **Achados que reorientam a decisão:** (1) o custo é
+> **~70% a IA criadora** (Frente B); a mensageria (Frente A) é **< 3%** — o runtime **não** é problema
+> de custo, é de **rastro/HITL**. (2) A doença da Frente B está medida: o custo/turno da criadora sobe
+> **6,3×** (19,7k → 300k+) por reenviar a conversa inteira. (3) Projeção: janela+resumo cortam
+> **~40–51%** e o cache Anthropic (não ligado hoje) evita **+~4,3M tokens** — combinado, **50–70%** da
+> maior categoria, **sem tocar o motor**. **Recomendação do estudo (§9 de lá):** dois trilhos
+> coordenados, **Frente B primeiro** (dinheiro + não precisa descongelar). **A decisão de forma é do
+> maestro** — segue adiada em §7 até ele bater o martelo.
 
 **Três eixos de medição** (o 2º e o 3º foram adicionados em 2026-07-26 — detalhe e números em `docs/BENCHMARK-MENSAGERIA-MOTORES.md` § "Economia por PROVEDOR"):
 1. **Arquitetura** (o Programa): consumo antes × depois de *persistir estado* (fim da re-busca, Frente A) + *compactar* (resumo/janela, Frente B). **Provedor-agnóstico** — é o ganho estrutural.
@@ -173,11 +183,16 @@ licença para absorver a borda de conversa para dentro dele, faseado e testado.*
 executadas juntas sobre uma fundação comum de persistência), ou dois trilhos separados que apenas se
 reconhecem e compartilham conceitos?
 
-- **Insumo obrigatório:** o **Marco 0** (estudo de tokens, §5) — a decisão de forma depende de provar como
-  persistência e compactação se conciliam (§4) e de quanto cada caminho economiza.
-- **Fator decisivo (palavra do maestro):** **consumo de tokens.** Não decidir no escuro.
-- **Enquanto não decidido:** as duas frentes seguem documentadas, cruzadas e priorizadas; nenhuma forma de
-  execução é travada.
+- **Insumo obrigatório — ✅ ENTREGUE:** o **Marco 0** (estudo de tokens, §5) foi feito com medição real —
+  [`ESTUDO-TOKENS-MARCO-0.md`](ESTUDO-TOKENS-MARCO-0.md). Ele prova a conciliação (§4) e quantifica o
+  ganho de cada caminho.
+- **Recomendação na mesa (do estudo, §9):** **dois trilhos coordenados, Frente B primeiro** — o custo
+  (~70%) está inteiro na criadora, que corta 50–70% **na borda, sem descongelar o motor**; a Frente A é
+  trabalho estrutural (rastro/HITL) que só precisa da suspensão dirigida na Fatia 4. Acoplar as duas num
+  programa monolítico casaria o barato-urgente com o delicado-arriscado.
+- **Fator decisivo (palavra do maestro):** **consumo de tokens.** O número agora está na mão.
+- **Falta:** o **maestro bater o martelo** na forma. Enquanto não bater, as duas frentes seguem
+  documentadas, cruzadas e priorizadas; nenhuma forma de execução é travada.
 
 ---
 
