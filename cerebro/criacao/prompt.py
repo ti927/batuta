@@ -14,6 +14,7 @@ from langchain_core.messages import SystemMessage
 
 import conhecimento
 from criacao.ferramentas import catalogo_de_instrumentos
+from orquestracao.modelos_ia import PROVEDOR_ANTHROPIC, provedor_do_modelo_seguro
 
 _BASE = """\
 Você é a IA do Batuta. Você conversa com o consultor para construir e cuidar de times
@@ -373,3 +374,23 @@ def montar_system_criadora(
             {"type": "text", "text": volatil, "cache_control": {"type": "ephemeral"}}
         )
     return SystemMessage(content=blocos)
+
+
+def prompt_criadora(
+    modelo: str,
+    snapshot_time: dict | None = None,
+    memorias: list[dict] | None = None,
+) -> "SystemMessage | str":
+    """O prompt de sistema no formato certo para o PROVEDOR do `modelo`:
+
+    - **Anthropic** → `SystemMessage` com pontos de cache (`montar_system_criadora`),
+      a economia da Parte D.
+    - **OpenAI / Google** (a criadora também aceita esses modelos) → **texto puro**
+      (`montar_prompt_criadora`). O `cache_control` é específico da Anthropic; enviá-lo a
+      outro provedor quebraria ou seria ignorado. Modelo desconhecido cai aqui também
+      (seguro).
+
+    É o ponto único que evita o cache vazar para um provedor que não o entende."""
+    if provedor_do_modelo_seguro(modelo) == PROVEDOR_ANTHROPIC:
+        return montar_system_criadora(snapshot_time, memorias)
+    return montar_prompt_criadora(snapshot_time, memorias)

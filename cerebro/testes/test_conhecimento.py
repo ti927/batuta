@@ -2,10 +2,13 @@
 da consulta/prompt da IA criadora. O acervo real (cerebro/central/*.md) é a fonte."""
 
 import conhecimento
+from langchain_core.messages import SystemMessage
+
 from criacao.prompt import (
     _blocos_criadora,
     montar_prompt_criadora,
     montar_system_criadora,
+    prompt_criadora,
 )
 
 PILOTO = "instrumentos/publicar-instagram"
@@ -79,3 +82,13 @@ def test_prompt_texto_igual_a_juncao_dos_blocos():
     estavel, volatil = _blocos_criadora(snap, mem)
     assert montar_prompt_criadora(snap, mem) == estavel + "\n\n" + volatil
     assert montar_prompt_criadora() == _blocos_criadora(None, None)[0]  # sem volátil
+
+
+def test_prompt_criadora_escolhe_formato_por_provedor():
+    # Cache é só da Anthropic: SystemMessage lá; texto puro em OpenAI/Google/desconhecido
+    # (a criadora aceita outros provedores — cache_control quebraria/seria ignorado lá).
+    assert isinstance(prompt_criadora("claude-sonnet-5"), SystemMessage)
+    assert isinstance(prompt_criadora("claude-opus-4-8"), SystemMessage)
+    assert isinstance(prompt_criadora("gpt-4o"), str)
+    assert isinstance(prompt_criadora("gemini-2.5-pro"), str)
+    assert isinstance(prompt_criadora("modelo-desconhecido-xyz"), str)  # seguro

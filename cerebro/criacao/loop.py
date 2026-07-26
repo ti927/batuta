@@ -36,7 +36,7 @@ from criacao.ferramentas import (
     montar_ferramentas,
     snapshot_time,
 )
-from criacao.prompt import montar_system_criadora
+from criacao.prompt import prompt_criadora
 from orquestracao.llm import construir_modelo, texto_da_resposta, usar_chaves
 
 # Modelo padrão da IA de conversa: Sonnet 5 — forte e econômico (perto do Opus por
@@ -102,10 +102,11 @@ def responder_turno(
     commit) e devolve {resposta, chips, time_id, time, uso}."""
     ctx = ContextoCriacao(sessao=sessao, conversa=conversa, usuario=usuario)
     ferramentas = montar_ferramentas(ctx)
-    # SystemMessage com pontos de cache (Parte D): o prefixo fixo é reaproveitado a ~10%
-    # entre turnos da mesma sessão, em vez de pagar preço cheio todo turno.
-    prompt = montar_system_criadora(
-        snapshot_time(sessao, conversa), memoria.para_o_prompt(sessao, conversa)
+    # Prompt no formato do provedor do modelo: na Anthropic, SystemMessage com pontos de
+    # cache (Parte D) — o prefixo fixo é reaproveitado a ~10% entre turnos; em OpenAI/
+    # Google (que a criadora também aceita), texto puro (cache_control é só da Anthropic).
+    prompt = prompt_criadora(
+        modelo, snapshot_time(sessao, conversa), memoria.para_o_prompt(sessao, conversa)
     )
 
     historico = _historico_para_mensagens(conversa.mensagens) + [
