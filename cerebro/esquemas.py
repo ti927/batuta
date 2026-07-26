@@ -401,6 +401,8 @@ class ExecucaoLer(BaseModel):
     # Nulo no modo `conversa` (rastro-sombra de atendimento, sem automação de origem).
     automacao_id: uuid.UUID | None = None
     estado: str
+    # `fluxo` (execução de automação) | `conversa` (rastro-sombra de um atendimento).
+    modo: str = "fluxo"
     entrada: dict | None
     resultado: dict | None
     iniciada_em: datetime | None

@@ -24,7 +24,7 @@ async function carregar(
   execId: string,
 ): Promise<{
   execucao: ExecucaoComPassos;
-  automacao: Automacao;
+  automacao: Automacao | null;
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
@@ -37,18 +37,26 @@ async function carregar(
   if (respExec.status === 404) return null;
   if (!respExec.ok) throw new Error("Falha ao carregar a execução");
   const execucao: ExecucaoComPassos = await respExec.json();
+  // Rastro-sombra de conversa (Fatia 1b): sem automação de origem. A MESMA tela de
+  // detalhe renderiza o passo a passo dos turnos — só não há automação a carregar.
+  const ehConversa = execucao.automacao_id == null;
 
-  const [respAuto, respAgentes, respTime, respInst, respTipos, eu] = await Promise.all([
-    buscarCerebro(`/automacoes/${execucao.automacao_id}`),
+  const [respAgentes, respTime, respInst, respTipos, eu] = await Promise.all([
     buscarCerebro(`/times/${timeId}/agentes`),
     buscarCerebro(`/times/${timeId}`),
     buscarCerebro(`/times/${timeId}/instrumentos`),
     buscarCerebro(`/instrumentos/tipos`),
     buscarMeuAcesso(),
   ]);
-  if (!respAuto.ok || !respTime.ok) return null;
-  const automacao: Automacao = await respAuto.json();
+  if (!respTime.ok) return null;
   const time: Time = await respTime.json();
+
+  let automacao: Automacao | null = null;
+  if (!ehConversa) {
+    const respAuto = await buscarCerebro(`/automacoes/${execucao.automacao_id}`);
+    if (!respAuto.ok) return null;
+    automacao = await respAuto.json();
+  }
   const agentes = await jsonOu<Agente[]>(respAgentes, []);
 
   // Cinto de cada agente e a conversa (eterna) — para o editor de agente aberto

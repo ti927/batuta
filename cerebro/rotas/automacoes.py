@@ -499,6 +499,39 @@ def listar_execucoes_do_time(
     ]
 
 
+@rotas.get("/times/{time_id}/conversas-rastro", response_model=list[ExecucaoNaLista])
+def listar_conversas_rastro(
+    time_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """As execuções-SOMBRA das conversas do time (modo='conversa') — o filtro
+    'Conversas' da aba Execuções. Cada uma é o rastro de um atendimento (os turnos do
+    agente atendente), inspecionável passo a passo na MESMA tela de detalhe. Escopadas
+    ao time pelo agente que atende a conversa. Observador vê. (Frente A, Fatia 1b.)"""
+    time = time_acessivel(sessao, usuario, time_id)
+    consulta = (
+        select(Execucao, Conversa)
+        .join(Conversa, Conversa.id == Execucao.conversa_id)
+        .join(Agente, Agente.id == Conversa.destino_id)
+        .where(Execucao.modo == "conversa")
+        .where(Conversa.destino_tipo == "agente")
+        .where(Agente.time_id == time_id)
+        .order_by(Execucao.criado_em.desc())
+    )
+    saida = []
+    for e, conversa in sessao.execute(consulta).all():
+        contato = conversa.contato_nome or conversa.contato_chave
+        saida.append(
+            ExecucaoNaLista(
+                **ExecucaoLer.model_validate(e).model_dump(),
+                automacao_nome=f"{contato} · {conversa.canal}",
+                organizacao_id=time.organizacao_id,
+            )
+        )
+    return saida
+
+
 @rotas.get("/execucoes", response_model=list[ExecucaoNaLista])
 def listar_todas_execucoes(
     estado: str | None = None,

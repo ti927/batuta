@@ -82,15 +82,34 @@ def automacao_acessivel(
     return auto
 
 
+def _org_da_execucao(sessao: Session, execucao: Execucao) -> uuid.UUID | None:
+    """A organização a que uma execução pertence — pela automação (modo `fluxo`) ou,
+    numa execução-SOMBRA de conversa (modo `conversa`, sem automação), pela conversa →
+    agente atendente → time. None se não der para resolver (recurso órfão)."""
+    if execucao.automacao_id is not None:
+        auto = sessao.get(Automacao, execucao.automacao_id)
+        time = sessao.get(Time, auto.time_id) if auto else None
+        return time.organizacao_id if time else None
+    if execucao.conversa_id is not None:
+        conversa = sessao.get(Conversa, execucao.conversa_id)
+        if conversa and conversa.destino_tipo == "agente" and conversa.destino_id:
+            agente = sessao.get(Agente, conversa.destino_id)
+            time = sessao.get(Time, agente.time_id) if agente else None
+            return time.organizacao_id if time else None
+    return None
+
+
 def execucao_acessivel(
     sessao: Session, usuario: Usuario, execucao_id: uuid.UUID, minimo: str = "observador"
 ) -> Execucao:
     execucao = sessao.get(Execucao, execucao_id)
     if execucao is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Execução não encontrada")
-    auto = sessao.get(Automacao, execucao.automacao_id)
-    time = sessao.get(Time, auto.time_id)
-    exigir_papel(sessao, usuario, time.organizacao_id, minimo)
+    # Resolve a organização pela automação (fluxo) OU pela conversa (rastro-sombra).
+    org_id = _org_da_execucao(sessao, execucao)
+    if org_id is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Execução não encontrada")
+    exigir_papel(sessao, usuario, org_id, minimo)
     return execucao
 
 

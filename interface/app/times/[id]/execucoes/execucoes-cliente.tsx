@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Activity, CalendarClock, ChevronRight, Clock, X } from "lucide-react";
+import {
+  Activity,
+  CalendarClock,
+  ChevronRight,
+  Clock,
+  MessageCircle,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -97,6 +104,23 @@ export function ExecucoesCliente({
   }, [time.id]);
   const pendentes = agendamentos.filter((a) => a.estado === "pendente");
   const cancelados = agendamentos.filter((a) => a.estado === "cancelado");
+
+  // Rastro-sombra das conversas do time (filtro "Conversas") — outra origem (execuções
+  // modo='conversa'), buscada no cliente, igual às Agendadas. Não entra nos stat cards
+  // nem nos filtros de estado (que são das automações), para não os poluir.
+  const [conversas, setConversas] = useState<ExecucaoNaLista[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    api
+      .get<ExecucaoNaLista[]>(`/times/${time.id}/conversas-rastro`)
+      .then((d) => vivo && setConversas(d))
+      .catch(() => {
+        /* filtro complementar: silencia se falhar (a aba fica vazia) */
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [time.id]);
 
   async function cancelarAgendamento(id: string) {
     try {
@@ -201,6 +225,18 @@ export function ExecucoesCliente({
         >
           Agendadas ({pendentes.length})
         </button>
+        {/* "Conversas": o rastro dos atendimentos por canal (execuções modo='conversa').
+            O passo a passo abre na MESMA tela de detalhe das execuções. */}
+        <button
+          onClick={() => setFiltro("conversas")}
+          className={`rounded-full border px-3 py-1 text-sm transition-colors ${
+            filtro === "conversas"
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-card text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Conversas ({conversas.length})
+        </button>
       </div>
 
       {filtro === "agendadas" ? (
@@ -210,6 +246,8 @@ export function ExecucoesCliente({
           souOperador={souOperador}
           onCancelar={cancelarAgendamento}
         />
+      ) : filtro === "conversas" ? (
+        <Conversas conversas={conversas} timeId={time.id} />
       ) : lista.length === 0 ? (
         <EstadoVazio icone={Activity} titulo="Nenhuma execução neste filtro.">
           Quando o time rodar, as execuções aparecem aqui.
@@ -345,6 +383,52 @@ function Agendadas({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Filtro "Conversas": o rastro-sombra dos atendimentos por canal (execuções
+// modo='conversa'). Cada linha abre o MESMO detalhe das execuções (o passo a passo
+// dos turnos do agente). Identificada pelo contato + canal, não por automação.
+function Conversas({
+  conversas,
+  timeId,
+}: {
+  conversas: ExecucaoNaLista[];
+  timeId: string;
+}) {
+  if (conversas.length === 0) {
+    return (
+      <EstadoVazio icone={MessageCircle} titulo="Nenhuma conversa ainda.">
+        Quando um agente atender alguém por um canal (ex.: Telegram), o rastro do
+        atendimento aparece aqui — com o passo a passo de cada resposta.
+      </EstadoVazio>
+    );
+  }
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      {conversas.map((c, i) => (
+        <Link
+          key={c.id}
+          href={`/times/${timeId}/execucoes/${c.id}`}
+          className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/50 ${
+            i > 0 ? "border-t border-border" : ""
+          }`}
+        >
+          <Badge variant="info" className="gap-1">
+            <MessageCircle className="size-3" /> conversa
+          </Badge>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm text-foreground">
+              {c.automacao_nome}
+            </span>
+          </span>
+          <span className="hidden whitespace-nowrap text-xs text-muted-foreground md:block">
+            {formatarData(c.criado_em)}
+          </span>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground/60" />
+        </Link>
+      ))}
     </div>
   );
 }

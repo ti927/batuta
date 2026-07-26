@@ -66,6 +66,9 @@ export const ESTADO: Record<string, { label: string; variante: VarianteBadge }> 
   concluida: { label: "concluída", variante: "success" },
   falhou: { label: "falhou", variante: "error" },
   cancelada: { label: "cancelada", variante: "neutral" },
+  // Rastro-sombra de um atendimento (Fatia 1b): não é uma execução que "avança"
+  // sozinha — é o histórico dos turnos da conversa.
+  conversa: { label: "conversa", variante: "info" },
 };
 
 export function formatarData(iso: string | null): string {
@@ -636,7 +639,7 @@ export function PainelExecucao({
   onEditarInstrumento,
 }: {
   execucao: ExecucaoComPassos;
-  automacao: Automacao;
+  automacao: Automacao | null;
   agentes: Agente[];
   resposta: string;
   setResposta: (v: string) => void;
@@ -656,7 +659,7 @@ export function PainelExecucao({
     <div className="rounded-xl border border-border bg-card p-5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h2 className="font-heading text-lg font-medium text-foreground">
-          Execução{" "}
+          {automacao ? "Execução" : "Conversa"}{" "}
           <span className="font-mono text-base text-muted-foreground">
             #{execucao.id.slice(0, 8)}
           </span>
@@ -688,7 +691,7 @@ export function PainelExecucao({
         )}
       </p>
 
-      {execucao.estado === "aguardando_humano" && (
+      {execucao.estado === "aguardando_humano" && automacao && (
         <PainelAprovacao
           aberta={execucao}
           automacao={automacao}
@@ -760,7 +763,7 @@ export function InspecaoExecucao({
   conversaId,
 }: {
   execucaoId: string;
-  automacao: Automacao;
+  automacao: Automacao | null;
   agentes: Agente[];
   meuPapel: PapelAcesso | null;
   inicial?: ExecucaoComPassos;
@@ -843,7 +846,9 @@ export function InspecaoExecucao({
         setExecucao(r);
         setErro(null);
         ultimoEstadoRef.current = r.estado; // prime: abrir a tela não dispara refresh
-        if (!ESTADOS_FINAIS.includes(r.estado)) acompanhar(r.id);
+        // 'conversa' (rastro-sombra) não "avança" sozinha → não fica pollando à toa.
+        if (!ESTADOS_FINAIS.includes(r.estado) && r.estado !== "conversa")
+          acompanhar(r.id);
       } catch (e) {
         if (vivo) setErro(mensagemDeErro(e, "Falha ao carregar a execução"));
       }

@@ -579,8 +579,11 @@ export type PassoExecucao = {
 
 export type Execucao = {
   id: string;
-  automacao_id: string;
+  // Nulo no modo `conversa` (rastro-sombra de atendimento, sem automação de origem).
+  automacao_id: string | null;
   estado: string;
+  // `fluxo` (execução de automação) | `conversa` (rastro-sombra de um atendimento).
+  modo?: string;
   entrada: { texto?: string } | null;
   resultado: { texto?: string; erro?: string } | null;
   iniciada_em: string | null;
