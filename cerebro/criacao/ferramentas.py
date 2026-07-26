@@ -327,7 +327,13 @@ MENSAGENS_CRIADORA: dict[str, str] = {
     "recordar": "Consultando o que sei do projeto…",
     "esquecer": "Atualizando o que sei…",
     "consultar_conhecimento": "Consultando a base de conhecimento…",
+    "buscar_no_historico": "Procurando no histórico da conversa…",
 }
+
+# Parte C (iceberg): teto de resultados e de tamanho por trecho na busca do histórico —
+# a busca existe para ECONOMIA, então nunca despeja tudo de volta no contexto.
+_MAX_ACHADOS_HISTORICO = 8
+_MAX_CHARS_ACHADO = 1200
 
 
 def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
@@ -670,6 +676,40 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         ]
         return json.dumps({"ok": True, "memorias": itens}, ensure_ascii=False)
 
+    def buscar_no_historico(consulta: str) -> str:
+        """Procura nos turnos ANTIGOS desta conversa (os que já saíram da janela recente e
+        foram dobrados no resumo) por uma palavra ou trecho, e devolve os que casarem —
+        no texto original. Use quando o consultor mencionar algo que vocês combinaram HÁ
+        MUITO e que talvez não esteja no resumo (ex.: 'procura no histórico o que ficou
+        decidido sobre X'). O resumo é uma síntese; isto recupera o detalhe antigo. Os
+        turnos RECENTES já estão no seu contexto — esta busca é só para o que ficou para
+        trás. Nada é apagado: o histórico completo fica guardado."""
+        termo = (consulta or "").strip().lower()
+        if not termo:
+            return _erro("Diga o que procurar no histórico (uma palavra ou um trecho).")
+        msgs = ctx.conversa.mensagens or []
+        ate = ctx.conversa.resumo_ate or 0
+        achados = []
+        for m in msgs[:ate]:  # só os turnos já dobrados (o recente já está no contexto)
+            conteudo = m.get("conteudo") or ""
+            if termo in conteudo.lower():
+                papel = "Consultor" if m.get("papel") == "usuario" else "Você"
+                achados.append(
+                    {"papel": papel, "conteudo": conteudo[:_MAX_CHARS_ACHADO]}
+                )
+        if not achados:
+            return _ok(
+                f"Nada nos turnos antigos casou com '{consulta}'. Pode estar no resumo "
+                "(já no seu contexto) ou nos turnos recentes.",
+                achados=[],
+            )
+        # Teto: os mais recentes entre os que casaram (economia — não despeja tudo).
+        achados = achados[-_MAX_ACHADOS_HISTORICO:]
+        return _ok(
+            f"{len(achados)} trecho(s) antigo(s) casaram com '{consulta}'.",
+            achados=achados,
+        )
+
     def esquecer(memoria_id: str) -> str:
         """Apaga uma memória de longo prazo que ficou ERRADA ou que o consultor mudou
         (ex.: ele revisou uma decisão). Pegue o `id` com recordar. Não apague memória
@@ -799,7 +839,7 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         ativar_time, desativar_time, ver_time, listar_tipos_instrumento,
         listar_execucoes, diagnosticar_execucao, ver_memoria_agente,
         sugerir_proximos_passos, lembrar, recordar, esquecer,
-        consultar_conhecimento,
+        consultar_conhecimento, buscar_no_historico,
     ]
 
     # O react agent do LangGraph roda as ferramentas de UM turno EM PARALELO (pool de

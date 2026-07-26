@@ -358,3 +358,50 @@ def test_diagnosticar_sem_id_pega_mais_recente_com_problema(sessao, dados):
     r = _chamar(f, "diagnosticar_execucao")
     assert r["ok"] and r["diagnostico"]["execucao_id"] == str(ex_falhou.id)
     assert any(a["codigo"] == "ia_sobrecarregada" for a in r["diagnostico"]["avisos"])
+
+
+def test_buscar_no_historico_acha_antigo_e_ignora_a_janela(sessao, dados):
+    """Parte C (iceberg): a busca varre só os turnos JÁ DOBRADOS (mensagens[:resumo_ate]);
+    os recentes (na janela) já estão no contexto, então NÃO entram no resultado."""
+    conversa = ConversaCriacao(
+        organizacao_id=dados["orgA"].id,
+        resumo_ate=4,  # os 4 primeiros saíram da janela (estão no resumo)
+        mensagens=[
+            {"papel": "usuario", "conteudo": "combinamos usar tom FORMAL no blog"},
+            {"papel": "ia", "conteudo": "ok, registrei o tom formal"},
+            {"papel": "usuario", "conteudo": "assunto qualquer"},
+            {"papel": "ia", "conteudo": "certo"},
+            {"papel": "usuario", "conteudo": "recente falando de tom de novo"},
+            {"papel": "ia", "conteudo": "tom recente"},
+        ],
+    )
+    sessao.add(conversa)
+    sessao.flush()
+    ctx = ContextoCriacao(sessao=sessao, conversa=conversa, usuario=dados["admin"])
+    f = ferramenta_por_nome(ctx)
+
+    r = _chamar(f, "buscar_no_historico", consulta="formal")
+    assert r["ok"] and len(r["achados"]) >= 1
+    assert "tom FORMAL" in " ".join(a["conteudo"] for a in r["achados"])
+    # "recente" está na janela (idx >= resumo_ate) → NÃO é varrido pela busca.
+    r2 = _chamar(f, "buscar_no_historico", consulta="recente")
+    assert r2["ok"] and r2["achados"] == []
+
+
+def test_buscar_no_historico_vazio_erra_e_sem_match_ok(sessao, dados):
+    conversa = ConversaCriacao(
+        organizacao_id=dados["orgA"].id,
+        resumo_ate=2,
+        mensagens=[
+            {"papel": "usuario", "conteudo": "algo antigo"},
+            {"papel": "ia", "conteudo": "resposta antiga"},
+        ],
+    )
+    sessao.add(conversa)
+    sessao.flush()
+    ctx = ContextoCriacao(sessao=sessao, conversa=conversa, usuario=dados["admin"])
+    f = ferramenta_por_nome(ctx)
+
+    assert _chamar(f, "buscar_no_historico", consulta="   ")["ok"] is False  # vazio
+    achou = _chamar(f, "buscar_no_historico", consulta="inexistente-xyz")
+    assert achou["ok"] and achou["achados"] == []  # sem casar, mas responde ok
