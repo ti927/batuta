@@ -1714,7 +1714,7 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
-## PROGRAMA — Unificação de Estado (motor + IA criadora)  📋 PRIORIDADE Nº 1 — Marco 0 (estudo) ✅ FEITO 2026-07-26; execução de código AINDA NÃO iniciada sem o sinal do maestro
+## PROGRAMA — Unificação de Estado (motor + IA criadora)  🔨 PRIORIDADE Nº 1 — Marco 0 ✅ FEITO + DECISÃO DE FORMA ✅ TOMADA (2026-07-26): dois trilhos, Frente B primeiro; EXECUÇÃO INICIANDO pela Fatia 1 (cache da criadora), fatia por fatia com aprovação
 
 **Documento-âncora:** [`docs/UNIFICACAO-ESTADO.md`](docs/UNIFICACAO-ESTADO.md) — junta as duas frentes abaixo numa fundação só (**memória entre turnos**), hospeda o **estudo de tokens (Marco 0)** e a **decisão adiada** (um só programa × dois trilhos coordenados). **Por que prioridade nº 1:** o app não está performando; a raiz é o **turno sem memória** (cada interação começa do zero → re-busca, portão que "renasce", custo alto de tokens) presente nos **dois** motores e na IA criadora. **Governança:** o motor deixou de ser "intocável" e passou a **evolução dirigida** (`MIGRACAO §6.1`). **Marco 0 (primeiro passo, o mais barato):** medir o consumo real e **provar** que *persistir estado* (Frente A) e *enviar menos* (Frente B) se conciliam — guardar o fio completo como iceberg durável, alimentar o modelo só com janela+resumo — e só então travar a forma de execução.
 

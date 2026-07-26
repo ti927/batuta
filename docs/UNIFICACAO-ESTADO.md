@@ -177,7 +177,12 @@ licença para absorver a borda de conversa para dentro dele, faseado e testado.*
 
 ---
 
-## 7. DECISÃO ADIADA DE PROPÓSITO (não decidir agora)
+## 7. DECISÃO DE FORMA — ✅ **TOMADA pelo maestro (2026-07-26)**
+
+> **DECISÃO:** **dois trilhos coordenados, Frente B (IA criadora) primeiro** — conforme a recomendação do
+> Marco 0 (§9 do estudo). O maestro autorizou **iniciar a execução**. Primeira fatia: **Frente B, Parte D
+> (cache da criadora) + medição honesta**. A execução segue a disciplina de sempre (fatia pequena,
+> testável, produção verde, aprovada antes de cada código). O histórico da deliberação fica abaixo.
 
 **Um só programa × dois trilhos** — as duas frentes viram um único programa de trabalho (planejadas e
 executadas juntas sobre uma fundação comum de persistência), ou dois trilhos separados que apenas se
@@ -190,9 +195,9 @@ reconhecem e compartilham conceitos?
   (~70%) está inteiro na criadora, que corta 50–70% **na borda, sem descongelar o motor**; a Frente A é
   trabalho estrutural (rastro/HITL) que só precisa da suspensão dirigida na Fatia 4. Acoplar as duas num
   programa monolítico casaria o barato-urgente com o delicado-arriscado.
-- **Fator decisivo (palavra do maestro):** **consumo de tokens.** O número agora está na mão.
-- **Falta:** o **maestro bater o martelo** na forma. Enquanto não bater, as duas frentes seguem
-  documentadas, cruzadas e priorizadas; nenhuma forma de execução é travada.
+- **Fator decisivo (palavra do maestro):** **consumo de tokens.** O número esteve na mão.
+- **✅ RESOLVIDO (2026-07-26):** o maestro bateu o martelo — **dois trilhos, Frente B primeiro** (ver o
+  box no topo desta seção). Execução autorizada, fatia por fatia.
 
 ---
 
