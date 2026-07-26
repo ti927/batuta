@@ -1,8 +1,15 @@
 # Mensageria de mão dupla — plano aprovado (Telegram Fase 1, WhatsApp Fase 2)
 
-> **Status (2026-06-13): PLANEJADO e APROVADO pelo maestro. NÃO iniciado.**
-> Aguarda só o sinal do maestro para executar. Este documento é a cópia durável do plano (o
-> arquivo de plano da sessão é efêmero). Ordem na fila de execução: ver `BUILD-PLAN.md`.
+> **Status: Fase 1 (Telegram) CONSTRUÍDA e EM PRODUÇÃO** (o "NÃO iniciado" original de 2026-06-13 está
+> superado). **Fase 2 (WhatsApp) segue pendente.** Este documento é a cópia durável do plano.
+>
+> **[Reconciliação 2026-07-26] Enquadramento superado:** este plano foi desenhado sob a regra "núcleo
+> congelado, tudo na borda" (§ abaixo) — e foi **exatamente esse enquadramento** que fez o modo
+> *conversacional* virar um **segundo motor** paralelo (roda o agente por fora do disparo, "uma execução
+> por turno" que recarrega o histórico do texto e **descarta** os resultados de ferramenta). Isso é
+> reconhecido como problema e está endereçado pelo **Programa de Unificação de Estado**
+> (`docs/UNIFICACAO-ESTADO.md`, prioridade nº 1). Leia este documento como **registro de como a
+> mensageria foi construída**, não como o desenho-alvo do runtime.
 > Lição que originou este desenho: ver a memória `feedback_canais-sao-instrumentos` (a 1ª
 > tentativa, com "ambiente de Canais" no nível da organização, foi **revertida**).
 
@@ -49,6 +56,11 @@ orquestração.
   webhook e um debounce leve por contato.
 
 ## Princípio estrutural — núcleo congelado, tudo na borda
+> **[Superado 2026-07-26]** Este princípio valia sob a antiga regra do "núcleo intocável". Hoje o motor
+> **evolui por decisão dirigida** (`MIGRACAO §6.1`) e o alvo é justamente **absorver esta borda de
+> conversa para dentro do motor** (Programa de Unificação de Estado). O texto abaixo descreve como a
+> Fase 1 foi construída — não a arquitetura-alvo.
+
 **NUNCA tocados:** `cerebro/orquestracao/cadeia.py`, `cerebro/orquestracao/agente.py`. Reusados por
 chamada: `executar_cadeia(..., no_inicial=, ordem_inicial=, registrar_passo=, cancelado=)`,
 `_escolher_saida`, `_DESTINOS_FIM`, contrato de pausa `pausa_humano`, `executar_agente`.

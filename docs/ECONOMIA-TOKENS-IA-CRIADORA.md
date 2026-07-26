@@ -1,6 +1,6 @@
 # Economia de tokens da IA criadora — resumo rolante (`projeto.md`) + iceberg + cache + foto enxuta
 
-> **Status:** 📋 **FASE FUTURA.** Plano **aprovado** pelo maestro (2026-07-21), execução **NÃO iniciada**. Iniciar só com o sinal do maestro. Este é o documento-fonte da verdade; o `BUILD-PLAN.md` só aponta para cá.
+> **Status:** 📋 **FASE FUTURA.** Plano **aprovado** pelo maestro (2026-07-21), execução **NÃO iniciada**. Iniciar só com o sinal do maestro. Este é o documento-fonte da **Frente B (autoria)** do **Programa de Unificação de Estado** (âncora: `docs/UNIFICACAO-ESTADO.md`) — mesma doença (turno sem memória) da Frente A (runtime, `docs/REMODELAGEM-MOTOR.md`). O `BUILD-PLAN.md` aponta para o programa.
 
 ## Contexto
 
@@ -71,4 +71,5 @@ Cada parte é verificável e não quebra as outras. Núcleo de orquestração **
 - **Front:** `interface/app/criar/[id]/criacao-cliente.tsx`, `interface/app/times/[id]/conversas/[conversaId]/conversa-cliente.tsx`, `interface/components/conversa-ia/usar-conversa.ts`, `interface/lib/api.ts`.
 
 ## Relação com outras fases
+- **Frente B do Programa de Unificação de Estado** (`docs/UNIFICACAO-ESTADO.md`): esta economia e a **remodelagem do motor** (`docs/REMODELAGEM-MOTOR.md`, Frente A) atacam a **mesma doença-raiz** — o turno que começa do zero e reconstrói o contexto do texto — com a **mesma família de cura** (persistir estado entre turnos). Há uma **tensão a resolver** (persistir tudo × enviar pouco), que só se concilia desenhando as duas juntas e que é o objeto do **estudo de tokens** (Marco 0 do programa). Se viram um só programa ou dois trilhos é a **decisão adiada**.
 - **Não confundir** com a [Base de conhecimento centralizada da IA criadora] (que é sobre a criadora *consultar* um catálogo de recursos) nem com a **memória vetorial** da Fase 10 (recuperação semântica). Esta fase é sobre **cortar o custo de contexto** da conversa eterna. A memória de projeto atual (`criacao/memoria.py`, texto/recência) permanece e é complementar ao `resumo`.

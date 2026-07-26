@@ -45,6 +45,8 @@ O plano tem **duas etapas**, e a ordem é inegociável:
 - Onde uma tarefa depender de conta ou segredo externo, você prepara tudo ao redor e pede ao maestro apenas o valor que só ele tem.
 - **A Etapa 2 está bloqueada até o maestro declarar o core validado** (ver Portão de Validação).
 
+> **⚠️ Governança (atualizado 2026-07-26) — leia antes de agir sobre o motor:** ao longo deste log, dezenas de fases carimbam "núcleo congelado / intocado". Isso era a regra **vigente na época** e descreve fielmente o que se fez — mas **hoje a regra mudou**: o motor **evolui por decisão dirigida** (`MIGRACAO.md §6.1`), não é mais intocável. A **prioridade nº 1 atual** é o **Programa de Unificação de Estado** (`docs/UNIFICACAO-ESTADO.md`), que unifica os **dois motores** (orquestração + conversa) e a economia de tokens da IA criadora sobre uma fundação só — **memória entre turnos**. Os carimbos "congelado" abaixo são **registro histórico**, não instrução corrente.
+
 ---
 
 # ETAPA 1 — O CORE
@@ -1712,7 +1714,11 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
-## FASE FUTURA — Unificação do Runtime (remodelagem simplificadora do motor)  📋 ESTUDO APROVADO, NÃO INICIAR sem o sinal do maestro (2026-07-21)
+## PROGRAMA — Unificação de Estado (motor + IA criadora)  📋 PRIORIDADE Nº 1 — documentação consolidada; execução de código NÃO iniciada sem o sinal do maestro (2026-07-26)
+
+**Documento-âncora:** [`docs/UNIFICACAO-ESTADO.md`](docs/UNIFICACAO-ESTADO.md) — junta as duas frentes abaixo numa fundação só (**memória entre turnos**), hospeda o **estudo de tokens (Marco 0)** e a **decisão adiada** (um só programa × dois trilhos coordenados). **Por que prioridade nº 1:** o app não está performando; a raiz é o **turno sem memória** (cada interação começa do zero → re-busca, portão que "renasce", custo alto de tokens) presente nos **dois** motores e na IA criadora. **Governança:** o motor deixou de ser "intocável" e passou a **evolução dirigida** (`MIGRACAO §6.1`). **Marco 0 (primeiro passo, o mais barato):** medir o consumo real e **provar** que *persistir estado* (Frente A) e *enviar menos* (Frente B) se conciliam — guardar o fio completo como iceberg durável, alimentar o modelo só com janela+resumo — e só então travar a forma de execução.
+
+### Frente A — Unificação do Runtime (remodelagem simplificadora do motor)  📋 ESTUDO APROVADO (2026-07-21)
 
 **Documento-fonte:** [`docs/REMODELAGEM-MOTOR.md`](docs/REMODELAGEM-MOTOR.md) (estudo sincero completo). **Benchmark de mercado:** [`docs/BENCHMARK-MENSAGERIA-MOTORES.md`](docs/BENCHMARK-MENSAGERIA-MOTORES.md) — confirma o alvo e mostra o caminho: **o Batuta já usa LangGraph mas SEM o checkpointer**; "dar memória à conversa" = ligar `PostgresSaver` + `thread_id` + `interrupt()` (portão nativo), não reescrever do zero. LangGraph/OpenAI Threads/OpenClaw todos persistem o estado da conversa (incl. tool results). Aqui só o resumo.
 
@@ -1726,9 +1732,9 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
-## FASE FUTURA — Economia de tokens da IA criadora (resumo rolante `projeto.md` + iceberg + cache)  📋 PLANO APROVADO, NÃO INICIAR sem o sinal do maestro (2026-07-21)
+### Frente B — Economia de tokens da IA criadora (resumo rolante `projeto.md` + iceberg + cache)  📋 PLANO APROVADO (2026-07-21)
 
-**Documento-fonte:** [`docs/ECONOMIA-TOKENS-IA-CRIADORA.md`](docs/ECONOMIA-TOKENS-IA-CRIADORA.md). Aqui só o resumo.
+**Documento-fonte:** [`docs/ECONOMIA-TOKENS-IA-CRIADORA.md`](docs/ECONOMIA-TOKENS-IA-CRIADORA.md). Aqui só o resumo. **É a Frente B do Programa de Unificação de Estado (acima)** — mesma doença-raiz da Frente A (turno sem memória).
 
 **Gatilho:** o maestro notou que acionar a IA criadora de um time **antigo** gasta MUITOS tokens. Confirmado no código: a cada turno o `criacao/loop.py` **remonta e reenvia a conversa inteira** (`conversa.mensagens`, JSONB append-only nunca podado) + o prompt de sistema cheio (catálogo + fotografia do time + memória). Num time de ~100 turnos: ~75k tokens de histórico + ~15–40k do prompt fixo, TODO turno.
 

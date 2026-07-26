@@ -1,0 +1,190 @@
+# Unificação de Estado — o programa que junta motor + IA criadora (âncora)
+
+> **Status:** 📋 **PROGRAMA FUTURO — PRIORIDADE Nº 1.** Documentação consolidada e aprovada como
+> registro; **execução de código NÃO iniciada** (não começar nenhuma fatia sem sinal explícito do
+> maestro). Esta rodada foi **só documentação**: consolidar o que estava disperso e conciliar a base.
+>
+> **Este é o documento-âncora.** Ele reúne e coordena três estudos que antes viviam soltos:
+> [`REMODELAGEM-MOTOR.md`](REMODELAGEM-MOTOR.md) (o runtime), [`ECONOMIA-TOKENS-IA-CRIADORA.md`](ECONOMIA-TOKENS-IA-CRIADORA.md)
+> (a autoria) e [`BENCHMARK-MENSAGERIA-MOTORES.md`](BENCHMARK-MENSAGERIA-MOTORES.md) (a evidência de
+> mercado). O `BUILD-PLAN.md` aponta para cá.
+
+---
+
+## 1. Por que este programa existe (a dor, sem rodeio)
+
+**O Batuta não está performando bem, e o maestro quer isso resolvido.** Ao investigar, veio à tona
+algo que ele **nunca soube** e que ninguém tinha dito com todas as letras: **o Batuta hoje tem dois
+motores de execução** fazendo a mesma coisa de formas incompatíveis —
+
+- **Motor 1 — Orquestração (disparo):** `orquestracao/disparo.py` → `cadeia.py` → `agente.py`. Cria
+  `Execucao` + `PassoExecucao`, tem fila robusta, heartbeat, rastro rico e inspecionável.
+- **Motor 2 — Conversa (mensageria):** `mensageria/servico.py::processar_turno` chama `executar_agente`
+  **direto, por fora do Motor 1**. Não cria execução; o rastro fica só na thread da conversa.
+
+Essa descoberta só apareceu porque uma regra de governança — **o "núcleo congelado / intocável"**
+(`MIGRACAO.md §6.1`) — proibia mexer no motor. A regra foi **prudente e certa** no seu tempo (proteger
+o core validado durante a Etapa 2), mas teve um efeito colateral pesado: **empurrou todo trabalho novo
+para a borda.** Quando chegou a mensageria, em vez de a conversa virar *extensão* do motor, virou **um
+segundo motor inteiro**. Nas palavras do maestro: *"escreveram que o motor era intocável, e agora temos
+2; daqui a pouco teremos 3."* Consertar essa regra é parte deste programa (ver §6 e a nota de governança
+no `MIGRACAO.md §6.1`).
+
+---
+
+## 2. A descoberta que une tudo: é UMA doença só
+
+As duas dores que pareciam separadas — "o motor de conversa é caro e não deixa rastro" e "a IA criadora
+gasta tokens demais" — são **a MESMA doença**, em dois lugares:
+
+> **Todo turno começa do zero.** O agente é reconstruído a cada interação, remonta o contexto **a partir
+> do texto** e **joga fora os resultados das ferramentas** do turno anterior. Ele não tem memória do que
+> já fez; então **re-deriva** — re-busca a mesma API, re-lê a mesma tabela — e o portão de aprovação
+> "renasce" entre apresentar e retomar (só texto atravessa).
+
+Onde a doença mora, em código:
+- **Runtime de conversa:** `mensageria/servico.py::_montar_entrada` (reconstrói do texto a cada mensagem).
+- **Autoria (IA criadora):** `criacao/loop.py::_historico_para_mensagens` (reenvia a conversa **inteira**
+  + o prompt cheio todo turno; num time antigo, ~75k tokens de histórico + 15–40k de prompt fixo, **por
+  turno**).
+
+Prova ao vivo (time de Reembolsos, Telegram → Bubble): um agente re-buscou a mesma tabela **3×** numa
+conversa; um turno de lançamento chegou a **90k tokens** de entrada.
+
+### A cura é uma família só
+O [`BENCHMARK-MENSAGERIA-MOTORES.md`](BENCHMARK-MENSAGERIA-MOTORES.md) mostrou que **todo motor sério do
+mercado** resolve isso do mesmo jeito: **estado de conversa PERSISTENTE entre turnos** (thread + checkpoint,
+incluindo os resultados das ferramentas). O agente **retoma do último ponto** — nunca re-deriva do zero.
+Aprovação humana = **pausar e retomar o MESMO estado**, não renascer.
+
+E a ironia que fecha o argumento: **o Batuta já usa LangGraph**, que entrega isso "de graça" —
+`create_react_agent(model, tools, checkpointer=PostgresSaver(...))` + um `thread_id` por conversa +
+`interrupt()` para o portão. O Batuta roda `create_react_agent` **sem** checkpointer e **reimplementou à
+mão, na borda,** o que a estante já tinha. A cura não é exótica; é **ligar a peça que já existe.**
+
+---
+
+## 3. As duas frentes do programa
+
+O programa tem **duas frentes que compartilham a mesma fundação** (dar memória entre turnos):
+
+| Frente | Onde | O que muda | Doc-fonte |
+|---|---|---|---|
+| **A — Runtime** | motor de conversa (`mensageria`) + orquestração | Uma `Execucao`/timeline única para todo fluxo (botão, hora, webhook, mensagem); portão vira passo `espera_humano`; conversa vira `modo=conversa` que dorme/acorda. Fim da re-busca e do rastro perdido. | [`REMODELAGEM-MOTOR.md`](REMODELAGEM-MOTOR.md) |
+| **B — Autoria** | IA criadora (`criacao/`) | Parar de reenviar a conversa inteira: resumo rolante (`projeto.md` visível/editável) + janela de N turnos + iceberg (histórico completo + busca sob demanda) + cache de prompt + foto enxuta. | [`ECONOMIA-TOKENS-IA-CRIADORA.md`](ECONOMIA-TOKENS-IA-CRIADORA.md) |
+
+**O vínculo (o que este documento estabelece e os dois docs-fonte agora reconhecem):** as duas frentes
+atacam a **mesma doença-raiz** (turno sem memória) com a **mesma família de cura** (persistir estado
+entre turnos em vez de reconstruir do texto). Fazer uma **ilumina** a outra. É por isso que elas deixam
+de ser "duas fases futuras soltas" e passam a ser **um programa com prioridade nº 1**.
+
+> **Correção de um registro anterior:** o `REMODELAGEM-MOTOR.md` dizia que a IA criadora "não unifica —
+> é outro domínio". Isso está **reconciliado**: as duas de fato compartilham o problema-raiz e a família
+> de cura. O que fica **em aberto** não é *se* elas se relacionam (relacionam), mas *como executá-las* —
+> ver a decisão adiada, §5.
+
+---
+
+## 4. A tensão real (por que a decisão de forma foi ADIADA)
+
+Aqui está o nó que o maestro corretamente recusou-se a decidir no escuro. As duas frentes puxam o
+contexto do turno em **direções opostas**:
+
+- **Frente A (persistência):** *não re-derivar* → o checkpointer guarda o **fio inteiro** (mensagens +
+  resultados de ferramenta) e o traz de volta a cada turno.
+- **Frente B (compactação):** *não reenviar tudo* → mandar ao modelo só um **resumo + janela curta**,
+  deixando o resto num iceberg guardado.
+
+Ingênuo, isso parece contradição: uma quer trazer tudo de volta, a outra quer mandar pouco. **Elas só se
+conciliam se forem desenhadas juntas:** guardar o fio completo como **iceberg durável** (a persistência
+da Frente A vira o *armazém*, não o *que se envia*) e **alimentar o modelo a cada turno só com janela +
+resumo** (a compactação da Frente B decide o *que entra na janela de contexto*). Persistência ≠ reenvio.
+
+Provar que essa combinação funciona — e medir o ganho real de tokens — **é um estudo, não um chute.** Por
+isso ele é o **primeiro marco** do plano (§5) e a decisão de forma depende dele.
+
+---
+
+## 5. O plano de construção (estagiado; execução aguarda sinal)
+
+> **Regra de ouro:** cada passo é pequeno, testável, deixa a produção verde e os testes passando. Nunca
+> há troca simultânea dos dois mundos. Se o maestro parar em qualquer ponto, o sistema fica coerente.
+> (É a migração **estranguladora** do `REMODELAGEM-MOTOR.md §5`.)
+
+### Marco 0 — ESTUDO DE TOKENS + decisão de forma ⭐ (o primeiro, e o mais barato)
+Medir, numa conversa longa real, o consumo **antes** e projetar o **depois** para as duas combinações;
+provar que "iceberg durável + janela/resumo" (§4) concilia persistência e compactação. **Saída:** a
+decisão adiada (§ abaixo) tomada com número na mão, e a sequência das fatias travada. Não escreve motor;
+é planejamento com evidência.
+
+### Frente A — as fatias do runtime (do `REMODELAGEM-MOTOR.md §5`)
+- **Fatia 1 — Unificar o RASTRO** (maior valor / menor risco; **NÃO toca o portão**). Toda conversa nasce
+  com uma `Execucao` sombra `modo=conversa`; o turno grava o passo pelo mesmo registrador do disparo,
+  **incluindo os `erros_instrumentos` hoje descartados**. Comportamento visível **inalterado** — só passa
+  a existir rastro. **Resolve JÁ a dor de hoje:** dá para depurar o agente lançador do Bubble (qual
+  instrumento chamou, com que corpo, o que a API respondeu, o erro).
+- **Fatia 2** — Unificar medição/limites sobre a execução sombra.
+- **Fatia 3** — Colapsar a config de 5 camadas por dimensão (remover chaves mortas).
+- **Fatia 4 ⚠️** — Portão como passo `espera_humano` unificado. **Exige a suspensão dirigida do
+  congelamento** (§6). Mexer por último, rede de testes máxima.
+- **Fatia 5** — Conversa vira `modo=conversa` de primeira classe (dorme/acorda); sweepers convergem.
+- **Fatia 6** (opcional) — Projeção única na UI (aba Conversa lê a timeline).
+
+### Frente B — as partes da economia (do `ECONOMIA-TOKENS-IA-CRIADORA.md`)
+- **A** — Resumo rolante + janela de turnos recentes (núcleo).  **B** — `projeto.md` visível/editável (UI).
+- **C** — Iceberg + `buscar_no_historico` (tool).  **D** — Cache de prompt Anthropic (ganho rápido).
+- **E** — Foto enxuta + detalhe sob demanda (`ver_agente`/`ver_automacao`).
+
+**Onde as frentes se tocam:** a Fatia 1 (parar de descartar o rastro/tool results) e a Parte C (iceberg
+que guarda tudo e busca sob demanda) são a **mesma ideia** aplicada aos dois lados — guardar o completo,
+alimentar o enxuto. O Marco 0 decide se elas viram **uma fundação comum** (ex.: o checkpointer do
+LangGraph servindo runtime e autoria) ou **dois trilhos coordenados**.
+
+---
+
+## 6. Governança — como o motor volta a poder evoluir
+
+Este programa **corrige a regra que criou o problema.** O "núcleo intocável" (`MIGRACAO.md §6.1`) foi
+substituído pelo princípio de **evolução dirigida do motor**: o motor é precioso e protegido, mas **pode e
+deve evoluir** quando o produto exige — por um mecanismo **formal, aditivo e aprovado-antes**, nunca uma
+reescrita cega. Há **precedente**: 2026-06-16 (grafos, tocou `cadeia.py` com aval) e 2026-07-20 (1 linha
+aditiva). Ver a nota de governança datada no `MIGRACAO.md §6.1`.
+
+**Permanece congelado (garantias que o rewrite NÃO remove):** a semântica de `seguir_para` (a bifurcação
+A/B é o produto), a garantia HITL antes de ação irreversível (`PRODUTO §14`), o contrato de instrumentos,
+a fila `FOR UPDATE SKIP LOCKED`, o laço `create_react_agent` do agente, e o heartbeat/sweeper/recuperação
+de órfãos (lei `CLAUDE.md §12-A`). **Suspender o congelamento não é licença para reescrever o motor — é
+licença para absorver a borda de conversa para dentro dele, faseado e testado.** A suspensão é cirúrgica
+(3 alvos: `cadeia.py`, `agente.py`, modelo `PassoExecucao`), só **antes da Fatia 4**, por aditivo curto ao
+`MIGRACAO.md` aprovado pelo maestro (formato do precedente de 2026-06-16). Detalhe em `REMODELAGEM-MOTOR.md §7`.
+
+---
+
+## 7. DECISÃO ADIADA DE PROPÓSITO (não decidir agora)
+
+**Um só programa × dois trilhos** — as duas frentes viram um único programa de trabalho (planejadas e
+executadas juntas sobre uma fundação comum de persistência), ou dois trilhos separados que apenas se
+reconhecem e compartilham conceitos?
+
+- **Insumo obrigatório:** o **Marco 0** (estudo de tokens, §5) — a decisão de forma depende de provar como
+  persistência e compactação se conciliam (§4) e de quanto cada caminho economiza.
+- **Fator decisivo (palavra do maestro):** **consumo de tokens.** Não decidir no escuro.
+- **Enquanto não decidido:** as duas frentes seguem documentadas, cruzadas e priorizadas; nenhuma forma de
+  execução é travada.
+
+---
+
+## 8. O que NÃO está no escopo desta rodada (nomeado, não feito)
+- **Nenhum código.** Esta rodada foi só documentação.
+- **Reescrever os ~50 capítulos de `cerebro/central/`** (o manual servido em `/ajuda` e lido pela IA
+  criadora): eles ensinam a dualidade atual (Execuções × Conversas como lugares separados) como se fosse
+  definitiva. Precisarão de uma passada **depois** que a unificação for executada — não agora.
+
+## 9. Documentos relacionados
+- Runtime (as fatias, o diagnóstico completo dos dois motores): [`REMODELAGEM-MOTOR.md`](REMODELAGEM-MOTOR.md).
+- Autoria (as partes A–E da economia): [`ECONOMIA-TOKENS-IA-CRIADORA.md`](ECONOMIA-TOKENS-IA-CRIADORA.md).
+- Evidência de mercado (por que a cura é "ligar o checkpointer"): [`BENCHMARK-MENSAGERIA-MOTORES.md`](BENCHMARK-MENSAGERIA-MOTORES.md).
+- Governança (a regra que muda): `MIGRACAO.md §6.1`.
+- **Não confundir** com a **Observabilidade** (`evento_log` + `/logs`, já no ar): aquela é o *entorno*
+  (infra transversal, correlaciona por `execucao_id`); este programa é a *história do fluxo* (a timeline
+  do que o agente fez). Convivem.

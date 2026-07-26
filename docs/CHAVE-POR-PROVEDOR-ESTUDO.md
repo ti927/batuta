@@ -6,7 +6,7 @@
 > `executora`). Proposta: **a chave é só por provedor** ("este provedor tem
 > credencial?"); a escolha de IA já acontece no **modelo** da conversa
 > (`Organizacao.modelo_criadora`) e de cada **agente** (`Agente.modelo_ia`).
-> Este documento estuda o raio de impacto ANTES de mexer. **Nada implementado.**
+> Este documento estuda o raio de impacto ANTES de mexer. **[Atualizado 2026-07-26: CONCLUÍDO e EM PRODUÇÃO — a "chave por provedor" foi implementada e validada ao vivo (ver o fim do documento). O "Nada implementado" era o status de 2026-06-15, quando o estudo foi escrito.]**
 
 ## 1. O que muda conceitualmente
 

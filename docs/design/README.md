@@ -2,6 +2,9 @@
 
 > Pacote de handoff de design para o Claude Code. Cobre as telas desenhadas no protótipo de alta fidelidade do Batuta e como recriá-las no sistema real.
 
+> **⚠️ [Atualizado 2026-07-26] Dois pontos deste handoff foram SUPERADOS pela evolução do produto — não os siga:**
+> **(1)** O fluxo de **"rascunho + aprovar e criar time"** (a criação que "só vira definitiva ao ser aprovada", item 1 do Overview) foi **revertido**: hoje a IA criadora opera numa **conversa única e eterna sobre o time real** (`MIGRACAO.md` Fase 9), sem ritual de aprovar-e-criar. **(2)** A navegação com **"Execuções" no topo / rota global `/execucoes`** foi **removida**: tudo de um time vive em `/times/[id]` (abas). O restante do handoff (dashboard, inspeção, IA companheira, shell sidebar) segue válido.
+
 ---
 
 ## 1. Overview

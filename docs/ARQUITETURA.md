@@ -96,10 +96,16 @@ direta ou indiretamente, a uma **Organização** — é o que sustenta o isolame
 
 ---
 
-## 5. O motor de orquestração (núcleo "congelado")
+## 5. O motor de orquestração (o core validado)
 
-Construído sobre **LangGraph**. É o coração validado do produto — a regra do projeto é **estendê-lo,
-nunca alterá-lo** ("núcleo congelado").
+Construído sobre **LangGraph**. É o coração validado do produto. **[Atualizado 2026-07-26]** A regra
+antiga era "estendê-lo, nunca alterá-lo" (núcleo congelado); hoje o motor **evolui por decisão dirigida**
+(`MIGRACAO.md §6.1`) — muda quando o produto exige, de forma formal/aditiva/aprovada, nunca por reescrita
+cega. **Fato que este retrato precisa deixar claro:** existem hoje **dois runtimes** que rodam agente —
+*este* motor (cria `Execucao`/`PassoExecucao`, deixa rastro inspecionável) e o **motor de conversa** da
+mensageria (`mensageria/servico.py`, que chama `executar_agente` **por fora** e **não** cria execução).
+Essa dualidade é o alvo do **Programa de Unificação de Estado** (`docs/UNIFICACAO-ESTADO.md`, prioridade
+nº 1): colapsar os dois numa **timeline única com memória entre turnos**.
 
 - **Agente isolado** (`orquestracao/agente.py`): o comportamento vem **100% dos 4 markdowns** (não há prompt-base escondido). Monta o prompt a partir dos markdowns, dá ao agente o **cinto** (instrumentos) como *tools*, e roda via `create_react_agent` do LangGraph. Mede tokens (`usage_metadata`).
 - **Cadeia por BIFURCAÇÃO** (`orquestracao/cadeia.py`): a `cadeia` (JSONB da automação) é um grafo onde, ao terminar um passo, **o próprio agente escolhe uma de várias saídas** — ele declara o ramo pela ferramenta `seguir_para(rotulo)` (injetada quando o nó tem 2+ saídas; o `rotulo` é um *enum* dos rótulos). A LLM roteadora (`_escolher_saida`) só entra de **fallback** (agente não declarou, rótulo inexistente, automação antiga). Loops são permitidos (com guarda de máximo de passos). Não é uma fila linear, nem um roteador adivinhando na frente do agente.
@@ -261,7 +267,8 @@ implicações de **custo**, **complexidade** e **manutenção** que valem ponder
 5. **Custo:** qual orçamento aceitável de embeddings/armazenamento? Provedor de embeddings (OpenAI? outro)?
 6. **Ingestão:** síncrona no upload ou assíncrona pela fila? Re-indexar quando um documento muda?
 
-> Restrições do projeto a respeitar em qualquer proposta: **não alterar o motor de orquestração**
-> (só estendê-lo, ex.: via instrumento); **isolamento por organização**; **segredos só no cérebro/cofre**;
-> a interface só fala com o cérebro; produção é 1 réplica do cérebro (cuidado com trabalho pesado de
-> ingestão bloqueando — usar a fila).
+> Restrições do projeto a respeitar em qualquer proposta: para a Biblioteca, **encaixar como extensão**
+> (ex.: um instrumento) sem precisar mexer no motor — e, de modo geral, o motor **evolui só por decisão
+> dirigida** (`MIGRACAO.md §6.1`), nunca por alteração avulsa; **isolamento por organização**; **segredos
+> só no cérebro/cofre**; a interface só fala com o cérebro; produção é 1 réplica do cérebro (cuidado com
+> trabalho pesado de ingestão bloqueando — usar a fila).

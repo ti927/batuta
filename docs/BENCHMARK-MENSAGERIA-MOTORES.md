@@ -1,6 +1,6 @@
 # Benchmark — como os OUTROS motores fazem "mensageria + IA" (estado/memória entre turnos)
 
-> **Status:** 📋 Estudo/benchmark (pedido do maestro, 2026-07-22). Informa a **FASE FUTURA — Unificação do Runtime** ([`REMODELAGEM-MOTOR.md`](REMODELAGEM-MOTOR.md)). Não é plano de execução.
+> **Status:** 📋 Estudo/benchmark (pedido do maestro, 2026-07-22). É a **evidência de mercado comum** do **Programa de Unificação de Estado** (âncora: [`UNIFICACAO-ESTADO.md`](UNIFICACAO-ESTADO.md)) — informa tanto a **Frente A** ([`REMODELAGEM-MOTOR.md`](REMODELAGEM-MOTOR.md)) quanto a **Frente B** ([`ECONOMIA-TOKENS-IA-CRIADORA.md`](ECONOMIA-TOKENS-IA-CRIADORA.md)). Não é plano de execução.
 
 ## O problema do Batuta (o que motivou)
 No Batuta, cada turno da conversa é um **agente NOVO** que reconstrói o contexto **do texto** (`mensageria/servico.py::_montar_entrada`; na criadora, `criacao/loop.py::_historico_para_mensagens`) e **joga fora os resultados das ferramentas** do turno anterior. Efeito: **re-busca** (o agente re-consulta a API externa a cada turno), portão que "renasce" (só texto atravessa), e custo alto. Provado ao vivo no time de Reembolsos (Telegram → Bubble): um agente re-buscou a mesma tabela 3× numa conversa, turno de lançamento a 90k tokens de entrada.

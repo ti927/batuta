@@ -82,6 +82,8 @@ O lugar onde fica a documentação e o conhecimento do time. É uma via de mão 
 
 A escrita automática na biblioteca por agentes é um ponto que exige controle de qualidade — ver seção 19 (decisões em aberto).
 
+> **[Nota de implementação 2026-07-26]** A Biblioteca ainda **não foi construída**. A decisão técnica vigente (`docs/BIBLIOTECA-DECISAO.md`, `docs/ARQUITETURA.md §12`) revisou o escopo: a base é **da ORGANIZAÇÃO** (todos os times acessam), **não por time**; e a **v1 é só-leitura** (os agentes consultam — a escrita/"alimentar", a mão dupla, fica para depois, com revisão humana). Este parágrafo descreve a visão original; o escopo da v1 é o do `BIBLIOTECA-DECISAO.md`.
+
 ## 10. Líder
 
 Cada time tem exatamente um Líder. Ele é definido por quatro documentos em markdown que o usuário preenche:
@@ -94,6 +96,8 @@ Características do Líder:
 - É o **único agente com acesso ao WhatsApp**. Cada time tem seu próprio número de WhatsApp; times diferentes, números diferentes.
 - É a **ponte entre o fluxo e os humanos**. Ele conduz a conversa: pergunta, espera resposta, retoma, entrega o resultado final.
 - Ele recebe a tarefa, aciona a cadeia de Agentes, e devolve a resposta para quem pediu.
+
+> **[Nota de implementação 2026-07-26]** O canal de mensageria virou um **INSTRUMENTO** no cinto do agente (decisão revista — `docs/MENSAGERIA-PLANO.md` e a memória `feedback_canais-sao-instrumentos`), **não** um atributo exclusivo do Líder. E o canal em produção hoje é o **Telegram**; o **WhatsApp** (Fase 2) ainda não foi construído. Onde este documento diz "WhatsApp" (aqui e no gatilho da §12), leia **"canal de mensageria" (Telegram hoje)**.
 
 ## 11. Agentes
 

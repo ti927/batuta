@@ -1,3 +1,5 @@
+> **[Nota Batuta — 2026-07-26]** Este README é o boilerplate padrão do `create-next-app`, **não customizado**. O Batuta **NÃO implanta na Vercel** — implanta no **Railway** (2 serviços Docker; ver `docs/ARQUITETURA.md §10` e a memória `reference_producao-railway`). Ignore a seção "Deploy on Vercel" abaixo.
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

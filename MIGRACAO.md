@@ -17,6 +17,8 @@ A ordem de leitura recomendada:
 
 **Importante:** este documento não autoriza, em nenhuma circunstância, mexer no motor de orquestração já construído e validado. As mudanças são por adição e por reorientação da Etapa 2 — não por refatoração do núcleo.
 
+> **Atualização de governança (2026-07-26):** o "não mexer no motor, em nenhuma circunstância" foi a regra **certa** para proteger o core recém-validado — mas, ao valer como trava absoluta, empurrou todo trabalho novo para a borda e fez a mensageria virar um **segundo motor** paralelo. A regra **graduou** para **evolução dirigida do motor** (ele pode evoluir por mecanismo formal, aditivo e aprovado-antes, nunca por reescrita cega). Ver a **§6.1 (reescrita)** e o programa **`docs/UNIFICACAO-ESTADO.md`**. O espírito anti-reescrita-cega permanece; a proibição absoluta, não.
+
 ---
 
 ## 1. Estado atual reconhecido
@@ -33,7 +35,7 @@ A Etapa 1 do `BUILD-PLAN.md` foi concluída e o portão de validação foi abert
 - Um time real em uso (`news-to-insight → curator-lure-fit → lure-writer → Lure.publisher`), publicando no WordPress por instrumento real.
 - Roteiro de validação cumprido, incluindo: espera-por-humano com retomada após tempo, tratamento de falha forçada, execuções simultâneas.
 
-**Decisão operacional crítica:** o núcleo construído nesta Etapa 1 é tratado, daqui em diante, como **núcleo congelado**. As migrações descritas neste documento podem **estender** o núcleo, **somar** novas peças e **reorientar** a Etapa 2 — mas não justificam reescrita do que já roda.
+**Decisão operacional crítica:** o núcleo construído nesta Etapa 1 é tratado, daqui em diante, como **núcleo congelado**. As migrações descritas neste documento podem **estender** o núcleo, **somar** novas peças e **reorientar** a Etapa 2 — mas não justificam reescrita do que já roda. *(Atualizado em 2026-07-26: "congelado" graduou para **evolução dirigida** — o motor pode mudar de forma dirigida e aprovada, o que segue vedado é a reescrita cega. Ver §6.1 e `docs/UNIFICACAO-ESTADO.md`.)*
 
 ---
 
@@ -135,7 +137,7 @@ Acrescentar seção descrevendo as três camadas que sustentam a memória da IA 
 
 - **Histórico de conversas do projeto** — armazenado em tabela própria, ligado ao projeto, recuperado em resumo na abertura de cada nova conversa.
 - **Conhecimento estrutural** — a IA tem ferramentas (no padrão de tool use) para consultar, sob demanda, o estado atual do projeto: quais agentes existem, quais instrumentos, últimas execuções, resultados, configurações. Não carrega tudo na janela de contexto; busca quando precisa.
-- **Memória de longo prazo destilada** — fatos, decisões e preferências importantes do projeto são guardados em formato recuperável por similaridade semântica (embeddings/memória vetorial), permitindo à IA recuperar contexto pela ideia, não pela palavra exata.
+- **Memória de longo prazo destilada** — fatos, decisões e preferências importantes do projeto são guardados para recuperação posterior. **[Atualizado 2026-07-26]** Na implementação real (ver `docs/ARQUITETURA.md §4/§7`), essa memória ficou **destilada, SEM vetor/embeddings** — decisão do maestro: um projeto acumula poucas memórias curtas que cabem no contexto, então a recuperação é por recência/filtro simples. A ideia de "embeddings/memória vetorial" deste parágrafo original **não** foi adotada (segue como possibilidade futura, não como estado atual).
 
 **Princípio de isolamento:** a memória de um projeto **nunca** vaza para outro. A engenharia dessa separação é crítica e segue o princípio de isolamento entre clientes já vigente no produto.
 
@@ -240,7 +242,7 @@ A Etapa 2 original tinha sete fases (6 a 12). Com as viradas, ela encolhe e se r
 
 **Fase de Mensageria (WhatsApp) — o canal do Líder** — ADICIONADA (2026-06-09)
 - **Lacuna corrigida:** o `PRODUTO.md` §10 prevê o WhatsApp como o canal do Líder (cada time com seu número), mas o core adiou isso "para a Etapa 2" e esta reorganização original (as cinco fases acima) **não o recolheu** — caiu num vão. Esta fase fecha a lacuna.
-- É um **adaptador de canal na borda** (gatilho de entrada + envio de saída), reusando o motor de execução e a espera-por-humano já validados — **não mexe no núcleo congelado**.
+- É um **adaptador de canal na borda** (gatilho de entrada + envio de saída), reusando o motor de execução e a espera-por-humano já validados — **não mexe no núcleo congelado**. **[Nota 2026-07-26]** Na prática, o modo *conversacional* da mensageria acabou virando um **runtime paralelo** ao motor (chama o agente por fora do disparo, sem criar execução) — exatamente o "segundo motor" que o **Programa de Unificação de Estado** (`docs/UNIFICACAO-ESTADO.md`) vai absorver para dentro do motor único.
 - **Decisão (2026-06-09, revista):** provedor = **Evolution API** — o vínculo é por **QR code, sem fricção** (o Cloud API oficial não faz QR; exige burocracia da Meta). Trade-off: não-oficial, risco de ban → mitigar com número dedicado por time e uso humano. **Cloud API = upgrade futuro** para quem exigir oficial. Detalhe e Definition of Done no `BUILD-PLAN.md`.
 - **Depende da URL pública** da implantação → executar junto com / logo após a fase final.
 
@@ -298,8 +300,9 @@ Esta seção é dirigida ao Claude Code. Lê com atenção; ela governa o **como
 
 ### 6.1. Princípios não-negociáveis
 
-1. **O núcleo já validado é intocável.** A orquestração de agentes, o LangGraph, a espera-por-humano, os gatilhos, a tela de inspeção, os instrumentos já construídos — todo o motor da Etapa 1 está fora do escopo desta migração. Você **estende e adiciona**, não refatora. Se uma fase desta migração parece exigir mudança no núcleo, pare e pergunte ao maestro antes de prosseguir.
-   - **Exceção autorizada (2026-06-16):** a **FASE — Automações como GRAFO** muda o **formato do `cadeia`** (de dict por-agente para lista de nós tipados), o que **toca o parser do motor** (`orquestracao/cadeia.py`: `validar_cadeia`/`executar_cadeia`) e a retomada (`mensageria/retoma.py`). O maestro autorizou essa evolução explicitamente (foi perguntado e decidiu *adaptar* o motor, não reescrevê-lo para LangGraph nativo). O **laço de execução de um agente** (`agente.py`, o `create_react_agent`) permanece **intocado**. Toda outra fase segue a regra acima.
+1. **O motor evolui por decisão dirigida — nunca por reescrita cega.** *(Princípio atualizado em 2026-07-26; substitui o "núcleo intocável" original, cujo custo estrutural está explicado na "Evolução de governança" ao final deste item.)* A orquestração de agentes, o LangGraph, a espera-por-humano, os gatilhos, a tela de inspeção, os instrumentos já construídos são o **core validado — precioso e protegido**. A regra **padrão** continua sendo **estender e adicionar**, não refatorar por impulso. Mas quando o produto **exige** mudar o motor (e a experiência mostrou que exige), a mudança é **autorizada de forma formal, aditiva, faseada e aprovada-antes**, com rede de testes máxima — jamais um rewrite às cegas. Se uma fase parece exigir mudança no núcleo, **pare, dimensione o impacto e alinhe com o maestro** um aditivo curto a esta seção antes de prosseguir (o formato do precedente de 2026-06-16).
+   - **Exceção autorizada (2026-06-16):** a **FASE — Automações como GRAFO** muda o **formato do `cadeia`** (de dict por-agente para lista de nós tipados), o que **toca o parser do motor** (`orquestracao/cadeia.py`: `validar_cadeia`/`executar_cadeia`) e a retomada (`mensageria/retoma.py`). O maestro autorizou essa evolução explicitamente (foi perguntado e decidiu *adaptar* o motor, não reescrevê-lo para LangGraph nativo). O **laço de execução de um agente** (`agente.py`, o `create_react_agent`) permanece **intocado**. Este é o **precedente formal** do mecanismo de evolução dirigida.
+   - **Evolução de governança (2026-07-26) — por que a regra mudou:** a trava absoluta ("intocável, em nenhuma circunstância") foi prudente para proteger o core recém-validado, mas teve um custo estrutural: empurrou tudo o que era novo para a **borda**, e a mensageria, em vez de estender o motor, virou um **segundo motor** paralelo e incompatível (diagnóstico em `docs/REMODELAGEM-MOTOR.md §2`; o maestro: *"escreveram que era intocável, e agora temos 2; daqui a pouco teremos 3"*). Fica autorizada a **direção** de unificar os dois motores numa timeline única — o **Programa de Unificação de Estado** (`docs/UNIFICACAO-ESTADO.md`), **prioridade nº 1**. **Permanecem congelados** (não se tocam nem no rewrite): a semântica de `seguir_para`, a garantia HITL antes de ação irreversível, o contrato de instrumentos, a fila `FOR UPDATE SKIP LOCKED`, o laço `create_react_agent` do agente, e o heartbeat/sweeper/recuperação de órfãos (lei `CLAUDE.md §12-A`). A suspensão para tocar `cadeia.py`/`agente.py`/modelo `PassoExecucao` é **cirúrgica e só antes da Fatia 4** do programa, por novo aditivo aprovado (ver `REMODELAGEM-MOTOR.md §7`). **Execução de código aguarda sinal explícito do maestro.**
 
 2. **Migrations no banco são aditivas, nunca destrutivas.** Você adiciona tabelas e colunas; não apaga nem renomeia o que já tem dados em produção interna. Onde for inevitável uma transformação (como o caso de `organizacoes.dono` migrando para a tabela `membros`), faz-se em duas etapas: adiciona o novo, popula com base no existente, e só então — depois de validação — descontinua o antigo.
 

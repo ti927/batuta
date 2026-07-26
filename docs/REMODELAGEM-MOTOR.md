@@ -4,7 +4,7 @@
 >
 > **Origem (2026-07-21):** pedido direto do maestro — *"QUERO UM PROJETO COMPLETO DE REMODELAGEM DO MOTOR, CÉREBRO, TUDO DE MANEIRA SIMPLIFICADA, E QUERO UM ESTUDO SINCERO, NÃO QUERO QUE FAÇA UM TREM PRA ME AGRADAR."*
 >
-> Este é o documento-fonte da verdade da fase. O `BUILD-PLAN.md` só aponta para cá.
+> Este é o documento-fonte da **Frente A (runtime)** do **Programa de Unificação de Estado** (âncora: `docs/UNIFICACAO-ESTADO.md`). O `BUILD-PLAN.md` aponta para o programa; o programa aponta para cá.
 
 ---
 
@@ -98,7 +98,7 @@ Os dois reimplementam, cada um do seu jeito: rodar agente, bifurcar (A/B), esper
 ### Uma superfície de história
 - **UMA timeline por execução** (`PassoExecucao` com `tipo`), com projeções por gatilho: tela de execução = timeline crua; aba Conversa = a **mesma** timeline como thread; `/uso` passa a cobrir a conversa automaticamente (a conversa agora grava passos).
 - `evento_log` (`/logs`) **fica** — observabilidade transversal de infra (http/auth/falhas), correlacionada por `execucao_id`. É o entorno, não a história do fluxo.
-- `TurnoCriacao` (IA criadora) **não unifica** — é outro domínio (autoria, não runtime). Juntar seria complexidade sem retorno.
+- `TurnoCriacao` (IA criadora) **não colapsa na mesma timeline de runtime** — é outro domínio (autoria, não execução de fluxo). **[Reconciliado 2026-07-26]** Mas atenção: a IA criadora sofre da **mesma doença-raiz** deste motor (turno sem memória, reconstrói do texto, gasta tokens) e se cura pela **mesma família** (persistir estado entre turnos). Por isso ela é a **Frente B** do mesmo programa — ver `docs/UNIFICACAO-ESTADO.md`. Se as duas frentes viram um só programa ou dois trilhos coordenados é a **decisão adiada** (depende do estudo de tokens); o que **não se sustenta mais** é tratá-las como coisas sem relação.
 
 **O que o maestro passa a olhar SEMPRE:** a timeline da execução. "Começou por botão, hora ou mensagem" vira etiqueta/filtro, não um lugar diferente do app.
 
@@ -168,5 +168,6 @@ O congelamento (`MIGRACAO.md §6.1`) precisa ser **suspenso de forma limitada e 
 ---
 
 ## 10. Relação com outras fases / observações
+- **Parte de um programa maior:** esta remodelagem é a **Frente A (runtime)** do **Programa de Unificação de Estado** (`docs/UNIFICACAO-ESTADO.md`), que a coordena com a **Frente B (autoria)** — a economia de tokens da IA criadora (`docs/ECONOMIA-TOKENS-IA-CRIADORA.md`). As duas compartilham a fundação "memória entre turnos"; o benchmark (`docs/BENCHMARK-MENSAGERIA-MOTORES.md`) é a evidência comum.
 - **Não confundir** com a fase de **Observabilidade** (`evento_log` + `/logs`, já no ar): aquela é o *entorno* (infra transversal). Esta é a *história do fluxo* (a timeline do que o agente fez). As duas convivem — `evento_log` correlaciona por `execucao_id`.
 - A dor imediata que originou o estudo (não dá pra depurar o agente lançador do Bubble) é resolvida já na **Fatia 1**, sem tocar o portão. Se o maestro quiser só isso primeiro, é a fatia certa.

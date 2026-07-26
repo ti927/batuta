@@ -8,8 +8,9 @@ Estes documentos governam este projeto. Leia-os antes de qualquer ação:
 2. **`CLAUDE.md`** (este arquivo) — como você deve trabalhar.
 3. **`BUILD-PLAN.md`** — o plano de implementação, fase por fase.
 4. **`DESIGN-SYSTEM.md`** — a marca do Batuta: paleta, tipografia, tokens, voz (fonte da verdade de **marca/tokens/voz**; ver seção 17).
-5. **`MIGRACAO.md`** — a reorientação da Etapa 2 (Batuta como ferramenta interna da consultoria; IA criadora/companheira; núcleo congelado). Vigente desde o fim do portão de validação.
+5. **`MIGRACAO.md`** — a reorientação da Etapa 2 (Batuta como ferramenta interna da consultoria; IA criadora/companheira; núcleo congelado → **evolução dirigida** desde 2026-07-26, ver §6.1 de lá). Vigente desde o fim do portão de validação.
 6. **`docs/design/`** (handoff de design hi-fi, com `README.md`) — a fonte da verdade de **design, layout, telas e UX/UI**: as telas desenhadas (criação AI-first, dashboard, inspeção de execução, IA companheira) e o shell de navegação (sidebar). **Sempre que for desenhar ou implementar qualquer tela/layout/UX, leia o `docs/design/README.md` junto com o `DESIGN-SYSTEM.md`** — um traz as telas hi-fi, o outro os tokens/marca. Os `.jsx`/`.html` ali são referência de design, não código de produção.
+7. **`docs/UNIFICACAO-ESTADO.md`** — o **Programa de Unificação de Estado (PRIORIDADE Nº 1)**: junta a remodelagem do motor e a economia de tokens da IA criadora numa fundação só — dar **memória entre turnos** (hoje cada turno começa do zero, o que fez brotar um segundo motor e encarece a IA). Consolidação **vigente**; **execução de código aguarda sinal do maestro**. Leia antes de qualquer trabalho de orquestração, mensageria ou IA criadora.
 
 Se `PRODUTO.md` e qualquer documento técnico divergirem, **o `PRODUTO.md` vence** — ou você levanta a contradição com o maestro antes de prosseguir.
 
@@ -120,6 +121,8 @@ Regras dessa separação:
 ## 9. LangGraph — o motor de orquestração
 
 A orquestração de agentes do Batuta é construída sobre o **LangGraph**. Disciplina ao usá-lo:
+
+> **Estado atual (2026-07-26) — leia antes de mexer em orquestração/mensageria/IA criadora:** hoje o Batuta tem **dois runtimes** que rodam agente — o motor de orquestração (`disparo`→`cadeia`→`agente`, que cria execução e deixa rastro) e o motor de conversa (`mensageria`, que chama o agente **por fora** e **não** cria execução). Isso é reconhecido como problema e está endereçado pelo **Programa de Unificação de Estado** (`docs/UNIFICACAO-ESTADO.md`, prioridade nº 1): um motor só, uma timeline só, com **memória entre turnos**. O motor **não é mais "intocável"** — evolui por **decisão dirigida** (`MIGRACAO.md §6.1`). **Não construa um terceiro runtime na borda: estenda o motor.**
 
 - **O `PRODUTO.md` manda, o LangGraph serve.** O LangGraph é o motor; o produto a ser entregue é o do `PRODUTO.md`. Se o LangGraph não fizer algo nativamente que o produto exige, complemente — não mude o produto para caber no LangGraph.
 - **Antes de implementar qualquer peça de orquestração, leia a documentação oficial do LangGraph sobre aquela peça.** Encadeamento, estado, e especialmente a espera-por-humano (human-in-the-loop) — esta última é a peça mais delicada do Batuta (ver `PRODUTO.md`, seção 14). Não improvise sobre o LangGraph de memória.

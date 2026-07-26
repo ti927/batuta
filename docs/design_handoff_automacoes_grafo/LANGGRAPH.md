@@ -2,6 +2,8 @@
 
 ⭐ Este é o documento técnico que conecta **a tela** (o construtor de grafo) ao **motor** (LangGraph) que já vive em `cerebro/orquestracao/`. Objetivo: o Claude Code olhar um nó/aresta na UI e saber **exatamente** que construção LangGraph ele vira — e perceber que o motor **já faz quase tudo** (Fase 4 do `BUILD-PLAN.md`), então isto é mais "ligar a UI ao que existe" do que "construir o motor".
 
+> **⚠️ [Correção 2026-07-26] Este mapa é o ALVO conceitual, não o que roda hoje.** Onde a tabela abaixo diz que o portão vira `interrupt()` e o estado da conversa vira `checkpointer` do LangGraph, isso é como o LangGraph *nativamente* faria — mas o Batuta roda `create_react_agent` **SEM checkpointer** e **reimplementou pausa/retoma à mão, na borda** (ver `docs/BENCHMARK-MENSAGERIA-MOTORES.md`). **Adotar o `interrupt()`/`PostgresSaver` nativos é justamente o ALVO** do **Programa de Unificação de Estado** (`docs/UNIFICACAO-ESTADO.md`), ainda **não executado**. Não presuma que a persistência/interrupt nativos já estão ligados.
+
 > Versões alvo (do `BUILD-PLAN.md`): LangGraph sobre `langchain-anthropic`/`-openai`/`-google-genai`; motor **síncrono**; chave resolvida por contexto (`usar_chaves`). Arquivos atuais: `orquestracao/{llm,agente,cadeia,disparo,modelos_ia}.py`, `rotas/{automacoes,execucao,webhooks}.py`.
 
 ---
