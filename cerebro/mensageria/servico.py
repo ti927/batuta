@@ -12,6 +12,7 @@ instrumento de canal é filtrado das ferramentas daquele turno para não haver
 envio em dobro. O modo fluxo (cadeia com pausa/retoma) entra depois.
 """
 
+import logging
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -38,12 +39,15 @@ from modelos import (
     Execucao,
     Instrumento,
     MensagemConversa,
+    PassoExecucao,
 )
 from observabilidade.escritor import registrar_evento
 from orquestracao.agente import executar_agente
 from orquestracao.llm import MODELO_PADRAO, usar_chaves
 from orquestracao.modelos_ia import provedor_do_modelo_seguro
 from sessao import CriadorDeSessao
+
+logger = logging.getLogger(__name__)
 
 # Tipos de instrumento que são canais de mensageria (a borda os opera; o agente
 # não os aciona como ferramenta no modo conversacional).
@@ -582,6 +586,119 @@ def _cancelar_por_canal(
     sessao.commit()
 
 
+def _sombra_da_conversa(
+    sessao: Session,
+    conversa_id: uuid.UUID,
+    *,
+    canal: str,
+    contato: str,
+    iniciada_em: datetime,
+) -> Execucao:
+    """A execução-SOMBRA desta conversa (modo 'conversa'): o rastro inspecionável dos
+    turnos do agente atendente, nos MESMOS trilhos da orquestração. Cria na 1ª vez.
+    Vive no estado próprio 'conversa', que a fila (`aguardando`) e os recuperadores de
+    órfãs/presas (`em_andamento`) IGNORAM — logo nenhum código do motor precisa mudar."""
+    sombra = sessao.scalars(
+        select(Execucao).where(
+            Execucao.conversa_id == conversa_id, Execucao.modo == "conversa"
+        )
+    ).first()
+    if sombra is None:
+        sombra = Execucao(
+            automacao_id=None,
+            modo="conversa",
+            conversa_id=conversa_id,
+            estado="conversa",
+            entrada={"texto": f"Atendimento por {canal} com {contato}"},
+            iniciada_em=iniciada_em,
+        )
+        sessao.add(sombra)
+        sessao.flush()
+    return sombra
+
+
+def _gravar_rastro_conversa(
+    conversa_id: uuid.UUID,
+    agente_id: uuid.UUID,
+    *,
+    canal: str,
+    contato: str,
+    origens: dict,
+    entrada: str,
+    iniciado: datetime,
+    finalizado: datetime,
+    resultado: dict | None = None,
+    erro: BaseException | None = None,
+) -> None:
+    """Grava UM passo no rastro-sombra da conversa (Frente A, Fatia 1a), espelhando o
+    que a orquestração já grava por passo: entrada, saída, instrumentos acionados,
+    ERROS de instrumento (o que faltava para depurar o agente conversacional) e uso.
+
+    Roda em SESSÃO PRÓPRIA e é à PROVA DE FALHA — o rastro é secundário e NUNCA pode
+    quebrar o atendimento (lei §12-A) nem envenenar a transação do turno (mesmo
+    isolamento do heartbeat `orquestracao/disparo._escrever_atividade`)."""
+    try:
+        s = CriadorDeSessao()
+        try:
+            sombra = _sombra_da_conversa(
+                s, conversa_id, canal=canal, contato=contato, iniciada_em=iniciado
+            )
+            ordem = (
+                len(
+                    s.scalars(
+                        select(PassoExecucao.id).where(
+                            PassoExecucao.execucao_id == sombra.id
+                        )
+                    ).all()
+                )
+                + 1
+            )
+            if erro is not None:
+                saida = {
+                    "texto": "",
+                    "erro": str(erro),
+                    "instrumentos_acionados": [],
+                    "saida_escolhida": None,
+                    "uso": [],
+                }
+                estado = "erro"
+            else:
+                r = resultado or {}
+                saida = {
+                    "texto": r.get("saida") or "",
+                    "instrumentos_acionados": r.get("instrumentos_acionados") or [],
+                    "saida_escolhida": r.get("ramo_escolhido") or None,
+                    "uso": _carimbar_uso_agente(r.get("uso"), origens),
+                }
+                # Só quando houve falha de instrumento — mantém o passo comum idêntico
+                # ao da orquestração (o diagnóstico lê com `.get(...) or []`).
+                if r.get("erros_instrumentos"):
+                    saida["erros_instrumentos"] = r["erros_instrumentos"]
+                estado = "concluido"
+            s.add(
+                PassoExecucao(
+                    execucao_id=sombra.id,
+                    ordem=ordem,
+                    agente_id=agente_id,
+                    no_id=None,
+                    entrada={"texto": entrada},
+                    saida=saida,
+                    estado=estado,
+                    iniciado_em=iniciado,
+                    finalizado_em=finalizado,
+                )
+            )
+            s.commit()
+        finally:
+            s.close()
+    except Exception:
+        logger.warning(
+            "Falha ao gravar o rastro-sombra da conversa %s (não afeta o atendimento).",
+            conversa_id,
+            exc_info=True,
+        )
+
+
 def _rodar_turno(
     sessao: Session,
     conversa: Conversa,
@@ -614,6 +731,9 @@ def _rodar_turno(
         cinto = _cinto_sem_canais(sessao, agente.id)
     entrada = _montar_entrada(sessao, conversa, gate=gate)
 
+    # Início do turno — carimbo do rastro-sombra (Fatia 1a). Capturado antes da chamada
+    # para medir a duração real do passo, inclusive numa falha.
+    iniciado = datetime.now(timezone.utc)
     try:
         with usar_chaves(chaves), midia_recebida.usar_imagens_recebidas(imagens_recebidas):
             resultado = executar_agente(
@@ -634,7 +754,29 @@ def _rodar_turno(
             erro=e, recurso_tipo="conversa", recurso_id=conversa.id,
             detalhe={"canal": conversa.canal, "gate": gate},
         )
+        # Rastro-sombra: uma falha dura vira um passo de erro (nunca em silêncio). Só no
+        # modo conversacional — o turno de portão (gate) pertence ao rastro do FLUXO.
+        if not gate:
+            _gravar_rastro_conversa(
+                conversa.id, agente.id, canal=conversa.canal,
+                contato=conversa.contato_nome or conversa.contato_chave,
+                origens=origens, entrada=entrada,
+                iniciado=iniciado, finalizado=datetime.now(timezone.utc), erro=e,
+            )
         return None
+
+    # Rastro-sombra do turno conversacional (Fatia 1a): grava o passo — com entrada,
+    # saída, instrumentos acionados, ERROS de instrumento e uso — nos mesmos trilhos da
+    # orquestração. Cobre turnos com e sem texto. Portão (gate) fica de fora: pertence
+    # ao rastro do FLUXO, não ao da conversa.
+    if not gate:
+        _gravar_rastro_conversa(
+            conversa.id, agente.id, canal=conversa.canal,
+            contato=conversa.contato_nome or conversa.contato_chave,
+            origens=origens, entrada=entrada,
+            iniciado=iniciado, finalizado=datetime.now(timezone.utc),
+            resultado=resultado,
+        )
 
     saida = (resultado.get("saida") or "").strip()
     ramo = (resultado.get("ramo_escolhido") or "").strip()

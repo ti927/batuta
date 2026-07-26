@@ -211,15 +211,30 @@ class Automacao(IdData, Base):
 
 
 class Execucao(IdData, Base):
-    """O registro de cada vez que uma automação roda."""
+    """O registro de cada vez que uma automação roda — ou, no modo `conversa`, o
+    rastro-sombra de um atendimento por mensageria (Frente A, Fatia 1a): a conversa
+    passa a deixar rastro nos MESMOS trilhos da orquestração (mesma tabela, mesmos
+    passos), para inspecionar o agente conversacional passo a passo."""
 
     __tablename__ = "execucoes"
-    automacao_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("automacoes.id", ondelete="CASCADE"), nullable=False
+    # Nulo no modo `conversa`: o rastro de uma conversa não nasce de uma automação
+    # (nasce do agente atendente). No modo `fluxo` (padrão), sempre preenchido.
+    automacao_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("automacoes.id", ondelete="CASCADE"), nullable=True
+    )
+    # `fluxo` (execução de automação, padrão) | `conversa` (rastro-sombra de um
+    # atendimento). A sombra vive no estado próprio `conversa` (abaixo), que a fila e
+    # os recuperadores de órfãs/presas IGNORAM (eles casam `aguardando`/`em_andamento`).
+    modo: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'fluxo'")
+    )
+    # A conversa que este rastro-sombra acompanha (modo `conversa`); nulo no modo fluxo.
+    conversa_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conversas.id", ondelete="CASCADE"), nullable=True
     )
     estado: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default=text("'aguardando'")
-    )  # aguardando | em_andamento | aguardando_humano | concluida | falhou
+    )  # aguardando | em_andamento | aguardando_humano | concluida | falhou | conversa
     entrada: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     resultado: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     iniciada_em: Mapped[datetime | None] = mapped_column(

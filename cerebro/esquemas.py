@@ -398,7 +398,8 @@ class ExecucaoLer(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    automacao_id: uuid.UUID
+    # Nulo no modo `conversa` (rastro-sombra de atendimento, sem automação de origem).
+    automacao_id: uuid.UUID | None = None
     estado: str
     entrada: dict | None
     resultado: dict | None
