@@ -38,7 +38,11 @@ Parar de enviar a conversa inteira. Enviar **`resumo` + os últimos N turnos na 
 - **Front:** painel "Sobre este time" na tela da criadora (`interface/app/criar/[id]/criacao-cliente.tsx`, `interface/app/times/[id]/conversas/[conversaId]/conversa-cliente.tsx`) — mostra o resumo e permite editar/salvar. Tipos + chamadas em `interface/lib/api.ts`. (Toca UI → seguir o handoff `docs/design/`.)
 - A IA pode **propor** atualização (ela vê o resumo no contexto); o humano tem a palavra final via o painel.
 
-### Parte C — Iceberg: histórico completo + ferramenta de busca  (tool)
+### Parte C — Iceberg: histórico completo + ferramenta de busca  ✅ **NO AR (2026-07-26, commit `1a8712f`)**
+> **Como ficou:** ferramenta `buscar_no_historico(consulta)` em `criacao/ferramentas.py` — varre os turnos
+> já dobrados (`mensagens[:resumo_ate]`, o que saiu da janela), casa por palavra/trecho e devolve o texto
+> original, com teto de resultados/tamanho (a busca é para economia). Entrada em `MENSAGENS_CRIADORA` (feedback
+> ao vivo). Fecha a ressalva "resumo com perda" da Parte A. Backend puro (sem migração, sem tela); +2 testes.
 - O `conversa.mensagens` **continua guardando tudo** (nada é apagado — só não é tudo enviado).
 - Nova ferramenta em `montar_ferramentas` (`ferramentas.py:333`): **`buscar_no_historico(consulta)`** — procura nos turnos **anteriores à janela** (`mensagens[:resumo_ate]`) por palavra/trecho e devolve os turnos casados (texto). Entrada em `MENSAGENS_CRIADORA` (`ferramentas.py:304`) para o feedback ao vivo. Assim o maestro instrui: *"procura no histórico o que combinamos sobre X"*.
 
