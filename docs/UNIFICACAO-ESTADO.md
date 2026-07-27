@@ -135,13 +135,14 @@ decisão adiada (§ abaixo) tomada com número na mão, e a sequência das fatia
 **Nuance:** cache só vale dentro da janela (5 min / 24h / implícito); "abrir time frio" quem resolve é o resumo rolante (Parte A). Os Eixos 2 e 3 economizam **sem** o rewrite; o Eixo 1 é o ganho de fundo do Programa.
 
 ### Frente A — as fatias do runtime (do `REMODELAGEM-MOTOR.md §5`)
-- **Fatia 1 — Unificar o RASTRO** (maior valor / menor risco; **NÃO toca o portão**) — ✅ **1a NO AR (2026-07-26, deploy `7dcdfc4`, migração `snd00sombra01`)**. Toda conversa nasce
+- **Fatia 1 — Unificar o RASTRO** (maior valor / menor risco; **NÃO toca o portão**) — ✅ **NO AR (1a+1b, 2026-07-26)**. Toda conversa nasce
   com uma `Execucao` sombra `modo=conversa`; o turno grava o passo (entrada/saída/instrumentos/
   **`erros_instrumentos` hoje descartados**/uso), nos mesmos trilhos da orquestração. Comportamento visível
   **inalterado** — só passa a existir rastro. **Resolve JÁ a dor de hoje:** dá para depurar o agente
   lançador do Bubble. Detalhes do que foi construído (estado próprio `'conversa'` fora da fila/recuperadores;
-  escritor dedicado à prova de falha; portão de fora; 100% aditivo, 732 testes) em `REMODELAGEM-MOTOR.md §5`.
-  Feita como **1a** (backend); a UI p/ VER o rastro é a **1b** (desenho antes).
+  escritor dedicado à prova de falha; portão de fora; 100% aditivo, 736 testes) em `REMODELAGEM-MOTOR.md §5`.
+  **1a** (deploy `7dcdfc4`) fez o rastro EXISTIR; **1b** (deploy `4505a8d`, sem migração) o tornou VISÍVEL na
+  tela de Execuções (filtro "Conversas" + a MESMA tela de detalhe). Falta só teste ao vivo.
 - **Fatia 2** — Unificar medição/limites sobre a execução sombra.
 - **Fatia 3** — Colapsar a config de 5 camadas por dimensão (remover chaves mortas).
 - **Fatia 4 ⚠️** — Portão como passo `espera_humano` unificado. **Exige a suspensão dirigida do

@@ -108,14 +108,15 @@ Os dois reimplementam, cada um do seu jeito: rodar agente, bifurcar (A/B), esper
 
 Cada fatia é pequena, testável, deixa a produção verde e os testes passando. Nunca há troca simultânea dos dois mundos. Se o maestro parar em qualquer ponto, o sistema fica coerente.
 
-### FATIA 1 — Unificar o RASTRO (maior valor / menor risco) ⭐ — ✅ 1a NO AR (2026-07-26)
+### FATIA 1 — Unificar o RASTRO (maior valor / menor risco) ⭐ — ✅ NO AR (1a+1b, 2026-07-26)
 Toda conversa nasce com uma `Execucao` sombra `modo=conversa` (criada preguiçosamente no 1º turno). `_rodar_turno` passa a gravar o passo do agente pelo **mesmo** registrador do disparo (`disparo._fazer_registrador`), **incluindo `erros_instrumentos`** (hoje descartado). Comportamento visível ao cliente **inalterado** — só passa a existir rastro. **Aditivo, baixo risco, NÃO toca o portão.**
 → **Resolve JÁ a dor de hoje:** dá para inspecionar o "agente lançador" do Bubble (qual instrumento chamou, com que corpo, o que a API respondeu, o erro).
 
-> **✅ FATIA 1 (parte 1a) NO AR (2026-07-26, deploy `7dcdfc4`, migração `snd00sombra01`).** Feita como **1a** (backend puro); a UI para VER o rastro é a **1b** (com desenho proposto antes). Onde o construído ficou diferente do esboço acima:
+> **✅ FATIA 1 COMPLETA (1a+1b) NO AR (2026-07-26).** 1a = deploy `7dcdfc4` + migração `snd00sombra01` (backend — o rastro passa a EXISTIR). 1b = deploy `4505a8d`, sem migração (o rastro fica VISÍVEL, reusando a tela de Execuções). Onde o construído ficou diferente do esboço acima:
 > - `Execucao` ganhou `modo` ('fluxo'|'conversa'), `automacao_id` **nulável** e `conversa_id` (FK). A sombra vive no estado próprio **`'conversa'`**, que a fila (`aguardando`) e os recuperadores de órfãs/presas (`em_andamento`) **IGNORAM** — por isso **nada da fila/sweeper mudou** e nenhum reinício a marca `'falhou'`. Sem automação, fica fora de todas as listas/métricas (join com automação) → não polui taxa de sucesso nem duplica custo.
 > - O passo **não** reusa literalmente `disparo._fazer_registrador` (acoplado à cadeia + à sessão do worker): é um escritor dedicado `servico._gravar_rastro_conversa` que **espelha a mesma forma** (entrada/saída/instrumentos/`erros_instrumentos`/uso), porém em **sessão própria e à prova de falha** (isolamento do heartbeat) — o rastro nunca quebra o atendimento (§12-A). O turno de **portão (gate) fica de fora** (pertence ao rastro do fluxo).
-> - 100% aditivo; **732 testes**; duplicar automação e inspeção de execução seguem idênticos. **Falta:** teste ao vivo + Fatia **1b** (UI).
+> - **1b (visibilidade):** filtro **"Conversas"** na aba Execuções (molde do "Agendadas"; busca no cliente, fora dos stat cards) + a MESMA tela de detalhe. `execucao_acessivel` escopa a sombra pela conversa→agente→time; novo `GET /times/{id}/conversas-rastro`; a página de detalhe tolera sem-automação e não polla o estado 'conversa'.
+> - 100% aditivo; **736 testes** + tsc/eslint/`next build`; duplicar automação e inspeção de execução seguem idênticos. **Falta:** só teste ao vivo.
 
 ### FATIA 2 — Unificar MEDIÇÃO/limites sobre a execução sombra
 Teto de custo/turnos passa a ler da timeline (contagem de passos + soma de uso); `Conversa.turnos`/`custo_acumulado_usd` viram cache derivado. Prepara a Dimensão B.
