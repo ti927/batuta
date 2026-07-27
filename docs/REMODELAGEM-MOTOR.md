@@ -118,6 +118,11 @@ Toda conversa nasce com uma `Execucao` sombra `modo=conversa` (criada preguiços
 > - **1b (visibilidade):** filtro **"Conversas"** na aba Execuções (molde do "Agendadas"; busca no cliente, fora dos stat cards) + a MESMA tela de detalhe. `execucao_acessivel` escopa a sombra pela conversa→agente→time; novo `GET /times/{id}/conversas-rastro`; a página de detalhe tolera sem-automação e não polla o estado 'conversa'.
 > - 100% aditivo; **736 testes** + tsc/eslint/`next build`; duplicar automação e inspeção de execução seguem idênticos. **Falta:** só teste ao vivo.
 
+> **📊 MEDIÇÃO + CACHE do runtime (2026-07-26, pós-Fatia 1, deploy `bf36cd8`).** O rastro da 1ª conversa real (Reembolsos/Bubble) permitiu MEDIR o custo: o peso **não** é o histórico reenviado (< 600 tok/turno), e sim a **multiplicação do laço ReAct** — o `create_react_agent` reenvia [ferramentas + prompt de sistema] a CADA passo de tool-calling (turno de 9 chamadas ao Bubble = 84,7k tok de entrada, ~17× o conteúdo real).
+> - **Ganho rápido entregue:** `_prompt_de_sistema` (`orquestracao/agente.py`) marca `cache_control: ephemeral` no prompt de sistema **só na Anthropic** (guard por provedor, espelha `criacao/prompt.prompt_criadora`) + captura `cache_read`/`cache_creation` no uso, para o custo ficar correto (a Anthropic conta o token cacheado na entrada pelo número cheio, mas cobra ~10%). Beneficia os DOIS motores (ambos passam por `executar_agente`).
+> - **Medido ao vivo (conversa nova, mesmo caso):** 48% da entrada servida do cache → custo **US$ 0,63 vs US$ 1,00** a preço cheio = **−37%**. (A contagem de tokens NÃO cai — o cacheado conta cheio; cai o CUSTO.)
+> - **A cura ESTRUTURAL — persistência entre turnos (parar de re-buscar o mesmo dado a cada turno) — segue PENDENTE:** ela ELIMINA os reenvios; o cache só os barateia. É a próxima empreitada estruturada (Fatias 4–5).
+
 ### FATIA 2 — Unificar MEDIÇÃO/limites sobre a execução sombra
 Teto de custo/turnos passa a ler da timeline (contagem de passos + soma de uso); `Conversa.turnos`/`custo_acumulado_usd` viram cache derivado. Prepara a Dimensão B.
 
