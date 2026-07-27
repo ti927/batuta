@@ -32,6 +32,7 @@ import {
 } from "@/lib/api";
 import { ChatCriacao } from "@/components/conversa-ia/chat";
 import { PainelConhecimento } from "@/components/conversa-ia/painel-conhecimento";
+import { PainelSobreTime } from "@/components/conversa-ia/painel-sobre-time";
 import { RotuloSecao, rotuloGatilho } from "@/components/conversa-ia/comum";
 import { useConversaCriacao } from "@/components/conversa-ia/usar-conversa";
 import { useState } from "react";
@@ -144,11 +145,18 @@ export function CriacaoCliente({
           )}
 
           {montou && time && (
-            <PainelConhecimento
-              time={time}
-              execucoes={execucoesRecentes}
-              memoria={conversa.memoria}
-            />
+            <>
+              <PainelSobreTime
+                conversaId={conversaInicial.id}
+                resumoInicial={conversaInicial.resumo}
+                podeEditar={podeConversar}
+              />
+              <PainelConhecimento
+                time={time}
+                execucoes={execucoesRecentes}
+                memoria={conversa.memoria}
+              />
+            </>
           )}
         </div>
       </section>

@@ -14,6 +14,7 @@ import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
 import { ChatCriacao } from "@/components/conversa-ia/chat";
 import { PainelConhecimento } from "@/components/conversa-ia/painel-conhecimento";
+import { PainelSobreTime } from "@/components/conversa-ia/painel-sobre-time";
 import { useConversaCriacao } from "@/components/conversa-ia/usar-conversa";
 
 // ───────── Contexto: estado do painel da IA, compartilhado pelo time ─────────
@@ -219,12 +220,19 @@ function ConversaCarregada({
       </button>
       {mostrarMemoria && (
         <div className="max-h-72 overflow-y-auto px-3 pb-3">
-          <PainelConhecimento
-            time={c.time}
-            execucoes={execucoesIniciais}
-            memoria={c.memoria}
-            comTitulo={false}
+          <PainelSobreTime
+            conversaId={conversa.id}
+            resumoInicial={conversa.resumo}
+            podeEditar={podeConversar}
           />
+          <div className="mt-4">
+            <PainelConhecimento
+              time={c.time}
+              execucoes={execucoesIniciais}
+              memoria={c.memoria}
+              comTitulo={false}
+            />
+          </div>
         </div>
       )}
     </div>

@@ -25,6 +25,7 @@ from esquemas import (
     ConversaCriacaoResumo,
     IniciarConversaCriacao,
     MensagemTurno,
+    ResumoProjeto,
     TurnoCriacaoLer,
     TurnoEnfileirado,
 )
@@ -196,6 +197,29 @@ def obter(
 ):
     conversa = conversa_criacao_acessivel(sessao, usuario, conversa_id)
     return _ler(sessao, conversa)
+
+
+@rotas.put("/conversas-criacao/{conversa_id}/resumo", response_model=ResumoProjeto)
+def editar_resumo(
+    conversa_id: uuid.UUID,
+    dados: ResumoProjeto,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Edita o resumo do projeto (o painel 'Sobre este time'): a versão humana VENCE a
+    da IA, que segue refinando a partir dela (o resumidor rolante parte do `resumo`
+    atual). Acesso: operador (mesmo nível de quem conversa/edita o time)."""
+    conversa = conversa_criacao_acessivel(
+        sessao, usuario, conversa_id, minimo="operador"
+    )
+    conversa.resumo = (dados.resumo or "").strip() or None
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="criacao.resumo_editado",
+        recurso_tipo="conversa_criacao", recurso_id=conversa.id,
+        organizacao_id=conversa.organizacao_id,
+    )
+    sessao.commit()
+    return ResumoProjeto(resumo=conversa.resumo)
 
 
 @rotas.post(

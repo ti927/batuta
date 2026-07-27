@@ -785,6 +785,9 @@ export type ConversaCriacao = {
   mensagens: MensagemConversa[];
   time: SnapshotTime | null;
   memoria: MemoriaProjeto[];
+  // Resumo rolante do projeto (o que a IA já sabe do time), visível e editável no
+  // painel "Sobre este time" (Parte B da economia de tokens).
+  resumo: string | null;
   // Turno ainda em andamento (se houver) — a tela RETOMA o acompanhamento após reload.
   turno_em_andamento?: TurnoCriacaoLer | null;
 };

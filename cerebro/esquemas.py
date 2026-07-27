@@ -696,9 +696,20 @@ class ConversaCriacaoLer(ConversaCriacaoResumo):
     mensagens: list
     time: dict | None = None
     memoria: list = []
+    # Resumo rolante do projeto (Parte A da economia de tokens): o que a IA já sabe do
+    # time, em texto. VISÍVEL e EDITÁVEL pelo painel "Sobre este time" (Parte B).
+    resumo: str | None = None
     # Turno ainda em andamento (aguardando/em_andamento), se houver — para a tela
     # RETOMAR o acompanhamento após um reload, sem perder o turno em voo.
     turno_em_andamento: TurnoCriacaoLer | None = None
+
+
+class ResumoProjeto(BaseModel):
+    """O resumo rolante do projeto que a IA criadora mantém (Parte B da economia de
+    tokens). Serve de corpo do PUT (a edição humana) e de resposta (o valor salvo). A
+    edição humana VENCE a da IA, que segue refinando a partir dela."""
+
+    resumo: str | None = None
 
 
 # ─────────────────── Mensageria / Conversas (Fase 1) ─────────────────────────

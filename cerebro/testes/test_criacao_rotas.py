@@ -127,3 +127,58 @@ def test_observador_ve_a_conversa(cliente, entrar, dados, sessao):
     resp = cliente.get(f"/conversas-criacao/{cid}")
     assert resp.status_code == 200
     assert resp.json()["id"] == str(cid)
+
+
+# ─────────── Parte B: painel "Sobre este time" (resumo editável) ────────────
+
+
+def test_resumo_aparece_na_leitura_da_conversa(cliente, entrar, dados, sessao):
+    entrar(dados["operador"])
+    cid = _conversa(sessao, dados["orgA"], dados["operador"])
+    conversa = sessao.get(ConversaCriacao, cid)
+    conversa.resumo = "Time de blog SEO; público é o decisor."
+    sessao.commit()
+    resp = cliente.get(f"/conversas-criacao/{cid}")
+    assert resp.status_code == 200
+    assert resp.json()["resumo"] == "Time de blog SEO; público é o decisor."
+
+
+def test_operador_edita_o_resumo_e_persiste(cliente, entrar, dados, sessao):
+    entrar(dados["operador"])
+    cid = _conversa(sessao, dados["orgA"], dados["operador"])
+    resp = cliente.put(
+        f"/conversas-criacao/{cid}/resumo", json={"resumo": "  Corrigido pelo humano  "}
+    )
+    assert resp.status_code == 200
+    # a resposta ecoa o valor salvo (com trim)
+    assert resp.json()["resumo"] == "Corrigido pelo humano"
+    # persistiu no banco
+    sessao.expire_all()
+    assert sessao.get(ConversaCriacao, cid).resumo == "Corrigido pelo humano"
+
+
+def test_resumo_vazio_vira_nulo(cliente, entrar, dados, sessao):
+    entrar(dados["operador"])
+    cid = _conversa(sessao, dados["orgA"], dados["operador"])
+    conversa = sessao.get(ConversaCriacao, cid)
+    conversa.resumo = "algo antigo"
+    sessao.commit()
+    resp = cliente.put(f"/conversas-criacao/{cid}/resumo", json={"resumo": "   "})
+    assert resp.status_code == 200
+    assert resp.json()["resumo"] is None
+    sessao.expire_all()
+    assert sessao.get(ConversaCriacao, cid).resumo is None
+
+
+def test_observador_nao_edita_o_resumo(cliente, entrar, dados, sessao):
+    entrar(dados["observador"])
+    cid = _conversa(sessao, dados["orgA"], dados["admin"])
+    resp = cliente.put(f"/conversas-criacao/{cid}/resumo", json={"resumo": "não deveria"})
+    assert resp.status_code == 403
+
+
+def test_estranho_nao_edita_o_resumo(cliente, entrar, dados, sessao):
+    entrar(dados["estranho"])  # membro só da Org B
+    cid = _conversa(sessao, dados["orgA"], dados["admin"])
+    resp = cliente.put(f"/conversas-criacao/{cid}/resumo", json={"resumo": "invasor"})
+    assert resp.status_code == 404
