@@ -151,7 +151,7 @@ decisão adiada (§ abaixo) tomada com número na mão, e a sequência das fatia
 - **Fatia 6** (opcional) — Projeção única na UI (aba Conversa lê a timeline).
 
 ### Frente B — as partes da economia (do `ECONOMIA-TOKENS-IA-CRIADORA.md`)
-- **A ✅ NO AR (2026-07-26)** — Resumo rolante + janela de turnos recentes (−62% do histórico provado; commit `3621138`).  **B** — `projeto.md` visível/editável (UI).
+- **A ✅ NO AR (2026-07-26)** — Resumo rolante + janela de turnos recentes (−62% do histórico provado; commit `3621138`).  **B ✅ NO AR (2026-07-27)** — Painel "Sobre este time" (resumo visível/editável, drawer à direita; edição humana vence a da IA; commit `4815f14`).
 - **C ✅ NO AR (2026-07-26)** — Iceberg + `buscar_no_historico` (tool; commit `1a8712f`; fecha a ressalva do resumo com perda).  **D ✅ NO AR (2026-07-26)** — Cache de prompt Anthropic (~88%/turno provado; commit `b28d091`; ver [`ESTUDO-TOKENS-MARCO-0.md`](ESTUDO-TOKENS-MARCO-0.md)).
 - **E ✅ NO AR (2026-07-27)** — Foto enxuta: o prompt da criadora leva só a estrutura do time (sem os markdowns dos agentes nem a cadeia); detalhe sob demanda via `ver_agente`/`ver_automacao` (commit `d3ce135`; a foto cheia segue para o front). **Frente B completa (A–E).**
 

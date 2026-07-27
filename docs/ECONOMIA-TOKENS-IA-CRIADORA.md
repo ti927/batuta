@@ -32,10 +32,23 @@ Parar de enviar a conversa inteira. Enviar **`resumo` + os últimos N turnos na 
 - **Manutenção do resumo** (dentro do processamento do turno, em `fila_turnos`, best-effort, **não bloqueia** a resposta): quando `len(mensagens) - resumo_ate > N`, dobrar os turnos que saíram da janela num resumo incremental — `novo_resumo = resumir(resumo_atual + turnos_saindo)` via **Haiku** (`construir_modelo("claude-haiku-4-5")`, barato) — e avançar `resumo_ate`. Instrução do resumidor: capturar **o que o time é/faz, decisões, preferências e pontas em aberto**, na linguagem da IA.
 - **Pegadinha honrada:** manter os últimos N turnos com `lc` verbatim preserva o sinal "nesta conversa, agir = chamar ferramenta" (a nota no topo do `loop.py`). O resumo é texto, mas os turnos recentes seguram o padrão de tool-use.
 
-### Parte B — `projeto.md` visível e editável  (UI)
-- **Prompt:** `montar_prompt_criadora` (`prompt.py:302`) ganha um bloco "# Resumo deste projeto (o que já foi feito — mantenha atualizado)" com o `resumo`.
-- **Backend:** em `rotas/criacao.py`, `GET` e `PUT` do `resumo` de uma conversa (o `PUT` é a edição humana; vence a versão da IA).
-- **Front:** painel "Sobre este time" na tela da criadora (`interface/app/criar/[id]/criacao-cliente.tsx`, `interface/app/times/[id]/conversas/[conversaId]/conversa-cliente.tsx`) — mostra o resumo e permite editar/salvar. Tipos + chamadas em `interface/lib/api.ts`. (Toca UI → seguir o handoff `docs/design/`.)
+### Parte B — `projeto.md` visível e editável  (UI)  ✅ **NO AR (2026-07-27, commit `4815f14`)**
+> **Como ficou:** o resumo (que a Parte A já mantinha, invisível) virou o painel **"Sobre este time"**
+> — um card no painel direito da criadora que **abre um drawer à direita** (mesmo padrão da edição de
+> agentes/instrumentos; **desenho escolhido pelo maestro**), onde o resumo é lido e — por **operador+**
+> — editado. **A edição humana VENCE a da IA** (o resumidor rolante da Parte A parte do `resumo` atual,
+> então a correção humana vira a base a partir da qual a IA refina). **Backend:** `ConversaCriacaoLer`
+> expõe `resumo`; `PUT /conversas-criacao/{id}/resumo` (operador+, auditado `criacao.resumo_editado`;
+> string vazia → `NULL`). **Front:** componente auto-contido `PainelSobreTime` (`components/conversa-ia/
+> painel-sobre-time.tsx`, card + drawer), encaixado nas **duas** superfícies da criadora — `/criar/[id]`
+> (`criacao-cliente.tsx`) e o painel companheiro dentro de `/times/[id]` (`painel-time.tsx`). A tela de
+> `.../conversas/[conversaId]` que o plano citava é a de **mensageria** (contato↔bot), não a criadora —
+> referência corrigida. 748 testes backend + tsc/eslint/`next build` verdes. Sem migração (a coluna
+> `resumo` veio na Parte A). **Falta:** teste ao vivo. **Com B, a Frente B está 100% COMPLETA (A–E).**
+
+- **Prompt:** `montar_prompt_criadora` já injeta o `resumo` no bloco volátil (Parte A).
+- **Backend:** em `rotas/criacao.py`, o `GET` já traz o `resumo` (em `ConversaCriacaoLer`) e o novo `PUT` do `resumo` é a edição humana (vence a versão da IA).
+- **Front:** painel "Sobre este time" na tela da criadora (`interface/app/criar/[id]/criacao-cliente.tsx` e o painel companheiro `components/conversa-ia/painel-time.tsx`) — card + drawer à direita. Tipos + chamadas em `interface/lib/api.ts`.
 - A IA pode **propor** atualização (ela vê o resumo no contexto); o humano tem a palavra final via o painel.
 
 ### Parte C — Iceberg: histórico completo + ferramenta de busca  ✅ **NO AR (2026-07-26, commit `1a8712f`)**
