@@ -51,6 +51,21 @@ Parar de enviar a conversa inteira. Enviar **`resumo` + os últimos N turnos na 
 - **Front:** painel "Sobre este time" na tela da criadora (`interface/app/criar/[id]/criacao-cliente.tsx` e o painel companheiro `components/conversa-ia/painel-time.tsx`) — card + drawer à direita. Tipos + chamadas em `interface/lib/api.ts`.
 - A IA pode **propor** atualização (ela vê o resumo no contexto); o humano tem a palavra final via o painel.
 
+> **Acréscimo (2026-07-27, commit `7fb573b`) — a IA ESCREVE o resumo sob comando + o painel busca fresco.**
+> No teste ao vivo o maestro pediu *"edite o resumo do projeto"* e a IA mexeu na **descrição do time**
+> (outra coisa) — ela **não tinha ferramenta nem o conceito** de "resumo do projeto". Corrigido:
+> - **`atualizar_resumo(resumo)`** (`criacao/ferramentas.py`) — a IA escreve o resumo; o prompt
+>   (`criacao/prompt.py`, nova seção no `_BASE`) ensina que é **distinto** da descrição do time
+>   (`definir_time`) e da memória de longo prazo (`lembrar`), e manda chamar `atualizar_resumo` quando o
+>   consultor pedir. (Complementa o resumidor automático da Parte A — que segue dobrando os turnos antigos.)
+> - **`GET /conversas-criacao/{id}/resumo`** (leve) + o `PainelSobreTime` busca o resumo **fresco ao abrir
+>   o drawer** — antes o painel fixava o valor no load e não refletia o que a IA escrevesse durante a sessão.
+> - **Diagnóstico do "resumo vazio" (prod, só leitura, `scratchpad/diag_resumo.py`):** o resumidor
+>   automático **FUNCIONA** — a conversa usada hoje (COF Post Blog, 68 msgs) tem resumo de **3096 chars (26
+>   turnos condensados)**; **todas** as vazias são conversas **sem atividade desde o deploy da Parte A**
+>   (preenchimento preguiçoso por design — `resumo_ate=0` até uma mensagem nova cruzar a janela). Não é bug.
+> 750 testes + front verde. Sem migração.
+
 ### Parte C — Iceberg: histórico completo + ferramenta de busca  ✅ **NO AR (2026-07-26, commit `1a8712f`)**
 > **Como ficou:** ferramenta `buscar_no_historico(consulta)` em `criacao/ferramentas.py` — varre os turnos
 > já dobrados (`mensagens[:resumo_ate]`, o que saiu da janela), casa por palavra/trecho e devolve o texto
