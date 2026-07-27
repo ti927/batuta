@@ -199,6 +199,19 @@ def obter(
     return _ler(sessao, conversa)
 
 
+@rotas.get("/conversas-criacao/{conversa_id}/resumo", response_model=ResumoProjeto)
+def obter_resumo(
+    conversa_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """O resumo atual do projeto (leitura leve — sem a foto do time). O painel 'Sobre
+    este time' busca por aqui ao abrir, para refletir o que a IA acabou de escrever no
+    resumo durante a conversa (a versão carregada com a página pode estar defasada)."""
+    conversa = conversa_criacao_acessivel(sessao, usuario, conversa_id)
+    return ResumoProjeto(resumo=conversa.resumo)
+
+
 @rotas.put("/conversas-criacao/{conversa_id}/resumo", response_model=ResumoProjeto)
 def editar_resumo(
     conversa_id: uuid.UUID,

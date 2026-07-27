@@ -63,6 +63,18 @@ def test_editar_agente(sessao, dados):
     assert _chamar(f, "editar_agente", agente_id="00000000-0000-0000-0000-000000000000", nome="Z")["ok"] is False
 
 
+def test_atualizar_resumo_escreve_o_resumo_do_projeto(sessao, dados):
+    # A IA mantém o "resumo do projeto" (painel 'Sobre este time') por ferramenta —
+    # é diferente da descrição do time e da memória de longo prazo.
+    ctx, f = _setup(sessao, dados)
+    r = _chamar(f, "atualizar_resumo", resumo="  Time de blog; público é o decisor.  ")
+    assert r["ok"]
+    assert ctx.conversa.resumo == "Time de blog; público é o decisor."  # com trim
+    # texto vazio zera (NULL)
+    assert _chamar(f, "atualizar_resumo", resumo="   ")["ok"]
+    assert ctx.conversa.resumo is None
+
+
 def test_remover_agente_limpa_cadeia(sessao, dados):
     _ctx, f = _setup(sessao, dados)
     _chamar(f, "definir_time", nome="T")

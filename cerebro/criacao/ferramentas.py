@@ -357,6 +357,7 @@ MENSAGENS_CRIADORA: dict[str, str] = {
     "diagnosticar_execucao": "Diagnosticando a execução…",
     "ver_memoria_agente": "Consultando a memória do agente…",
     "sugerir_proximos_passos": "Pensando nos próximos passos…",
+    "atualizar_resumo": "Atualizando o resumo do projeto…",
     "lembrar": "Anotando o que aprendi…",
     "recordar": "Consultando o que sei do projeto…",
     "esquecer": "Atualizando o que sei…",
@@ -736,6 +737,18 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         ctx.chips = list(chips)[:4]
         return _ok("Sugestões registradas.")
 
+    def atualizar_resumo(resumo: str) -> str:
+        """Escreve o RESUMO DO PROJETO — o que aparece no painel 'Sobre este time': a
+        síntese viva do que este time É e FAZ, das decisões tomadas, das preferências do
+        consultor e das pontas em aberto. É DIFERENTE da descrição do time (definir_time,
+        o texto público curto) e da memória de longo prazo (lembrar, fatos avulsos): o
+        resumo é a síntese corrida de todo o projeto. Chame quando o consultor pedir para
+        atualizar/editar o resumo do projeto, ou quando algo importante for decidido/mudar.
+        Escreva em português, em tópicos curtos; o texto SUBSTITUI o resumo atual (o
+        consultor pode corrigir por cima, no painel)."""
+        ctx.conversa.resumo = (resumo or "").strip() or None
+        return _ok("Resumo do projeto atualizado.")
+
     def lembrar(categoria: str, conteudo: str) -> str:
         """Guarda na MEMÓRIA de longo prazo deste projeto algo que você deve lembrar
         nas próximas conversas. Use para fatos do cliente, decisões tomadas com o
@@ -920,7 +933,7 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         ativar_time, desativar_time, ver_time, ver_agente, ver_automacao,
         listar_tipos_instrumento,
         listar_execucoes, diagnosticar_execucao, ver_memoria_agente,
-        sugerir_proximos_passos, lembrar, recordar, esquecer,
+        sugerir_proximos_passos, atualizar_resumo, lembrar, recordar, esquecer,
         consultar_conhecimento, buscar_no_historico,
     ]
 

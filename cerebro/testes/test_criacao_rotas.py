@@ -143,6 +143,19 @@ def test_resumo_aparece_na_leitura_da_conversa(cliente, entrar, dados, sessao):
     assert resp.json()["resumo"] == "Time de blog SEO; público é o decisor."
 
 
+def test_get_resumo_traz_o_valor_atual(cliente, entrar, dados, sessao):
+    # Leitura leve (observador vê) — o painel busca por aqui ao abrir, para pegar o que
+    # a IA escreveu no resumo durante a conversa.
+    entrar(dados["observador"])
+    cid = _conversa(sessao, dados["orgA"], dados["admin"])
+    conversa = sessao.get(ConversaCriacao, cid)
+    conversa.resumo = "resumo fresco"
+    sessao.commit()
+    resp = cliente.get(f"/conversas-criacao/{cid}/resumo")
+    assert resp.status_code == 200
+    assert resp.json()["resumo"] == "resumo fresco"
+
+
 def test_operador_edita_o_resumo_e_persiste(cliente, entrar, dados, sessao):
     entrar(dados["operador"])
     cid = _conversa(sessao, dados["orgA"], dados["operador"])

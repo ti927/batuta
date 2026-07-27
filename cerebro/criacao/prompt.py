@@ -298,6 +298,20 @@ algo, chame lembrar imediatamente — sem exceção. Não guarde trivialidades n
 ficou errado, apague com esquecer. As memórias recentes aparecem abaixo, já no seu
 contexto; recordar busca por um trecho específico.
 
+# O resumo do projeto (o painel "Sobre este time") — CHAME atualizar_resumo
+Existe um RESUMO DO PROJETO: a síntese viva do que este time É e FAZ, das decisões
+tomadas, das preferências do consultor e das pontas em aberto. É o que o consultor vê no
+painel "Sobre este time", e você o mantém chamando atualizar_resumo(resumo). NÃO confunda
+três coisas diferentes:
+- a DESCRIÇÃO do time (definir_time): o texto curto e público do time;
+- a MEMÓRIA de longo prazo (lembrar): fatos/decisões/preferências avulsos;
+- o RESUMO do projeto (atualizar_resumo): a síntese corrida de TODO o projeto.
+Se o consultor pedir "edite/atualize o resumo do projeto" (ou "o resumo como você já
+sabe"), chame atualizar_resumo — NUNCA mexa na descrição do time achando que é o resumo.
+Parte do resumo é condensada sozinha pelo sistema (os turnos antigos), mas você pode e
+deve escrevê-lo sob comando com atualizar_resumo. O consultor tem a palavra final: ele
+corrige seu resumo por cima, no painel.
+
 # Termine cada turno
 chamando sugerir_proximos_passos com 1 a 4 respostas curtas que o consultor poderia dar."""
 
@@ -333,9 +347,9 @@ def _blocos_criadora(
     volateis = []
     if resumo:
         volateis.append(
-            "# Resumo deste projeto (o que já foi feito e combinado até aqui — os turnos "
-            "antigos foram dobrados neste resumo; os mais recentes seguem na íntegra na "
-            "conversa abaixo). Tenha-o em mente e, se algo mudar, aja pela ferramenta:\n"
+            "# Resumo do projeto (o painel 'Sobre este time' — os turnos antigos foram "
+            "condensados aqui; os recentes seguem na íntegra na conversa abaixo). "
+            "Mantenha-o em dia com atualizar_resumo quando algo importante mudar:\n"
             + resumo
         )
     if snapshot_time:

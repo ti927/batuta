@@ -31,11 +31,25 @@ export function PainelSobreTime({
   const [aberto, setAberto] = useState(false);
   const previa = (resumo ?? "").trim();
 
+  // Ao abrir, busca o resumo FRESCO: a IA pode tê-lo escrito/condensado durante a
+  // conversa desta sessão, e o valor carregado com a página estaria defasado.
+  async function abrir() {
+    setAberto(true);
+    try {
+      const r = await api.get<{ resumo: string | null }>(
+        `/conversas-criacao/${conversaId}/resumo`,
+      );
+      setResumo(r.resumo);
+    } catch {
+      /* mantém o que já tem — não trava a abertura por causa de rede */
+    }
+  }
+
   return (
     <div>
       <RotuloSecao Icone={FileText}>Sobre este time</RotuloSecao>
       <button
-        onClick={() => setAberto(true)}
+        onClick={abrir}
         className="w-full rounded-lg border border-border bg-card p-3.5 text-left transition-colors hover:border-[#D6D3E8]"
       >
         <div className="mb-1 flex items-center gap-2">
