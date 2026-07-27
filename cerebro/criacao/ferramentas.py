@@ -298,6 +298,38 @@ def snapshot_time(sessao: Session, conversa: ConversaCriacao) -> dict | None:
     return _snapshot_time(ContextoCriacao(sessao=sessao, conversa=conversa)) or None
 
 
+def enxugar_snapshot(snap: dict | None) -> dict | None:
+    """Projeção ENXUTA da foto do time, só para o PROMPT da IA criadora (Parte E da
+    economia de tokens). Mantém a ESTRUTURA — o que existe e os `id` para agir — e tira
+    o que é PESADO e raramente muda por turno: os 4 markdowns de cada agente e a `cadeia`
+    de cada automação. A IA puxa esse detalhe sob demanda com `ver_agente`/`ver_automacao`,
+    só do que o turno realmente toca. Num time grande isso corta muito o custo fixo.
+
+    IMPORTANTE: isto é SÓ para o contexto do modelo. A foto CHEIA continua indo para o
+    front (redesenhar o canvas, `rotas/criacao.py` e a resposta do turno) e para o
+    `ver_time` — esta função não altera aquela. Instrumentos ficam INTEIROS (config,
+    `acao_irreversivel`, `segredos_pendentes` são pequenos e guiam a decisão da IA)."""
+    if not snap:
+        return snap
+    enxuto = dict(snap)
+    enxuto["agentes"] = [
+        {
+            "id": a.get("id"), "nome": a.get("nome"), "papel": a.get("papel"),
+            "modelo_ia": a.get("modelo_ia"), "cinto": a.get("cinto", []),
+        }
+        for a in snap.get("agentes") or []
+    ]
+
+    def _auto_enxuta(a: dict | None) -> dict | None:
+        if not a:
+            return a
+        return {k: v for k, v in a.items() if k != "cadeia"}
+
+    enxuto["automacoes"] = [_auto_enxuta(a) for a in snap.get("automacoes") or []]
+    enxuto["automacao"] = _auto_enxuta(snap.get("automacao"))
+    return enxuto
+
+
 # Frase de atividade ao vivo por ferramenta ("o que a IA está fazendo agora"), para a
 # tela mostrar durante um turno longo — mesmo espírito de atividade.MENSAGENS_ATIVIDADE.
 # Ferramenta sem entrada aqui cai no fallback genérico.
@@ -318,6 +350,8 @@ MENSAGENS_CRIADORA: dict[str, str] = {
     "ativar_time": "Ativando o time…",
     "desativar_time": "Desativando o time…",
     "ver_time": "Revendo o time…",
+    "ver_agente": "Lendo o agente…",
+    "ver_automacao": "Lendo o fluxo da automação…",
     "listar_tipos_instrumento": "Consultando os instrumentos disponíveis…",
     "listar_execucoes": "Consultando as execuções…",
     "diagnosticar_execucao": "Diagnosticando a execução…",
@@ -642,6 +676,53 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
             return _ok("Ainda não há time. Comece com definir_time.", time=None)
         return json.dumps(_snapshot_time(ctx), ensure_ascii=False)
 
+    def ver_agente(agente_id: str) -> str:
+        """Mostra os TEXTOS completos de um agente (os 4 markdowns: agent_md/skill_md/
+        tools_md/soul_md), o modelo e o cinto. A foto do time no seu contexto traz só a
+        ESTRUTURA (nome, papel, id, cinto) para economizar tokens — chame isto quando
+        precisar LER ou EDITAR o conteúdo de um agente específico (ex.: antes de ajustar
+        o skill_md, veja o que já está escrito)."""
+        agente = _agente(agente_id)
+        if agente is None:
+            return _erro(f"Não há agente com id {agente_id} neste time.")
+        cinto = [
+            str(iid)
+            for (iid,) in sess.execute(
+                select(AgenteInstrumento.instrumento_id).where(
+                    AgenteInstrumento.agente_id == agente.id
+                )
+            ).all()
+        ]
+        return json.dumps(
+            {
+                "id": str(agente.id), "nome": agente.nome, "papel": agente.papel,
+                "modelo_ia": agente.modelo_ia,
+                "agent_md": agente.agent_md, "skill_md": agente.skill_md,
+                "tools_md": agente.tools_md, "soul_md": agente.soul_md,
+                "cinto": cinto,
+            },
+            ensure_ascii=False,
+        )
+
+    def ver_automacao(automacao_id: str) -> str:
+        """Mostra a CADEIA completa (o fluxo/grafo de nós) de uma automação, com o
+        gatilho e se está ativa. A foto do time no seu contexto traz só nome/gatilho/
+        ativa/id de cada automação para economizar tokens — chame isto quando precisar
+        LER ou EDITAR o fluxo de uma automação específica."""
+        aid = _uuid(automacao_id)
+        auto = sess.get(Automacao, aid) if aid else None
+        if auto is None or auto.time_id != ctx.conversa.time_id:
+            return _erro(f"Não há automação com id {automacao_id} neste time.")
+        return json.dumps(
+            {
+                "id": str(auto.id), "nome": auto.nome, "tipo_gatilho": auto.tipo_gatilho,
+                "configuracao_gatilho": auto.configuracao_gatilho,
+                "cadeia": grafo.normalizar(auto.cadeia or {}),
+                "ativa": auto.ativa,
+            },
+            ensure_ascii=False,
+        )
+
     def listar_tipos_instrumento() -> str:
         """Lista os tipos de instrumento disponíveis, com o que cada um faz, os
         CAMPOS de configuração (obrigatório/secreto) e se a ação é irreversível.
@@ -836,7 +917,8 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         configurar_instrumento, editar_instrumento, encaixar_instrumento,
         desencaixar_instrumento, criar_automacao, renomear_automacao,
         montar_cadeia, definir_gatilho, estimar_custo,
-        ativar_time, desativar_time, ver_time, listar_tipos_instrumento,
+        ativar_time, desativar_time, ver_time, ver_agente, ver_automacao,
+        listar_tipos_instrumento,
         listar_execucoes, diagnosticar_execucao, ver_memoria_agente,
         sugerir_proximos_passos, lembrar, recordar, esquecer,
         consultar_conhecimento, buscar_no_historico,

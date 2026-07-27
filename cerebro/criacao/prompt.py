@@ -341,7 +341,13 @@ def _blocos_criadora(
     if snapshot_time:
         volateis.append(
             "# Time atual (estado REAL — o que já existe; use os id ao encaixar e na "
-            "cadeia):\n" + json.dumps(snapshot_time, ensure_ascii=False)
+            "cadeia). Para ECONOMIA, esta foto traz só a ESTRUTURA: os agentes vêm sem "
+            "os 4 textos (agent_md/skill_md/tools_md/soul_md) e as automações sem a "
+            "cadeia. Quando precisar LER ou EDITAR o conteúdo de um agente, chame "
+            "ver_agente(agente_id); para o fluxo de uma automação, ver_automacao("
+            "automacao_id) — só do que este turno realmente toca. NÃO adivinhe o texto "
+            "de um agente: leia-o antes de editar.\n"
+            + json.dumps(snapshot_time, ensure_ascii=False)
         )
     if memorias:
         volateis.append(

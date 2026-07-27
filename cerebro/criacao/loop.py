@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 from criacao import memoria
 from criacao.ferramentas import (
     ContextoCriacao,
+    enxugar_snapshot,
     montar_ferramentas,
     snapshot_time,
 )
@@ -106,9 +107,13 @@ def responder_turno(
     # cache (Parte D) — o prefixo fixo é reaproveitado a ~10% entre turnos; em OpenAI/
     # Google (que a criadora também aceita), texto puro (cache_control é só da Anthropic).
     # O `resumo` (Parte A) entra no prompt como visão do que já foi feito.
+    # Foto ENXUTA (Parte E): o prompt leva só a ESTRUTURA do time (sem os markdowns dos
+    # agentes nem a cadeia das automações — o grosso do custo fixo por turno). A IA puxa
+    # esse detalhe sob demanda com ver_agente/ver_automacao. A foto CHEIA segue indo para
+    # o front na resposta abaixo (redesenhar o canvas).
     prompt = prompt_criadora(
         modelo,
-        snapshot_time(sessao, conversa),
+        enxugar_snapshot(snapshot_time(sessao, conversa)),
         memoria.para_o_prompt(sessao, conversa),
         resumo=conversa.resumo,
     )
