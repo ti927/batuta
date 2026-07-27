@@ -12,7 +12,7 @@ import unicodedata
 import uuid
 from typing import Literal
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.tools import StructuredTool
 from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel, Field, create_model
@@ -27,6 +27,7 @@ from instrumentos.base import (
 from modelos import Agente, Instrumento
 from orquestracao import atividade
 from orquestracao.llm import MODELO_PADRAO, construir_modelo, texto_da_resposta
+from orquestracao.modelos_ia import PROVEDOR_ANTHROPIC, provedor_do_modelo_seguro
 from sessao import CriadorDeSessao
 
 
@@ -361,6 +362,27 @@ def _instrucao_de_memoria(agente: Agente) -> str:
     return texto
 
 
+def _prompt_de_sistema(instrucoes: str, modelo_id: str) -> "SystemMessage | str":
+    """O prompt de sistema no formato certo para o PROVEDOR do modelo.
+
+    Na **Anthropic**, um `SystemMessage` com PONTO DE CACHE (`cache_control: ephemeral`):
+    o `create_react_agent` reenvia [ferramentas + prompt de sistema] a CADA passo do laço
+    de tool-calling (e a cada turno de uma conversa), então marcar o cache faz esses
+    reenvios repetidos custarem ~10% — economia grande em turnos com muitas chamadas de
+    ferramenta (medido: a entrada de um turno chega a 13–18× o conteúdo real). Em
+    **OpenAI/Google** (ou modelo desconhecido), texto puro — `cache_control` é específico
+    da Anthropic e quebraria/seria ignorado nos outros. Mesmo padrão da IA criadora
+    (`criacao/prompt.prompt_criadora`). Ponto único que evita o cache vazar para um
+    provedor que não o entende."""
+    if provedor_do_modelo_seguro(modelo_id) == PROVEDOR_ANTHROPIC:
+        return SystemMessage(
+            content=[
+                {"type": "text", "text": instrucoes, "cache_control": {"type": "ephemeral"}}
+            ]
+        )
+    return instrucoes
+
+
 def executar_agente(
     agente: Agente,
     cinto: list[Instrumento],
@@ -407,7 +429,10 @@ def executar_agente(
     if len(saidas) >= 2:
         ferramentas.append(_ferramenta_seguir_para(saidas, escolha))
         instrucoes += "\n\n" + _instrucao_de_fluxo(saidas, gate, texto_portao)
-    app = create_react_agent(modelo, ferramentas, prompt=instrucoes)
+    # Cache de prompt (Anthropic): o prompt e as ferramentas são reenviados a cada passo
+    # do laço/turno; marcar o cache corta o custo desses reenvios (economia de tokens).
+    prompt_sistema = _prompt_de_sistema(instrucoes, agente.modelo_ia or MODELO_PADRAO)
+    app = create_react_agent(modelo, ferramentas, prompt=prompt_sistema)
     # Feedback ao vivo: o turno de LLM pode demorar; avisa que o agente está pensando.
     atividade.registrar(f"{agente.nome}: pensando…")
     resultado = app.invoke({"messages": [{"role": "user", "content": entrada}]})
@@ -428,11 +453,18 @@ def executar_agente(
     # tool-calling há vários AIMessage; cada turno reenvia o contexto, então a
     # soma reflete o que foi de fato consumido.
     tokens_entrada = tokens_saida = 0
+    cache_read = cache_write = 0
     for m in mensagens:
         if isinstance(m, AIMessage):
             u = m.usage_metadata or {}
             tokens_entrada += u.get("input_tokens", 0)
             tokens_saida += u.get("output_tokens", 0)
+            # Cache de prompt (Anthropic): `input_tokens` INCLUI o que veio do cache a
+            # preço cheio; guardamos leitura/criação para a medição cobrar ~10% (releitura)
+            # e ~1,25× (criação), como no `criacao/loop.py`. Sem cache, ambos ficam 0.
+            det = u.get("input_token_details") or {}
+            cache_read += det.get("cache_read", 0) or 0
+            cache_write += det.get("cache_creation", 0) or 0
     modelo_usado = agente.modelo_ia or MODELO_PADRAO
 
     return {
@@ -446,6 +478,8 @@ def executar_agente(
                 "modelo": modelo_usado,
                 "tokens_entrada": tokens_entrada,
                 "tokens_saida": tokens_saida,
+                "tokens_cache_read": cache_read,
+                "tokens_cache_write": cache_write,
             }
         ],
     }

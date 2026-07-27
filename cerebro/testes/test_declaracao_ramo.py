@@ -103,6 +103,15 @@ def test_instrucao_de_fluxo_fallback_sem_md():
     assert agente_mod._instrucao_de_fluxo(_saidas_duas(), True, "   ") == padrao
 
 
+def _texto_do_prompt(p) -> str:
+    """O prompt de sistema pode vir como texto puro (OpenAI/Google) OU como
+    `SystemMessage` com blocos de cache (Anthropic — cache de prompt). Extrai o texto
+    dos dois formatos, para a asserção não depender do provedor."""
+    if isinstance(p, str):
+        return p
+    return "".join(b.get("text", "") for b in p.content)
+
+
 def test_executar_agente_injeta_portao_md_no_prompt(monkeypatch):
     """O `texto_portao` chega ao PROMPT do agente, com o trilho `seguir_para` intacto."""
     prompts: list = []
@@ -122,5 +131,6 @@ def test_executar_agente_injeta_portao_md_no_prompt(monkeypatch):
         _agente(), [], "entrada", saidas=_saidas_duas(), gate=True,
         texto_portao="AGENDE E ENCAMINHE",
     )
-    assert "AGENDE E ENCAMINHE" in prompts[0]
-    assert "seguir_para" in prompts[0]  # trilho mecânico preservado
+    texto = _texto_do_prompt(prompts[0])
+    assert "AGENDE E ENCAMINHE" in texto
+    assert "seguir_para" in texto  # trilho mecânico preservado
