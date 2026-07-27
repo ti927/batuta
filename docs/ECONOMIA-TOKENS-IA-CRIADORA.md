@@ -57,9 +57,21 @@ Parar de enviar a conversa inteira. Enviar **`resumo` + os últimos N turnos na 
 - **Opcional:** `precos.py` ler `cache_read_input_tokens`/`cache_creation_input_tokens` do `usage_metadata` para a medição refletir o cache (hoje conta tudo como entrada normal — informativo).
 - **Honestidade:** o cache esfria em ~5 min (ou 1h numa variante) → ajuda uma sessão de vários turnos, **não** o primeiríssimo turno ao reabrir um time parado. Quem resolve o "abrir time velho" é a Parte A.
 
-### Parte E — Foto enxuta + detalhe sob demanda  (ganho p/ times grandes)
-- `snapshot_time` (`ferramentas.py:199`) passa a mandar, por padrão, só a **estrutura**: time + agentes (nome/papel/id/cinto-ids) + instrumentos (nome/tipo/id) + automações (nome/gatilho/ativa/id) — **sem** os 4 markdowns de cada agente nem a `cadeia` inteira.
-- Ferramenta(s) de detalhe sob demanda: **`ver_agente(agente_id)`** (markdowns) e **`ver_automacao(automacao_id)`** (cadeia). (`ver_time` já existe; estender o padrão.) A IA puxa o detalhe do agente que o turno realmente toca. Corta muito o custo fixo em times grandes.
+### Parte E — Foto enxuta + detalhe sob demanda  (ganho p/ times grandes)  ✅ **NO AR (2026-07-27, commit `d3ce135`)**
+> **Como ficou:** função pura `enxugar_snapshot(foto)` (`criacao/ferramentas.py`) aplicada **só no
+> `loop.py`** (a cópia que vai no PROMPT): tira os 4 markdowns de cada agente e a `cadeia` de cada
+> automação, mantém a estrutura (id/nome/papel/modelo/cinto; instrumentos INTEIROS — config/
+> `acao_irreversivel`/`segredos_pendentes` são pequenos e guiam a decisão). Duas ferramentas novas de
+> detalhe sob demanda — **`ver_agente(id)`** (os 4 markdowns + cinto) e **`ver_automacao(id)`** (a
+> cadeia) — e o cabeçalho da foto no prompt avisa "só estrutura; peça o detalhe do que este turno
+> toca; não adivinhe o texto antes de editar". **A foto CHEIA continua indo para o front** (redesenhar
+> o canvas: `rotas/criacao.py` + a resposta do turno) e para o `ver_time` — `enxugar_snapshot` NÃO
+> altera aquela, então **zero regressão na tela**. Backend puro, sem migração, sem UI. 743 testes verdes
+> (+5 em `test_foto_enxuta.py`). **Falta:** teste ao vivo (abrir um time grande, medir a queda do
+> `tokens_entrada` por turno; ver a IA chamar `ver_agente` antes de editar um agente).
+
+- `snapshot_time` (`ferramentas.py`) passa a mandar, **no prompt**, só a **estrutura**: time + agentes (nome/papel/id/modelo/cinto-ids) + instrumentos (inteiros) + automações (nome/gatilho/ativa/id) — **sem** os 4 markdowns de cada agente nem a `cadeia` inteira.
+- Ferramenta(s) de detalhe sob demanda: **`ver_agente(agente_id)`** (markdowns) e **`ver_automacao(automacao_id)`** (cadeia). (`ver_time` já existe; estende o padrão.) A IA puxa o detalhe do agente que o turno realmente toca. Corta muito o custo fixo em times grandes.
 
 ---
 
