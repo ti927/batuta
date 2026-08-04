@@ -458,9 +458,10 @@ def test_canal_teto_passa_humano_e_cancela_execucao(sessao, dados, monkeypatch):
 
 def test_canal_portao_direto_roteia_mecanico(sessao, dados, monkeypatch):
     enviados = []
-    # perfil disparo → portao_forma = direto: a palavra escolhe a saída (sem re-rodar)
+    # portao_forma = direto (ajuste do fluxo): a palavra escolhe a saída (sem re-rodar)
     canal, ag, auto, execucao = _setup_canal(
-        sessao, dados, monkeypatch, enviados, configuracao={"perfil": "disparo"}
+        sessao, dados, monkeypatch, enviados,
+        configuracao={"ajustes": {"portao_forma": "direto"}},
     )
 
     def explode(*a, **k):
@@ -694,13 +695,17 @@ def test_vincular_pausa_avisa_expectativa_estacionar(sessao, dados, monkeypatch)
     assert len([t for t in enviados if "batuta.team" in t]) == 1
 
 
-def test_vincular_pausa_avisa_cancelamento_no_perfil_disparo(sessao, dados, monkeypatch):
+def test_vincular_pausa_avisa_cancelamento_quando_abandono_cancela(sessao, dados, monkeypatch):
     enviados = []
     monkeypatch.setattr(telegram, "enviar", lambda t, c, x: enviados.append(x) or {"ok": True})
     canal = _canal(sessao, dados)
     si.salvar_segredos(sessao, canal.id, {"token_bot": "tok"})
     ag = _agente(sessao, dados)
-    auto = _automacao(sessao, dados, ag, canal, configuracao={"perfil": "disparo"})  # cancelar
+    # portao_acao_abandono = cancelar (ajuste do fluxo; antes vinha do preset "disparo")
+    auto = _automacao(
+        sessao, dados, ag, canal,
+        configuracao={"ajustes": {"portao_acao_abandono": "cancelar"}},
+    )
     execucao = _exec_pausada(sessao, auto, ag)
 
     aprovacao.vincular_pausa(sessao, execucao)

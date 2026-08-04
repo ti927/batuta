@@ -133,8 +133,17 @@ Teto de custo/turnos passa a ler da timeline (contagem de passos + soma de uso);
 > - **Sem duplicar `/uso`:** a sombra segue fora daquela agregação (INNER JOIN com automação; sombra tem `automacao_id=None`). Escopo aditivo e reversível; nada visível ao cliente muda.
 > - **Verificação:** `test_medir_conversa.py` (6 testes — equivalência com o contador em chat puro, com custo além do agente, turno sem produto, turno de erro, sem-sombra) + suíte de mensageria/portão/uso/config verde. `test_teto_estourado_passa_para_humano` migrado para semear a timeline (a nova autoridade). **Falta:** só teste ao vivo.
 
-### FATIA 3 — Colapsar a CONFIG por dimensão (seção 4)
+### FATIA 3 — Colapsar a CONFIG por dimensão (seção 4) — ✅ PARTE SEGURA NO AR (2026-08-04)
 2 presets + 3 dimensões, com `resolver_config` como fachada de compatibilidade. Migração preguiçosa (automação migra ao re-salvar, como o grafo já faz). Remover chaves mortas. Efetivo idêntico para as automações existentes.
+
+> **✅ FATIA 3 (PARTE SEGURA) COMPLETA (2026-08-04).** Backend puro, SEM migração, **zero mudança de comportamento** (verificado contra a produção: 18 automações, só `interno`/sem-perfil; ninguém usava disparo/personalizado; 0 canais com regra própria). Decisão do maestro: fazer só a parte segura agora e **adiar** o re-dimensionar a cascata + o teto-de-passos para a Fatia 4. O que entrou:
+> - **Chaves MORTAS removidas:** `max_passos`, `modelo_roteador` (o motor usa o fixo `MAX_PASSOS`/`MODELO_PADRAO`, nunca lia essas) e `acao_ao_estourar` (o teto SEMPRE passa para humano — o campo na tela era decorativo/enganoso). Saíram de `GLOBAL`/`PERFIS`/`ESCOLHAS`/`CAMPOS`.
+> - **Presets 4 → 2 honestos:** `interno` (Processo interno) + `atendimento` (Atendimento externo). Caíram `disparo` (é um GATILHO, vira `origem` na Fatia 4) e `personalizado` (é só "sem tipo + ajustes", já é como a tela trata a ausência de perfil).
+> - **Constante espelhada unificada:** `diagnostico_execucao.LIMIAR_PRESO_MIN` passou a importar `fila.TETO_INATIVIDADE_EXEC_MIN` (fonte única; sem ciclo de import — verificado).
+> - **Front:** a tela de config é 100% data-driven de `/config/fluxo` (`painel_config`) → o seletor mostra 2 tipos e o campo "Ao estourar o limite" some **sozinho**; `tsc` verde, nenhuma linha de front mudou.
+> - **Verificação:** testes de config/perfil/gate/diagnóstico/fila verdes; `test_config_fluxo`/`test_gate_conversa` migrados de `perfil="disparo"` para `ajustes` explícitos (a forma "direto"/"cancelar" continua sendo VALOR válido, só não mais empacotada num preset).
+>
+> **ADIADO para a Fatia 4 (com o descongelamento §7):** (a) `max_passos`→`cadeia.py` como teto de passos configurável (núcleo congelado); (b) o re-dimensionar a cascata por dimensão (A=tempos `global<canal`; B=limites `global<automacao`; C=portão `automacao<no`) — é o único trecho que MUDA comportamento ao vivo (os tempos das 9 automações `interno`) e exige acompanhar o front; casa melhor com a unificação do motor.
 
 ### FATIA 4 — Portão como passo `espera_humano` unificado (delicada) ⚠️
 Introduzir `PassoExecucao.tipo`. O portão produz um passo `espera_humano` explícito. A retomada por CANAL deixa de ser motor paralelo: `servico` só ENTREGA a resposta como `mensagem_entrante` e chama o **único** caminho de retomada. `_turno_de_portao` vira adaptador fino. Tela e canal continuam como **pontos de entrada** legítimos, convergindo para UMA função. **Exige a suspensão dirigida do congelamento (seção 7).** Rede de testes máxima.

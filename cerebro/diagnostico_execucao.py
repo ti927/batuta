@@ -42,8 +42,9 @@ from orquestracao import grafo
 # resumimos antes — o porquê está nos `avisos`, não no corpo dos passos.
 MAX_TRECHO = 280
 MAX_PASSOS = 12
-# Espelha `fila.TETO_INATIVIDADE_EXEC_MIN` (sem progresso além disto = travada).
-LIMIAR_PRESO_MIN = 15
+# (Fatia 3) Limiar de "travada" (sem progresso além disto) — FONTE ÚNICA com o sweeper:
+# importado de `fila`, não redefinido, para as duas pontas nunca divergirem.
+from fila import TETO_INATIVIDADE_EXEC_MIN as LIMIAR_PRESO_MIN  # noqa: E402
 # Acima disto na FILA (sem começar) já é suspeito (pool parado / fila cheia).
 LIMIAR_FILA_MIN = 5
 

@@ -90,10 +90,12 @@ def test_perfil_desconhecido_cai_no_global(sessao, dados):
 
 
 def test_config_da_automacao_sem_conversa(sessao, dados):
-    auto = _auto(sessao, dados, {"perfil": "disparo"})
+    # (Fatia 3) "disparo" saiu dos presets; a forma "direto" continua sendo um VALOR
+    # válido, escolhido por ajuste do fluxo (não mais empacotado num preset).
+    auto = _auto(sessao, dados, {"perfil": "interno", "ajustes": {"portao_forma": "direto"}})
     r = cfg.config_da_automacao(auto)
-    assert r["portao_forma"] == "direto"
-    assert r["max_turnos"] == 5
+    assert r["portao_forma"] == "direto"  # ajuste do fluxo vence o default do perfil
+    assert r["max_turnos"] == 20          # default do perfil interno (global seria 40)
 
 
 def test_ajuste_do_no_e_o_mais_especifico():
@@ -104,7 +106,7 @@ def test_ajuste_do_no_e_o_mais_especifico():
 def test_painel_config_tem_perfis_grupos_e_opcoes():
     p = cfg.painel_config()
     ids = {x["id"] for x in p["perfis"]}
-    assert {"interno", "atendimento", "disparo", "personalizado"} <= ids
+    assert ids == {"interno", "atendimento"}  # (Fatia 3) de 4 presets → 2 honestos
     interno = next(x for x in p["perfis"] if x["id"] == "interno")
     assert interno["defaults"]["saudacao_abertura"] == ""  # perfil aplica o default
     # campos de escolha trazem as opções (fonte única, sem duplicar no front)

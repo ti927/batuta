@@ -61,7 +61,6 @@ GLOBAL: dict = {
     # B. Limites da conversa
     "max_turnos": 40,
     "teto_usd": 1.0,
-    "acao_ao_estourar": "passar_humano",  # passar_humano | encerrar
     # C. Atendimento (cliente externo)
     "saudacao_abertura": SAUDACAO_PADRAO,  # "" = desligada
     "horario_comercial_ativo": False,
@@ -81,19 +80,21 @@ GLOBAL: dict = {
     # `acao_ao_encerrar`, que podia divergir desta — unificadas.)
     "portao_acao_abandono": "estacionar",
     "portao_max_rodadas": 8,
-    # E. Motor (avançado/raro) — NÃO lidos em produção hoje: o motor usa o fixo
-    # `MAX_PASSOS` (cadeia.py) e o roteador usa sempre `MODELO_PADRAO`. Mantidos como
-    # trilho/documentação; NÃO expostos em `CAMPOS` (nada visível sem efeito real).
-    "max_passos": 25,
-    "modelo_roteador": None,             # None = MODELO_PADRAO
 }
+# (Fatia 3) As chaves MORTAS `max_passos`, `modelo_roteador` e `acao_ao_estourar`
+# saíram: nunca eram lidas — o motor usa o fixo `MAX_PASSOS` (cadeia.py) e o roteador
+# usa sempre `MODELO_PADRAO`; o teto SEMPRE passa para humano. O "teto de passos"
+# configurável (unificando `max_passos`+`max_turnos`) entra na Fatia 4, junto com o
+# descongelamento dirigido do núcleo (`docs/REMODELAGEM-MOTOR.md §7`).
 
 # Só estas chaves podem vir do canal/ajustes (ignora token, destinatario_padrao, etc.).
 CHAVES = frozenset(GLOBAL)
 
 # ── PERFIS de fluxo: presets que sobrepõem o global. O usuário escolhe um "tipo de
-# fluxo"; "personalizado" não tem defaults próprios (parte do global e os ajustes
-# mandam). FONTE ÚNICA — o frontend lê estes valores por endpoint, não os duplica. ──
+# fluxo". FONTE ÚNICA — o frontend lê estes valores por endpoint, não os duplica.
+# (Fatia 3) De 4 presets → 2 honestos: caíram "disparo" (é um GATILHO, não um tipo de
+# fluxo — vira `origem` na Fatia 4) e "personalizado" (é apenas "sem tipo + ajustes",
+# já é como a tela trata a ausência de perfil). Nenhuma automação de produção os usava. ──
 PERFIS: dict[str, dict] = {
     "interno": {
         "saudacao_abertura": "",
@@ -104,7 +105,6 @@ PERFIS: dict[str, dict] = {
         "teto_usd": 0.5,
         "portao_forma": "conversa",
         "portao_acao_abandono": "estacionar",
-        "acao_ao_estourar": "passar_humano",
     },
     "atendimento": {
         "saudacao_abertura": SAUDACAO_PADRAO,
@@ -114,20 +114,7 @@ PERFIS: dict[str, dict] = {
         "teto_usd": 1.0,
         "portao_forma": "conversa",
         "portao_acao_abandono": "estacionar",
-        "acao_ao_estourar": "passar_humano",
     },
-    "disparo": {
-        "saudacao_abertura": "",
-        "horario_comercial_ativo": False,
-        "timeout_min": 15,
-        "nudge_timeout_min": 10,
-        "max_turnos": 5,
-        "teto_usd": 0.25,
-        "portao_forma": "direto",
-        "portao_acao_abandono": "cancelar",
-        "acao_ao_estourar": "encerrar",
-    },
-    "personalizado": {},
 }
 
 # Perfil que uma automação recém-criada assume quando ninguém escolhe um tipo de
@@ -140,14 +127,11 @@ PERFIL_PADRAO = "interno"
 # Rótulos amigáveis dos perfis (para a UI; fonte única).
 PERFIS_ROTULOS = {
     "interno": "Processo interno",
-    "atendimento": "Atendimento ao cliente",
-    "disparo": "Disparo / notificação externa",
-    "personalizado": "Personalizado",
+    "atendimento": "Atendimento externo",
 }
 
 # Opções dos botões de escolha (valor → rótulo amigável).
 ESCOLHAS = {
-    "acao_ao_estourar": [("passar_humano", "Passar para um humano"), ("encerrar", "Encerrar a conversa")],
     "portao_forma": [
         ("conversa", "O agente conversa (pode perguntar de volta)"),
         ("direto", "Decisão direta (aprovar/reprovar)"),
@@ -156,8 +140,7 @@ ESCOLHAS = {
 }
 
 # Botões EXPOSTOS na UI, agrupados (fonte única — o front renderiza a partir daqui,
-# sem duplicar rótulos/opções). O que não está aqui fica interno (trilho de segurança
-# ou avançado-raro como max_passos/modelo_roteador).
+# sem duplicar rótulos/opções). O que não está aqui fica interno (trilho de segurança).
 CAMPOS = [
     {"grupo": "Espera e encerramento", "campos": [
         {"chave": "timeout_min", "rotulo": "Tempo até cutucar quem some", "tipo": "int", "sufixo": "min"},
@@ -167,7 +150,6 @@ CAMPOS = [
     {"grupo": "Limites da conversa", "campos": [
         {"chave": "max_turnos", "rotulo": "Máx. de mensagens por conversa", "tipo": "int"},
         {"chave": "teto_usd", "rotulo": "Teto de custo de IA por conversa", "tipo": "valor", "sufixo": "US$"},
-        {"chave": "acao_ao_estourar", "rotulo": "Ao estourar o limite", "tipo": "escolha"},
     ]},
     {"grupo": "Atendimento ao cliente", "campos": [
         {"chave": "saudacao_abertura", "rotulo": "Saudação no 1º contato (vazio = desligada)", "tipo": "texto"},
@@ -217,8 +199,9 @@ def _mesclar(base: dict, extra: dict | None) -> dict:
 
 
 def config_da_automacao(auto: Automacao | None) -> dict:
-    """O efetivo no nível do FLUXO: global < canal-NÃO (aqui sem conversa) < perfil <
-    ajustes. Usado quando só se tem a automação (ex.: motor lendo max_passos)."""
+    """O efetivo no nível do FLUXO: global < perfil < ajustes (sem canal, aqui sem
+    conversa). Usado quando só se tem a automação (ex.: o portão lendo `portao_max_rodadas`
+    na tela, via `retoma`)."""
     cfg = dict(GLOBAL)
     bruto = (auto.configuracao or {}) if auto else {}
     perfil = bruto.get("perfil")
