@@ -19,7 +19,7 @@ from sqlalchemy import func, select, update
 
 from modelos import Execucao, PassoExecucao
 from observabilidade.escritor import registrar_evento
-from orquestracao.disparo import rodar_execucao
+from orquestracao.disparo import rodar_execucao, rodar_retomada
 from sessao import CriadorDeSessao
 
 # Quantas execuções rodam ao mesmo tempo (limite de concorrência).
@@ -92,7 +92,12 @@ def _ciclo_trabalhador(n: int) -> None:
         try:
             execucao = sessao.get(Execucao, eid)
             if execucao is not None:
-                rodar_execucao(sessao, execucao)
+                # Uma execução reivindicada é uma RETOMADA de portão (aprovação em segundo
+                # plano, §12-A) quando tem `retomada_resposta`; senão é um disparo do zero.
+                if execucao.retomada_resposta is not None:
+                    rodar_retomada(sessao, execucao)
+                else:
+                    rodar_execucao(sessao, execucao)
                 logger.info(
                     "Trabalhador %d concluiu execução %s (%s)", n, eid, execucao.estado
                 )

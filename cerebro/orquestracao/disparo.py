@@ -178,6 +178,64 @@ def criar_execucao(
     return execucao
 
 
+def rodar_retomada(sessao: Session, execucao: Execucao) -> Execucao:
+    """Roda em SEGUNDO PLANO a retomada de um portão aprovado (§12-A). O worker da fila
+    já reivindicou a execução (`em_andamento`) e detectou `retomada_resposta` preenchida.
+    Espelha `rodar_execucao`: resolve as chaves da organização, fixa o contexto de log e
+    publica atividade ao vivo (heartbeat p/ a tela + sweeper), e delega o miolo a
+    `retoma.retomar_execucao` — que roda o próximo passo, que pode ser PESADO (publicar,
+    gerar mídia). Assim aprovar devolve NA HORA e o trabalho não fica preso num request.
+
+    `retomar_execucao` gerencia os próprios commits/estados (concluida/aguardando_humano/
+    falhou). Aqui envolvemos com chaves+atividade+contexto e tratamos a falha da re-rodada
+    do agente (que ele pode levantar) de forma visível, sem deixar a execução pendurada."""
+    resposta = execucao.retomada_resposta or ""
+    execucao.retomada_resposta = None
+    sessao.commit()
+    automacao = sessao.get(Automacao, execucao.automacao_id)
+    time_id = automacao.time_id if automacao else None
+    org_id = _org_do_time(sessao, time_id)
+    with contexto.usar_contexto(
+        execucao_id=str(execucao.id),
+        automacao_id=str(execucao.automacao_id),
+        time_id=time_id,
+        organizacao_id=org_id,
+        origem="fila",
+    ):
+        chaves, origens = resolver_chaves_por_time(sessao, time_id)
+        from mensageria import aprovacao, retoma
+        try:
+            with usar_chaves(chaves), atividade.usar_atividade(
+                lambda t: _escrever_atividade(execucao.id, t)
+            ):
+                retoma.retomar_execucao(
+                    sessao, execucao, resposta, chaves=chaves, origens=origens
+                )
+            # Saiu de `em_andamento` (concluiu/pausou de novo/falhou): zera o feedback ao
+            # vivo para a tela não mostrar atividade obsoleta.
+            if execucao.estado != "em_andamento":
+                execucao.atividade = None
+                execucao.atividade_em = None
+            # Coexistência (aprovação por canal): resolver pela tela desvincula a conversa
+            # que aguardava — a não ser que a cadeia tenha pausado de novo (aí a retoma já
+            # re-vinculou). Mesmo critério que a rota `responder` aplicava antes.
+            if execucao.estado != "aguardando_humano":
+                aprovacao.desvincular(sessao, execucao.id)
+        except Exception as e:  # falha na re-rodada do agente do portão — visível, não muda
+            execucao.estado = "falhou"
+            execucao.resultado = {"erro": str(e)}
+            execucao.finalizada_em = datetime.now(timezone.utc)
+            execucao.atividade = None
+            execucao.atividade_em = None
+            registrar_evento(
+                categoria="execucao", acao="retomada.falhou", nivel="error",
+                resultado="falha", erro=e, recurso_tipo="execucao", recurso_id=execucao.id,
+            )
+        sessao.commit()
+        sessao.refresh(execucao)
+        return execucao
+
+
 def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
     """Roda a cadeia de uma execução já reivindicada pelo trabalhador, gravando
     cada passo e o estado final (concluida, aguardando_humano ou falhou).

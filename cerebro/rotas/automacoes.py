@@ -55,7 +55,6 @@ from modelos import (
 from chaves import (
     ORIGEM_CONSULTORIA,
     ORIGEM_LEGADO,
-    resolver_chaves_por_time,
 )
 from consultoria import exigir_admin_consultoria
 from mensageria import aprovacao, config, retoma
@@ -313,10 +312,16 @@ def responder(
             status.HTTP_409_CONFLICT, "Esta execução não está aguardando resposta."
         )
 
-    # Fases 7.3/7.6/7-A: as mesmas chaves (por provedor) da organização valem para
-    # o roteamento da retomada e para o restante da cadeia (fallback consultoria →
-    # .env legado p/ Anthropic), com as origens para carimbar a medição.
-    chaves, origens = resolver_chaves_por_time(sessao, auto.time_id)
+    # Pré-condição da retomada: tem que haver um passo de pausa. Checamos AQUI (barato)
+    # para devolver 422 na hora, em vez de enfileirar uma retomada que o worker só
+    # descobriria impossível depois. Falta de passo de pausa → 422.
+    try:
+        retoma.localizar_no_pausado(sessao, execucao)
+    except ValueError:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Não foi possível retomar: passo de pausa ausente.",
+        )
 
     # Auditoria (§3.7): a aprovação humana de um portão é ação sensível.
     auditoria.registrar(
@@ -326,22 +331,20 @@ def responder(
         detalhe={"resposta": dados.resposta[:200]},
     )
 
-    # A mecânica de retoma vive na borda (reutilizada pela mensageria); aqui só a
-    # autorização, o 409 e a auditoria. Falta de passo de pausa → 422.
-    try:
-        retoma.retomar_execucao(
-            sessao, execucao, dados.resposta, chaves=chaves, origens=origens
-        )
-    except ValueError:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "Não foi possível retomar: passo de pausa ausente.",
-        )
-    # Coexistência (aprovação por canal): resolver pela tela desfaz o vínculo de
-    # qualquer conversa que aguardava esta aprovação por mensageria — a não ser que
-    # a cadeia tenha pausado de novo (a retoma já re-vincula nesse caso).
-    if execucao.estado != "aguardando_humano":
-        aprovacao.desvincular(sessao, execucao.id)
+    # §12-A — a RETOMADA roda o próximo passo, que costuma ser PESADO (publicar no
+    # Instagram, gerar mídia). Rodá-la aqui prendia o request por minutos; um proxy
+    # (Cloudflare ~100s) cortava a conexão → o navegador dizia "a conexão falhou",
+    # sempre. Agora ENFILEIRAMOS (mesmo padrão do disparo): a resposta do humano fica em
+    # `retomada_resposta`, a execução volta a `aguardando`, cutucamos a fila e devolvemos
+    # NA HORA. Um trabalhador roda a retomada em segundo plano; a tela acompanha por
+    # polling (heartbeat + cronômetro), e o sweeper de presas é a rede de segurança.
+    execucao.retomada_resposta = dados.resposta
+    execucao.estado = "aguardando"
+    execucao.atividade = "Retomando…"
+    execucao.atividade_em = datetime.now(timezone.utc)
+    sessao.commit()
+    fila.enfileirar()
+    sessao.refresh(execucao)
     return _montar_com_passos(sessao, execucao)
 
 

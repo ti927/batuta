@@ -251,6 +251,12 @@ class Execucao(IdData, Base):
     atividade_em: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Retomada de portão em SEGUNDO PLANO (§12-A): quando um humano aprova pela tela, a
+    # resposta dele fica AQUI e a execução volta a `aguardando`; um trabalhador da fila a
+    # reivindica e roda a retomada (que pode ser pesada: publicar, gerar mídia) fora do
+    # request — que senão ficaria minutos aberto e um proxy o cortaria ("conexão falhou").
+    # Nulo = disparo normal (o worker roda a cadeia do zero); preenchido = é uma retomada.
+    retomada_resposta: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class PassoExecucao(IdData, Base):
