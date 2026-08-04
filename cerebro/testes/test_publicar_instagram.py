@@ -169,6 +169,25 @@ def test_status_error_falha(monkeypatch):
     assert e.value.retentavel is False
 
 
+def test_status_error_inclui_o_motivo_da_meta(monkeypatch):
+    # Quando a Meta explica o motivo no campo `status`, a mensagem TEM que trazê-lo —
+    # antes ficava só "status ERROR", sem dizer proporção/resolução/duração/formato.
+    motivo = "Error: 2207026 - Unsupported aspect ratio. Use 9:16."
+
+    def r(metodo, url, dados):
+        if metodo == "POST" and url.endswith("/media"):
+            return _Resp({"id": "CONT1"})
+        if metodo == "GET":
+            return _Resp({"status_code": "ERROR", "status": motivo})
+        return _Resp({}, 400)
+
+    _instalar(monkeypatch, r)
+    with pytest.raises(FalhaInstrumento) as e:
+        PublicarInstagram().executar(CFG, ArgsPublicarInstagram(midia_urls=["u"]))
+    assert motivo in str(e.value)
+    assert e.value.retentavel is False
+
+
 def test_falha_de_publicacao_nunca_e_retentavel(monkeypatch):
     # 500 no media_publish: NÃO pode ser retentável (idempotência → sem republicar).
     def r(metodo, url, dados):

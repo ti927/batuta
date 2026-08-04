@@ -152,25 +152,42 @@ def _montar_carrossel(cli, config, itens: list[tuple[str, str]], legenda: str) -
 
 def _aguardar_finished(cli, config, container_id: str) -> None:
     """Espera o contêiner ficar FINISHED (loop próprio, NÃO via retentativa da
-    orquestração — ver idempotência no topo do módulo)."""
+    orquestração — ver idempotência no topo do módulo).
+
+    Pede `status` além de `status_code`: o `status_code` é só o enum (ERROR/FINISHED/…),
+    mas o `status` traz o MOTIVO por extenso da Meta quando falha (proporção/resolução/
+    duração/formato/tamanho inválidos, URL inacessível, etc.) — sem ele o erro fica
+    genérico ("status ERROR") e o consultor não sabe o que corrigir."""
     for _ in range(POLL_TENTATIVAS):
-        status = _get(
+        info = _get(
             cli,
             f"{API}/{container_id}",
-            {"fields": "status_code", "access_token": config.token},
-        ).get("status_code")
+            {"fields": "status_code,status", "access_token": config.token},
+        )
+        status = info.get("status_code")
         if status == "FINISHED":
             return
         if status in ("ERROR", "EXPIRED"):
             raise FalhaInstrumento(
-                f"o Instagram não conseguiu processar a mídia (status {status}).",
-                retentavel=False,
+                _erro_de_midia(status, info.get("status")), retentavel=False
             )
         time.sleep(POLL_INTERVALO_S)
     raise FalhaInstrumento(
         "a mídia demorou demais para processar no Instagram (tempo esgotado).",
         retentavel=False,
     )
+
+
+def _erro_de_midia(status_code: str, detalhe: str | None) -> str:
+    """Monta a mensagem de falha de processamento incluindo o MOTIVO da Meta (campo
+    `status`), quando ele acrescenta algo além do enum. O detalhe costuma vir como
+    'Error: <código> - <explicação>' (ex.: proporção/resolução/duração fora do aceito)."""
+    base = f"o Instagram não conseguiu processar a mídia (status {status_code})."
+    d = (detalhe or "").strip()
+    # Ignora ecos triviais do próprio enum ("Error", "Expired", "In Progress").
+    if d and d.strip(".").upper() not in ("ERROR", "EXPIRED", "IN PROGRESS", "FINISHED"):
+        base += f" Motivo informado pela Meta: {d}"
+    return base
 
 
 def _publicar(cli, config, container_id: str) -> str:
