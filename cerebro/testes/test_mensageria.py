@@ -16,9 +16,33 @@ from modelos import (
     Agente,
     AgenteInstrumento,
     Conversa,
+    Execucao,
     Instrumento,
     MensagemConversa,
+    PassoExecucao,
 )
+
+
+def _semear_sombra(sessao, conversa, *, custo_usd=0.0, turnos=1):
+    """Semeia a timeline-sombra da conversa (Fatia 2: a fonte da medição do teto)
+    com `turnos` passos PRODUTIVOS somando `custo_usd`. Substitui, nos testes,
+    setar o contador `custo_acumulado_usd` na mão — que virou só cache."""
+    sombra = Execucao(
+        automacao_id=None, modo="conversa", conversa_id=conversa.id,
+        estado="conversa", entrada={"texto": "sombra"},
+    )
+    sessao.add(sombra)
+    sessao.flush()
+    for i in range(turnos):
+        sessao.add(
+            PassoExecucao(
+                execucao_id=sombra.id, ordem=i + 1,
+                saida={"texto": "x", "uso": [{"custo_usd": custo_usd if i == 0 else 0}]},
+                estado="concluido",
+            )
+        )
+    sessao.flush()
+    return sombra
 
 
 class _SessaoFake:
@@ -277,7 +301,8 @@ def test_teto_estourado_passa_para_humano(sessao, dados, monkeypatch):
     si.salvar_segredos(sessao, inst.id, {"token_bot": "T"})
     _agente_com(sessao, dados, inst)
     conversa, _ = servico.registrar_entrada(sessao, inst, _msg("oi"))
-    conversa.custo_acumulado_usd = 999  # já estourou o teto
+    # Fatia 2: o teto lê da TIMELINE-sombra, não do contador. Semeia um turno caro.
+    _semear_sombra(sessao, conversa, custo_usd=999)
     sessao.commit()
 
     rodou = {"agente": False}

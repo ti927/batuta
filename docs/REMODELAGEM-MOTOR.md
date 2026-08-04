@@ -1,6 +1,6 @@
 # Remodelagem do Motor — Unificação do Runtime (estudo + plano)
 
-> **Status:** 📋 **FASE FUTURA.** Estudo concluído e aprovado como registro; **execução NÃO iniciada**. Não começar nenhuma fatia sem sinal explícito do maestro. A Fatia 4 exige suspensão dirigida do congelamento do núcleo (seção 7).
+> **Status:** ▶️ **EM EXECUÇÃO ESTRANGULADORA.** Fatias **1 e 2 NO AR** (ver §5); Fatia 3 é a próxima na ordem do plano. Cada fatia começa só com sinal explícito do maestro. A Fatia 4 exige suspensão dirigida do congelamento do núcleo (seção 7).
 >
 > **Origem (2026-07-21):** pedido direto do maestro — *"QUERO UM PROJETO COMPLETO DE REMODELAGEM DO MOTOR, CÉREBRO, TUDO DE MANEIRA SIMPLIFICADA, E QUERO UM ESTUDO SINCERO, NÃO QUERO QUE FAÇA UM TREM PRA ME AGRADAR."*
 >
@@ -123,8 +123,15 @@ Toda conversa nasce com uma `Execucao` sombra `modo=conversa` (criada preguiços
 > - **Medido ao vivo (conversa nova, mesmo caso):** 48% da entrada servida do cache → custo **US$ 0,63 vs US$ 1,00** a preço cheio = **−37%**. (A contagem de tokens NÃO cai — o cacheado conta cheio; cai o CUSTO.)
 > - **A cura ESTRUTURAL — persistência entre turnos (parar de re-buscar o mesmo dado a cada turno) — segue PENDENTE:** ela ELIMINA os reenvios; o cache só os barateia. É a próxima empreitada estruturada (Fatias 4–5).
 
-### FATIA 2 — Unificar MEDIÇÃO/limites sobre a execução sombra
+### FATIA 2 — Unificar MEDIÇÃO/limites sobre a execução sombra — ✅ NO AR (2026-08-04)
 Teto de custo/turnos passa a ler da timeline (contagem de passos + soma de uso); `Conversa.turnos`/`custo_acumulado_usd` viram cache derivado. Prepara a Dimensão B.
+
+> **✅ FATIA 2 COMPLETA (2026-08-04).** Backend puro, sem migração (as colunas já existem). Onde ficou diferente do esboço:
+> - **Nova autoridade da medição:** `servico.medir_conversa(sessao, conversa) -> (turnos, custo)` lê a timeline-sombra e substitui a leitura dos contadores. O **teto de chat** (`processar_turno`) passa a decidir por ela. O turno de **portão** continua medido pelo contador (é rastro do FLUXO, não da conversa — só entra na timeline na Fatia 4); por isso os contadores **continuam sendo escritos** e viram *puramente* derivados só na Fatia 4.
+> - **Conserto de fidelidade:** o passo da sombra passou a guardar o uso **CHEIO** do turno (agente + transcrição + visão + instrumentos pagos) — antes guardava só o do agente, e medir pela timeline ficaria MENOR que o contador, afrouxando o limite de segurança. `_gravar_rastro_conversa` ganhou `uso_cheio`; o `uso_turno` é medido uma vez, antes de gravar o passo, e reusado pelo contador. (De quebra, a tela de inspeção mostra o custo real por turno.)
+> - **Regras espelhadas ao token:** `medir_conversa` conta só passos PRODUTIVOS (com texto OU ramo) e soma o uso deles — turno sem produto e turno de erro rodam mas NÃO contam, igual ao contador. `custo_de_entrada` (mesmo cálculo do `_custo_do_turno`).
+> - **Sem duplicar `/uso`:** a sombra segue fora daquela agregação (INNER JOIN com automação; sombra tem `automacao_id=None`). Escopo aditivo e reversível; nada visível ao cliente muda.
+> - **Verificação:** `test_medir_conversa.py` (6 testes — equivalência com o contador em chat puro, com custo além do agente, turno sem produto, turno de erro, sem-sombra) + suíte de mensageria/portão/uso/config verde. `test_teto_estourado_passa_para_humano` migrado para semear a timeline (a nova autoridade). **Falta:** só teste ao vivo.
 
 ### FATIA 3 — Colapsar a CONFIG por dimensão (seção 4)
 2 presets + 3 dimensões, com `resolver_config` como fachada de compatibilidade. Migração preguiçosa (automação migra ao re-salvar, como o grafo já faz). Remover chaves mortas. Efetivo idêntico para as automações existentes.

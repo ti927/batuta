@@ -628,11 +628,16 @@ def _gravar_rastro_conversa(
     iniciado: datetime,
     finalizado: datetime,
     resultado: dict | None = None,
+    uso_cheio: list | None = None,
     erro: BaseException | None = None,
 ) -> None:
     """Grava UM passo no rastro-sombra da conversa (Frente A, Fatia 1a), espelhando o
     que a orquestração já grava por passo: entrada, saída, instrumentos acionados,
     ERROS de instrumento (o que faltava para depurar o agente conversacional) e uso.
+
+    `uso_cheio` (Fatia 2): o uso do TURNO INTEIRO (agente + transcrição + visão +
+    instrumentos pagos), para a timeline virar o LIVRO-CAIXA fiel da conversa — a
+    fonte da medição (`medir_conversa`). Sem ele (compat), grava só o uso do agente.
 
     Roda em SESSÃO PRÓPRIA e é à PROVA DE FALHA — o rastro é secundário e NUNCA pode
     quebrar o atendimento (lei §12-A) nem envenenar a transação do turno (mesmo
@@ -668,7 +673,10 @@ def _gravar_rastro_conversa(
                     "texto": r.get("saida") or "",
                     "instrumentos_acionados": r.get("instrumentos_acionados") or [],
                     "saida_escolhida": r.get("ramo_escolhido") or None,
-                    "uso": _carimbar_uso_agente(r.get("uso"), origens),
+                    # Uso CHEIO do turno (Fatia 2), para a timeline medir o custo real da
+                    # conversa. Só o do agente quando o chamador não o passa (compat).
+                    "uso": uso_cheio if uso_cheio is not None
+                    else _carimbar_uso_agente(r.get("uso"), origens),
                 }
                 # Só quando houve falha de instrumento — mantém o passo comum idêntico
                 # ao da orquestração (o diagnóstico lê com `.get(...) or []`).
@@ -697,6 +705,37 @@ def _gravar_rastro_conversa(
             conversa_id,
             exc_info=True,
         )
+
+
+def medir_conversa(sessao: Session, conversa: Conversa) -> tuple[int, float]:
+    """Mede (turnos, custo_usd) de uma conversa LENDO a timeline-sombra — a fonte da
+    verdade da medição a partir da Fatia 2 (antes, os contadores `conversa.turnos`/
+    `custo_acumulado_usd` eram a autoridade; agora são só cache).
+
+    Conta apenas passos PRODUTIVOS (com texto OU ramo escolhido) e soma o uso deles,
+    espelhando EXATAMENTE a regra do contador de hoje: um turno sem produto e um turno
+    de erro rodam o agente mas NÃO contam turno nem custo. O turno de PORTÃO fica de
+    fora (não é gravado na sombra da conversa — pertence ao rastro do fluxo); ele só
+    entra nesta timeline na Fatia 4. Sem sombra ainda (1º turno) → (0, 0.0)."""
+    sombra_id = sessao.scalars(
+        select(Execucao.id).where(
+            Execucao.conversa_id == conversa.id, Execucao.modo == "conversa"
+        )
+    ).first()
+    if sombra_id is None:
+        return 0, 0.0
+    passos = sessao.scalars(
+        select(PassoExecucao).where(PassoExecucao.execucao_id == sombra_id)
+    ).all()
+    turnos = 0
+    custo = 0.0
+    for p in passos:
+        saida = p.saida or {}
+        if not (saida.get("texto") or saida.get("saida_escolhida")):
+            continue  # turno sem produto / de erro → não conta (igual ao contador)
+        turnos += 1
+        custo += sum(precos.custo_de_entrada(e) for e in (saida.get("uso") or []))
+    return turnos, custo
 
 
 def _rodar_turno(
@@ -765,17 +804,30 @@ def _rodar_turno(
             )
         return None
 
+    # Uso CHEIO do turno (agente + transcrição + visão + instrumentos pagos), medido
+    # UMA vez. Alimenta o rastro-sombra (que na Fatia 2 é a FONTE da medição da
+    # conversa, via `medir_conversa`), a contabilização da thread e o teto — tudo da
+    # mesma origem.
+    uso_turno = (
+        _carimbar_uso_agente(resultado.get("uso"), origens)
+        + uso_transcricao
+        + uso_visao
+        + medicao_instrumentos.uso_de_instrumentos_pagos(
+            sessao, agente.id, resultado.get("instrumentos_acionados"), origens=origens
+        )
+    )
+
     # Rastro-sombra do turno conversacional (Fatia 1a): grava o passo — com entrada,
-    # saída, instrumentos acionados, ERROS de instrumento e uso — nos mesmos trilhos da
-    # orquestração. Cobre turnos com e sem texto. Portão (gate) fica de fora: pertence
-    # ao rastro do FLUXO, não ao da conversa.
+    # saída, instrumentos acionados, ERROS de instrumento e o uso CHEIO do turno — nos
+    # mesmos trilhos da orquestração. Cobre turnos com e sem texto. Portão (gate) fica
+    # de fora: pertence ao rastro do FLUXO, não ao da conversa.
     if not gate:
         _gravar_rastro_conversa(
             conversa.id, agente.id, canal=conversa.canal,
             contato=conversa.contato_nome or conversa.contato_chave,
             origens=origens, entrada=entrada,
             iniciado=iniciado, finalizado=datetime.now(timezone.utc),
-            resultado=resultado,
+            resultado=resultado, uso_cheio=uso_turno,
         )
 
     saida = (resultado.get("saida") or "").strip()
@@ -806,14 +858,6 @@ def _rodar_turno(
                 )
             )
 
-    uso_turno = (
-        _carimbar_uso_agente(resultado.get("uso"), origens)
-        + uso_transcricao
-        + uso_visao
-        + medicao_instrumentos.uso_de_instrumentos_pagos(
-            sessao, agente.id, resultado.get("instrumentos_acionados"), origens=origens
-        )
-    )
     # Com texto → mensagem do agente (entregue). Decisão sem texto → registra um
     # lançamento interno (papel sistema, não enviado) que carrega o uso, para a
     # contabilização não perder este turno e a thread mostrar que o fluxo andou.
@@ -974,9 +1018,10 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
         conf = resolver_config(sessao, conversa)
 
         # Teto de gasto / máx. de turnos → passa para um humano (não roda a IA).
-        if (conversa.turnos or 0) >= conf["max_turnos"] or float(
-            conversa.custo_acumulado_usd or 0
-        ) >= conf["teto_usd"]:
+        # Fatia 2: a medição vem da TIMELINE-sombra (`medir_conversa`), a fonte única;
+        # os contadores `conversa.turnos`/`custo_acumulado_usd` viram só cache.
+        turnos_ate_agora, custo_ate_agora = medir_conversa(sessao, conversa)
+        if turnos_ate_agora >= conf["max_turnos"] or custo_ate_agora >= conf["teto_usd"]:
             try:
                 if token:
                     telegram.enviar(token, conversa.contato_chave, conf["mensagem_limite"])
