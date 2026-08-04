@@ -145,8 +145,15 @@ Teto de custo/turnos passa a ler da timeline (contagem de passos + soma de uso);
 >
 > **ADIADO para a Fatia 4 (com o descongelamento §7):** (a) `max_passos`→`cadeia.py` como teto de passos configurável (núcleo congelado); (b) o re-dimensionar a cascata por dimensão (A=tempos `global<canal`; B=limites `global<automacao`; C=portão `automacao<no`) — é o único trecho que MUDA comportamento ao vivo (os tempos das 9 automações `interno`) e exige acompanhar o front; casa melhor com a unificação do motor.
 
-### FATIA 4 — Portão como passo `espera_humano` unificado (delicada) ⚠️
+### FATIA 4 — Portão como passo `espera_humano` unificado (delicada) ⚠️ — ▶️ EM EXECUÇÃO (descongelamento nº 2 autorizado 2026-08-04)
 Introduzir `PassoExecucao.tipo`. O portão produz um passo `espera_humano` explícito. A retomada por CANAL deixa de ser motor paralelo: `servico` só ENTREGA a resposta como `mensagem_entrante` e chama o **único** caminho de retomada. `_turno_de_portao` vira adaptador fino. Tela e canal continuam como **pontos de entrada** legítimos, convergindo para UMA função. **Exige a suspensão dirigida do congelamento (seção 7).** Rede de testes máxima.
+
+> **Sub-fatiamento (2026-08-04) — a Fatia 4 é grande demais para um passo só num produto ao vivo. Quebrada em três, cada uma testável e parável:**
+> - **4.1 — `PassoExecucao.tipo` (vocabulário da timeline). ✅ NO AR (2026-08-04).** Migração aditiva `tip00passo001` (coluna nulável `tipo`: `agente`|`roteador`|`espera_humano`|`mensagem_entrante`). Cada passo passa a se carimbar: o nó de PORTÃO = `espera_humano` (`cadeia.py` + o re-run na tela `retoma.py`), os demais `agente`/`roteador`, e o turno conversacional-sombra = `agente` (`servico.py`). O registrador (`disparo._fazer_registrador`) mapeia `tipo`→coluna. **Nada LÊ a coluna ainda (4.1 só POPULA) → zero mudança de comportamento.** Verificação: `test_cadeia_grafo` (portão→espera_humano, roteador→roteador, agente→agente) + `test_rastro_conversa` (coluna no banco). Não matou o "renasce" — é fundação.
+> - **4.2 — Unificar a retomada (tela × canal) num caminho só; `_turno_de_portao` vira adaptador fino.** Some o "segundo motor"; o agente ainda re-roda. Risco médio.
+> - **4.3 — A CURA: memória entre turnos (o agente do portão retoma do estado salvo, não re-deriva).** Risco alto. Decisão de arquitetura à parte (checkpointer nativo do LangGraph × solução caseira) — trazida com a doc oficial lida (§9) e o estudo de tokens, ANTES de qualquer código. É aqui que o "renasce" morre.
+>
+> **Fatos da versão confirmados no ambiente (2026-08-04):** LangGraph **1.2.2**; `create_react_agent` aceita `checkpointer` e há `interrupt()`/`Command` (`langgraph.types`); mas o `PostgresSaver` **não está instalado** (só o de memória) → a 4.3 nativa exigiria a dependência `langgraph-checkpoint-postgres` + tabelas próprias.
 
 ### FATIA 5 — Conversa vira `modo=conversa` de primeira classe
 "Esperar mensagem" vira passo `espera_humano` (sem ramo). Sweeper de conversa e de execução **convergem** (a conversa herda o heartbeat/recuperação do Motor 1). `Conversa` encolhe para transporte. **Cuidado central:** o sweeper de presos NÃO pode confundir "dormindo esperando o cliente" com "travada" (conversa é potencialmente eterna; execução clássica termina).

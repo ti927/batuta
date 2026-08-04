@@ -689,6 +689,8 @@ def _gravar_rastro_conversa(
                     ordem=ordem,
                     agente_id=agente_id,
                     no_id=None,
+                    tipo="agente",  # Fatia 4.1: turno conversacional = passo de agente
+
                     entrada={"texto": entrada},
                     saida=saida,
                     estado=estado,

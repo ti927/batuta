@@ -130,6 +130,7 @@ def test_conversa_cria_sombra_com_passo(sessao, dados, monkeypatch):
     assert passos[0].agente_id == ag.id
     assert passos[0].saida["texto"] == "Oi, como posso ajudar?"
     assert passos[0].estado == "concluido"
+    assert passos[0].tipo == "agente"  # Fatia 4.1: turno conversacional na coluna tipo
 
 
 def test_segundo_turno_anexa_passo_na_mesma_sombra(sessao, dados, monkeypatch):

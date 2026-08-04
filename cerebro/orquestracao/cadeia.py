@@ -299,6 +299,9 @@ def executar_cadeia(
 
         passo = {
             "no_id": no_atual,
+            # Tipo do passo na timeline (Fatia 4.1): o nó de PORTÃO é uma espera
+            # por humano; os demais, agente ou roteador. Aditivo — só carimba.
+            "tipo": "espera_humano" if gate else ("roteador" if tipo == "roteador" else "agente"),
             "agente_id": agente_id_str,
             "agente_nome": agente_nome,
             "entrada": entrada_atual,

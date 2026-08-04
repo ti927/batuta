@@ -71,6 +71,8 @@ def _fazer_registrador(
                 execucao_id=execucao_id,
                 ordem=ordem,
                 no_id=passo.get("no_id"),
+                tipo=passo.get("tipo"),  # Fatia 4.1: classificação do passo na timeline
+
                 # agente_id pode ser nulo num nó roteador (que não roda agente).
                 agente_id=(
                     uuid.UUID(passo["agente_id"]) if passo.get("agente_id") else None

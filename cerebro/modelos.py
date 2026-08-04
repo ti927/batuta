@@ -270,6 +270,11 @@ class PassoExecucao(IdData, Base):
         ForeignKey("execucoes.id", ondelete="CASCADE"), nullable=False
     )
     ordem: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Classificação do passo na timeline (Fatia 4.1): agente | roteador |
+    # espera_humano (portão / aguardando resposta) | mensagem_entrante. Nulável:
+    # passos antigos não o têm. Introduz o vocabulário que unifica o portão como
+    # passo único de espera-por-humano (REMODELAGEM-MOTOR §5).
+    tipo: Mapped[str | None] = mapped_column(String(20), nullable=True)
     agente_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("agentes.id", ondelete="SET NULL"), nullable=True
     )

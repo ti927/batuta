@@ -215,6 +215,8 @@ def test_gate_pausa(sessao, dados, ag, monkeypatch):
     # o nó com gate NÃO roteia sozinho (a resposta do humano decide depois)
     assert r["passos"][-1]["saida_escolhida"] is None
     assert r["passos"][-1]["no_id"] == "rev"
+    # Fatia 4.1: o passo de PORTÃO é carimbado como espera-por-humano na timeline.
+    assert r["passos"][-1]["tipo"] == "espera_humano"
 
 
 def test_no_roteador_classifica_sem_agente(sessao, dados, ag, monkeypatch):
@@ -240,6 +242,9 @@ def test_no_roteador_classifica_sem_agente(sessao, dados, ag, monkeypatch):
     assert r["resultado"] == "cheguei em A"
     primeiro = r["passos"][0]
     assert primeiro["no_id"] == "rot"
+    # Fatia 4.1: nó roteador → tipo "roteador"; nó de agente → tipo "agente".
+    assert primeiro["tipo"] == "roteador"
+    assert r["passos"][1]["tipo"] == "agente"
     assert primeiro["agente_id"] is None  # roteador não roda agente
     assert primeiro["saida_escolhida"] == "A"
 

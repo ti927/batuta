@@ -236,6 +236,7 @@ def _retomar_conversando_tela(
 
     passo = {
         "no_id": ultimo.no_id or (str(ultimo.agente_id) if ultimo.agente_id else None),
+        "tipo": "espera_humano",  # Fatia 4.1: re-run do nó de PORTÃO = espera por humano
         "agente_id": str(agente.id),
         "agente_nome": agente.nome,
         "entrada": entrada_rerun,
