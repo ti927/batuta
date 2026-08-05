@@ -398,6 +398,26 @@ def test_canal_agente_decide_e_conclui(sessao, dados, monkeypatch):
     assert execucao.estado == "concluida"  # aprovado → fim
 
 
+def test_canal_portao_deixa_passo_espera_humano_no_fluxo(sessao, dados, monkeypatch):
+    """Fatia 4.2 (unificação do rastro): o portão pelo CANAL passa a deixar rastro na
+    timeline do FLUXO — um passo `espera_humano`, como a tela já fazia. Antes o re-run
+    pelo canal sumia da inspeção de execução (a lacuna 'canal não gera passo')."""
+    enviados = []
+    canal, ag, auto, execucao = _setup_canal(sessao, dados, monkeypatch, enviados)
+    _mock_servico_agente(monkeypatch, ramo=None, saida="Por que você reprovou?")
+
+    _responder(sessao, canal, "reprovado")
+
+    passos = _passos(sessao, execucao.id)
+    assert len(passos) == 2  # a pausa inicial (ordem 1) + o re-run pelo canal (ordem 2)
+    assert passos[1].ordem == 2
+    assert passos[1].tipo == "espera_humano"
+    assert passos[1].agente_id == ag.id
+    assert "Por que você reprovou?" in (passos[1].saida or {}).get("texto", "")
+    # uso VAZIO no passo: o custo do turno vive na MensagemConversa (não conta em dobro).
+    assert (passos[1].saida or {}).get("uso") == []
+
+
 def test_canal_agente_decide_SEM_texto_o_fluxo_anda(sessao, dados, monkeypatch):
     """O BUG do dia 19/06: o agente decidiu (chamou `seguir_para`) mas sem escrever
     nada → a borda descartava a decisão e a execução ficava 'aguardando_humano' para

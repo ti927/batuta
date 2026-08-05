@@ -935,6 +935,7 @@ def _turno_de_portao(
         _processar_aprovacao(sessao, conversa, execucao, token, conf)
         return
 
+    iniciado = datetime.now(timezone.utc)
     resultado = _rodar_turno(
         sessao, conversa, token, agente, conf,
         saidas=saidas, gate=True, chaves=chaves, origens=origens,
@@ -947,12 +948,48 @@ def _turno_de_portao(
     por_rotulo = {s["rotulo"]: s for s in saidas if s.get("rotulo")}
     ramo = resultado.get("ramo_escolhido")
     escolhida = por_rotulo.get(ramo) if ramo else None
+
+    # Fatia 4.2 (unificação do rastro): o portão pelo CANAL passa a deixar um passo
+    # `espera_humano` na timeline do fluxo — como a tela (`retoma._retomar_conversando_tela`)
+    # já faz — para o portão ficar inspecionável independentemente da superfície (some a
+    # lacuna "canal não gera passo"). Gravado DIRETO (não pelo registrador, que auto-soma
+    # o custo de instrumento) com `uso=[]`: o custo do turno já vive na MensagemConversa
+    # gravada por `_rodar_turno` — não contar em dobro no `/uso`. Entrega e ciclo de vida
+    # do canal ficam idênticos (nada visível ao cliente muda).
+    resposta_humano = _ultima_msg_contato(sessao, conversa.id)
+    entrada_passo = (
+        f"{(ultimo.entrada or {}).get('texto', '')}\n\n"
+        f"{(ultimo.saida or {}).get('texto', '')}\n\n"
+        f"---\n[Resposta do humano]\n{resposta_humano}"
+    ).strip()
+    sessao.add(
+        PassoExecucao(
+            execucao_id=execucao.id,
+            ordem=ultimo.ordem + 1,
+            no_id=ultimo.no_id or (str(ultimo.agente_id) if ultimo.agente_id else None),
+            tipo="espera_humano",
+            agente_id=agente.id,
+            entrada={"texto": entrada_passo},
+            saida={
+                "texto": (resultado.get("saida") or "").strip(),
+                "instrumentos_acionados": resultado.get("instrumentos_acionados") or [],
+                "saida_escolhida": ramo if escolhida is not None else None,
+                "uso": [],
+            },
+            estado="concluido",
+            iniciado_em=iniciado,
+            finalizado_em=datetime.now(timezone.utc),
+        )
+    )
+    sessao.flush()
+
     if escolhida is not None:
         # O agente DECIDIU → o fluxo anda; leva o histórico da conversa como contexto.
+        # A partir do passo de portão recém-gravado (ordem+1), como na tela.
         retoma.avancar_apos_gate(
             sessao, execucao, idx=idx, cadeia=cadeia, escolhida=escolhida,
             entrada_proxima=_historico_texto(sessao, conversa),
-            ordem_inicial=ultimo.ordem, chaves=chaves, origens=origens,
+            ordem_inicial=ultimo.ordem + 1, chaves=chaves, origens=origens,
         )
         sessao.refresh(execucao)
         if execucao.estado != "aguardando_humano":
