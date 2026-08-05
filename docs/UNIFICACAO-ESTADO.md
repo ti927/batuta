@@ -143,10 +143,9 @@ decisão adiada (§ abaixo) tomada com número na mão, e a sequência das fatia
   escritor dedicado à prova de falha; portão de fora; 100% aditivo, 736 testes) em `REMODELAGEM-MOTOR.md §5`.
   **1a** (deploy `7dcdfc4`) fez o rastro EXISTIR; **1b** (deploy `4505a8d`, sem migração) o tornou VISÍVEL na
   tela de Execuções (filtro "Conversas" + a MESMA tela de detalhe). Falta só teste ao vivo.
-- **Fatia 2** — Unificar medição/limites sobre a execução sombra.
-- **Fatia 3** — Colapsar a config de 5 camadas por dimensão (remover chaves mortas).
-- **Fatia 4 ⚠️** — Portão como passo `espera_humano` unificado. **Exige a suspensão dirigida do
-  congelamento** (§6). Mexer por último, rede de testes máxima.
+- **Fatia 2 — Medição sobre a execução sombra** — ✅ **NO AR (2026-08-04, commit `4d2ab1e`).** O teto de custo/turnos da conversa passa a ser lido da TIMELINE (`servico.medir_conversa`), não dos contadores soltos (que viram cache). Conserto de fidelidade: o passo passou a guardar o uso CHEIO do turno (agente + transcrição + visão + instrumentos). Backend puro, sem migração, zero mudança de comportamento (equivalência provada em `test_medir_conversa.py`).
+- **Fatia 3 (parte segura) — Declutter da config** — ✅ **NO AR (2026-08-04, commit `7efb6e7`).** Removidas as chaves MORTAS (`max_passos`, `modelo_roteador`, `acao_ao_estourar`); presets 4→2 honestos (Processo interno + Atendimento externo; caíram disparo/personalizado, sem uso em prod); constante espelhada unificada. Front data-driven (tela se atualiza sozinha). **ADIADO p/ Fatia 4:** re-dimensionar a cascata por dimensão + `max_passos`→cadeia (núcleo).
+- **Fatia 4 ⚠️ — Portão como passo `espera_humano` unificado** — ▶️ **EM EXECUÇÃO (descongelamento nº 2 autorizado, `MIGRACAO.md §6.1`, 2026-08-04).** Sub-fatiada em três: **✅ 4.1 (vocabulário) NO AR** (`62e18d5`, migração aditiva `tip00passo001` — coluna `PassoExecucao.tipo`; portão carimbado `espera_humano`; nada lê ainda → zero mudança). **✅ 4.2 (unificação do rastro) NO AR** (`12fb70f` — o portão pelo CANAL passa a deixar passo `espera_humano` na timeline do fluxo, como a tela; achado honesto: merge do ciclo-de-vida = risco alto/pouco ganho, a 4.3 reescreve o re-run). **⬜ 4.3 — A CURA: memória entre turnos** (o agente do portão retoma do estado salvo, não re-deriva) — mata o "renasce"; **decisão de arquitetura à parte** (checkpointer nativo do LangGraph × solução caseira), com a doc oficial lida (§9) e o estudo de tokens ANTES de código. Rede de segurança montada antes: tag `pre-fatia-4` + dump de PROD.
 - **Fatia 5** — Conversa vira `modo=conversa` de primeira classe (dorme/acorda); sweepers convergem.
 - **Fatia 6** (opcional) — Projeção única na UI (aba Conversa lê a timeline).
 
