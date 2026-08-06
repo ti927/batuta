@@ -1,6 +1,11 @@
 # Fatia 4.3 — Decisão de arquitetura: memória entre turnos (a CURA do "renasce")
 
-> **Status:** 🟡 **ESTUDO/DECISÃO — aguardando o martelo do maestro. NENHUM código escrito.**
+> **Status:** ✅ **DECIDIDO (2026-08-06): Opção A — NATIVO (checkpointer `PostgresSaver` + `interrupt()`).**
+> O maestro escolheu A, ciente das ressalvas do §4/§5 (contra a recomendação de B). NENHUM código de
+> produção escrito ainda: A começa por um **protótipo isolado** (spike) que prova as 3 mecânicas e o
+> desenho de HITL seletivo que **protege a garantia congelada** (não re-disparar instrumento irreversível),
+> e depende de **duas autorizações do maestro** — ver §8-A. Só depois disso as sub-fatias estranguladoras
+> tocam o motor vivo.
 > Este documento é o insumo obrigatório da **Fatia 4.3** (`REMODELAGEM-MOTOR.md §5`), a última e mais
 > delicada da Frente A. Conforme a disciplina do projeto (`CLAUDE.md §9/§10`), a doc oficial do LangGraph
 > **da nossa versão** foi lida e os fatos foram verificados **no ambiente real** antes de recomendar. A
@@ -175,3 +180,66 @@ middleware seletivo e o pacote `langchain` — decisão separada, não embutida 
 **Decisão que peço:** aprovar **B**, ou preferir **A**/**C**. Aprovada a forma, a 4.3 é sub-fatiada
 (persistir o fio → alimentar de volta com janela/resumo → medir o delta de uso) e cada sub-fatia vem com
 plano e verificação antes do código, como sempre.
+
+---
+
+## 8-A. Decisão tomada — A (nativo) — e como executá-la com segurança (2026-08-06)
+
+O maestro escolheu **A**. Executar A com a disciplina do projeto exige começar por um **protótipo isolado**
+(fora da produção) e passar por **duas portas de autorização** antes de qualquer código de motor:
+
+**Como A é feito (estrangulador, sem rewrite cego):**
+1. **Spike isolado (sem tocar produção)** — provar em ambiente de teste: (a) `checkpointer` + `thread_id`
+   dão memória através dos turnos no nosso `create_react_agent`; (b) **HITL SELETIVO** que interrompe
+   **só** os instrumentos irreversíveis (o desenho que protege `PRODUTO §14` sob o modelo nativo — via
+   `interrupt_on`/middleware, ou `interrupt()` posicionado após os efeitos); (c) medir **só o delta** de
+   `uso` por turno (não recontar o estado acumulado). **Se o spike provar que a garantia HITL não se
+   protege com segurança sob o nativo, isso volta como achado — a escolha se revisita com número na mão.**
+2. **Sub-fatias na produção** (cada uma com plano + verificação + a rede `pre-fatia-4`/dump já montada):
+   introduzir o `PostgresSaver` + `.setup()` (tabelas de checkpoint) → memória no chat (`modo=conversa`) →
+   portão nativo **por último** (a peça mais delicada) → conciliar `uso` e a fonte-da-verdade do histórico.
+
+**Porta 1 — Governança (só o maestro abre):** A toca o **laço `create_react_agent`**, que o
+`REMODELAGEM-MOTOR.md §7` mantinha **congelado até na suspensão nº 2**. Adotar o checkpointer/interrupt
+nativos **expande** o descongelamento além do que foi autorizado em 2026-08-04 (que cobria `cadeia.py`,
+`agente.py` e `PassoExecucao`, preservando o laço). Isso exige um **aditivo curto ao `MIGRACAO.md §6.1`**,
+aprovado antes — no formato dos precedentes.
+
+**Porta 2 — Dependências (mutam o ambiente, exigem ok):** `langgraph-checkpoint-postgres` (persistência
+durável) e, para o HITL seletivo seguro, o pacote `langchain` (`HumanInTheLoopMiddleware`). Instalar é
+mudança de ambiente → confirmação do maestro (`CLAUDE.md §6`).
+
+---
+
+## 9. Achados do protótipo isolado (2026-08-06) — spike rodado, produção intocada
+
+O maestro autorizou; o spike rodou em ambiente de teste (modelo FALSO roteirizado, custo zero; o **mesmo
+`ToolNode`** que o prebuilt usa; `MemorySaver` como checkpointer). Uma ferramenta **segura** (`ler_dados`)
+e uma **irreversível** (`publicar`, guardada por `interrupt()` **antes** do efeito). Resultados medidos:
+
+| Pergunta | Resultado | Leitura |
+|---|---|---|
+| **(a) Memória entre turnos** | **FUNCIONA** — no 2º turno o agente respondeu "42" **sem reler**; o estado persistiu (mensagens acumuladas na thread). | A cura do "renasce" é real com o checkpointer nativo. |
+| **(b) Ação irreversível protegida** | **SIM** — `publicar` só disparou **após** a aprovação (`Command(resume=...)`); rodou **exatamente 1×**. | O padrão `interrupt()`-antes-do-efeito **protege** a garantia `PRODUTO §14`. |
+| **(c) Caveat do re-run (o risco que eu havia sinalizado)** | **CONFIRMADO, empírico** — a leitura **segura** que rodou na **mesma rodada, antes** do portão, **RE-EXECUTOU ao retomar** (contador 1→2). | O nó re-roda inteiro no resume. **Tudo que rodar antes do `interrupt()` no mesmo nó re-executa** — precisa ser idempotente. |
+| **Contabilização de `uso`** | O `invoke` devolve o estado **acumulado** (todos os turnos). Somar todas as `AIMessage` **superfatura**. | A medição tem de ser o **delta** do turno, não a soma do estado. |
+
+**Achados de dependência/versão (também medidos):**
+- **`create_react_agent` está DEPRECADO** (LangGraph V1.0, "removido na V2.0") → o caminho A migra, na
+  prática, para **`langchain.agents.create_agent`** (que aceita `middleware`, `checkpointer`,
+  `interrupt_before/after`) + **`HumanInTheLoopMiddleware(interrupt_on={...})`** — o HITL **seletivo** que
+  gateia só os instrumentos irreversíveis (o desenho que protege (b) e **contém** (c)).
+- **Instalar `langchain` desloca o core:** `langchain-core 1.4.0→1.5.3` e `langgraph 1.2.2→1.2.10`. A
+  adoção real exige **atualizar dependências centrais do app ao vivo** → **regressão completa** obrigatória.
+  (O spike restaurou o venv ao lockfile depois; o manifesto não foi tocado.)
+
+### Veredito do spike (honesto)
+A **é viável e a memória entre turnos é real**; a garantia HITL **é protegível** sob o nativo, **desde que**
+o portão use o **HITL seletivo** (`interrupt_on`) e **nada com efeito colateral não-idempotente rode antes
+do `interrupt()` no mesmo nó**. Não é um veto — mas **confirma que A é o maior rewrite da Frente A**: migrar
+`create_react_agent`→`create_agent`, subir o core do LangChain/LangGraph (regressão), desenhar o
+`interrupt_on` do cinto por reversibilidade, corrigir a contabilização para o delta, e criar/adotar as
+tabelas de checkpoint como (novo) armazém — tudo sobre clientes ao vivo, para um ganho **estrutural** (o
+custo já foi tratado na Frente B). A recomendação técnica original (B) segue de pé; a decisão de seguir com
+A é do maestro e está tomada — daqui, se ele mantiver A, entra o **plano de sub-fatias de produção**
+(cada uma com a proteção (b)+(c) explícita e verificação antes do código).
