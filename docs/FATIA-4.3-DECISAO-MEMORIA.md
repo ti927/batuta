@@ -243,3 +243,8 @@ tabelas de checkpoint como (novo) armazém — tudo sobre clientes ao vivo, para
 custo já foi tratado na Frente B). A recomendação técnica original (B) segue de pé; a decisão de seguir com
 A é do maestro e está tomada — daqui, se ele mantiver A, entra o **plano de sub-fatias de produção**
 (cada uma com a proteção (b)+(c) explícita e verificação antes do código).
+
+> **✅ Maestro manteve A (2026-08-06).** Plano estrangulador de produção escrito:
+> [`FATIA-4.3-PLANO-PRODUCAO.md`](FATIA-4.3-PLANO-PRODUCAO.md) — sub-fatias `P0` (subir o núcleo isolado) →
+> `P1` (`create_react_agent`→`create_agent`) → `P2` (memória no chat, a cura, com parada segura) → `P3`
+> (portão nativo, por último) → `P4` (limpeza). Aguarda aval para iniciar a **P0**.
