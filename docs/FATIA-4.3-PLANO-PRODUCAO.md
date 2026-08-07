@@ -1,6 +1,6 @@
 # Fatia 4.3 — Plano de produção (Opção A, nativo): sub-fatias estranguladoras
 
-> **Status:** 🟡 **PLANO — aguardando aval do maestro para iniciar a sub-fatia P0. NENHUM código escrito.**
+> **Status:** ▶️ **EM EXECUÇÃO. ✅ P0 e ✅ P1 NO AR (2026-08-06). Próxima: P2 (a cura — memória no chat).**
 > Decisão de forma tomada (A/nativo) e ampliação de descongelamento nº 3 registrada (`MIGRACAO.md §6.1`).
 > Base: [`FATIA-4.3-DECISAO-MEMORIA.md`](FATIA-4.3-DECISAO-MEMORIA.md) (estudo + achados do protótipo).
 > Cada sub-fatia começa só com sinal explícito do maestro e tem seu próprio plano+verificação antes do código.
@@ -27,7 +27,10 @@
 
 ## As sub-fatias (ordem inegociável — risco crescente)
 
-### P0 — Subir o núcleo (dependências) em ISOLAMENTO ⭐ (primeiro, mais barato)
+### P0 — Subir o núcleo (dependências) em ISOLAMENTO ⭐ — ✅ NO AR (commit `0d33044`, 2026-08-06)
+> `uv add langgraph-checkpoint-postgres langchain` (core 1.4→1.5.3, langgraph 1.2.2→1.2.10). Suíte 761/761
+> verde (2ª rodada); app subiu saudável (`/saude`=`0d33044`); zero mudança de comportamento. 1 flaky
+> pré-existente (mocka o LLM) à parte.
 - **O que muda:** `uv add langgraph-checkpoint-postgres langchain` (deixa `langchain-core`/`langgraph`
   subirem para as versões compatíveis — medido no spike: `langchain-core 1.4→1.5`, `langgraph 1.2.2→1.2.10`).
   **Zero código de comportamento.**
@@ -38,7 +41,13 @@
   aparece — e reverte-se limpo.
 - **Não muda:** nada que o usuário vê.
 
-### P1 — `executar_agente`: `create_react_agent` → `create_agent`, SEM checkpointer/interrupt
+### P1 — `executar_agente`: `create_react_agent` → `create_agent`, SEM checkpointer/interrupt — ✅ NO AR (commit `a82b5fd`, 2026-08-06)
+> Troca do construtor (o `create_react_agent` está deprecado). `system_prompt` aceita `SystemMessage` COMO
+> ESTÁ → o `cache_control` (cache Anthropic da Frente B) sobrevive. Verificação: suíte **761/761**; fumaça ao
+> vivo (turno Haiku real: resposta + `seguir_para` + uso); **cache provado no Sonnet via `create_agent`
+> (cache_read=4324)**; confirmado que nem P0 nem P1 quebraram o cache (idêntico antes/depois). Nota menor: o
+> `cache_write` de CRIAÇÃO aparece 0 no reporte do langchain (idêntico nos 2 construtores; erra p/ subestimar
+> custo) — item à parte. `test_declaracao_ramo` passou a interceptar `create_agent`.
 - **O que muda:** trocar a peça **deprecada** pela nova (`langchain.agents.create_agent`), mantendo tudo o
   mais idêntico (uma mensagem de entrada, mesmas ferramentas, mesmo prompt + cache Anthropic, mesma coleta de
   `uso`). Adaptação coberta pela ampliação nº 3 do descongelamento (`agente.py`).
@@ -104,4 +113,5 @@
 
 ## Ordem e portões de aprovação
 `P0 → P1 → P2(a,b,c) → [parada segura possível] → P3 → P4`. Cada uma: **plano + verificação apresentados e
-aprovados antes do código**; deploy e observação antes da seguinte. A P0 é o próximo passo proposto.
+aprovados antes do código**; deploy e observação antes da seguinte. ✅ P0 e P1 NO AR; **a P2 é o próximo
+passo** (aguarda plano+aval; e um teste real da P1 em produção antes, se o maestro quiser).
