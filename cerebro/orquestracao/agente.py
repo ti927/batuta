@@ -14,7 +14,7 @@ from typing import Literal
 
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.tools import StructuredTool
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
 from pydantic import BaseModel, Field, create_model
 
 import instrumentos as encaixe
@@ -432,7 +432,11 @@ def executar_agente(
     # Cache de prompt (Anthropic): o prompt e as ferramentas são reenviados a cada passo
     # do laço/turno; marcar o cache corta o custo desses reenvios (economia de tokens).
     prompt_sistema = _prompt_de_sistema(instrucoes, agente.modelo_ia or MODELO_PADRAO)
-    app = create_react_agent(modelo, ferramentas, prompt=prompt_sistema)
+    # `create_agent` (LangChain 1.x) é a sucessora oficial do `create_react_agent`
+    # (deprecado na V1.0). Aceita `system_prompt: str | SystemMessage` e usa o
+    # `SystemMessage` COMO ESTÁ — então o `cache_control` (cache de prompt Anthropic)
+    # sobrevive intacto. Fatia 4.3/P1: só a troca do construtor; laço/entrada/uso iguais.
+    app = create_agent(modelo, ferramentas, system_prompt=prompt_sistema)
     # Feedback ao vivo: o turno de LLM pode demorar; avisa que o agente está pensando.
     atividade.registrar(f"{agente.nome}: pensando…")
     resultado = app.invoke({"messages": [{"role": "user", "content": entrada}]})

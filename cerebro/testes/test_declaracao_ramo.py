@@ -3,7 +3,7 @@
 Quando um nó tem 2+ saídas, `executar_agente` injeta a ferramenta `seguir_para`
 (enum dos rótulos) e expõe o ramo escolhido em `ramo_escolhido`. Nó de 1 saída não
 oferece a ferramenta (não há o que escolher). Estes testes não falam com a LLM:
-trocam `create_react_agent` por um app falso que aciona (ou não) a ferramenta.
+trocam `create_agent` por um app falso que aciona (ou não) a ferramenta.
 """
 
 import uuid
@@ -30,10 +30,10 @@ def _saidas_duas():
 
 
 def _fake_app(monkeypatch, *, chama_rotulo=None, capturar=None):
-    """Troca create_react_agent por um app falso. Se `chama_rotulo`, aciona a
+    """Troca create_agent por um app falso. Se `chama_rotulo`, aciona a
     ferramenta `seguir_para` com esse rótulo. `capturar` recebe a lista de tools."""
 
-    def fake_create(modelo, ferramentas, prompt):
+    def fake_create(modelo, ferramentas, system_prompt):
         if capturar is not None:
             capturar.extend(ferramentas)
         if chama_rotulo is not None:
@@ -47,7 +47,7 @@ def _fake_app(monkeypatch, *, chama_rotulo=None, capturar=None):
         return App()
 
     monkeypatch.setattr(agente_mod, "construir_modelo", lambda m: object())
-    monkeypatch.setattr(agente_mod, "create_react_agent", fake_create)
+    monkeypatch.setattr(agente_mod, "create_agent", fake_create)
 
 
 def test_agente_declara_o_ramo(monkeypatch):
@@ -116,8 +116,8 @@ def test_executar_agente_injeta_portao_md_no_prompt(monkeypatch):
     """O `texto_portao` chega ao PROMPT do agente, com o trilho `seguir_para` intacto."""
     prompts: list = []
 
-    def fake_create(modelo, ferramentas, prompt):
-        prompts.append(prompt)
+    def fake_create(modelo, ferramentas, system_prompt):
+        prompts.append(system_prompt)
 
         class App:
             def invoke(self, _):
@@ -126,7 +126,7 @@ def test_executar_agente_injeta_portao_md_no_prompt(monkeypatch):
         return App()
 
     monkeypatch.setattr(agente_mod, "construir_modelo", lambda m: object())
-    monkeypatch.setattr(agente_mod, "create_react_agent", fake_create)
+    monkeypatch.setattr(agente_mod, "create_agent", fake_create)
     agente_mod.executar_agente(
         _agente(), [], "entrada", saidas=_saidas_duas(), gate=True,
         texto_portao="AGENDE E ENCAMINHE",
