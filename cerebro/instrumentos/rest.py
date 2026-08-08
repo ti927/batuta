@@ -24,6 +24,34 @@ TIMEOUT_S = 15.0
 MAX_CORPO = 10_000
 
 
+def _projetar_registros(corpo: Any, campos: list[str]) -> Any:
+    """Mantém só `campos` em cada REGISTRO de uma resposta em lista — corta o custo
+    de respostas grandes (ex.: uma busca no Bubble que traz 14 registros × 30 campos,
+    quando o agente usa 6). Reconhece os formatos comuns: o `response.results` do
+    Bubble, uma lista no topo, ou `results` no topo. Formato não reconhecido (ou item
+    que não é dict) → devolve INTACTO: nunca quebra e nunca descarta dado por engano
+    (o pior caso é não economizar). Campo ausente num registro simplesmente não vem."""
+    conjunto = set(campos)
+
+    def enxuga(registro: Any) -> Any:
+        if isinstance(registro, dict):
+            return {k: v for k, v in registro.items() if k in conjunto}
+        return registro
+
+    def enxuga_lista(lista: list) -> list:
+        return [enxuga(r) for r in lista]
+
+    if isinstance(corpo, dict):
+        resp = corpo.get("response")
+        if isinstance(resp, dict) and isinstance(resp.get("results"), list):
+            return {**corpo, "response": {**resp, "results": enxuga_lista(resp["results"])}}
+        if isinstance(corpo.get("results"), list):
+            return {**corpo, "results": enxuga_lista(corpo["results"])}
+    if isinstance(corpo, list):
+        return enxuga_lista(corpo)
+    return corpo
+
+
 class ConfigRest(BaseModel):
     """Configuração fixa do instrumento, preenchida por quem monta o agente.
     `token_bearer` é SEGREDO (cofre, Fase 7-B): se preenchido, vira o cabeçalho
@@ -39,6 +67,16 @@ class ConfigRest(BaseModel):
     token_bearer: str = Field(
         default="",
         description="Token de autenticação (segredo) → cabeçalho Authorization Bearer.",
+    )
+    campos_resposta: list[str] = Field(
+        default_factory=list,
+        title="Campos da resposta",
+        description=(
+            "Opcional. Traga só estes campos de cada registro da resposta — enxuga "
+            "listas grandes e corta o custo de tokens do agente. "
+            'Ex.: ["_id", "cpo.NomeCliente"]. Vazio = a resposta inteira (como hoje). '
+            "Aplica-se a respostas em lista, inclusive o formato \"results\" do Bubble."
+        ),
     )
 
 
@@ -116,6 +154,12 @@ class ChamarApiRest(TipoInstrumento):
             corpo: Any = resposta.json()
         except ValueError:
             corpo = resposta.text[:MAX_CORPO]
+
+        # Filtro de campos (corte de custo): enxuga cada registro da resposta aos
+        # campos escolhidos. Vazio = resposta inteira (retrocompatível). Feito ANTES
+        # do diag para o `rest.diag` medir o tamanho JÁ reduzido (prova a economia).
+        if config.campos_resposta:
+            corpo = _projetar_registros(corpo, config.campos_resposta)
 
         # TEMP-DIAG (remover após diagnóstico de custo/constraints): registra O QUE o
         # agente enviou (query com o `constraints`, corpo do POST — que mostra a data) e
