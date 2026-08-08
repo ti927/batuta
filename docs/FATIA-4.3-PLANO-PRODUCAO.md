@@ -1,6 +1,6 @@
 # Fatia 4.3 — Plano de produção (Opção A, nativo): sub-fatias estranguladoras
 
-> **Status:** ▶️ **EM EXECUÇÃO. ✅ P0 e ✅ P1 NO AR (2026-08-06). Próxima: P2 (a cura — memória no chat).**
+> **Status:** ▶️ **EM EXECUÇÃO. ✅ P0, ✅ P1, ✅ P2a NO AR e provados ao vivo. ✅ P2b (janela/resumo) VERIFICADA — aguarda deploy. Próxima após deploy: P3 (portão nativo).**
 > Decisão de forma tomada (A/nativo) e ampliação de descongelamento nº 3 registrada (`MIGRACAO.md §6.1`).
 > Base: [`FATIA-4.3-DECISAO-MEMORIA.md`](FATIA-4.3-DECISAO-MEMORIA.md) (estudo + achados do protótipo).
 > Cada sub-fatia começa só com sinal explícito do maestro e tem seu próprio plano+verificação antes do código.
@@ -60,16 +60,27 @@
 ### P2 — Persistência + MEMÓRIA no chat (`modo=conversa`); o portão fica como está ⭐ (a CURA do "renasce")
 > **É aqui que o "renasce" morre no chat.**
 >
-> **🟡 P2a IMPLEMENTADA (2026-08-08) — verificada em isolamento; aguarda deploy.** Novo módulo
+> **✅ P2a NO AR e PROVADA AO VIVO (commit `907e00a`, 2026-08-08).** Novo módulo
 > `orquestracao/memoria_conversa.py` (PostgresSaver + pool, à prova de falha → sem checkpointer a conversa
 > cai no modo legado); `executar_agente` ganhou `checkpointer`/`thread_id`/`preambulo_sistema` opcionais +
-> medição pelo **delta** (sem memória, byte-idêntico à P1); `mensageria/servico._rodar_turno` usa a memória
-> SÓ no chat (não no portão) com **semeadura** do histórico no 1º turno (cobre conversas em andamento no
-> deploy); `main.ciclo_de_vida` faz o `setup()` no boot. Verificação: suíte **765 verde** (1 flaky
-> pré-existente à parte) + `test_memoria_conversa` (delta/preâmbulo) + `test_mensageria` (semeadura/fala-nova)
-> + **integração ao vivo** (executar_agente real + PostgresSaver real + Sonnet: lembrou o fato entre turnos,
-> delta certo, tabelas dropadas). Prod usa o pooler Supabase modo-sessão (5432 → DDL/prepared OK);
-> `prepare_threshold=0` pooler-safe. **Falta:** deploy + teste ao vivo. P2b (janela) e P2c já embutido (delta).
+> medição pelo **delta**; `mensageria/servico._rodar_turno` usa a memória SÓ no chat (não no portão) com
+> **semeadura** do histórico no 1º turno; `main.ciclo_de_vida` faz o `setup()` no boot. Teste ao vivo
+> (Reembolsos): Buscar_Projetos 3×→1×, Buscar_Trechos 2×→1×, "confirmado" só Criar_Reembolso — o "renasce"
+> MORREU; 18 checkpoints persistidos. Ressalva registrada: tokens/turno ainda altos (fio acumulado reenviado).
+>
+> **✅ P2b IMPLEMENTADA e VERIFICADA (2026-08-08) — aguarda deploy.** O `SummarizationMiddleware` nativo entra
+> em `executar_agente` **só no caminho com memória** (o chat): quando o fio de trabalho cresce, ele **dobra o
+> antigo num resumo e mantém a janela recente**, de forma durável no próprio checkpoint. Resumidor **Haiku**
+> (barato, à prova de falha → sem middleware o turno segue sem compactar), gatilho ~20k / janela ~8k tokens
+> (constantes tunáveis em `agente.py`). **Correção obrigatória junto (P2c embutida):** a medição do delta
+> passou de **posição** (`mensagens[n_antes:]`) para **identidade de mensagem** (id) — o resumo pode ENCOLHER o
+> fio e a fatia por posição mediria zero; por id é robusto. O portão/orquestração seguem SEM middleware
+> (byte-idêntico à P1). Nada se perde: o histórico completo continua em `MensagemConversa` (thread humana) e
+> `PassoExecucao` (timeline); o checkpoint é a memória de TRABALHO — é o "iceberg durável × janela enviada" da
+> Frente B (`UNIFICACAO-ESTADO.md §4`). Verificação: suíte **768 verde** + testes novos (delta robusto ao
+> encolhimento; middleware só no chat) + **fumaça de integração ao vivo** (Haiku + PostgresSaver + middleware
+> reais, gatilho rebaixado: o resumo DISPAROU, o fio ENCOLHEU 6→4→3 msgs, delta correto sem quebra, e a memória
+> SOBREVIVEU à compactação — lembrou o fato do turno 1). **Falta:** deploy + teste ao vivo.
 >
 > Sub-divisão original:
 - **P2a — Checkpointer + `thread_id`:** ligar `PostgresSaver` (`.setup()` cria as tabelas de checkpoint —

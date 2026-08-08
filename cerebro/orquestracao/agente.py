@@ -15,6 +15,7 @@ from typing import Literal
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.tools import StructuredTool
 from langchain.agents import create_agent
+from langchain.agents.middleware import SummarizationMiddleware
 from pydantic import BaseModel, Field, create_model
 
 import instrumentos as encaixe
@@ -29,6 +30,21 @@ from orquestracao import atividade
 from orquestracao.llm import MODELO_PADRAO, construir_modelo, texto_da_resposta
 from orquestracao.modelos_ia import PROVEDOR_ANTHROPIC, provedor_do_modelo_seguro
 from sessao import CriadorDeSessao
+
+# --- Janela/resumo da memória do chat (Fatia 4.3 / P2b) --------------------------
+# O checkpoint (P2a) guarda o fio inteiro do agente — sem isso ele crescia sem fim e
+# cada turno reenviava tudo (custo alto). Aqui um `SummarizationMiddleware` nativo
+# DOBRA os trechos antigos num resumo e mantém só a JANELA recente, de forma durável
+# no próprio checkpoint. Nada se perde: o histórico completo continua na thread humana
+# (`MensagemConversa`) e na timeline (`PassoExecucao`) — o checkpoint é a memória de
+# TRABALHO. Mesmo espírito do resumo rolante da Frente B (`criacao/resumo.py`):
+# resumidor barato (Haiku), best-effort. Valores tunáveis — calibrados na fumaça.
+MODELO_RESUMIDOR_CHAT = "claude-haiku-4-5"
+# Dispara o resumo quando o fio de trabalho passa disto (tokens do fio; o middleware
+# também olha o total reportado pelo provedor). Acima disso, dobra o antigo.
+RESUMO_GATILHO = ("tokens", 20000)
+# Quanto do fim do fio fica SEMPRE cru (a janela) depois de resumir. O resto vira resumo.
+RESUMO_JANELA = ("tokens", 8000)
 
 
 def montar_instrucoes(agente: Agente) -> str:
@@ -383,6 +399,24 @@ def _prompt_de_sistema(instrucoes: str, modelo_id: str) -> "SystemMessage | str"
     return instrucoes
 
 
+def _middlewares_de_memoria() -> list:
+    """Os middlewares do agente COM memória (só o chat). Hoje: o `SummarizationMiddleware`
+    que dobra o fio antigo num resumo e mantém a janela recente (P2b). À prova de falha:
+    se o resumidor não puder ser montado, devolve `[]` — a memória segue sem compactar
+    (fio maior naquele turno, nada quebra; lei §12-A). A garantia HITL/portão NÃO passa por
+    aqui — o portão continua na borda (P3 é quem o levará ao `interrupt()` nativo)."""
+    try:
+        return [
+            SummarizationMiddleware(
+                model=construir_modelo(MODELO_RESUMIDOR_CHAT),
+                trigger=RESUMO_GATILHO,
+                keep=RESUMO_JANELA,
+            )
+        ]
+    except Exception:
+        return []
+
+
 def executar_agente(
     agente: Agente,
     cinto: list[Instrumento],
@@ -450,18 +484,28 @@ def executar_agente(
     # do texto (fim da re-busca). A orquestração/tarefa e o portão NÃO passam → grafo
     # efêmero e entrada = texto completo, exatamente como antes.
     memoria = checkpointer is not None and thread_id is not None
-    extra = {"checkpointer": checkpointer} if memoria else {}
+    extra: dict = {}
+    if memoria:
+        extra["checkpointer"] = checkpointer
+        # P2b: só o chat (com memória) ganha o resumo/janela; a orquestração/tarefa e o
+        # portão seguem sem middleware — grafo efêmero, byte-idêntico à P1.
+        extra["middleware"] = _middlewares_de_memoria()
     app = create_agent(modelo, ferramentas, system_prompt=prompt_sistema, **extra)
     config = {"configurable": {"thread_id": thread_id}} if memoria else None
-    # Quantas mensagens já havia no fio ANTES deste turno — para medir só o DELTA (com
-    # checkpointer o `invoke` devolve o estado ACUMULADO; somar tudo superfaturaria uso).
-    n_antes = 0
+    # IDs das mensagens que já existiam no fio ANTES deste turno — para medir só o DELTA
+    # por IDENTIDADE (não por posição). Com checkpointer o `invoke` devolve o estado
+    # ACUMULADO; e o resumo (P2b) pode ENCOLHER o fio (troca antigas por 1 resumo) — então
+    # `mensagens[n_antes:]` mediria errado (até zero). Comparar por id é robusto ao encolher:
+    # o que sobrou de turnos anteriores mantém o mesmo id; o resumo e a fala nova têm ids
+    # novos. Sem memória, o conjunto é vazio → conta o fio inteiro, como sempre.
+    ids_antes: set = set()
     if memoria:
         try:
             st = app.get_state(config)
-            n_antes = len((getattr(st, "values", None) or {}).get("messages", [])) if st else 0
+            msgs_antes = (getattr(st, "values", None) or {}).get("messages") or []
+            ids_antes = {m.id for m in msgs_antes if getattr(m, "id", None) is not None}
         except Exception:
-            n_antes = 0
+            ids_antes = set()
     # Feedback ao vivo: o turno de LLM pode demorar; avisa que o agente está pensando.
     atividade.registrar(f"{agente.nome}: pensando…")
     if memoria:
@@ -475,9 +519,12 @@ def executar_agente(
         raise FalhaInstrumento(falhas[0])
 
     mensagens = resultado["messages"]
-    # DELTA do turno: sem memória, é o fio inteiro (n_antes=0); com memória, só o que veio
-    # depois do estado anterior. Uso e instrumentos acionados contam só ESTE turno.
-    mensagens_turno = mensagens[n_antes:]
+    # DELTA do turno POR IDENTIDADE: o que NÃO estava no fio antes. Sem memória, ids_antes é
+    # vazio → o fio inteiro (como sempre). Com memória, exclui os turnos anteriores mesmo
+    # que o resumo tenha reordenado/encolhido o fio; o resumo injetado (HumanMessage, sem
+    # uso nem tool_calls) entra no delta mas não afeta a medição. Uso e instrumentos deste
+    # turno contam só as mensagens novas.
+    mensagens_turno = [m for m in mensagens if getattr(m, "id", None) not in ids_antes]
     acionados = [
         chamada.get("name")
         for m in mensagens_turno
