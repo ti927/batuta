@@ -391,6 +391,9 @@ def executar_agente(
     saidas: list[dict] | None = None,
     gate: bool = False,
     texto_portao: str | None = None,
+    checkpointer=None,
+    thread_id: str | None = None,
+    preambulo_sistema: str | None = None,
 ) -> dict:
     """Roda um agente sozinho sobre uma entrada. Devolve a saída em texto e a
     lista de instrumentos que ele acionou (para inspeção).
@@ -420,6 +423,12 @@ def executar_agente(
     ]
     saidas = saidas or []
     instrucoes = montar_instrucoes(agente)
+    # Enquadramento do transporte (P2a): a mensageria passa o "você atende X pelo Telegram…
+    # segurança…" como PREÂMBULO DE SISTEMA (persistente e cacheado). Com memória, a entrada
+    # do turno é só a fala NOVA — então o enquadramento não pode ir na entrada (repetiria a
+    # cada turno e empilharia no fio). Sem preâmbulo (orquestração/tarefa), nada muda.
+    if preambulo_sistema:
+        instrucoes += "\n\n" + preambulo_sistema
     # Memória do agente (quando ligada): 2 ferramentas injetadas + (modo "sempre") as
     # fichas no prompt. `agente.id` já está aqui; núcleo de cadeia intocado.
     if getattr(agente, "memoria_ativa", False):
@@ -436,10 +445,29 @@ def executar_agente(
     # (deprecado na V1.0). Aceita `system_prompt: str | SystemMessage` e usa o
     # `SystemMessage` COMO ESTÁ — então o `cache_control` (cache de prompt Anthropic)
     # sobrevive intacto. Fatia 4.3/P1: só a troca do construtor; laço/entrada/uso iguais.
-    app = create_agent(modelo, ferramentas, system_prompt=prompt_sistema)
+    # Memória entre turnos (P2a): SÓ a conversa passa `checkpointer` + `thread_id` — aí o
+    # agente RETOMA o fio salvo (mensagens + resultados de ferramenta) em vez de re-derivar
+    # do texto (fim da re-busca). A orquestração/tarefa e o portão NÃO passam → grafo
+    # efêmero e entrada = texto completo, exatamente como antes.
+    memoria = checkpointer is not None and thread_id is not None
+    extra = {"checkpointer": checkpointer} if memoria else {}
+    app = create_agent(modelo, ferramentas, system_prompt=prompt_sistema, **extra)
+    config = {"configurable": {"thread_id": thread_id}} if memoria else None
+    # Quantas mensagens já havia no fio ANTES deste turno — para medir só o DELTA (com
+    # checkpointer o `invoke` devolve o estado ACUMULADO; somar tudo superfaturaria uso).
+    n_antes = 0
+    if memoria:
+        try:
+            st = app.get_state(config)
+            n_antes = len((getattr(st, "values", None) or {}).get("messages", [])) if st else 0
+        except Exception:
+            n_antes = 0
     # Feedback ao vivo: o turno de LLM pode demorar; avisa que o agente está pensando.
     atividade.registrar(f"{agente.nome}: pensando…")
-    resultado = app.invoke({"messages": [{"role": "user", "content": entrada}]})
+    if memoria:
+        resultado = app.invoke({"messages": [{"role": "user", "content": entrada}]}, config)
+    else:
+        resultado = app.invoke({"messages": [{"role": "user", "content": entrada}]})
 
     # Não confiamos na narração do agente: se uma ação IRREVERSÍVEL falhou,
     # a execução falha de forma determinística e visível (nunca em silêncio).
@@ -447,9 +475,12 @@ def executar_agente(
         raise FalhaInstrumento(falhas[0])
 
     mensagens = resultado["messages"]
+    # DELTA do turno: sem memória, é o fio inteiro (n_antes=0); com memória, só o que veio
+    # depois do estado anterior. Uso e instrumentos acionados contam só ESTE turno.
+    mensagens_turno = mensagens[n_antes:]
     acionados = [
         chamada.get("name")
-        for m in mensagens
+        for m in mensagens_turno
         for chamada in (getattr(m, "tool_calls", None) or [])
     ]
 
@@ -458,7 +489,7 @@ def executar_agente(
     # soma reflete o que foi de fato consumido.
     tokens_entrada = tokens_saida = 0
     cache_read = cache_write = 0
-    for m in mensagens:
+    for m in mensagens_turno:
         if isinstance(m, AIMessage):
             u = m.usage_metadata or {}
             tokens_entrada += u.get("input_tokens", 0)

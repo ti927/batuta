@@ -9,6 +9,7 @@ import agendador
 import fila
 import fila_turnos
 from arquivos import DIRETORIO_ARQUIVOS
+from orquestracao import memoria_conversa
 from observabilidade.log import configurar_logging
 from observabilidade.middleware import MiddlewareLog
 from rotas import (
@@ -38,6 +39,9 @@ async def ciclo_de_vida(app: FastAPI):
     trabalhadores) e o relógio dos gatilhos por agendamento ao iniciar; desliga tudo
     ao parar."""
     configurar_logging()  # logs estruturados (JSON) com identidade de servidor
+    # Memória entre turnos da conversa (Fatia 4.3/P2a): cria/garante as tabelas de
+    # checkpoint. À prova de falha — se não subir, a conversa cai no modo legado.
+    memoria_conversa.preparar()
     fila.iniciar()
     fila_turnos.iniciar()
     agendador.iniciar()
@@ -45,6 +49,7 @@ async def ciclo_de_vida(app: FastAPI):
     agendador.desligar()
     fila_turnos.desligar()
     fila.desligar()
+    memoria_conversa.desligar()
 
 
 app = FastAPI(title="Batuta — Cérebro", lifespan=ciclo_de_vida)

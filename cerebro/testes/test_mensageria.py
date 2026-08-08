@@ -261,6 +261,66 @@ def test_processar_turno_envia_resposta_e_grava(sessao, dados, monkeypatch):
     assert do_agente[0].conteudo == "Custa R$10." and do_agente[0].entregue
 
 
+def test_memoria_semeia_historico_no_primeiro_turno(sessao, dados, monkeypatch):
+    """P2a: com checkpointer disponível e SEM fio ainda, semeia com o histórico e passa
+    checkpointer + thread_id + preâmbulo de sistema ao executar_agente."""
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "T"})
+    _agente_com(sessao, dados, inst)
+    conversa, _ = servico.registrar_entrada(sessao, inst, _msg("quanto custa?"))
+
+    capt = {}
+    sentinela = object()
+    monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
+    monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
+    monkeypatch.setattr(servico.memoria_conversa, "obter", lambda: sentinela)
+    monkeypatch.setattr(servico.memoria_conversa, "tem_estado", lambda tid: False)  # sem fio → semeia
+
+    def fake(ag, cinto, entrada, **k):
+        capt["entrada"] = entrada
+        capt["kwargs"] = k
+        return {"saida": "R$10", "uso": [{"tokens_entrada": 1, "tokens_saida": 1}]}
+
+    monkeypatch.setattr(servico, "executar_agente", fake)
+    monkeypatch.setattr(servico.telegram, "enviar", lambda *a: {"ok": True})
+
+    servico.processar_turno(conversa.id)
+
+    assert "quanto custa?" in capt["entrada"]  # SEMEOU com o histórico
+    assert capt["kwargs"]["checkpointer"] is sentinela
+    assert capt["kwargs"]["thread_id"] == str(conversa.id)
+    assert "atendendo" in capt["kwargs"]["preambulo_sistema"].lower()
+
+
+def test_conteudo_novo_pega_so_apos_o_ultimo_agente(sessao, dados):
+    """P2a: a 'fala nova' do turno = mensagens do contato APÓS o último turno do agente
+    (o resto o agente lembra do fio). Timestamps explícitos: numa só transação de teste,
+    `now()` empataria."""
+    inst = _bot(sessao, dados)
+    ag = _agente_com(sessao, dados, inst)
+    conv = Conversa(
+        instrumento_id=inst.id, contato_chave="1", contato_nome="X",
+        estado="aberta", destino_tipo="agente", destino_id=ag.id,
+    )
+    sessao.add(conv)
+    sessao.flush()
+    base = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    for papel, texto, off in [
+        ("contato", "pergunta antiga", 0),
+        ("agente", "resposta antiga", 1),
+        ("contato", "pergunta NOVA", 2),
+    ]:
+        sessao.add(MensagemConversa(
+            conversa_id=conv.id, papel=papel, conteudo=texto,
+            criado_em=base + timedelta(seconds=off),
+        ))
+    sessao.flush()
+
+    novo = servico._conteudo_novo(sessao, conv)
+    assert "pergunta NOVA" in novo
+    assert "antiga" not in novo  # não reenvia o que veio antes do último turno do agente
+
+
 def test_debounce_aborta_quando_chega_msg_mais_nova(sessao, dados, monkeypatch):
     inst = _bot(sessao, dados)
     si.salvar_segredos(sessao, inst.id, {"token_bot": "T"})

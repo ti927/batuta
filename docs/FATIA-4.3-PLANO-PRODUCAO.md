@@ -58,7 +58,20 @@
 - **Não muda:** ainda **não há memória**; portão como está; nada que o usuário vê.
 
 ### P2 — Persistência + MEMÓRIA no chat (`modo=conversa`); o portão fica como está ⭐ (a CURA do "renasce")
-> **É aqui que o "renasce" morre no chat.** Sub-dividida no seu próprio plano quando chegarmos:
+> **É aqui que o "renasce" morre no chat.**
+>
+> **🟡 P2a IMPLEMENTADA (2026-08-08) — verificada em isolamento; aguarda deploy.** Novo módulo
+> `orquestracao/memoria_conversa.py` (PostgresSaver + pool, à prova de falha → sem checkpointer a conversa
+> cai no modo legado); `executar_agente` ganhou `checkpointer`/`thread_id`/`preambulo_sistema` opcionais +
+> medição pelo **delta** (sem memória, byte-idêntico à P1); `mensageria/servico._rodar_turno` usa a memória
+> SÓ no chat (não no portão) com **semeadura** do histórico no 1º turno (cobre conversas em andamento no
+> deploy); `main.ciclo_de_vida` faz o `setup()` no boot. Verificação: suíte **765 verde** (1 flaky
+> pré-existente à parte) + `test_memoria_conversa` (delta/preâmbulo) + `test_mensageria` (semeadura/fala-nova)
+> + **integração ao vivo** (executar_agente real + PostgresSaver real + Sonnet: lembrou o fato entre turnos,
+> delta certo, tabelas dropadas). Prod usa o pooler Supabase modo-sessão (5432 → DDL/prepared OK);
+> `prepare_threshold=0` pooler-safe. **Falta:** deploy + teste ao vivo. P2b (janela) e P2c já embutido (delta).
+>
+> Sub-divisão original:
 - **P2a — Checkpointer + `thread_id`:** ligar `PostgresSaver` (`.setup()` cria as tabelas de checkpoint —
   migração aditiva); `thread_id` = a conversa (`conversa.id`). A entrada do turno passa a ser **só a mensagem
   NOVA** — `_montar_entrada` deixa de reconstruir o histórico do texto (o checkpoint é a memória de trabalho).
