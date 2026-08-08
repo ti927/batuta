@@ -131,6 +131,9 @@ def test_middleware_de_resumo_so_no_chat(monkeypatch):
     com_mem, sem_mem = capt["mws"]
     assert isinstance(com_mem, list) and len(com_mem) == 1
     assert isinstance(com_mem[0], SummarizationMiddleware)
+    # Conserto do "resumo inútil": sem trim, o resumidor recebe o trecho inteiro (o trim
+    # nativo com start_on="human" zerava o trecho quando ele não tinha fala humana).
+    assert com_mem[0].trim_tokens_to_summarize is None
     assert sem_mem == "AUSENTE"  # sem memória, nenhum middleware é passado
 
 

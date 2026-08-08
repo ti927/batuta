@@ -411,6 +411,14 @@ def _middlewares_de_memoria() -> list:
                 model=construir_modelo(MODELO_RESUMIDOR_CHAT),
                 trigger=RESUMO_GATILHO,
                 keep=RESUMO_JANELA,
+                # NÃO trimar o trecho antes de resumir. O trim nativo usa
+                # `start_on="human"`: quando o trecho antigo é dominado por um resultado
+                # GIGANTE de ferramenta e não tem fala humana (o caso do Reembolsos), ele
+                # devolve VAZIO e o resumo vira o placeholder inútil "too long to
+                # summarize" — descartando o histórico sem resumo real. Sem trim, o trecho
+                # inteiro (já limitado por gatilho−janela) vai ao resumidor Haiku → resumo
+                # de verdade. É barato e raro.
+                trim_tokens_to_summarize=None,
             )
         ]
     except Exception:
