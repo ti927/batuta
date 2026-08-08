@@ -45,3 +45,46 @@ def test_arquivar_sem_imagem_falha_claro():
 def test_arquivar_nao_exige_portao():
     # guarda no NOSSO bucket (como gerar_imagem) → não é ação irreversível (sem portão)
     assert instrumentos.acao_irreversivel("arquivar_imagem", {}) is False
+
+
+def test_arquivar_resgata_quando_nao_ha_foto_fresca(monkeypatch):
+    """Fallback entre turnos: sem foto fresca no turno, o `resgatar` re-baixa a imagem
+    recente (pelo file_id) → o agente guarda o comprovante num turno POSTERIOR ao envio."""
+    monkeypatch.setattr("arquivos.salvar", lambda nome, dados, ct: f"https://sto/{nome}")
+    resgatou = {"n": 0}
+
+    def resgatar():
+        resgatou["n"] += 1
+        return [{"bytes": b"\xff\xd8\xffOLD", "mime": "image/jpeg", "legenda": ""}]
+
+    with midia_recebida.usar_imagens_recebidas([], resgatar=resgatar):
+        r = ArquivarImagem().executar(ConfigArquivar(), ArgsArquivar())
+    assert r["ok"] and r["quantidade"] == 1
+    assert resgatou["n"] == 1  # resgatou porque não havia foto fresca
+
+
+def test_arquivar_prefere_foto_fresca_sem_resgatar(monkeypatch):
+    """Com foto fresca no turno, o `resgatar` NÃO é chamado (lazy — não baixa à toa)."""
+    monkeypatch.setattr("arquivos.salvar", lambda nome, dados, ct: f"https://sto/{nome}")
+    resgatou = {"n": 0}
+
+    def resgatar():
+        resgatou["n"] += 1
+        return [{"bytes": b"X", "mime": "image/png", "legenda": ""}]
+
+    fresca = [{"bytes": b"\xff\xd8\xffNEW", "mime": "image/jpeg", "legenda": ""}]
+    with midia_recebida.usar_imagens_recebidas(fresca, resgatar=resgatar):
+        r = ArquivarImagem().executar(ConfigArquivar(), ArgsArquivar())
+    assert r["quantidade"] == 1
+    assert resgatou["n"] == 0  # não resgatou (havia foto fresca)
+
+
+def test_arquivar_resgatar_falha_volta_erro_claro():
+    """Se o resgate falha (Telegram fora, file_id expirado), o instrumento avisa claro
+    (não trava): o fallback engole a exceção → contexto vazio → FalhaInstrumento."""
+    def resgatar():
+        raise RuntimeError("telegram fora")
+
+    with midia_recebida.usar_imagens_recebidas([], resgatar=resgatar):
+        with pytest.raises(FalhaInstrumento):
+            ArquivarImagem().executar(ConfigArquivar(), ArgsArquivar())

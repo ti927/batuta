@@ -321,6 +321,55 @@ def test_conteudo_novo_pega_so_apos_o_ultimo_agente(sessao, dados):
     assert "antiga" not in novo  # não reenvia o que veio antes do último turno do agente
 
 
+def test_resgatar_imagens_recentes_rebaixa_pelo_file_id(sessao, dados, monkeypatch):
+    """Fallback do arquivar entre turnos: resgata a imagem MAIS RECENTE re-baixando pelo
+    file_id salvo — o que deixa o agente guardar o comprovante num turno posterior ao envio."""
+    inst = _bot(sessao, dados)
+    ag = _agente_com(sessao, dados, inst)
+    conv = Conversa(
+        instrumento_id=inst.id, contato_chave="1", contato_nome="X",
+        estado="aberta", destino_tipo="agente", destino_id=ag.id,
+    )
+    sessao.add(conv)
+    sessao.flush()
+    base = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    sessao.add(MensagemConversa(
+        conversa_id=conv.id, papel="contato", conteudo="[imagem recebida] recibo",
+        midia={"tipo": "imagem", "file_id": "FID123", "legenda": "recibo"},
+        criado_em=base,
+    ))
+    sessao.add(MensagemConversa(  # mensagem de texto MAIS NOVA (não é imagem)
+        conversa_id=conv.id, papel="contato", conteudo="cof piso",
+        criado_em=base + timedelta(seconds=5),
+    ))
+    sessao.flush()
+
+    monkeypatch.setattr(
+        servico.telegram, "baixar_arquivo",
+        lambda tok, fid: b"\xff\xd8\xffJPG" if fid == "FID123" else None,
+    )
+    imgs = servico._resgatar_imagens_recentes(sessao, conv, token="T")
+    assert len(imgs) == 1
+    assert imgs[0]["bytes"] == b"\xff\xd8\xffJPG"
+    assert imgs[0]["legenda"] == "recibo"
+
+
+def test_resgatar_sem_token_ou_sem_imagem_volta_vazio(sessao, dados):
+    """Sem token, ou sem nenhuma imagem na conversa → []; o instrumento então avisa claro."""
+    inst = _bot(sessao, dados)
+    ag = _agente_com(sessao, dados, inst)
+    conv = Conversa(
+        instrumento_id=inst.id, contato_chave="1", contato_nome="X",
+        estado="aberta", destino_tipo="agente", destino_id=ag.id,
+    )
+    sessao.add(conv)
+    sessao.flush()
+    sessao.add(MensagemConversa(conversa_id=conv.id, papel="contato", conteudo="só texto"))
+    sessao.flush()
+    assert servico._resgatar_imagens_recentes(sessao, conv, token=None) == []  # sem token
+    assert servico._resgatar_imagens_recentes(sessao, conv, token="T") == []   # sem imagem
+
+
 def test_debounce_aborta_quando_chega_msg_mais_nova(sessao, dados, monkeypatch):
     inst = _bot(sessao, dados)
     si.salvar_segredos(sessao, inst.id, {"token_bot": "T"})

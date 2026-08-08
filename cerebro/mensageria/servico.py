@@ -510,6 +510,40 @@ def _descrever_imagens_pendentes(
     return usos, imagens
 
 
+def _resgatar_imagens_recentes(
+    sessao: Session, conversa: Conversa, token: str | None
+) -> list[dict]:
+    """Fallback do `arquivar_imagem` em turnos SEM foto nova: re-baixa a imagem MAIS
+    RECENTE da conversa pelo `file_id` salvo (o Telegram guarda o arquivo). É o que
+    permite o agente GUARDAR o comprovante mesmo arquivando num turno posterior ao do
+    envio (recebe a foto, identifica o projeto e só então guarda). Best-effort: sem
+    token/file_id ou em falha, devolve [] (o instrumento avisa que não há imagem)."""
+    if not token:
+        return []
+    recentes = sessao.scalars(
+        select(MensagemConversa)
+        .where(
+            MensagemConversa.conversa_id == conversa.id,
+            MensagemConversa.papel == "contato",
+        )
+        .order_by(MensagemConversa.criado_em.desc())
+        .limit(10)
+    ).all()
+    for m in recentes:
+        midia = m.midia or {}
+        if midia.get("tipo") != "imagem" or not midia.get("file_id"):
+            continue
+        try:
+            dados = telegram.baixar_arquivo(token, midia["file_id"])
+        except Exception:
+            return []
+        if not dados:
+            return []
+        mime = visao._mime(dados) or "application/octet-stream"
+        return [{"bytes": dados, "mime": mime, "legenda": (midia.get("legenda") or "").strip()}]
+    return []
+
+
 def _execucao_pausada(sessao: Session, conversa: Conversa) -> Execucao | None:
     """A execução que esta conversa conduz, se estiver pausada aguardando humano
     (aprovação por canal). None caso contrário (segue o modo conversacional)."""
@@ -847,7 +881,10 @@ def _rodar_turno(
     # para medir a duração real do passo, inclusive numa falha.
     iniciado = datetime.now(timezone.utc)
     try:
-        with usar_chaves(chaves), midia_recebida.usar_imagens_recebidas(imagens_recebidas):
+        with usar_chaves(chaves), midia_recebida.usar_imagens_recebidas(
+            imagens_recebidas,
+            resgatar=lambda: _resgatar_imagens_recentes(sessao, conversa, token),
+        ):
             resultado = executar_agente(
                 agente, cinto, entrada, saidas=saidas, gate=gate,
                 texto_portao=texto_portao, **kwargs_mem,
