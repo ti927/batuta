@@ -3,8 +3,8 @@ titulo: "Conversas (atendimento por mensageria)"
 area: "mensageria"
 slug: "conversas"
 tags: ["conversa", "atendimento", "inbox", "takeover", "humano-assume", "timeout", "audio"]
-revisado_em: "2026-07-17"
-fontes: ["cerebro/mensageria/servico.py", "cerebro/mensageria/sweeper.py", "project_estado-atual-build-plan"]
+revisado_em: "2026-08-08"
+fontes: ["cerebro/mensageria/servico.py", "cerebro/mensageria/sweeper.py", "cerebro/orquestracao/memoria_conversa.py", "project_estado-atual-build-plan"]
 ---
 
 # Conversas (atendimento por mensageria)
@@ -30,13 +30,21 @@ conversa e sabe quando chamar uma pessoa. Cada canal tem **um agente atendente**
 ## Limites e cuidados
 - O atendimento tem **regras de borda uniformes**: junta mensagens em rajada (debounce), tem **teto** de
   idas e vindas antes de chamar um humano, **timeout** com aviso de retomada (nudge), proteção contra
-  injeção de instruções, e transcrição de **áudio** (Whisper).
+  injeção de instruções, transcrição de **áudio** (Whisper) e leitura de **imagem** (visão — o agente
+  "enxerga" a foto que o contato manda; veja [[instrumentos/arquivar-imagem]] para guardá-la).
 - Uma conversa parada é retomada/encerrada pelo mecanismo de tempo — não fica presa em silêncio.
+- A conversa tem **memória entre turnos**: o agente lembra o que já consultou e decidiu nos turnos
+  anteriores da MESMA conversa, então não refaz do zero a cada mensagem. Para não crescer sem limite, os
+  turnos antigos são condensados num resumo e a janela recente é mantida — a memória dura, o custo fica sob
+  controle.
 
 ## Para a IA
 Para atendimento, o canal precisa estar **conectado** (webhook) e no cinto do **único** agente atendente.
 Não pendure o mesmo canal em dois agentes esperando que ambos atendam. Ligar a memória do agente costuma
-ajudar no atendimento (veja [[times-agentes/memoria-do-agente]]).
+ajudar no atendimento (veja [[times-agentes/memoria-do-agente]]). A conversa em si já tem **memória entre
+turnos** (o agente não "renasce" a cada mensagem; lembra o que já buscou) — não desenhe o fluxo supondo que
+cada turno começa do zero, e não instrua o agente a "não re-buscar": ele já carrega o contexto anterior. Isso
+é DIFERENTE da memória do agente (fichas por assunto, que persistem entre execuções distintas).
 
 ## Relacionado
 - [[mensageria/canal-telegram]]

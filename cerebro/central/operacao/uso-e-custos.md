@@ -3,7 +3,7 @@ titulo: "Uso e custos"
 area: "operacao"
 slug: "uso-e-custos"
 tags: ["uso", "custo", "medicao", "categoria", "origem", "provedor", "consumo"]
-revisado_em: "2026-07-17"
+revisado_em: "2026-08-08"
 fontes: ["cerebro/precos.py", "cerebro/medicao_instrumentos.py", "project_estado-atual-build-plan"]
 ---
 
@@ -35,7 +35,10 @@ mostra, não corta o fluxo.
 
 ## Para a IA
 Não prometa "custo zero". Se o consultor quer economizar, aponte os ajustes reais: duração/qualidade de
-mídia, recência/profundidade de busca, modelo de IA mais barato. O uso é medido por categoria/origem.
+mídia, recência/profundidade de busca, modelo de IA mais barato. Num fluxo que consulta APIs que devolvem
+listas grandes (CRM, Bubble, ERP), o maior gasto costuma ser a **resposta gorda reenviada a cada passo** —
+filtre com `campos_resposta` no [[instrumentos/chamar-rest]] para trazer só os campos usados (corte típico
+de tokens grande). O uso é medido por categoria/origem.
 
 ## Relacionado
 - [[segredos/chaves-de-ia]]

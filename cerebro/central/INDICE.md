@@ -3,7 +3,7 @@ titulo: "Índice da Central de Conhecimento"
 area: "meta"
 slug: "indice"
 tags: ["meta", "sumario", "indice"]
-revisado_em: "2026-07-17"
+revisado_em: "2026-08-08"
 fontes: ["PRODUTO.md", "cerebro/modelos.py"]
 ---
 
@@ -61,6 +61,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Gerar vídeo (Sora) | `instrumentos/gerar-video` | Texto/imagem→vídeo | ✅ | ✍️ |
 | Gerar vídeo de foto (fal.ai) | `instrumentos/gerar-video-fal` | Anima foto (rosto real); freios de movimento | ✅ | ✍️ |
 | Descrever imagem | `instrumentos/descrever-imagem` | Visão (imagem→texto) | ✅ | ✍️ |
+| Guardar imagem recebida | `instrumentos/arquivar-imagem` | Salva a foto do canal → URL pública (comprovantes) | ✅ | ✍️ |
 | Gerar PDF | `instrumentos/gerar-pdf` | Documentos | ✅ | ✍️ |
 | **Instagram** | | | | |
 | Publicar no Instagram | `instrumentos/publicar-instagram` | Feed/Reels/Stories/carrossel | ✅ | ✍️ (piloto) |

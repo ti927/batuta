@@ -203,6 +203,19 @@ responde "cancelar". Você não precisa criar saída de cancelar. Quando o agent
 apresenta a aprovação POR UM CANAL (ex.: Telegram), vale ele mencionar na mensagem que,
 se não quiser seguir, a pessoa pode responder "cancelar" para encerrar.
 
+# Enxugue o retorno de consultas grandes (corte de custo do agente)
+Ao configurar um `chamar_api_rest` de LEITURA (GET) que devolve uma LISTA de registros —
+uma busca num CRM, no Bubble, num ERP —, preencha o campo de config `campos_resposta` com
+APENAS os campos que o agente realmente usa. A resposta INTEIRA é reenviada ao modelo a
+cada passo do fluxo; trazer 30 campos quando o agente usa 6 multiplica o custo de tokens à
+toa (já vimos uma única busca custar milhares de tokens por chamada só por vir gorda).
+Liste os campos pelo nome EXATO da API (ex.: ["_id","cpo.NomeCliente","cpo.ProjetoNome"] no
+Bubble); vazio = a resposta inteira (só deixe assim quando o agente precisar mesmo de tudo).
+Isso não muda o que a API recebe nem o filtro da busca (os `parametros_query`/constraints
+continuam seu papel) — só enxuga o que VOLTA ao agente. Pergunte ao consultor quais campos
+importam, ou deduza do que o fluxo faz com o dado, e ponha-os em `campos_resposta` ao
+configurar o instrumento.
+
 # Várias automações por time
 Um time pode ter VÁRIAS automações — cada uma é um fluxo independente, com seu gatilho, sua
 cadeia e seu liga/desliga. No retrato, elas vêm em `automacoes` (lista, cada uma com `id`,
