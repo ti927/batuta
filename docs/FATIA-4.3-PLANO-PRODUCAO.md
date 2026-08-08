@@ -1,6 +1,6 @@
 # Fatia 4.3 — Plano de produção (Opção A, nativo): sub-fatias estranguladoras
 
-> **Status:** ▶️ **EM EXECUÇÃO. ✅ P0, ✅ P1, ✅ P2a, ✅ P2b NO AR e provados ao vivo. ▶️ P3 EM CURSO: spike do middleware ✅ (mecanismo provado) + ✅ P3a (o portão nativo existe em `executar_agente`, "no escuro"). Próxima: P3b (ligar o portão da CONVERSA ao nativo).** A P3 foi sub-fatiada (spike → P3a → P3b → P3c → P3d → P4) — ver a seção P3 abaixo.
+> **Status:** ▶️ **EM EXECUÇÃO. ✅ P0, ✅ P1, ✅ P2a, ✅ P2b NO AR e provados ao vivo. ▶️ P3 EM CURSO: spike ✅ + ✅ P3a (portão nativo em `executar_agente`, "no escuro") + ✅ P3b (TRAVA nativa no modo CONVERSA, atrás de interruptor por time — default OFF). Próxima: P3c (portão de FLUXO/tela ao nativo).** A P3 foi sub-fatiada (spike → P3a → P3b → P3c → P3d → P4) — ver a seção P3 abaixo.
 > Decisão de forma tomada (A/nativo) e ampliação de descongelamento nº 3 registrada (`MIGRACAO.md §6.1`).
 > Base: [`FATIA-4.3-DECISAO-MEMORIA.md`](FATIA-4.3-DECISAO-MEMORIA.md) (estudo + achados do protótipo).
 > Cada sub-fatia começa só com sinal explícito do maestro e tem seu próprio plano+verificação antes do código.
@@ -130,10 +130,27 @@ checkpointer em memória, com chamadas SEPARADAS (grafo efêmero) no mesmo threa
 gate seletivo, aprovar→1× (+ leitura não re-executa), recusar→0×, reenvio não duplica, desligado→não gateia,
 `interrupt_on` derivado da parede. Suíte completa verde.
 
+**✅ P3b NO CÓDIGO (2026-08-08) — TRAVA nativa no modo CONVERSA, atrás de interruptor por time.**
+> **Descoberta que corrigiu o alvo:** o que eu chamava de "portão da conversa" (`_turno_de_portao`) é o
+> portão de FLUXO por canal (dois nós), que está DORMENTE no time vivo (Reembolsos roda em conversa pura). Na
+> conversa pura (`_rodar_turno gate=False`) NÃO havia trava nenhuma para ações irreversíveis — só a confirmação
+> "de boa vontade" do markdown. É AÍ que o middleware encaixa (memória/checkpointer já presente) e onde está o
+> risco real. Decisão do maestro (2026-08-08): a trava na conversa, **o próprio contato confirma**.
+
+Como ficou: com o interruptor do time ligado, o agente de conversa roda com `portao_nativo=True`. Ao tentar
+uma ação irreversível, `executar_agente` pausa → `_rodar_turno` chama `_apresentar_pausa` (mostra a ação ao
+contato + "responda *sim*/*não*") e estaciona a conversa (`aguardando_resposta` + relógio do sweeper). A
+próxima mensagem do contato é classificada (`_classificar_aprovacao`, SEGURO: ambíguo nunca aprova) e RETOMA
+(`Command resume`) — aprovar executa 1×, recusar 0×. Detecção pausa/retoma pelo checkpointer
+(`memoria_conversa.ha_interrupcao`, canal `__interrupt__` no `pending_writes`; sem coluna/migração).
+Interruptor = `PORTAO_NATIVO_CONVERSA_TIMES` (lista de ids de time; **vazio = OFF → zero mudança ao vivo**;
+graduação para toggle de produto na tela é a P3d). Arquivos: `mensageria/config.py` (interruptor),
+`orquestracao/memoria_conversa.py` (`ha_interrupcao`), `mensageria/servico.py` (classificação/apresentação +
+integração em `_rodar_turno` + `processar_turno` respeita a pausa). Verificação: `test_portao_nativo_conversa.py`
+(8: pausa→apresenta, aprovar→1×, recusar→0×, ambíguo→re-pergunta, switch OFF→direto, classificador,
+ponta-a-ponta via `processar_turno`). **Falta:** ligar num time de teste + teste ao vivo.
+
 **As sub-fatias seguintes (a fazer, cada uma com plano+sinal):**
-- **P3b — ligar o portão da CONVERSA ao nativo** (`mensageria/servico._turno_de_portao`): o portão que de
-  fato roda hoje (Reembolsos vive em conversa). O checkpointer já existe (`memoria_conversa`); a resposta do
-  aprovador pelo canal vira `Command(resume=...)`. "cancelar" → encerrar. Preserva a correlação de `aprovacao.py`.
 - **P3c — ligar o portão do FLUXO/tela ao nativo** (`cadeia`/`retoma`/`rotas/automacoes.responder`): a esteira
   clássica ganha `thread_id`+checkpointer; o botão de aprovar da tela vira `Command(resume=...)`; colapsa a
   re-derivação (`entrada_rerun`).

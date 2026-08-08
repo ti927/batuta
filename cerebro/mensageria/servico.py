@@ -13,7 +13,9 @@ envio em dobro. O modo fluxo (cadeia com pausa/retoma) entra depois.
 """
 
 import logging
+import re
 import time
+import unicodedata
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -29,6 +31,7 @@ from mensageria import aprovacao, retoma, telegram, transcricao, visao
 from mensageria.config import (  # MSG_LIMITE: compat servico.X
     MSG_LIMITE,
     com_ajuste_do_no,
+    portao_nativo_ligado,
     resolver_config,
 )
 from modelos import (
@@ -825,6 +828,116 @@ def medir_conversa(sessao: Session, conversa: Conversa) -> tuple[int, float]:
     return turnos, custo
 
 
+# ── Portão NATIVO na conversa (Fatia 4.3 / P3b) ──────────────────────────────
+# Com o interruptor do time ligado, uma ação IRREVERSÍVEL do agente de conversa PAUSA e
+# espera o "sim" do próprio contato — a trava de SISTEMA (PRODUTO §14), não a boa vontade
+# do markdown. A pausa/retoma vive no checkpointer (mesmo thread da memória, P2a); a
+# decisão do contato é classificada aqui. SEGURANÇA: resposta ambígua NUNCA aprova.
+_APROVA = {
+    "sim", "s", "ok", "okay", "confirmo", "confirmar", "confirmado", "confirma",
+    "pode", "aprovo", "aprovar", "aprovado", "isso", "positivo", "claro", "certo",
+    "correto", "manda", "vai", "bora", "yes", "y", "👍", "✅",
+}
+_RECUSA = {
+    "nao", "n", "cancelar", "cancela", "cancelado", "negativo", "para", "pare",
+    "reprovo", "reprovar", "reprovado", "recuso", "recusar", "recusado", "no", "nunca",
+}
+
+
+def _norm_txt(texto: str) -> str:
+    """Minúsculas + sem acento (para casar 'não'/'nao', 'sim.'/'sim')."""
+    nfkd = unicodedata.normalize("NFKD", (texto or "").strip().lower())
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+def _classificar_aprovacao(texto: str) -> str | None:
+    """A resposta do contato num portão nativo → 'approve' | 'reject' | None (ambíguo →
+    re-perguntar). SEGURANÇA: só um SIM claro aprova; qualquer dúvida NÃO dispara a ação
+    irreversível. Um NÃO na frase vence um SIM (viés ao seguro)."""
+    t = _norm_txt(texto)
+    palavras = re.findall(r"[a-z0-9]+", t)
+    if not palavras:
+        return None
+    conj = set(palavras)
+    neg = bool(_RECUSA & conj)
+    pos = bool(_APROVA & conj)
+    # A 1ª palavra manda quando é negação: "nao pode/quero/confirmo" = recusa (mesmo tendo
+    # uma palavra "de sim" depois). "pode confirmar" começa positivo → aprova.
+    if palavras[0] in _RECUSA:
+        return "reject"
+    if neg and not pos:
+        return "reject"
+    if pos and not neg:
+        return "approve"
+    return None  # ambíguo (ambos, ou nenhum) → re-pergunta (SEGURANÇA: nunca aprova)
+
+
+def _nome_amigavel_ferramenta(tool_name: str) -> str:
+    """Nome técnico da ferramenta (ex.: 'Criar_Reembolso_ab12cd34') → algo legível
+    ('Criar Reembolso'). Tira o sufixo de id e troca '_' por espaço."""
+    base = re.sub(r"_[0-9a-f]{8}$", "", tool_name or "")
+    return base.replace("_", " ").strip() or "uma ação"
+
+
+def _descrever_acao_pendente(acao_pendente: dict | None) -> str:
+    """Descrição curta e humana do que será feito, a partir do pedido de aprovação do HITL
+    (`action_requests`: nome da ferramenta + args)."""
+    reqs = (acao_pendente or {}).get("action_requests") or []
+    nomes = [_nome_amigavel_ferramenta(r.get("name")) for r in reqs if r.get("name")]
+    return " e ".join(dict.fromkeys(nomes)) if nomes else "uma ação"
+
+
+def _reperguntar_aprovacao(
+    sessao: Session, conversa: Conversa, token: str, conf: dict
+) -> None:
+    """Resposta ambígua no portão nativo: re-pergunta (não aprova) e segue aguardando."""
+    _enviar_e_registrar(
+        sessao, conversa, token,
+        "Não entendi. Responda *sim* para confirmar ou *não* para cancelar.",
+    )
+    conversa.estado = "aguardando_resposta"
+    conversa.aguardando_ate = datetime.now(timezone.utc) + timedelta(
+        minutes=int(conf["timeout_min"])
+    )
+    sessao.commit()
+
+
+def _apresentar_pausa(
+    sessao: Session, conversa: Conversa, token: str, conf: dict,
+    resultado: dict, uso_turno: list,
+) -> None:
+    """A ação irreversível PAUSOU (portão nativo): apresenta ao contato O QUE será feito e
+    pede confirmação (sim/não); estaciona a conversa (o sweeper governa o silêncio, §12-A).
+    Não executa nada — só a retomada com 'sim' dispara a ação."""
+    acao = _descrever_acao_pendente(resultado.get("acao_pendente"))
+    msg = (
+        f"⏸️ Antes de concluir, preciso da sua confirmação para: *{acao}*.\n"
+        "Responda *sim* para confirmar ou *não* para cancelar."
+    )
+    entregue = False
+    try:
+        entregue = bool(telegram.enviar(token, conversa.contato_chave, msg).get("ok"))
+    except Exception:
+        entregue = False
+    sessao.add(
+        MensagemConversa(
+            conversa_id=conversa.id, papel="agente", conteudo=msg,
+            entregue=entregue, uso=uso_turno or None,
+            midia={"tipo": "portao_nativo"},
+        )
+    )
+    conversa.turnos = (conversa.turnos or 0) + 1
+    conversa.custo_acumulado_usd = float(conversa.custo_acumulado_usd or 0) + (
+        _custo_do_turno(uso_turno)
+    )
+    conversa.estado = "aguardando_resposta"
+    conversa.aguardando_ate = datetime.now(timezone.utc) + timedelta(
+        minutes=int(conf["timeout_min"])
+    )
+    conversa.nudge_enviado = False
+    sessao.commit()
+
+
 def _rodar_turno(
     sessao: Session,
     conversa: Conversa,
@@ -876,6 +989,21 @@ def _rodar_turno(
     else:
         entrada = _montar_entrada(sessao, conversa, gate=gate)
         kwargs_mem = {}
+
+    # Portão NATIVO na conversa (P3b): com o interruptor do time ligado, o agente de
+    # conversa roda com a TRAVA nativa (`portao_nativo`). Se a conversa já está PAUSADA num
+    # portão (checkpoint com interrupt), a resposta do contato é a DECISÃO: classifica e
+    # RETOMA (`Command resume`); ambíguo → re-pergunta e NÃO aprova. Só no chat (gate=False)
+    # e com checkpointer (o interrupt exige estado salvo).
+    nativo = not gate and ckpt is not None and portao_nativo_ligado(agente.time_id)
+    if nativo:
+        kwargs_mem["portao_nativo"] = True
+        if memoria_conversa.ha_interrupcao(tid):
+            decisao = _classificar_aprovacao(_ultima_msg_contato(sessao, conversa.id))
+            if decisao is None:
+                _reperguntar_aprovacao(sessao, conversa, token, conf)
+                return None
+            kwargs_mem["retomar"] = {"decisions": [{"type": decisao}]}
 
     # Início do turno — carimbo do rastro-sombra (Fatia 1a). Capturado antes da chamada
     # para medir a duração real do passo, inclusive numa falha.
@@ -939,6 +1067,12 @@ def _rodar_turno(
             iniciado=iniciado, finalizado=datetime.now(timezone.utc),
             resultado=resultado, uso_cheio=uso_turno,
         )
+
+    # Portão NATIVO pausou (P3b): o agente quer rodar uma ação irreversível → apresenta ao
+    # contato e espera o "sim" (não executa). A retomada é o próximo turno (ha_interrupcao).
+    if resultado.get("pausado"):
+        _apresentar_pausa(sessao, conversa, token, conf, resultado, uso_turno)
+        return resultado
 
     saida = (resultado.get("saida") or "").strip()
     ramo = (resultado.get("ramo_escolhido") or "").strip()
@@ -1201,6 +1335,11 @@ def processar_turno(conversa_id: uuid.UUID) -> None:
             saidas=[], gate=False, chaves=chaves, origens=origens,
         )
         if resultado is None:
+            return
+        # Portão NATIVO pausou (P3b): `_apresentar_pausa` já apresentou o pedido e deixou a
+        # conversa `aguardando_resposta` (relógio do sweeper armado). NÃO sobrescrever o
+        # estado aqui — a bola é do contato (confirmar), não nossa.
+        if resultado.get("pausado"):
             return
         # Agente sem resposta (turno vazio): a bola é nossa — deixa "aberta" (não
         # entra no relógio de inatividade, para não cutucar o cliente que aguarda).
