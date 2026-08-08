@@ -1,6 +1,6 @@
 # Fatia 4.3 — Plano de produção (Opção A, nativo): sub-fatias estranguladoras
 
-> **Status:** ▶️ **EM EXECUÇÃO. ✅ P0, ✅ P1, ✅ P2a NO AR e provados ao vivo. ✅ P2b (janela/resumo) VERIFICADA — aguarda deploy. Próxima após deploy: P3 (portão nativo).**
+> **Status:** ▶️ **EM EXECUÇÃO. ✅ P0, ✅ P1, ✅ P2a, ✅ P2b NO AR e provados ao vivo. ▶️ P3 EM CURSO: spike do middleware ✅ (mecanismo provado) + ✅ P3a (o portão nativo existe em `executar_agente`, "no escuro"). Próxima: P3b (ligar o portão da CONVERSA ao nativo).** A P3 foi sub-fatiada (spike → P3a → P3b → P3c → P3d → P4) — ver a seção P3 abaixo.
 > Decisão de forma tomada (A/nativo) e ampliação de descongelamento nº 3 registrada (`MIGRACAO.md §6.1`).
 > Base: [`FATIA-4.3-DECISAO-MEMORIA.md`](FATIA-4.3-DECISAO-MEMORIA.md) (estudo + achados do protótipo).
 > Cada sub-fatia começa só com sinal explícito do maestro e tem seu próprio plano+verificação antes do código.
@@ -100,19 +100,53 @@
   nativo ainda. **Ponto de parada seguro.**
 
 ### P3 — Portão NATIVO (`interrupt()` + HITL seletivo) — a peça mais delicada, por ÚLTIMO ⚠️
-- **O que muda:** substituir a maquinaria de portão da borda por `interrupt()` via
-  `HumanInTheLoopMiddleware(interrupt_on=<derivado de acao_irreversivel>)`, gateando **só** os instrumentos
-  irreversíveis. A retomada (tela **e** canal) vira `Command(resume=...)` no mesmo `thread_id` — os dois
-  caminhos partidos **colapsam** num só (o objetivo original da Fatia 4). Some a instrução escondida
-  `_instrucao_de_fluxo` e a re-derivação do `entrada_rerun`.
-- **Proteção obrigatória (do achado (c) do spike):** garantir que **nada com efeito colateral não-idempotente
-  rode antes do `interrupt()` no mesmo nó** — senão re-executa ao retomar. O gate seletivo interrompe **antes**
-  do efeito irreversível; ações de leitura idempotentes podem re-rodar sem dano. Testar explicitamente:
-  aprovar → publica **1×**; recusar → **não** publica; re-aprovar/reenvio **não duplica**.
-- **Risco:** máximo (é o portão, onde moram os bugs históricos, sobre clientes ao vivo).
-- **Verificação:** `test_gate_conversa`, `test_aprovacao_por_canal`, `test_portao_*`, `test_retoma*`
-  reescritos/verdes; **teste ao vivo** exaustivo do portão pela tela e pelo canal; rede `pre-fatia-4`/dump.
-- **Não muda:** a garantia de nunca re-disparar irreversível (é o que estamos protegendo).
+> Sub-fatiada (risco crescente): **spike ✅ → P3a ✅ → P3b → P3c → P3d → P4**. Cada uma com plano +
+> verificação + sinal do maestro antes do código.
+
+**Descasamento de paradigma (achado da investigação, 2026-08-08 — decide o desenho):** o portão do Batuta
+hoje é de **fluxo/nó** — um nó PREPARA e apresenta (`gate:true`), o humano aprova, e um nó SEGUINTE
+(`gate:false`) EXECUTA a ação irreversível (a criadora ensina esse split de dois nós). O
+`HumanInTheLoopMiddleware` é de **chamada de ferramenta** — o próprio agente chama `publicar`, e o middleware
+intercepta ANTES de executar. Adotar o nativo colapsa o modelo de dois nós num agente só cujo instrumento
+irreversível é gateado no ato — o que RIPPLE para o modelo de montagem, a IA criadora e as automações vivas.
+O maestro escolheu o **portão nativo completo** ciente disso.
+
+**✅ Spike do middleware (2026-08-08, `scratchpad/spike_p3_middleware.py`, custo zero).** O protótipo original
+provou o `interrupt()` CRU; este provou o `HumanInTheLoopMiddleware(interrupt_on=...)` — a peça em que a P3
+se apoia. Provado: (1) gate SELETIVO (só o irreversível pausa); (2) aprovar → executa 1×; (3) recusar → 0×;
+(4) reenvio/duplo não duplica; (5) **o caveat (c) do re-run é CONTIDO** — o que rodou antes do portão NÃO
+re-executa ao retomar (o middleware pausa em `after_model`, fronteira limpa; os passos anteriores já estão no
+checkpoint). Formato descoberto: interrupt devolve `{'action_requests': [{name, args, description}], ...}`;
+retoma com `Command(resume={"decisions": [{"type": "approve"|"reject"|"edit"}]})`.
+
+**✅ P3a NO CÓDIGO ("no escuro", 2026-08-08) — o portão nativo existe em `executar_agente`, ligado a NINGUÉM.**
+`executar_agente` ganhou `portao_nativo: bool` (opt-in) e `retomar: dict | None`; quando ligado (exige
+checkpointer), adiciona `_middleware_portao(...)` = `HumanInTheLoopMiddleware(interrupt_on={ferramentas
+irreversíveis})`, com o mapa nome→irreversível derivado da MESMA regra da parede (`acao_irreversivel`, fonte
+única). Ao pausar, devolve `{"pausado": True, "acao_pendente": {...}}`; a retomada entra por `retomar=`
+(`Command(resume=...)`). **Zero mudança para os chamadores atuais** (default off; `pausado:False` é chave
+aditiva). Verificação: `testes/test_portao_nativo.py` (6) exerce o `executar_agente` REAL + middleware REAL +
+checkpointer em memória, com chamadas SEPARADAS (grafo efêmero) no mesmo thread — o cenário real de produção:
+gate seletivo, aprovar→1× (+ leitura não re-executa), recusar→0×, reenvio não duplica, desligado→não gateia,
+`interrupt_on` derivado da parede. Suíte completa verde.
+
+**As sub-fatias seguintes (a fazer, cada uma com plano+sinal):**
+- **P3b — ligar o portão da CONVERSA ao nativo** (`mensageria/servico._turno_de_portao`): o portão que de
+  fato roda hoje (Reembolsos vive em conversa). O checkpointer já existe (`memoria_conversa`); a resposta do
+  aprovador pelo canal vira `Command(resume=...)`. "cancelar" → encerrar. Preserva a correlação de `aprovacao.py`.
+- **P3c — ligar o portão do FLUXO/tela ao nativo** (`cadeia`/`retoma`/`rotas/automacoes.responder`): a esteira
+  clássica ganha `thread_id`+checkpointer; o botão de aprovar da tela vira `Command(resume=...)`; colapsa a
+  re-derivação (`entrada_rerun`).
+- **P3d — IA criadora + modelo de montagem + UI** (toca tela/UX → proposta em TEXTO antes de mexer):
+  ensinar o novo modelo (instrumento irreversível no agente; gate automático) + caminho de compatibilidade p/
+  as automações de dois nós já existentes; a tela de aprovação passa a mostrar o `action_request` (nome+args
+  exatos da ação).
+- **P4 — limpeza:** some a retomada partida tela×canal, a `_instrucao_de_fluxo` do portão e a re-derivação.
+
+**Proteção obrigatória (mantida em todas):** nenhuma ação irreversível roda antes do `interrupt()`; o gate
+seletivo interrompe ANTES do efeito. Testes: aprovar → 1×; recusar → não; reenvio → não duplica.
+**Risco:** máximo (é o portão, sobre clientes ao vivo). **Não muda:** a garantia congelada de nunca
+re-disparar irreversível — é o que estamos protegendo, e o spike confirmou que o nativo a protege melhor.
 
 ### P4 — Convergência / limpeza
 - A retomada partida (tela × canal) some de vez; `_montar_entrada`/`entrada_rerun`/`_instrucao_de_fluxo`

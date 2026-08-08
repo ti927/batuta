@@ -248,3 +248,11 @@ A é do maestro e está tomada — daqui, se ele mantiver A, entra o **plano de 
 > [`FATIA-4.3-PLANO-PRODUCAO.md`](FATIA-4.3-PLANO-PRODUCAO.md) — sub-fatias `P0` (subir o núcleo isolado) →
 > `P1` (`create_react_agent`→`create_agent`) → `P2` (memória no chat, a cura, com parada segura) → `P3`
 > (portão nativo, por último) → `P4` (limpeza). Aguarda aval para iniciar a **P0**.
+>
+> **Adendo (2026-08-08) — lacuna do spike original FECHADA.** O spike de 2026-08-06 provou o `interrupt()`
+> CRU, não o `HumanInTheLoopMiddleware(interrupt_on=...)`, que é a peça em que a P3 se apoia. Um 2º spike
+> (`scratchpad/spike_p3_middleware.py`) provou o middleware: gate seletivo, aprovar→1×, recusar→0×, reenvio
+> não duplica e — o achado importante — **o caveat (c) do re-run é CONTIDO** pelo middleware (ele pausa em
+> `after_model`, fronteira limpa; o que rodou antes já está no checkpoint e NÃO re-executa). Ou seja, o nativo
+> protege a garantia congelada MELHOR que o `interrupt()` cru. Detalhe e as sub-fatias P3a→P4 em
+> [`FATIA-4.3-PLANO-PRODUCAO.md`](FATIA-4.3-PLANO-PRODUCAO.md).

@@ -15,7 +15,8 @@ from typing import Literal
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.tools import StructuredTool
 from langchain.agents import create_agent
-from langchain.agents.middleware import SummarizationMiddleware
+from langchain.agents.middleware import HumanInTheLoopMiddleware, SummarizationMiddleware
+from langgraph.types import Command
 from pydantic import BaseModel, Field, create_model
 
 import instrumentos as encaixe
@@ -425,6 +426,31 @@ def _middlewares_de_memoria() -> list:
         return []
 
 
+def _middleware_portao(irreversivel_por_ferramenta: dict[str, bool]) -> list:
+    """O middleware do PORTÃO NATIVO (Fatia 4.3 / P3): o HITL SELETIVO que interrompe
+    ANTES de executar uma ferramenta IRREVERSÍVEL (publicar/enviar/gravar), deixando as
+    de leitura correrem livres. O `interrupt_on` é derivado da MESMA regra da parede de
+    ativação (`instrumentos/base.py::acao_irreversivel`) — uma fonte de verdade só, não
+    uma segunda lista. Ao pausar, o estado é salvo no checkpoint (por isso o portão
+    nativo EXIGE checkpointer) e a decisão do humano volta como `Command(resume=…)`.
+
+    Achado do protótipo P3 (custo zero): o middleware pausa numa FRONTEIRA limpa (depois
+    que o agente decide chamar a ferramenta, ANTES de executá-la) — então o que já rodou
+    no turno NÃO re-executa ao retomar (contém o caveat do re-run do `interrupt()` cru) e
+    a garantia congelada de nunca disparar irreversível 2× fica protegida.
+
+    À prova de falha: sem ferramenta irreversível no cinto, devolve `[]` (nada a gatear);
+    se o middleware não puder ser montado, `[]` também — o turno segue sem portão nativo
+    (a lei §12-A: a borda nunca quebra por causa disto)."""
+    gatear = {nome: True for nome, irr in irreversivel_por_ferramenta.items() if irr}
+    if not gatear:
+        return []
+    try:
+        return [HumanInTheLoopMiddleware(interrupt_on=gatear)]
+    except Exception:
+        return []
+
+
 def executar_agente(
     agente: Agente,
     cinto: list[Instrumento],
@@ -436,6 +462,8 @@ def executar_agente(
     checkpointer=None,
     thread_id: str | None = None,
     preambulo_sistema: str | None = None,
+    portao_nativo: bool = False,
+    retomar: dict | None = None,
 ) -> dict:
     """Roda um agente sozinho sobre uma entrada. Devolve a saída em texto e a
     lista de instrumentos que ele acionou (para inspeção).
@@ -458,11 +486,21 @@ def executar_agente(
     # da IA) — inclui falhas de leitura/geração que não derrubam a execução.
     erros_instrumentos: list[dict] = []
     escolha: dict[str, str] = {}  # o ramo que o agente declarar via `seguir_para`
-    ferramentas = [
-        f
-        for i in cinto
-        for f in _ferramentas_de_instrumento(i, falhas, mensagens_enviadas, erros_instrumentos)
-    ]
+    # Constrói as ferramentas do cinto e, em paralelo, o mapa nome→irreversível (a MESMA
+    # regra da parede: `acao_irreversivel(tipo, config)`) — é o que o portão nativo (P3)
+    # usa para saber QUAIS ferramentas exigem aprovação antes de executar. As ferramentas
+    # de controle/memória (seguir_para, registrar/pesquisar_memoria), adicionadas abaixo,
+    # não entram no mapa → nunca são gateadas.
+    ferramentas: list = []
+    irreversivel_por_ferramenta: dict[str, bool] = {}
+    for i in cinto:
+        fs = _ferramentas_de_instrumento(
+            i, falhas, mensagens_enviadas, erros_instrumentos
+        )
+        irrev = acao_irreversivel(i.tipo, i.configuracao or {})
+        for f in fs:
+            ferramentas.append(f)
+            irreversivel_por_ferramenta[f.name] = irrev
     saidas = saidas or []
     instrucoes = montar_instrucoes(agente)
     # Enquadramento do transporte (P2a): a mensageria passa o "você atende X pelo Telegram…
@@ -497,7 +535,13 @@ def executar_agente(
         extra["checkpointer"] = checkpointer
         # P2b: só o chat (com memória) ganha o resumo/janela; a orquestração/tarefa e o
         # portão seguem sem middleware — grafo efêmero, byte-idêntico à P1.
-        extra["middleware"] = _middlewares_de_memoria()
+        mids = _middlewares_de_memoria()
+        # Portão NATIVO (P3): HITL seletivo que interrompe ANTES de executar uma
+        # ferramenta IRREVERSÍVEL. Opt-in (`portao_nativo`) — hoje ligado por NINGUÉM em
+        # produção (P3a "no escuro"); precisa de checkpointer (o interrupt salva o estado).
+        if portao_nativo:
+            mids = mids + _middleware_portao(irreversivel_por_ferramenta)
+        extra["middleware"] = mids
     app = create_agent(modelo, ferramentas, system_prompt=prompt_sistema, **extra)
     config = {"configurable": {"thread_id": thread_id}} if memoria else None
     # IDs das mensagens que já existiam no fio ANTES deste turno — para medir só o DELTA
@@ -516,7 +560,12 @@ def executar_agente(
             ids_antes = set()
     # Feedback ao vivo: o turno de LLM pode demorar; avisa que o agente está pensando.
     atividade.registrar(f"{agente.nome}: pensando…")
-    if memoria:
+    if retomar is not None:
+        # Retomada do portão NATIVO (P3): a decisão do humano volta como
+        # `Command(resume=…)` no MESMO thread_id — o agente continua de onde parou, sem
+        # re-derivar do texto. Precisa de checkpointer/config (garantido pelo chamador).
+        resultado = app.invoke(Command(resume=retomar), config)
+    elif memoria:
         resultado = app.invoke({"messages": [{"role": "user", "content": entrada}]}, config)
     else:
         resultado = app.invoke({"messages": [{"role": "user", "content": entrada}]})
@@ -556,20 +605,42 @@ def executar_agente(
             cache_read += det.get("cache_read", 0) or 0
             cache_write += det.get("cache_creation", 0) or 0
     modelo_usado = agente.modelo_ia or MODELO_PADRAO
+    uso = [
+        {
+            "modelo": modelo_usado,
+            "tokens_entrada": tokens_entrada,
+            "tokens_saida": tokens_saida,
+            "tokens_cache_read": cache_read,
+            "tokens_cache_write": cache_write,
+        }
+    ]
+
+    # Portão NATIVO pausou? (P3) O HITL interrompe ANTES de executar a ferramenta
+    # irreversível → o estado volta com `__interrupt__` (o pedido de aprovação: nome +
+    # args da ação), em vez de concluir. A ação irreversível NÃO rodou. Devolvemos o
+    # pedido para a borda apresentar ao humano e, depois, retomar com `retomar=`
+    # (Command resume). `pausado=False` no caminho normal — chave aditiva, chamadores
+    # atuais leem por chave e não quebram.
+    interrupcoes = resultado.get("__interrupt__") if isinstance(resultado, dict) else None
+    if interrupcoes:
+        pend = interrupcoes[0]
+        return {
+            "pausado": True,
+            "acao_pendente": getattr(pend, "value", pend),
+            "saida": None,
+            "instrumentos_acionados": acionados,
+            "mensagens_enviadas": mensagens_enviadas,
+            "erros_instrumentos": erros_instrumentos,
+            "ramo_escolhido": None,
+            "uso": uso,
+        }
 
     return {
+        "pausado": False,
         "saida": texto_da_resposta(mensagens[-1]),
         "instrumentos_acionados": acionados,
         "mensagens_enviadas": mensagens_enviadas,
         "erros_instrumentos": erros_instrumentos,
         "ramo_escolhido": escolha.get("rotulo"),
-        "uso": [
-            {
-                "modelo": modelo_usado,
-                "tokens_entrada": tokens_entrada,
-                "tokens_saida": tokens_saida,
-                "tokens_cache_read": cache_read,
-                "tokens_cache_write": cache_write,
-            }
-        ],
+        "uso": uso,
     }
