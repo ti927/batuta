@@ -1,6 +1,6 @@
 # Fatia 4.3 — Plano de produção (Opção A, nativo): sub-fatias estranguladoras
 
-> **Status:** ▶️ **EM EXECUÇÃO. ✅ P0, ✅ P1, ✅ P2a, ✅ P2b NO AR e provados ao vivo. ▶️ P3 EM CURSO: spike ✅ + ✅ P3a (nativo em `executar_agente`) + ✅ P3b (TRAVA na CONVERSA) + ✅ P3d (governança DEFINITIVA = parede de aprovação; criadora não pede confirmação em dobro; apresentação na voz do agente — a trava ficou LIGADA ao vivo pela parede). Falta: limpar markdowns de agentes existentes + P3c (portão de FLUXO/tela) + P4.** A P3 foi sub-fatiada (spike → P3a → P3b → P3d → P3c → P4) — ver a seção P3 abaixo.
+> **Status:** ▶️ **EM EXECUÇÃO. ✅ P0, ✅ P1, ✅ P2a, ✅ P2b NO AR e provados ao vivo. ▶️ P3 EM CURSO: spike ✅ + ✅ P3a (nativo em `executar_agente`) + ✅ P3b (TRAVA na CONVERSA) + ✅ P3d (governança DEFINITIVA = parede de aprovação; criadora não pede em dobro; voz do agente — trava LIGADA ao vivo) + ✅ P3c-B COMPLETA (portão de esteira com memória: tela + canal). Falta: limpar markdowns de agentes existentes (o maestro faz) + P4 (limpeza opcional).** A P3 foi sub-fatiada (spike → P3a → P3b → P3d → P3c → P4) — ver a seção P3 abaixo.
 > Decisão de forma tomada (A/nativo) e ampliação de descongelamento nº 3 registrada (`MIGRACAO.md §6.1`).
 > Base: [`FATIA-4.3-DECISAO-MEMORIA.md`](FATIA-4.3-DECISAO-MEMORIA.md) (estudo + achados do protótipo).
 > Cada sub-fatia começa só com sinal explícito do maestro e tem seu próprio plano+verificação antes do código.
@@ -169,10 +169,15 @@ de dois nós e ganha MEMÓRIA na retomada (checkpointer + thread `execucao:nó`)
 NO AR — retomada pela TELA (`retoma._retomar_conversando_tela`, 2026-08-08):** 1ª retomada SEMEIA com o
 `entrada_rerun` (apresentado + resposta), rodadas seguintes usam SÓ a resposta (o agente lembra); sem
 checkpointer → byte-idêntico ao legado (zero regressão). NÃO usa interrupt (o agente roda até o fim com
-memória, padrão P2a). 2 testes; suíte **798**. **Achado honesto:** valor MARGINAL — o portão de esteira quase
-sempre resolve em 1 retomada (aí é idêntico a hoje); a memória só ajuda em rodadas MÚLTIPLAS (raras); e o
-portão de esteira está DORMENTE no time vivo. **Passo 2 (portão por CANAL, `_rodar_turno` compartilhado)
-PENDENTE** — mais entrelaçado, mesmo ganho pequeno; fazer só se valer a pena.
+memória, padrão P2a). 2 testes; suíte **798**. **Correção do "dormente":** o portão de esteira NÃO é dormente (isso era visão enviesada pelo Reembolsos) —
+a automação **"Post Wordpress"** usa o portão de esteira DE VERDADE, aprovado pelo **canal (Telegram)**
+(execução `21bcb42e`, 2026-08-09: ciclo → artigo → **pausou no portão** → aprovado → publicou no WordPress).
+O ganho da memória segue sendo sobretudo em rodadas MÚLTIPLAS (numa aprovação de 1 rodada é idêntico a hoje),
+mas o caminho por CANAL é usado de verdade. **✅ Passo 2 NO AR — portão por CANAL com memória (2026-08-09):**
+`_rodar_turno` ganhou `thread_portao`; no gate por canal usa checkpointer + thread `execucao:nó` (semeia na
+1ª rodada, só-resposta depois), como a tela. `_turno_de_portao` passa o `thread_portao`. Sem checkpointer →
+byte-idêntico ao legado; o CHAT (gate=False) intacto. +1 teste (canal com memória); os testes de canal
+existentes provam a fallback. **P3c-B COMPLETA (tela + canal).**
 
 - **P3c (resto) / referência original — ligar o portão do FLUXO/tela ao nativo** (`cadeia`/`retoma`/`rotas/automacoes.responder`): a esteira
   clássica ganha `thread_id`+checkpointer; o botão de aprovar da tela vira `Command(resume=...)`; colapsa a

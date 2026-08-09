@@ -960,6 +960,7 @@ def _rodar_turno(
     chaves: dict,
     origens: dict,
     texto_portao: str | None = None,
+    thread_portao: str | None = None,
 ):
     """Roda UM turno do agente e ENTREGA pela borda (canal filtrado do cinto), grava
     na thread com uso, conta turno/custo e rearma o relógio de inatividade. Reusado
@@ -979,19 +980,26 @@ def _rodar_turno(
     with usar_chaves(chaves):
         cinto = _cinto_sem_canais(sessao, agente.id)
 
-    # Memória entre turnos (P2a, a CURA do "renasce"): SÓ o chat (não o portão) usa o fio
-    # durável. Sem checkpointer disponível → modo LEGADO (reconstrói do texto), idêntico a
-    # antes. Com memória: o enquadramento vai para o prompt de sistema e a entrada é só a
-    # fala NOVA — no 1º turno (sem fio) SEMEIA com o histórico recente (cobre conversas já
-    # em andamento no deploy → sem "amnésia").
-    ckpt = None if gate else memoria_conversa.obter()
+    # Memória entre turnos (P2a, a CURA do "renasce"). O enquadramento vai para o prompt de
+    # sistema e a entrada é só a fala NOVA; no 1º turno (sem fio) SEMEIA. Sem checkpointer →
+    # modo LEGADO (reconstrói do texto), byte-idêntico a antes.
+    # - CHAT (gate=False): thread = a conversa; semeia com o histórico recente.
+    # - PORTÃO por CANAL (gate=True, P3c-B passo 2): thread PRÓPRIA da execução:nó
+    #   (`thread_portao`), como a tela — memória ENTRE as rodadas do portão; semeia com o
+    #   apresentado+resposta (`_montar_entrada(gate)`). Sem `thread_portao` → modo legado.
+    if gate:
+        ckpt = memoria_conversa.obter() if thread_portao else None
+        tid = thread_portao if ckpt is not None else None
+    else:
+        ckpt = memoria_conversa.obter()
+        tid = str(conversa.id) if ckpt is not None else None
     if ckpt is not None:
-        tid = str(conversa.id)
-        entrada = (
-            _conteudo_novo(sessao, conversa)
-            if memoria_conversa.tem_estado(tid)
-            else _historico_texto(sessao, conversa)
-        )
+        if memoria_conversa.tem_estado(tid):
+            entrada = _conteudo_novo(sessao, conversa)
+        elif gate:
+            entrada = _montar_entrada(sessao, conversa, gate=True)  # semeia o portão
+        else:
+            entrada = _historico_texto(sessao, conversa)  # semeia o chat
         kwargs_mem = {
             "checkpointer": ckpt, "thread_id": tid,
             "preambulo_sistema": _preambulo_sistema(conversa, gate=gate),
@@ -1192,6 +1200,9 @@ def _turno_de_portao(
         sessao, conversa, token, agente, conf,
         saidas=saidas, gate=True, chaves=chaves, origens=origens,
         texto_portao=(no.get("instrucoes") or {}).get("fechamento"),
+        # P3c-B passo 2: memória do portão por CANAL, thread própria da execução:nó (como
+        # a tela). O agente do portão lembra entre as rodadas em vez de re-derivar do texto.
+        thread_portao=f"{execucao.id}:{no_id}",
     )
     if resultado is None:
         return  # falha dura (já tratada: conversa "aberta") — a bola é nossa, retoma depois

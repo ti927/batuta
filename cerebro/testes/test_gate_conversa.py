@@ -460,6 +460,31 @@ def test_canal_agente_decide_e_conclui(sessao, dados, monkeypatch):
     assert execucao.estado == "concluida"  # aprovado → fim
 
 
+def test_canal_portao_com_memoria_thread_execucao_no(sessao, dados, monkeypatch):
+    """P3c-B passo 2: o portão por CANAL ganha MEMÓRIA (thread `execucao:no`, como a tela).
+    Com checkpointer presente, a retomada pelo canal passa checkpointer + thread_id ao
+    executar_agente (1ª retomada semeia). Sem checkpointer os demais testes de canal já
+    provam o modo legado (byte-idêntico)."""
+    enviados = []
+    canal, ag, auto, execucao = _setup_canal(sessao, dados, monkeypatch, enviados)
+    saver = object()
+    monkeypatch.setattr(servico.memoria_conversa, "obter", lambda: saver)
+    monkeypatch.setattr(servico.memoria_conversa, "tem_estado", lambda tid: False)
+
+    capt: dict = {}
+
+    def fake(agente, cinto, entrada, **k):
+        capt["kwargs"] = k
+        return {"saida": "Aprovado, seguindo.", "instrumentos_acionados": [], "uso": [],
+                "mensagens_enviadas": {}, "ramo_escolhido": "aprovado"}
+
+    monkeypatch.setattr(servico, "executar_agente", fake)
+    _responder(sessao, canal, "pode aprovar")
+
+    assert capt["kwargs"].get("checkpointer") is saver
+    assert capt["kwargs"].get("thread_id") == f"{execucao.id}:{NO_GATE}"
+
+
 def test_canal_portao_deixa_passo_espera_humano_no_fluxo(sessao, dados, monkeypatch):
     """Fatia 4.2 (unificação do rastro): o portão pelo CANAL passa a deixar rastro na
     timeline do FLUXO — um passo `espera_humano`, como a tela já fazia. Antes o re-run
