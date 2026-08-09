@@ -203,6 +203,21 @@ responde "cancelar". Você não precisa criar saída de cancelar. Quando o agent
 apresenta a aprovação POR UM CANAL (ex.: Telegram), vale ele mencionar na mensagem que,
 se não quiser seguir, a pessoa pode responder "cancelar" para encerrar.
 
+# Ações irreversíveis na CONVERSA — o sistema segura (não peça confirmação em dobro)
+Num agente de ATENDIMENTO (que conversa por um canal, ex.: Telegram), quando ele for
+executar uma ação IRREVERSÍVEL (lançar, publicar, enviar, gravar num sistema externo), o
+Batuta SEGURA a ação automaticamente e pede a confirmação da pessoa — é a "parede de
+aprovação" da organização (ligada por padrão), agora valendo também na conversa. É uma
+trava do SISTEMA, não do texto do agente. Por isso, ao escrever um agente de atendimento:
+- NÃO escreva um ritual manual de confirmação ("pergunte 'confirma?' e espere o sim antes
+  de lançar"). Isso viraria confirmação EM DOBRO — a do agente E a do sistema.
+- Escreva o agente para, quando decidir agir, DIZER com clareza o que vai fazer (ex.: "vou
+  lançar o reembolso de R$320 no projeto X") e ACIONAR o instrumento no mesmo passo. O
+  sistema apresenta essa fala à pessoa e só executa após o "sim"; no "não", não executa.
+- A pessoa vê UMA confirmação, na voz do próprio agente.
+Isto vale só para a CONVERSA (atendimento). Nas automações de ESTEIRA, o portão continua
+sendo o nó de aprovação que você desenha (seção acima) — lá o modelo é prepara→aprova→age.
+
 # Enxugue o retorno de consultas grandes (corte de custo do agente)
 Ao configurar um `chamar_api_rest` de LEITURA (GET) que devolve uma LISTA de registros —
 uma busca num CRM, no Bubble, num ERP —, preencha o campo de config `campos_resposta` com

@@ -18,27 +18,31 @@ Este módulo é FOLHA (não importa servico/sweeper) — ele é a origem dos def
 das mensagens-padrão; a borda passa a importar daqui.
 """
 
-import os
-
 from sqlalchemy.orm import Session
 
-from modelos import Automacao, Execucao, Instrumento
+from modelos import Automacao, Execucao, Instrumento, Organizacao, Time
 
 # Endereço público do app (onde a aprovação de um portão também pode ser resolvida pela
 # tela). Fonte única para as mensagens que orientam o humano.
 URL_APP = "batuta.team"
 
 
-def portao_nativo_ligado(time_id) -> bool:
-    """Interruptor do PORTÃO NATIVO na conversa (Fatia 4.3 / P3b), POR TIME. Lê a lista de
-    ids de time em `PORTAO_NATIVO_CONVERSA_TIMES` (separados por vírgula) — vazio = DESLIGADO
-    em todo lugar (default → zero mudança ao vivo). Quando o id do time está na lista, os
-    agentes de conversa desse time ganham a TRAVA nativa: uma ação IRREVERSÍVEL pausa e
-    espera o 'sim' do contato (mesmo que o markdown não peça). Rollout controlado, sem
-    migração/coluna; a graduação para um interruptor de produto (por time, na tela) é a P3d."""
-    lista = os.environ.get("PORTAO_NATIVO_CONVERSA_TIMES", "")
-    ids = {p.strip() for p in lista.split(",") if p.strip()}
-    return bool(time_id) and str(time_id) in ids
+def portao_nativo_ligado(sessao: Session, time_id) -> bool:
+    """Se o PORTÃO NATIVO na conversa está ativo para este time (Fatia 4.3 / P3b+P3d).
+
+    Governança DEFINITIVA: respeita a PAREDE DE APROVAÇÃO da organização
+    (`Organizacao.parede_ativacao`, LIGADA por padrão) — a MESMA regra que barra ativar uma
+    esteira com ação irreversível sem portão. Uma fonte de verdade só, controlada na tela da
+    organização (sem env/Railway). Quando a trava está ligada, uma ação IRREVERSÍVEL do
+    agente de conversa pausa e espera o 'sim' do contato (trava de SISTEMA, não do markdown);
+    org que desligou a parede → sem trava na conversa também (escolha da org)."""
+    if not time_id:
+        return False
+    time = sessao.get(Time, time_id)
+    if time is None:
+        return False
+    org = sessao.get(Organizacao, time.organizacao_id)
+    return bool(org and org.parede_ativacao)
 
 # ── Mensagens-padrão (a borda importa daqui; antes viviam em servico/sweeper) ──
 SAUDACAO_PADRAO = "Olá! Você está falando com um assistente virtual. Como posso ajudar?"

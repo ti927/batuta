@@ -31,6 +31,16 @@ def test_prompt_tem_as_pecas_essenciais():
     assert "acao_irreversivel" in p
 
 
+def test_prompt_ensina_trava_da_conversa():
+    """P3d: a criadora sabe que a ação irreversível na CONVERSA é travada pelo SISTEMA
+    (parede de aprovação) → não deve escrever ritual manual de confirmação (evita dobro)."""
+    p = montar_prompt_criadora()
+    assert "confirmação em dobro" in p
+    assert "trava do SISTEMA" in p
+    # orienta o agente a DIZER a ação e acionar (não "pergunte e espere")
+    assert "NÃO escreva um ritual manual de confirmação" in p
+
+
 def test_prompt_injeta_o_time_atual():
     snap = {"time": {"id": "t1", "nome": "Blog SEO", "descricao": None}, "agentes": []}
     p = montar_prompt_criadora(snap)

@@ -1,6 +1,6 @@
 # Fatia 4.3 — Plano de produção (Opção A, nativo): sub-fatias estranguladoras
 
-> **Status:** ▶️ **EM EXECUÇÃO. ✅ P0, ✅ P1, ✅ P2a, ✅ P2b NO AR e provados ao vivo. ▶️ P3 EM CURSO: spike ✅ + ✅ P3a (portão nativo em `executar_agente`, "no escuro") + ✅ P3b (TRAVA nativa no modo CONVERSA, atrás de interruptor por time — default OFF). Próxima: P3c (portão de FLUXO/tela ao nativo).** A P3 foi sub-fatiada (spike → P3a → P3b → P3c → P3d → P4) — ver a seção P3 abaixo.
+> **Status:** ▶️ **EM EXECUÇÃO. ✅ P0, ✅ P1, ✅ P2a, ✅ P2b NO AR e provados ao vivo. ▶️ P3 EM CURSO: spike ✅ + ✅ P3a (nativo em `executar_agente`) + ✅ P3b (TRAVA na CONVERSA) + ✅ P3d (governança DEFINITIVA = parede de aprovação; criadora não pede confirmação em dobro; apresentação na voz do agente — a trava ficou LIGADA ao vivo pela parede). Falta: limpar markdowns de agentes existentes + P3c (portão de FLUXO/tela) + P4.** A P3 foi sub-fatiada (spike → P3a → P3b → P3d → P3c → P4) — ver a seção P3 abaixo.
 > Decisão de forma tomada (A/nativo) e ampliação de descongelamento nº 3 registrada (`MIGRACAO.md §6.1`).
 > Base: [`FATIA-4.3-DECISAO-MEMORIA.md`](FATIA-4.3-DECISAO-MEMORIA.md) (estudo + achados do protótipo).
 > Cada sub-fatia começa só com sinal explícito do maestro e tem seu próprio plano+verificação antes do código.
@@ -149,6 +149,18 @@ graduação para toggle de produto na tela é a P3d). Arquivos: `mensageria/conf
 integração em `_rodar_turno` + `processar_turno` respeita a pausa). Verificação: `test_portao_nativo_conversa.py`
 (8: pausa→apresenta, aprovar→1×, recusar→0×, ambíguo→re-pergunta, switch OFF→direto, classificador,
 ponta-a-ponta via `processar_turno`). **Falta:** ligar num time de teste + teste ao vivo.
+
+**✅ P3d NO AR (2026-08-08) — governança DEFINITIVA + fim da confirmação em dobro.** (1) A trava na
+conversa deixou de ser env/Railway e passou a respeitar a **parede de aprovação da organização**
+(`Organizacao.parede_ativacao`, ligada por padrão) — uma fonte só, na tela, consistente com a esteira; ao
+deployar, a trava ficou LIGADA ao vivo para toda org com a parede on. (2) A IA criadora (`criacao/prompt.py`)
+aprendeu: em agente de ATENDIMENTO, NÃO escrever ritual manual de confirmação — o sistema segura; o agente só
+DIZ a ação e aciona (evita confirmação em dobro). (3) A borda apresenta o pedido na **voz do agente** (a frase
+que ele escreveu no passo da ação), não uma genérica (`executar_agente` devolve `texto_pendente`;
+`_apresentar_pausa` usa). Verificação: `test_portao_nativo_conversa.py` (voz do agente + parede off→sem trava)
++ `test_prompt_criadora.py` (ensina a trava). Suíte **796** verde. **FALTA:** limpar o "confirma?" manual dos
+markdowns dos agentes de conversa que JÁ existem (ex.: Reembolsos) — seguro fazer DEPOIS do flip (a trava já
+cobre); senão eles confirmam em dobro por um tempo.
 
 **As sub-fatias seguintes (a fazer, cada uma com plano+sinal):**
 - **P3c — ligar o portão do FLUXO/tela ao nativo** (`cadeia`/`retoma`/`rotas/automacoes.responder`): a esteira

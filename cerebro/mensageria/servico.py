@@ -909,11 +909,21 @@ def _apresentar_pausa(
     """A ação irreversível PAUSOU (portão nativo): apresenta ao contato O QUE será feito e
     pede confirmação (sim/não); estaciona a conversa (o sweeper governa o silêncio, §12-A).
     Não executa nada — só a retomada com 'sim' dispara a ação."""
-    acao = _descrever_acao_pendente(resultado.get("acao_pendente"))
-    msg = (
-        f"⏸️ Antes de concluir, preciso da sua confirmação para: *{acao}*.\n"
-        "Responda *sim* para confirmar ou *não* para cancelar."
-    )
+    # Apresentação na VOZ do agente (P3d): se ele já escreveu uma frase explicando a ação
+    # no passo em que decidiu agir, use ESSA frase + o pedido de sim/não — assim não há
+    # confirmação em dobro (a do agente + uma genérica). Sem frase, cai no genérico.
+    texto_agente = (resultado.get("texto_pendente") or "").strip()
+    if texto_agente:
+        msg = (
+            f"{texto_agente}\n\n"
+            "_Confirma? Responda *sim* para prosseguir ou *não* para cancelar._"
+        )
+    else:
+        acao = _descrever_acao_pendente(resultado.get("acao_pendente"))
+        msg = (
+            f"⏸️ Antes de concluir, preciso da sua confirmação para: *{acao}*.\n"
+            "Responda *sim* para confirmar ou *não* para cancelar."
+        )
     entregue = False
     try:
         entregue = bool(telegram.enviar(token, conversa.contato_chave, msg).get("ok"))
@@ -995,7 +1005,7 @@ def _rodar_turno(
     # portão (checkpoint com interrupt), a resposta do contato é a DECISÃO: classifica e
     # RETOMA (`Command resume`); ambíguo → re-pergunta e NÃO aprova. Só no chat (gate=False)
     # e com checkpointer (o interrupt exige estado salvo).
-    nativo = not gate and ckpt is not None and portao_nativo_ligado(agente.time_id)
+    nativo = not gate and ckpt is not None and portao_nativo_ligado(sessao, agente.time_id)
     if nativo:
         kwargs_mem["portao_nativo"] = True
         if memoria_conversa.ha_interrupcao(tid):

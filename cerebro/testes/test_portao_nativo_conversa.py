@@ -21,8 +21,14 @@ from pydantic import BaseModel
 import orquestracao.agente as agente_mod
 from instrumentos.base import TipoInstrumento, registrar
 from mensageria import servico
-from mensageria import telegram as tg
-from modelos import Agente, AgenteInstrumento, Conversa, Instrumento, MensagemConversa
+from modelos import (
+    Agente,
+    AgenteInstrumento,
+    Conversa,
+    Instrumento,
+    MensagemConversa,
+    Organizacao,
+)
 from orquestracao import memoria_conversa
 
 cont = {"pub": 0}
@@ -49,8 +55,12 @@ class _TipoPubC(TipoInstrumento):
 registrar(_TipoPubC())
 
 
+# Texto que o agente escreve NO passo em que decide agir (vazio = fake "mudo").
+_TEXTO_ACAO = {"v": ""}
+
+
 class _FakeModelo(BaseChatModel):
-    """Chama a ação irreversível; depois de tê-la (ToolMessage), conclui."""
+    """Chama a ação irreversível (com ou sem texto); depois de tê-la (ToolMessage), conclui."""
 
     @property
     def _llm_type(self) -> str:
@@ -62,14 +72,14 @@ class _FakeModelo(BaseChatModel):
     def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
         feitas = {m.name for m in messages if isinstance(m, ToolMessage)}
         if _NOME_PUB["v"] not in feitas:
-            ai = AIMessage(content="", tool_calls=[
+            ai = AIMessage(content=_TEXTO_ACAO["v"], tool_calls=[
                 {"name": _NOME_PUB["v"], "args": {}, "id": "c1", "type": "tool_call"}])
         else:
             ai = AIMessage(content="Feito!")
         return ChatResult(generations=[ChatGeneration(message=ai)])
 
 
-def _cenario(sessao, dados, monkeypatch, saver, *, ligado=True):
+def _cenario(sessao, dados, monkeypatch, saver, *, ligado=True, texto_acao=""):
     cont["pub"] = 0
     time_id = dados["timeA"].id
     canal = Instrumento(time_id=time_id, nome="Bot", tipo="enviar_telegram",
@@ -91,11 +101,16 @@ def _cenario(sessao, dados, monkeypatch, saver, *, ligado=True):
     sessao.add(conversa)
     sessao.flush()
     _NOME_PUB["v"] = agente_mod._nome_de_ferramenta(pub, "p3c_pub")
+    _TEXTO_ACAO["v"] = texto_acao
+
+    # Governança DEFINITIVA: a trava respeita a PAREDE DE APROVAÇÃO da org (não env/Railway).
+    org = sessao.get(Organizacao, dados["timeA"].organizacao_id)
+    org.parede_ativacao = ligado
+    sessao.flush()
 
     enviados: list[str] = []
     monkeypatch.setattr(agente_mod, "construir_modelo", lambda m: _FakeModelo())
     monkeypatch.setattr(memoria_conversa, "obter", lambda: saver)
-    monkeypatch.setattr(servico, "portao_nativo_ligado", lambda tid: ligado)
     monkeypatch.setattr(
         servico.telegram, "enviar",
         lambda token, chat, texto: enviados.append(texto) or {"ok": True},
@@ -169,14 +184,29 @@ def test_ambiguo_repergunta_e_nao_executa(sessao, dados, monkeypatch):
     assert conversa.estado == "aguardando_resposta"           # segue aguardando
 
 
-def test_switch_desligado_nao_pausa(sessao, dados, monkeypatch):
-    """Interruptor do time DESLIGADO = comportamento de hoje: a ação roda direto, sem trava."""
+def test_parede_desligada_nao_pausa(sessao, dados, monkeypatch):
+    """Parede de aprovação da org DESLIGADA = sem trava: a ação roda direto (escolha da org)."""
     ag, conversa, enviados = _cenario(
         sessao, dados, monkeypatch, MemorySaver(), ligado=False
     )
     _contato(sessao, conversa, "quero lançar")
     _turno(sessao, conversa, ag)
     assert cont["pub"] == 1                                   # rodou direto (sem pausa)
+
+
+def test_apresenta_na_voz_do_agente(sessao, dados, monkeypatch):
+    """P3d: quando o agente já escreve a frase da ação no passo em que decide agir, o
+    sistema apresenta ESSA frase (não uma genérica) — evita confirmação em dobro."""
+    ag, conversa, enviados = _cenario(
+        sessao, dados, monkeypatch, MemorySaver(),
+        texto_acao="Vou lançar o reembolso de R$320 no projeto Alfa.",
+    )
+    _contato(sessao, conversa, "manda ver")
+    _turno(sessao, conversa, ag)
+    assert cont["pub"] == 0
+    # a mensagem sai NA VOZ do agente + o pedido de sim/não
+    assert any("Vou lançar o reembolso de R$320" in m for m in enviados)
+    assert any("sim" in m.lower() and "não" in m.lower() for m in enviados)
 
 
 class _SessaoFake:

@@ -628,6 +628,12 @@ def executar_agente(
             "pausado": True,
             "acao_pendente": getattr(pend, "value", pend),
             "saida": None,
+            # O que o agente ESCREVEU no passo em que decidiu agir (ex.: "vou lançar o
+            # reembolso de R$320…"). A borda apresenta ISSO como o pedido de confirmação —
+            # na VOZ do agente — em vez de um texto genérico (evita a confirmação em dobro
+            # quando o agente já explica a ação; P3d). Pode vir vazio → a borda usa o
+            # genérico.
+            "texto_pendente": texto_da_resposta(mensagens[-1]),
             "instrumentos_acionados": acionados,
             "mensagens_enviadas": mensagens_enviadas,
             "erros_instrumentos": erros_instrumentos,
