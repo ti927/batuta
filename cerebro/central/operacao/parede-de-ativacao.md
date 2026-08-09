@@ -3,8 +3,8 @@ titulo: "Parede de ativação"
 area: "operacao"
 slug: "parede-de-ativacao"
 tags: ["parede", "ativacao", "ativar", "acao-irreversivel", "portao", "trava", "seguranca"]
-revisado_em: "2026-07-17"
-fontes: ["cerebro/instrumentos/base.py (exige_portao)", "cerebro/rotas/automacoes.py", "project_ia-unica-conversa-eterna"]
+revisado_em: "2026-08-09"
+fontes: ["cerebro/instrumentos/base.py (exige_portao)", "cerebro/rotas/automacoes.py", "cerebro/mensageria/config.py (parede governa a trava da conversa)", "cerebro/orquestracao/agente.py (portão nativo)", "project_ia-unica-conversa-eterna"]
 ---
 
 # Parede de ativação
@@ -30,7 +30,12 @@ aprovado. Você encontra a parede no momento de ativar (ou quando a IA companhei
 - A necessidade de portão é **derivada** de cada instrumento (`acao_irreversivel`), não de uma lista fixa —
   um GET não pede portão; um POST/publicação sim.
 - Instrumentos com interruptor por instância (ex.: REST/SQL em leitura, webhook) ajustam essa derivação.
-- **Nada roda enquanto inativa.** A parede só entra em cena na ativação.
+- **Nada roda enquanto inativa.** A parede só entra em cena na ativação — no caso das **automações**.
+- **No atendimento por conversa, a mesma parede age AO VIVO.** Quando o agente atendente vai executar uma
+  ação irreversível, o sistema **segura e pede a confirmação do contato na hora**, dentro do próprio turno
+  (não há o modelo de dois nós da esteira). É a mesma trava, governada pela mesma parede da organização:
+  ligada, protege; desligada, a ação segue direto. Veja [[mensageria/conversas]]. Por isso o agente **não**
+  deve ter um "Confirma?" manual no roteiro — seria confirmação em dobro.
 
 ## Para a IA
 Você não ativa por conta própria uma automação com ação irreversível sem portão — é justamente o que a

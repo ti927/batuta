@@ -3,8 +3,8 @@ titulo: "Conversas (atendimento por mensageria)"
 area: "mensageria"
 slug: "conversas"
 tags: ["conversa", "atendimento", "inbox", "takeover", "humano-assume", "timeout", "audio"]
-revisado_em: "2026-08-08"
-fontes: ["cerebro/mensageria/servico.py", "cerebro/mensageria/sweeper.py", "cerebro/orquestracao/memoria_conversa.py", "project_estado-atual-build-plan"]
+revisado_em: "2026-08-09"
+fontes: ["cerebro/mensageria/servico.py", "cerebro/mensageria/sweeper.py", "cerebro/orquestracao/memoria_conversa.py", "cerebro/orquestracao/agente.py (portão nativo)", "cerebro/mensageria/config.py (parede governa a trava)", "project_estado-atual-build-plan"]
 ---
 
 # Conversas (atendimento por mensageria)
@@ -37,6 +37,11 @@ conversa e sabe quando chamar uma pessoa. Cada canal tem **um agente atendente**
   anteriores da MESMA conversa, então não refaz do zero a cada mensagem. Para não crescer sem limite, os
   turnos antigos são condensados num resumo e a janela recente é mantida — a memória dura, o custo fica sob
   controle.
+- **Ação irreversível na conversa é segurada pelo próprio sistema.** Se o agente atendente vai fazer algo
+  irreversível (lançar, publicar, enviar, gravar num sistema externo), o Batuta **pausa e pede a confirmação
+  do contato automaticamente** antes de a ação acontecer — é a mesma [[operacao/parede-de-ativacao]] que
+  protege as automações, agindo agora **ao vivo**, dentro da conversa. A pessoa vê **uma** confirmação, na
+  voz do próprio agente; se a organização desligar a parede, a ação segue direto.
 
 ## Para a IA
 Para atendimento, o canal precisa estar **conectado** (webhook) e no cinto do **único** agente atendente.
@@ -45,6 +50,11 @@ ajudar no atendimento (veja [[times-agentes/memoria-do-agente]]). A conversa em 
 turnos** (o agente não "renasce" a cada mensagem; lembra o que já buscou) — não desenhe o fluxo supondo que
 cada turno começa do zero, e não instrua o agente a "não re-buscar": ele já carrega o contexto anterior. Isso
 é DIFERENTE da memória do agente (fichas por assunto, que persistem entre execuções distintas).
+Como o sistema já **segura o irreversível e pede o OK** sozinho, **não** instrua o agente atendente a fazer
+um ritual manual de "pergunte 'confirma?' e espere o sim" — isso viraria confirmação **em dobro** (a do
+agente e a do sistema). Deixe-o **afirmar** o que vai fazer e agir; a trava aparece por conta própria quando
+for preciso. Na conversa **não** existe o modelo de dois nós (prepara+gate → executa) da esteira: o portão é
+nativo, no meio do próprio turno.
 
 ## Relacionado
 - [[mensageria/canal-telegram]]
