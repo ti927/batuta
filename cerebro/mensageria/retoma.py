@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from mensageria.config import com_ajuste_do_no, config_da_automacao
 from modelos import Agente, Automacao, Execucao, PassoExecucao
-from orquestracao import grafo
+from orquestracao import grafo, memoria_conversa
 from orquestracao.agente import executar_agente
 from orquestracao.cadeia import _carregar_cinto, _escolher_saida, executar_cadeia
 from orquestracao.disparo import _aplicar_resultado, _fazer_registrador
@@ -196,11 +196,29 @@ def _retomar_conversando_tela(
     anda; não declarou (perguntou) → a pergunta vira um novo passo (visível na tela)
     e a execução segue `aguardando_humano`."""
     agente = sessao.get(Agente, uuid.UUID(str(no.get("ref"))))
+    no_id = ultimo.no_id or (str(ultimo.agente_id) if ultimo.agente_id else None)
     entrada_rerun = (
         f"{(ultimo.entrada or {}).get('texto', '')}\n\n"
         f"{(ultimo.saida or {}).get('texto', '')}\n\n"
         f"---\n[Resposta do humano]\n{resposta}"
     ).strip()
+
+    # Memória do portão de ESTEIRA (Fatia 4.3 / P3c-B): o agente do portão deixa de
+    # "renascer" a cada rodada. Um checkpointer + thread próprio da execução
+    # (`execucao:nó`) guarda o fio das rodadas deste portão. Na 1ª retomada (sem estado)
+    # SEMEIA com o `entrada_rerun` (o apresentado + a resposta) — idêntico a hoje; nas
+    # rodadas seguintes a entrada é SÓ a resposta do humano (o agente lembra o resto).
+    # Sem checkpointer disponível → modo LEGADO (sempre `entrada_rerun`), byte-idêntico ao
+    # de antes. NÃO usa portão nativo/interrupt (isso é a Opção A, recusada): o agente roda
+    # até o fim (apresenta/decide) com memória — o mesmo padrão da conversa (P2a).
+    ckpt = memoria_conversa.obter()
+    memoria = ckpt is not None and no_id is not None
+    tid = f"{execucao.id}:{no_id}" if memoria else None
+    if memoria and memoria_conversa.tem_estado(tid):
+        entrada = f"---\n[Resposta do humano]\n{resposta}"
+    else:
+        entrada = entrada_rerun
+    kwargs_mem = {"checkpointer": ckpt, "thread_id": tid} if memoria else {}
 
     iniciado = datetime.now(timezone.utc)
     # Instruções de FECHAMENTO do portão (o "portao.md"): o que o agente deve FAZER
@@ -209,8 +227,8 @@ def _retomar_conversando_tela(
     with usar_chaves(chaves):
         cinto = _carregar_cinto(sessao, agente.id)
         resultado = executar_agente(
-            agente, cinto, entrada_rerun, saidas=saidas, gate=True,
-            texto_portao=texto_portao,
+            agente, cinto, entrada, saidas=saidas, gate=True,
+            texto_portao=texto_portao, **kwargs_mem,
         )
     finalizado = datetime.now(timezone.utc)
 

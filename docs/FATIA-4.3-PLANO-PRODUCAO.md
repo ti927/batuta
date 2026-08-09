@@ -163,7 +163,18 @@ markdowns dos agentes de conversa que JÁ existem (ex.: Reembolsos) — seguro f
 cobre); senão eles confirmam em dobro por um tempo.
 
 **As sub-fatias seguintes (a fazer, cada uma com plano+sinal):**
-- **P3c — ligar o portão do FLUXO/tela ao nativo** (`cadeia`/`retoma`/`rotas/automacoes.responder`): a esteira
+**▶️ P3c — portão de ESTEIRA com MEMÓRIA (Opção B, conservador — decidida pelo maestro).** Em vez do
+tool-level nativo (Opção A, que reestruturaria as automações de esteira), o portão de esteira mantém o modelo
+de dois nós e ganha MEMÓRIA na retomada (checkpointer + thread `execucao:nó`), curando o "renasce". **✅ Passo 1
+NO AR — retomada pela TELA (`retoma._retomar_conversando_tela`, 2026-08-08):** 1ª retomada SEMEIA com o
+`entrada_rerun` (apresentado + resposta), rodadas seguintes usam SÓ a resposta (o agente lembra); sem
+checkpointer → byte-idêntico ao legado (zero regressão). NÃO usa interrupt (o agente roda até o fim com
+memória, padrão P2a). 2 testes; suíte **798**. **Achado honesto:** valor MARGINAL — o portão de esteira quase
+sempre resolve em 1 retomada (aí é idêntico a hoje); a memória só ajuda em rodadas MÚLTIPLAS (raras); e o
+portão de esteira está DORMENTE no time vivo. **Passo 2 (portão por CANAL, `_rodar_turno` compartilhado)
+PENDENTE** — mais entrelaçado, mesmo ganho pequeno; fazer só se valer a pena.
+
+- **P3c (resto) / referência original — ligar o portão do FLUXO/tela ao nativo** (`cadeia`/`retoma`/`rotas/automacoes.responder`): a esteira
   clássica ganha `thread_id`+checkpointer; o botão de aprovar da tela vira `Command(resume=...)`; colapsa a
   re-derivação (`entrada_rerun`).
 - **P3d — IA criadora + modelo de montagem + UI** (toca tela/UX → proposta em TEXTO antes de mexer):

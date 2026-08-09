@@ -153,6 +153,68 @@ def test_tela_agente_decide_e_o_fluxo_anda(sessao, dados, monkeypatch):
     assert execucao.estado == "concluida"
 
 
+def test_tela_portao_com_memoria_semeia_depois_so_resposta(sessao, dados, monkeypatch):
+    """P3c-B: o portão de esteira pela TELA ganha MEMÓRIA (checkpointer + thread
+    `execucao:no`). 1ª retomada SEMEIA (entrada = apresentado + resposta); a 2ª usa SÓ a
+    resposta do humano (o agente lembra o resto, não re-deriva)."""
+    canal = _canal(sessao, dados)
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal)
+    execucao = _exec_pausada(sessao, auto, ag, texto="PROPOSTA X")
+
+    saver = object()  # checkpointer "presente" (o executar_agente é mockado)
+    estado = {"tem": False}  # 1ª retomada: sem estado (semeia); 2ª: com estado
+    monkeypatch.setattr(retoma.memoria_conversa, "obter", lambda: saver)
+    monkeypatch.setattr(retoma.memoria_conversa, "tem_estado", lambda tid: estado["tem"])
+
+    capt: dict = {}
+
+    def fake(agente, cinto, entrada, **kwargs):
+        capt["entrada"] = entrada
+        capt["kwargs"] = kwargs
+        # perguntou (ramo=None) → segue aguardando, permitindo a 2ª rodada
+        return {"saida": "(pergunta)", "instrumentos_acionados": [], "uso": [],
+                "mensagens_enviadas": {}, "ramo_escolhido": None}
+
+    monkeypatch.setattr(retoma, "executar_agente", fake)
+
+    # 1ª retomada: SEMEIA (entrada = apresentado + resposta) + passa checkpointer/thread
+    retoma.retomar_execucao(sessao, execucao, "por que?", chaves={}, origens={})
+    assert capt["kwargs"].get("checkpointer") is saver
+    assert capt["kwargs"].get("thread_id") == f"{execucao.id}:{NO_GATE}"
+    assert "PROPOSTA X" in capt["entrada"] and "por que?" in capt["entrada"]
+
+    # 2ª retomada: já tem estado → entrada = SÓ a resposta (não re-deriva o apresentado)
+    estado["tem"] = True
+    sessao.refresh(execucao)
+    retoma.retomar_execucao(sessao, execucao, "agora sim", chaves={}, origens={})
+    assert capt["kwargs"].get("thread_id") == f"{execucao.id}:{NO_GATE}"
+    assert "PROPOSTA X" not in capt["entrada"] and "agora sim" in capt["entrada"]
+
+
+def test_tela_portao_sem_checkpointer_e_identico_a_hoje(sessao, dados, monkeypatch):
+    """Sem checkpointer (obter()=None), a retomada pela tela usa `entrada_rerun` como
+    sempre e NÃO passa checkpointer/thread — byte-idêntico ao comportamento legado."""
+    canal = _canal(sessao, dados)
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal)
+    execucao = _exec_pausada(sessao, auto, ag, texto="PROPOSTA Y")
+    monkeypatch.setattr(retoma.memoria_conversa, "obter", lambda: None)
+
+    capt: dict = {}
+
+    def fake(agente, cinto, entrada, **kwargs):
+        capt["entrada"] = entrada
+        capt["kwargs"] = kwargs
+        return {"saida": "ok", "instrumentos_acionados": [], "uso": [],
+                "mensagens_enviadas": {}, "ramo_escolhido": "aprovado"}
+
+    monkeypatch.setattr(retoma, "executar_agente", fake)
+    retoma.retomar_execucao(sessao, execucao, "ok", chaves={}, origens={})
+    assert "checkpointer" not in capt["kwargs"] and "thread_id" not in capt["kwargs"]
+    assert "PROPOSTA Y" in capt["entrada"]  # entrada_rerun completo, como hoje
+
+
 def test_tela_teto_de_rodadas_cai_no_roteador(sessao, dados, monkeypatch):
     canal = _canal(sessao, dados)
     ag = _agente(sessao, dados)
