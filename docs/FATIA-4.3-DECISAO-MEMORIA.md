@@ -1,11 +1,10 @@
 # Fatia 4.3 — Decisão de arquitetura: memória entre turnos (a CURA do "renasce")
 
-> **Status:** ✅ **DECIDIDO (2026-08-06): Opção A — NATIVO (checkpointer `PostgresSaver` + `interrupt()`).**
-> O maestro escolheu A, ciente das ressalvas do §4/§5 (contra a recomendação de B). NENHUM código de
-> produção escrito ainda: A começa por um **protótipo isolado** (spike) que prova as 3 mecânicas e o
+> **Status:** ✅ **DECIDIDO (2026-08-06) e EXECUTADO — P0→P3 NO AR e PROVADAS AO VIVO (2026-08-09): Opção A — NATIVO (checkpointer `PostgresSaver` + `interrupt()`).**
+> O maestro escolheu A, ciente das ressalvas do §4/§5 (contra a recomendação de B). O caminho começou por um **protótipo isolado** (spike) que provou as 3 mecânicas e o
 > desenho de HITL seletivo que **protege a garantia congelada** (não re-disparar instrumento irreversível),
-> e depende de **duas autorizações do maestro** — ver §8-A. Só depois disso as sub-fatias estranguladoras
-> tocam o motor vivo.
+> com as autorizações do maestro (§8-A), e seguiu pelas sub-fatias estranguladoras (`P0`→`P3`) que tocaram o
+> motor vivo uma a uma — **todas no ar**. Detalhe da execução em [`FATIA-4.3-PLANO-PRODUCAO.md`](FATIA-4.3-PLANO-PRODUCAO.md).
 > Este documento é o insumo obrigatório da **Fatia 4.3** (`REMODELAGEM-MOTOR.md §5`), a última e mais
 > delicada da Frente A. Conforme a disciplina do projeto (`CLAUDE.md §9/§10`), a doc oficial do LangGraph
 > **da nossa versão** foi lida e os fatos foram verificados **no ambiente real** antes de recomendar. A
@@ -247,7 +246,7 @@ A é do maestro e está tomada — daqui, se ele mantiver A, entra o **plano de 
 > **✅ Maestro manteve A (2026-08-06).** Plano estrangulador de produção escrito:
 > [`FATIA-4.3-PLANO-PRODUCAO.md`](FATIA-4.3-PLANO-PRODUCAO.md) — sub-fatias `P0` (subir o núcleo isolado) →
 > `P1` (`create_react_agent`→`create_agent`) → `P2` (memória no chat, a cura, com parada segura) → `P3`
-> (portão nativo, por último) → `P4` (limpeza). Aguarda aval para iniciar a **P0**.
+> (portão nativo, por último) → `P4` (limpeza). **✅ P0→P3 executadas e NO AR, provadas ao vivo (2026-08-09); resta só o P4 opcional.**
 >
 > **Adendo (2026-08-08) — lacuna do spike original FECHADA.** O spike de 2026-08-06 provou o `interrupt()`
 > CRU, não o `HumanInTheLoopMiddleware(interrupt_on=...)`, que é a peça em que a P3 se apoia. Um 2º spike

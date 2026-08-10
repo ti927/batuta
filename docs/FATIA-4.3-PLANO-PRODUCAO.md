@@ -68,7 +68,7 @@
 > (Reembolsos): Buscar_Projetos 3×→1×, Buscar_Trechos 2×→1×, "confirmado" só Criar_Reembolso — o "renasce"
 > MORREU; 18 checkpoints persistidos. Ressalva registrada: tokens/turno ainda altos (fio acumulado reenviado).
 >
-> **✅ P2b IMPLEMENTADA e VERIFICADA (2026-08-08) — aguarda deploy.** O `SummarizationMiddleware` nativo entra
+> **✅ P2b NO AR e PROVADA AO VIVO (2026-08-08/09).** O `SummarizationMiddleware` nativo entra
 > em `executar_agente` **só no caminho com memória** (o chat): quando o fio de trabalho cresce, ele **dobra o
 > antigo num resumo e mantém a janela recente**, de forma durável no próprio checkpoint. Resumidor **Haiku**
 > (barato, à prova de falha → sem middleware o turno segue sem compactar), gatilho ~20k / janela ~8k tokens
@@ -216,5 +216,6 @@ re-disparar irreversível — é o que estamos protegendo, e o spike confirmou q
 
 ## Ordem e portões de aprovação
 `P0 → P1 → P2(a,b,c) → [parada segura possível] → P3 → P4`. Cada uma: **plano + verificação apresentados e
-aprovados antes do código**; deploy e observação antes da seguinte. ✅ P0 e P1 NO AR; **a P2 é o próximo
-passo** (aguarda plano+aval; e um teste real da P1 em produção antes, se o maestro quiser).
+aprovados antes do código**; deploy e observação antes da seguinte. ✅ **P0→P3 NO AR e provadas ao vivo
+(2026-08-09)** — cada sub-fatia foi com plano+verificação aprovados e deploy observado, como manda esta
+ordem; resta só o **P4** (limpeza opcional).
