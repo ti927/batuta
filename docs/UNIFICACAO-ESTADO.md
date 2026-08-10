@@ -1,8 +1,11 @@
 # Unificação de Estado — o programa que junta motor + IA criadora (âncora)
 
-> **Status:** 📋 **PROGRAMA FUTURO — PRIORIDADE Nº 1.** Documentação consolidada e aprovada como
-> registro; **execução de código NÃO iniciada** (não começar nenhuma fatia sem sinal explícito do
-> maestro). Esta rodada foi **só documentação**: consolidar o que estava disperso e conciliar a base.
+> **Status:** 🔨 **PROGRAMA EM EXECUÇÃO AVANÇADA — PRIORIDADE Nº 1.** **Frente B (IA criadora) 100% NO AR**
+> (partes A–E, 2026-07-27) e **Frente A (runtime) até a Fatia 4.3/P3 NO AR e provada ao vivo** (2026-08-09)
+> — memória entre turnos + portão nativo; o "renasce" morreu. **Toda a economia de tokens planejada está em
+> produção:** cache Anthropic ligado nos DOIS motores, resumo/janela, iceberg + busca, foto enxuta e o filtro
+> de campos do REST (−84% no Bubble). **Resta:** limpar o "Confirma?" manual dos agentes (o maestro faz) +
+> P4 (limpeza opcional). Cada fatia foi executada com sinal explícito do maestro, uma por vez.
 >
 > **Este é o documento-âncora.** Ele reúne e coordena três estudos que antes viviam soltos:
 > [`REMODELAGEM-MOTOR.md`](REMODELAGEM-MOTOR.md) (o runtime), [`ECONOMIA-TOKENS-IA-CRIADORA.md`](ECONOMIA-TOKENS-IA-CRIADORA.md)
@@ -105,7 +108,7 @@ isso ele é o **primeiro marco** do plano (§5) e a decisão de forma depende de
 
 ---
 
-## 5. O plano de construção (estagiado; execução aguarda sinal)
+## 5. O plano de construção (estagiado; execução avançada — Frente B 100%, Frente A até a Fatia 4.3/P3)
 
 > **Regra de ouro:** cada passo é pequeno, testável, deixa a produção verde e os testes passando. Nunca
 > há troca simultânea dos dois mundos. Se o maestro parar em qualquer ponto, o sistema fica coerente.
@@ -130,7 +133,7 @@ decisão adiada (§ abaixo) tomada com número na mão, e a sequência das fatia
 **Três eixos de medição** (o 2º e o 3º foram adicionados em 2026-07-26 — detalhe e números em `docs/BENCHMARK-MENSAGERIA-MOTORES.md` § "Economia por PROVEDOR"):
 1. **Arquitetura** (o Programa): consumo antes × depois de *persistir estado* (fim da re-busca, Frente A) + *compactar* (resumo/janela, Frente B). **Provedor-agnóstico** — é o ganho estrutural.
 2. **Modelo por agente** (preço-base, **spread de 5×** Haiku↔Opus): cada agente e a criadora estão superdimensionados para o que fazem? **Já disponível hoje** (`Agente.modelo_ia` / `Organizacao.modelo_criadora`), sem tocar o motor — possivelmente a economia mais barata. Ressalva: modelo mais barato pode custar qualidade (a criadora quer um modelo forte) → **right-size por agente**, não "tudo no Haiku".
-3. **Cache por provedor:** na Anthropic o Batuta hoje **não** liga `cache_control` → paga cheio; OpenAI/Gemini dão **auto-cache de ~90%** do contexto repetido de graça. Medir o ganho de ligar o cache na Anthropic (Frente B, Parte D) × o que já se ganharia noutro provedor.
+3. **Cache por provedor:** à época do estudo a Anthropic pagava cheio (o Batuta **não** ligava `cache_control`); OpenAI/Gemini dão **auto-cache de ~90%** do contexto repetido de graça. **✅ Ligado desde então nos DOIS motores** (Frente B Parte D `b28d091` + cache do runtime `bf36cd8`) — medido −37% no custo de uma conversa nova.
 
 **Nuance:** cache só vale dentro da janela (5 min / 24h / implícito); "abrir time frio" quem resolve é o resumo rolante (Parte A). Os Eixos 2 e 3 economizam **sem** o rewrite; o Eixo 1 é o ganho de fundo do Programa.
 

@@ -1,6 +1,6 @@
 # Economia de tokens da IA criadora — resumo rolante (`projeto.md`) + iceberg + cache + foto enxuta
 
-> **Status:** 📋 **FASE FUTURA.** Plano **aprovado** pelo maestro (2026-07-21), execução **NÃO iniciada**. Iniciar só com o sinal do maestro. Este é o documento-fonte da **Frente B (autoria)** do **Programa de Unificação de Estado** (âncora: `docs/UNIFICACAO-ESTADO.md`) — mesma doença (turno sem memória) da Frente A (runtime, `docs/REMODELAGEM-MOTOR.md`). O `BUILD-PLAN.md` aponta para o programa.
+> **Status:** ✅ **100% NO AR (partes A–E), 2026-07-27.** Plano aprovado pelo maestro (2026-07-21) e **executado por inteiro**: **A** resumo rolante + janela · **B** painel "Sobre este time" · **C** busca no iceberg · **D** cache Anthropic · **E** foto enxuta — todas em produção (ver o selo `✅ NO AR` em cada parte abaixo). **Falta só um teste ao vivo dedicado** (as peças foram medidas isoladas: A −62% de histórico, D ~88% de economia por turno). Este é o documento-fonte da **Frente B (autoria)** do **Programa de Unificação de Estado** (âncora: `docs/UNIFICACAO-ESTADO.md`) — mesma doença (turno sem memória) da Frente A (runtime, `docs/REMODELAGEM-MOTOR.md`). O `BUILD-PLAN.md` aponta para o programa.
 
 ## Contexto
 
