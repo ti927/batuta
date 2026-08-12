@@ -1764,6 +1764,18 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
+## FASE FUTURA — Framework de Instrumentos (Construtor + Marketplace)  📋 PLANO COMPLETO ESCRITO, mockup validado; NÃO INICIAR sem o sinal do maestro (2026-08-12)
+
+**Documento-fonte:** [`docs/FRAMEWORK-INSTRUMENTOS.md`](docs/FRAMEWORK-INSTRUMENTOS.md) (plano completo). Aqui só o resumo.
+
+**Origem:** ideia do maestro, inspirada na **loja de plugins do Bubble.io** — quer um **framework self-service** para criar instrumentos sem depender de mim codar cada um. Dor concreta: usa muito o Bubble e "1 endpoint = 1 instrumento REST"; e integrações "só da minha conta" (Instagram/Google pessoais) não precisam de App Review. Mockup da Fase 1 **validado** (artefato `435b0bdf`).
+
+**Tese:** um **Construtor de Instrumento** onde se monta um instrumento **em formulário, sem código** — construído **sobre** o contrato `TipoInstrumento` que já existe (não é sistema novo). O **trilema** (código qualquer × sem servidor do dev × sem sandbox — escolha 2 de 3) leva a **3 níveis**: **(1) conector declarativo** (formulário, seguro, o foco) · **(2) traga seu endpoint** (MCP/webhook — já no ar) · **(3) código hospedado** (sandbox, aposta grande, adiada). No motor, é **um novo tipo `conector`** cuja `Config` é uma **lista de operações** + `expandir_ferramentas` (o mesmo mecanismo do MCP) → cada operação vira uma ferramenta. Reusa cofre, parede (`acao_irreversivel` por operação), `campos_resposta` (o "testar e detectar"). 5 padrões de UX do Bubble embutidos (auth por menu, `[colchete]`→campo, papel IA/Fixo/Segredo, detectar-resposta, Ação×Só-leitura).
+
+**Faseamento estrangulador:** 0 forma/spike → **1 motor do conector (sem UI, provado por teste)** → 2 construtor (telas) → 3 importar OpenAPI → 4 IA criadora monta conector + Central → 5 marketplace básico → 6+ Nível 3 (sandbox). A Fatia 1 já entrega o valor (conector multi-operação p/ o Bubble) sem marketplace. **Sequência:** depois da prioridade nº 1 (Unificação de Estado); quase tudo é **borda** (novo tipo + UI + criadora), toca pouco o núcleo. Decisões abertas e detalhe técnico no documento-fonte.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
