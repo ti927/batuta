@@ -6,6 +6,10 @@
 > pode começar antes do marketplace, pois ajuda o maestro **já** e toca pouco o motor. Governança:
 > `MIGRACAO §6.1` (evolução dirigida) — mas quase tudo aqui é **borda** (um novo tipo de instrumento + UI +
 > ferramentas da criadora), não o núcleo.
+>
+> **Decisões do maestro em 2026-08-12** (nome="Instrumento" + botão "🌟 Criar instrumento"; escopo de organização;
+> substituir os instrumentos existentes por este modelo, com a fronteira dos 3 grupos; credenciais moram no
+> instrumento): registradas em **§5.7–5.9** e **§12**.
 
 > **Origem (2026-08-11/12):** ideia do maestro, inspirada na **loja de plugins do Bubble.io** ("desenvolvedores
 > criam mini-aplicações que outros usam"). Quer um **framework self-service**: hoje, todo instrumento novo
@@ -179,6 +183,48 @@ polling (nada de request preso). Erro honesto e reenviável (`mensagemDeErro`).
 Colar a especificação da API → o Batuta **gera as operações sozinho**. É como as ferramentas no-code fazem
 "conector de Stripe/HubSpot". Reduz o Instagram/Google a poucos cliques.
 
+### 5.7 Onde nasce e onde vive (decisões do maestro, 2026-08-12)
+
+- **Nome:** continua **"Instrumento"** (sem palavra nova). O rótulo interno do tipo é técnico e invisível (comigo).
+- **Entrada:** um botão **"🌟 Criar instrumento"** na **aba de Instrumentos do time**.
+- **Escopo — vira biblioteca de instrumentos da ORGANIZAÇÃO:** ao criar, o instrumento é gravado **na organização**
+  (disponível para **todos os times**) **e** vinculado ao **time atual** para uso imediato. Cria-se uma vez,
+  reaproveita-se em qualquer time. (Hoje o instrumento é por-time — `instrumentos.time_id`; isto introduz o
+  **escopo de organização** + o vínculo time↔instrumento. Aditivo.)
+
+### 5.8 Substituir os instrumentos existentes por este modelo — a meta e a fronteira honesta
+
+**Meta do maestro:** trocar os instrumentos de hoje por instrumentos personalizados; **nativos** só os que são
+**código fechado do motor** (ex.: o agendador). Direção correta — com uma **fronteira honesta em 3 grupos** (do
+estudo de §2, porque nem todo instrumento é "só uma chamada de API"):
+
+- **(a) Nativos para sempre — tocam o interior do Batuta:** `agendar_automacao`, `arquivar_imagem`, `mcp`,
+  `descrever_imagem` (usa o motor de IA). São tripas, não "chamada de API".
+- **(b) Migram para o modelo personalizado (a MAIORIA — "só chamam API"):** busca web/Exa/Firecrawl, WordPress,
+  Search Console, Telegram, webhook de saída, os de Instagram, `chamar_api_rest`. Viram conectores declarativos.
+- **(c) Ficam nativos ATÉ o Nível 3 (precisam de código de verdade):** `gerar_pdf` (monta um PDF), `sql` (fala com
+  banco), `gerar_imagem`/`gerar_video`/`gerar_video_fal` (laço "ficou pronto?"). Um conector declarativo **não
+  expressa** essa lógica — ou esperam o **Nível 3** (código hospedado), ou um conector multi-passo mais esperto os
+  absorve depois. A fronteira é "**tem lógica além de chamar um endereço**".
+
+**Como migrar (sem quebrar):** instrumento por instrumento, a versão declarativa **provada equivalente** antes de
+trocar; as instâncias já configuradas (Instagram/WordPress plugados) **continuam funcionando** com caminho de
+migração. **Nada de big-bang.**
+
+### 5.9 Credenciais — moram no instrumento (decisão do maestro, 2026-08-12)
+
+Com o instrumento virando **objeto da organização** (criado uma vez, usado por todos os times), a credencial que
+mora nele **já é compartilhada e única** → a **"caixa-forte de credenciais nomeadas" vira redundante para
+instrumentos**: o segredo fica **no próprio instrumento**. Consequências:
+
+- **A criptografia FICA** — o cofre que cifra o segredo continua; some só a **abstração "credencial separada"**
+  (`tipos_credencial_aceitos`/`credencial_id`) para instrumentos.
+- **A renovação automática (§5.3.1)** grava o token novo **no segredo do instrumento** — coerente.
+- **Separado disto:** o **pool de chaves de IA compartilhadas** (`chave_compartilhada` — OpenAI/Tavily/etc. das
+  funções **nativas** do Batuta) é **outra coisa** (chaves das capacidades pagas da plataforma, não credencial de
+  instrumento do usuário) e pode continuar como está.
+- **Migração:** as credenciais nomeadas existentes se **dobram** no instrumento que as usa.
+
 ---
 
 ## 6. A IA criadora monta o instrumento
@@ -268,15 +314,22 @@ plano + verificação aprovados **antes** do código; deploy e observação ante
 
 ---
 
-## 12. Decisões abertas (do maestro)
+## 12. Decisões (do maestro)
 
-1. **Nome:** "Conector"? "Construtor de Instrumento"? "Instrumento personalizado"? (o construtor é a tela; o
-   tipo no motor precisa de um nome).
-2. **Novo tipo × generalizar o REST atual.** *Recomendação:* **novo tipo** `conector` — deixa o `chamar_api_rest`
-   simples intacto (retrocompat) e o conector nasce multi-operação.
-3. **OAuth 2.0 (login):** entra em qual fatia? (por ora, token do próprio app resolve o caso pessoal).
-4. **Marketplace:** quando? É a virada de "ferramenta interna" → "plataforma". Sequência depois da prioridade nº1.
-5. **Nível 3 (sandbox):** investir, e quando? (só faz falta para código arbitrário hospedado).
+**✅ Decididas (2026-08-12):**
+1. **Nome = "Instrumento"** (sem palavra nova); rótulo interno técnico fica comigo. Entrada: botão **"🌟 Criar
+   instrumento"** na aba de Instrumentos do time (§5.7).
+2. **Novo tipo** `conector` — não generalizar o `chamar_api_rest` (o REST simples fica intacto).
+3. **Escopo = organização** + vínculo ao time (biblioteca de instrumentos da org, §5.7).
+4. **Substituir os instrumentos** por este modelo, exceto os nativos de motor — com a **fronteira dos 3 grupos**
+   (§5.8): (a) nativos p/ sempre · (b) migram (maioria "só API") · (c) esperam o Nível 3 (precisam de código).
+5. **Credenciais moram no instrumento** — a caixa-forte de credenciais nomeadas vira redundante para instrumentos;
+   a criptografia (cofre) fica; o pool de chaves de IA da plataforma é outra coisa e segue (§5.9).
+
+**Ainda abertas:**
+6. **OAuth 2.0 (login):** entra em qual fatia? (por ora, token do próprio app resolve o caso pessoal).
+7. **Marketplace:** quando? É a virada de "ferramenta interna" → "plataforma". Sequência depois da prioridade nº1.
+8. **Nível 3 (sandbox):** investir, e quando? (só faz falta para código arbitrário hospedado).
 
 ---
 
