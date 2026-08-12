@@ -1,7 +1,8 @@
 # Framework de Instrumentos — Plano Completo (Construtor + Central + IA criadora + Marketplace)
 
-> **Status:** 📋 **PLANO — não iniciar sem o sinal do maestro.** Mockup da **Fase 1 validado** (2026-08-12,
-> artefato `435b0bdf`). Este é o plano da **Fase 2**. **Sequência:** vem **depois da prioridade nº 1**
+> **Status:** ▶️ **EM EXECUÇÃO (sinal dado 2026-08-12).** **Fatia 0 (forma) + Fatia 1 (motor do conector) ✅ NO AR**
+> — tipo `conector` executável, provado por teste (commit `3163721`, 810 testes verdes); ver §11. Próxima: Fatia 2
+> (Construtor — telas, propor antes). Mockup da Fatia 2 validado (2026-08-12, artefato `435b0bdf`). **Sequência:** convive com a **prioridade nº 1**
 > (Unificação de Estado, `docs/UNIFICACAO-ESTADO.md`); a *semente barata* (o tipo "conector" + o construtor)
 > pode começar antes do marketplace, pois ajuda o maestro **já** e toca pouco o motor. Governança:
 > `MIGRACAO §6.1` (evolução dirigida) — mas quase tudo aqui é **borda** (um novo tipo de instrumento + UI +
@@ -301,9 +302,9 @@ Do modelo do Bubble, adaptado:
 
 | Fatia | Entrega | Toca UI? | Risco |
 |---|---|---|---|
-| **0. Forma** | decisões (§12) + spike do executor genérico | não | baixo |
-| **1. Motor do conector** | novo tipo `conector` (`expandir_ferramentas` + executor), **sem UI**, provado por teste; reusa REST/cofre/parede/`campos_resposta` | não | baixo |
-| **2. Construtor** | as telas do mockup (Identidade/Auth/Operações/Testar) | **sim** (propor antes) | médio |
+| **0. Forma** ✅ | decisões (§12) + forma travada no código (§encaixe: `TipoInstrumento` + `expandir_ferramentas`) | não | baixo |
+| **1. Motor do conector** ✅ | novo tipo `conector` (`expandir_ferramentas` + executor), **sem UI**, provado por teste; reusa REST/cofre/parede/`campos_resposta` | não | baixo |
+| **2. Construtor** ◀ próxima | as telas do mockup (Identidade/Auth/Operações/Testar) | **sim** (propor antes) | médio |
 | **3. Importar OpenAPI** | colar spec → gera operações | sim | médio |
 | **4. Criadora + Central** | ferramentas da criadora p/ montar conector + capítulos novos | sim | médio |
 | **5. Marketplace básico** | só-org → compartilhado → público + revisão | sim | alto |
@@ -311,6 +312,22 @@ Do modelo do Bubble, adaptado:
 
 Fatia 1 já entrega o **valor pro maestro** (conector multi-operação p/ o Bubble) sem marketplace. Cada fatia:
 plano + verificação aprovados **antes** do código; deploy e observação antes da seguinte.
+
+**O que a Fatia 1 entregou (commit `3163721`, 2026-08-12):** `cerebro/instrumentos/conector.py` — `ConfigConector`
+(`auth_tipo` nenhuma/bearer/cabecalho/query + `auth_segredo` no cofre; lista de `operacoes`), cada operação → 1
+ferramenta via `expandir_ferramentas`; campos com papel **ia/fixo** e destino **query/corpo/url** (colchete `[campo]`
+na URL); auth declarativa; `campos_resposta` herdado do REST; robusto a nome de campo não-identificador (ex.:
+`cpo.NomeCliente`). Registrado no `__init__.py`; **oculto no catálogo** via marcador aditivo `oculto_no_catalogo`
+(contrato `base.py` + filtro em `/instrumentos/tipos`) — o motor executa, a tela atual não oferece até a Fatia 2.
+Zero migração, zero toque em `cadeia.py`/`agente.py`. 11 testes novos (`testes/test_conector.py`).
+
+**Dois follow-ups nomeados (esperam uma fatia com toque ADITIVO no motor, evolução dirigida):** (a) **portão
+operação-a-operação** — hoje a irreversibilidade é conservadora por instrumento (qualquer escrita → gateia tudo);
+o refino "GET livre, POST gateado" exige o mapa nome→irreversível por ferramenta expandida em `agente.py`
+(hoje ele aplica o valor do instrumento a todas as expandidas, igual ao MCP). (b) **retentativa/`falhas` das
+ferramentas expandidas** — como o MCP, o conector não passa pelo `_ferramenta_unica` (sem `acionar_com_retentativa`
+nem a promessa "nunca fingir sucesso em irreversível que falhou"); o portão já PREVINE a ação sem aprovação, mas
+essa garantia fina fica para a mesma fatia de motor.
 
 ---
 
