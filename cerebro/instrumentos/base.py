@@ -109,6 +109,13 @@ class TipoInstrumento(ABC):
     # EXATAMENTE o que foi apresentado ao humano (e não o status que o agente
     # narra depois). None = o instrumento não apresenta mensagem a humano.
     campo_mensagem: str | None = None
+    # OCULTO NO CATÁLOGO: o tipo é REAL (o motor o executa, `obter_tipo` o acha),
+    # mas NÃO aparece no dropdown de "criar instrumento" da tela atual — para tipos
+    # cujo formulário cru (gerado do JSON Schema) seria inutilizável e que ganharão
+    # uma tela dedicada depois (ex.: o `conector`, que espera o Construtor de
+    # Instrumento do Framework). A rota de catálogo (`/instrumentos/tipos`) filtra
+    # por isto; a criação/execução por tipo seguem funcionando normalmente.
+    oculto_no_catalogo: bool = False
 
     def irreversivel_para(self, configuracao: dict) -> bool:
         """Se ESTA instância (com esta configuração) faz ação irreversível.

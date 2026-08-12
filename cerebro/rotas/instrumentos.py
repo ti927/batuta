@@ -120,6 +120,7 @@ def listar_tipos(usuario: Usuario = Depends(usuario_atual)):
             dependencias=t.dependencias_ui(),
         )
         for t in encaixe.tipos_disponiveis()
+        if not getattr(t, "oculto_no_catalogo", False)
     ]
 
 
