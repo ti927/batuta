@@ -1,8 +1,9 @@
 # Framework de Instrumentos — Plano Completo (Construtor + Central + IA criadora + Marketplace)
 
-> **Status:** ▶️ **EM EXECUÇÃO (sinal dado 2026-08-12).** **Fatia 0 (forma) + Fatia 1 (motor do conector) ✅ NO AR**
-> — tipo `conector` executável, provado por teste (commit `3163721`, 810 testes verdes); ver §11. Próxima: Fatia 2
-> (Construtor — telas, propor antes). Mockup da Fatia 2 validado (2026-08-12, artefato `435b0bdf`). **Sequência:** convive com a **prioridade nº 1**
+> **Status:** ▶️ **EM EXECUÇÃO (sinal dado 2026-08-12).** **Fatias 0–2 ✅ NO AR** — motor do conector (`3163721`) + o
+> **Construtor de Instrumento** (`c7db8ab`, tela do mockup validado + backend "testar e detectar"); 816 testes verdes,
+> tsc/eslint/build limpos; ver §11. **Próxima: Fatia 2.5** (biblioteca da org — escopo org-wide) ou **Fatia 3** (importar OpenAPI).
+> Mockup validado (2026-08-12, artefato `435b0bdf`). **Sequência:** convive com a **prioridade nº 1**
 > (Unificação de Estado, `docs/UNIFICACAO-ESTADO.md`); a *semente barata* (o tipo "conector" + o construtor)
 > pode começar antes do marketplace, pois ajuda o maestro **já** e toca pouco o motor. Governança:
 > `MIGRACAO §6.1` (evolução dirigida) — mas quase tudo aqui é **borda** (um novo tipo de instrumento + UI +
@@ -304,7 +305,8 @@ Do modelo do Bubble, adaptado:
 |---|---|---|---|
 | **0. Forma** ✅ | decisões (§12) + forma travada no código (§encaixe: `TipoInstrumento` + `expandir_ferramentas`) | não | baixo |
 | **1. Motor do conector** ✅ | novo tipo `conector` (`expandir_ferramentas` + executor), **sem UI**, provado por teste; reusa REST/cofre/parede/`campos_resposta` | não | baixo |
-| **2. Construtor** ◀ próxima | as telas do mockup (Identidade/Auth/Operações/Testar) | **sim** (propor antes) | médio |
+| **2. Construtor** ✅ | as telas do mockup (Operações/Identidade/Auth/Testar/Publicar) + backend "testar e detectar" | sim | médio |
+| **2.5. Biblioteca da org** ◀ próxima | escopo org-wide (decisão #3): conector gravado p/ a ORG, disponível a todos os times (migração) | sim | médio |
 | **3. Importar OpenAPI** | colar spec → gera operações | sim | médio |
 | **4. Criadora + Central** | ferramentas da criadora p/ montar conector + capítulos novos | sim | médio |
 | **5. Marketplace básico** | só-org → compartilhado → público + revisão | sim | alto |
@@ -328,6 +330,17 @@ o refino "GET livre, POST gateado" exige o mapa nome→irreversível por ferrame
 ferramentas expandidas** — como o MCP, o conector não passa pelo `_ferramenta_unica` (sem `acionar_com_retentativa`
 nem a promessa "nunca fingir sucesso em irreversível que falhou"); o portão já PREVINE a ação sem aprovação, mas
 essa garantia fina fica para a mesma fatia de motor.
+
+**O que a Fatia 2 entregou (commit `c7db8ab`, 2026-08-12):** `interface/components/construtor-instrumento.tsx` — o
+Construtor (overlay de tela cheia) com as 5 seções do mockup; botão **"🌟 Criar instrumento"** na aba Instrumentos
+(`instrumentos-cliente.tsx`), e clicar num conector abre o Construtor (não o form genérico). Editor de operação:
+método + URL com `[colchete]` (campo automático), campos **IA/Fixo** × destino **query/corpo/url**, comportamento
+(informativo, derivado do método), e **testar e detectar** que marca os `campos_resposta`. Backend: **POST
+`/instrumentos/{id}/testar-operacao`** (`Conector.testar_operacao` + `_detectar_campos`, roda SEM o filtro para
+detectar tudo; reusa a config salva + segredo do cofre, nada gravado) + metadados `descricao`/`categoria` no
+`ConfigConector` (o motor ignora). Tipos no `api.ts`. **Deferido com honestidade** (o mockup já adia): auth **Basic/OAuth2**
+("em breve"); papel **Segredo** por-campo → o segredo é o token da aba Autenticação; **Publicar/marketplace**;
+**escopo org-wide** (grava no time atual → Fatia 2.5). 816 testes verdes; tsc/eslint/build limpos.
 
 ---
 
