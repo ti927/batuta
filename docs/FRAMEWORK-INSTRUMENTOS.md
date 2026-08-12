@@ -129,9 +129,39 @@ Barra de seções: **Operações** (lista + editor), **Identidade**, **Autentica
 ### 5.3 Autenticação — tipos, faseado
 
 - **Já-fáceis (declarativos):** Bearer, chave no cabeçalho, chave na URL, HTTP Basic, sem auth.
-- **OAuth 2.0 (login do usuário):** mais complexo (fluxo de consentimento + refresh). **Fase posterior.** Por ora,
+- **Token auto-renovável (renovação automática, sem agente):** ver §5.3.1 — resolve o token que expira
+  (Instagram/Google pessoal) sem o usuário ficar trocando à mão.
+- **OAuth 2.0 (login do usuário):** o mais complexo (consentimento no navegador). **Fase posterior.** Por ora,
   o usuário cola o **token do próprio app** (o "bypass" pessoal do Instagram/Google — sem App Review).
-- Renovação de token: o Batuta avisa quando estiver perto de expirar (o mesmo cuidado que o Instagram já tem).
+
+#### 5.3.1 Token auto-renovável — o sistema renova sozinho, no fundo
+
+**Dor (levantada pelo maestro):** tokens expiram (o do Instagram dura ~60 dias); ninguém quer ficar trocando à mão.
+
+**A forma CERTA é system-level, não um agente.** Um agente só renovaria se **rodasse** — se nenhuma automação
+disparar, o token morre em silêncio. Renovação é assunto de **credencial**, não de lógica de agente: um
+trabalhador automático (**agendador**) renova **antes** de expirar, independente de qualquer agente.
+
+**O Batuta JÁ faz isso — para o Instagram:** `instagram_tokens.renovar` é chamada pelo **agendador** e "estica a
+validade antes dos 60 dias" (`instagram_oauth.py`, `instagram_tokens.py`). O framework **generaliza** esse padrão
+para **qualquer conector**.
+
+**No construtor (declarativo, sem código):** um tipo de auth **"token que se renova sozinho"** onde o autor
+declara **(a)** a **chamada de renovação** (endereço/método/o que enviar — o token atual ou um `refresh_token`) e
+**(b)** **onde o token novo está na resposta** (ex.: `access_token`, `expires_in`). O sistema agenda e renova no
+fundo, gravando o token novo no cofre. Espelha o **OAuth2 auto-renovável do Bubble** (a doc estudada exige
+resposta com `access_token` + `expires_in`).
+
+**Capacidade nova (pequena e contida — a ÚNICA peça de motor que esta parte toca):** hoje um instrumento só
+**LÊ** o segredo do cofre; a auto-renovação exige o sistema **GRAVAR** o token novo de volta. O encanamento já
+existe (o `instagram_tokens` já grava o token renovado) — o framework só o estende aos segredos dos conectores.
+Roda no **agendador/borda**, não no laço do agente.
+
+**Limite honesto:** a auto-renovação só funciona enquanto o token atual **ainda é válido** (renova ANTES de
+vencer) ou há um `refresh_token` de longa vida. Se o token **morrer de vez**, ou se a API exigir um **login de
+navegador** (consentimento OAuth completo), o sistema **não** se cura sozinho — o humano precisa **logar de novo
+uma vez**. Ou seja: cobre o "esticar antes de vencer" (o caso comum, incl. Instagram); não ressuscita credencial
+morta nem faz o primeiro login sozinho.
 
 ### 5.4 O `[colchete]` → campo automático
 
