@@ -236,22 +236,23 @@ def _executar_operacao(
 # ───────────────────────── testar e detectar (Construtor) ─────────────────────────
 
 
-def _amostra_de_registro(corpo: Any) -> dict | None:
-    """O registro representativo da resposta, para detectar seus campos: o
-    `response.results[0]` do Bubble, o primeiro de uma lista, `results[0]` no topo,
-    ou o próprio dict. `None` se não há um dict de onde tirar campos."""
+def _registros_da_resposta(corpo: Any) -> list[dict]:
+    """TODOS os registros (dicts) de uma resposta: o `response.results` do Bubble,
+    uma lista no topo, `results` no topo, ou o próprio dict (um registro só).
+
+    Varre TODOS — não só o primeiro — de propósito: o Bubble (e outras APIs) OMITE
+    da resposta os campos VAZIOS de cada registro. Olhar só o primeiro perderia
+    campos que estão preenchidos em outros registros. A união dá a lista completa."""
     if isinstance(corpo, dict):
         resp = corpo.get("response")
         if isinstance(resp, dict) and isinstance(resp.get("results"), list):
-            lista = resp["results"]
-            return lista[0] if lista and isinstance(lista[0], dict) else None
+            return [r for r in resp["results"] if isinstance(r, dict)]
         if isinstance(corpo.get("results"), list):
-            lista = corpo["results"]
-            return lista[0] if lista and isinstance(lista[0], dict) else None
-        return corpo
+            return [r for r in corpo["results"] if isinstance(r, dict)]
+        return [corpo]
     if isinstance(corpo, list):
-        return corpo[0] if corpo and isinstance(corpo[0], dict) else None
-    return None
+        return [r for r in corpo if isinstance(r, dict)]
+    return []
 
 
 def _tipo_amigavel(v: Any) -> str:
@@ -281,15 +282,20 @@ def _exemplo(v: Any) -> Any:
 
 
 def _detectar_campos(corpo: Any) -> list[dict]:
-    """Os campos do registro representativo da resposta (nome + tipo amigável +
-    exemplo), para o Construtor deixar o usuário marcar quais trazer (`campos_resposta`)."""
-    reg = _amostra_de_registro(corpo)
-    if not reg:
-        return []
-    return [
-        {"nome": k, "tipo": _tipo_amigavel(v), "exemplo": _exemplo(v)}
-        for k, v in reg.items()
-    ]
+    """Os campos da resposta (nome + tipo amigável + exemplo), para o Construtor
+    deixar o usuário marcar quais trazer (`campos_resposta`). Faz a UNIÃO dos campos
+    de TODOS os registros retornados — porque o Bubble omite os vazios de cada um, e
+    olhar só o primeiro perderia campos. Guarda o primeiro exemplo com valor de cada."""
+    campos: dict[str, dict] = {}
+    for registro in _registros_da_resposta(corpo):
+        for k, v in registro.items():
+            atual = campos.get(k)
+            if atual is None:
+                campos[k] = {"nome": k, "tipo": _tipo_amigavel(v), "exemplo": _exemplo(v)}
+            elif atual["exemplo"] in (None, "") and v not in (None, ""):
+                # um registro posterior tem valor onde o primeiro estava vazio: melhora
+                campos[k] = {"nome": k, "tipo": _tipo_amigavel(v), "exemplo": _exemplo(v)}
+    return list(campos.values())
 
 
 class Conector(TipoInstrumento):

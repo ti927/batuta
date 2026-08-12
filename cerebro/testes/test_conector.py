@@ -265,6 +265,23 @@ def test_testar_operacao_detecta_todos_os_campos(monkeypatch):
     assert tipos == {"id": "número", "status": "texto", "extra": "texto"}
 
 
+def test_detecta_uniao_de_campos_esparsos(monkeypatch):
+    """Bubble OMITE campos vazios de cada registro — a detecção une os campos de
+    TODOS os registros retornados (não só do primeiro), senão perderia campos."""
+    _mock_http(
+        monkeypatch,
+        _Resp(200, {"response": {"results": [
+            {"a": 1, "b": "x"},           # 1º registro: a, b
+            {"a": 2, "c": True},          # 2º: a, c (b omitido por estar vazio)
+            {"a": 3, "d": "y"},           # 3º: a, d
+        ]}}),
+        [],
+    )
+    config = ConfigConector(operacoes=[{"nome": "l", "url": "https://x", "metodo": "GET"}])
+    r = Conector().testar_operacao(config, "l", {})
+    assert [c["nome"] for c in r["campos_detectados"]] == ["a", "b", "c", "d"]
+
+
 def test_testar_operacao_inexistente_levanta():
     config = ConfigConector(operacoes=[{"nome": "a", "url": "https://x", "metodo": "GET"}])
     with pytest.raises(FalhaInstrumento):

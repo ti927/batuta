@@ -526,6 +526,11 @@ function SecaoOperacoes({
   onAlternarCampoResposta: (nomeCampo: string) => void;
 }) {
   const camposIa = op.campos.filter((c) => c.papel === "ia");
+  const [manualNome, setManualNome] = useState("");
+  // Campos escolhidos que NÃO vieram na amostra detectada (adicionados pelo nome).
+  const manuais = op.campos_resposta.filter(
+    (c) => !detectados.some((d) => d.nome === c),
+  );
   return (
     <div>
       <header className="mb-5">
@@ -785,13 +790,14 @@ function SecaoOperacoes({
                 </div>
               )}
 
-              {detectados.length > 0 && (
+              {(detectados.length > 0 || op.campos_resposta.length > 0) && (
                 <div className="px-3 pb-3">
                   {detectados.map((c) => {
                     const marcado = op.campos_resposta.includes(c.nome);
                     return (
                       <button
                         key={c.nome}
+                        type="button"
                         onClick={() => onAlternarCampoResposta(c.nome)}
                         className="flex w-full items-center gap-3 border-t border-border py-2 text-left first:border-t-0"
                       >
@@ -816,6 +822,50 @@ function SecaoOperacoes({
                       </button>
                     );
                   })}
+
+                  {/* campos escolhidos pelo nome (vieram vazios na amostra do Bubble) */}
+                  {manuais.map((nomeCampo) => (
+                    <button
+                      key={nomeCampo}
+                      type="button"
+                      onClick={() => onAlternarCampoResposta(nomeCampo)}
+                      className="flex w-full items-center gap-3 border-t border-border py-2 text-left first:border-t-0"
+                    >
+                      <span className="grid size-[18px] shrink-0 place-items-center rounded border border-primary bg-primary text-primary-foreground">
+                        <Check className="size-3" />
+                      </span>
+                      <span className="font-mono text-[13px] font-medium text-foreground">
+                        {nomeCampo}
+                      </span>
+                      <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                        adicionado
+                      </span>
+                    </button>
+                  ))}
+
+                  {/* adicionar campo pelo nome — para o que veio vazio na amostra */}
+                  <form
+                    className="mt-2 flex items-center gap-2 border-t border-border pt-2.5"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const nomeCampo = manualNome.trim();
+                      if (nomeCampo && !op.campos_resposta.includes(nomeCampo)) {
+                        onAlternarCampoResposta(nomeCampo);
+                      }
+                      setManualNome("");
+                    }}
+                  >
+                    <Input
+                      value={manualNome}
+                      onChange={(e) => setManualNome(e.target.value)}
+                      placeholder="Falta um campo? adicione pelo nome (ex.: cpo.TipoProjeto)"
+                      className="h-8 font-mono text-xs"
+                    />
+                    <Button type="submit" size="sm" variant="outline" disabled={!manualNome.trim()}>
+                      <Plus className="size-3.5" /> Adicionar
+                    </Button>
+                  </form>
+
                   <p className="mt-2 text-xs text-muted-foreground">
                     {op.campos_resposta.length === 0
                       ? "Nada marcado = traz a resposta inteira."
