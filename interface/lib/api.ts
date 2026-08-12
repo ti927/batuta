@@ -263,6 +263,56 @@ export type TipoInstrumento = {
   > | null;
 };
 
+// ───────── Conector (Framework de Instrumentos) — configuração declarativa ─────────
+// Um conector é um Instrumento de `tipo: "conector"` cuja `configuracao` tem esta
+// forma. O Construtor (construtor-instrumento.tsx) edita isto; o motor
+// (cerebro/instrumentos/conector.py) o executa, cada operação virando uma ferramenta.
+
+export type PapelCampoConector = "ia" | "fixo";
+export type DestinoCampoConector = "query" | "corpo" | "url";
+export type MetodoHttp = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+export type TipoAuthConector = "nenhuma" | "bearer" | "cabecalho" | "query";
+
+export type CampoConector = {
+  nome: string;
+  papel: PapelCampoConector; // "ia" = a IA preenche na hora; "fixo" = valor constante
+  destino: DestinoCampoConector; // onde o valor entra: query, corpo (JSON) ou URL ([nome])
+  valor: string; // usado quando papel="fixo"
+  descricao: string; // ajuda para a IA (quando papel="ia")
+  obrigatorio: boolean;
+};
+
+export type OperacaoConector = {
+  nome: string;
+  descricao: string; // o que a operação faz (a IA lê isto por ferramenta)
+  metodo: MetodoHttp;
+  url: string; // pode conter [campos] substituídos por valores
+  cabecalhos: Record<string, string>;
+  campos: CampoConector[];
+  campos_resposta: string[]; // só estes campos de cada registro (corta custo)
+};
+
+export type ConfigConector = {
+  auth_tipo: TipoAuthConector;
+  auth_nome: string; // nome do cabeçalho/parâmetro (para "cabecalho"/"query")
+  auth_segredo?: string; // SÓ no envio; nunca volta (fica no cofre)
+  operacoes: OperacaoConector[];
+  descricao: string; // para que serve (referência humana)
+  categoria: string; // agrupamento cosmético
+};
+
+// Um campo detectado na resposta de um teste (para escolher `campos_resposta`).
+export type CampoDetectado = { nome: string; tipo: string; exemplo: unknown };
+
+// Resposta de POST /instrumentos/{id}/testar-operacao.
+export type RespostaTeste = {
+  ok: boolean;
+  status?: number | null;
+  corpo?: unknown;
+  erro?: string;
+  campos_detectados: CampoDetectado[];
+};
+
 // Caixa-forte de credenciais nomeadas (docs/CAIXA-FORTE-PLANO.md).
 export type CampoCredencial = {
   nome: string;

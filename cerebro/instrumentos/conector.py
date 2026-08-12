@@ -96,6 +96,11 @@ class ConfigConector(BaseModel):
         default="", description="Token/chave de autenticação (SEGREDO → cofre)."
     )
     operacoes: list[OperacaoConector] = Field(default_factory=list)
+    # Metadados do Construtor — NÃO afetam a execução (o motor os ignora). A
+    # descrição geral é referência humana; cada OPERAÇÃO tem a sua, que é a que o
+    # agente lê por ferramenta. A categoria só agrupa/ajuda a achar o instrumento.
+    descricao: str = Field(default="", description="Para que serve (referência humana).")
+    categoria: str = Field(default="", description="Categoria para agrupar (cosmético).")
 
 
 class ArgsConector(BaseModel):
@@ -228,6 +233,65 @@ def _executar_operacao(
     return _chamar_http(op.metodo, url, cabecalhos, params, corpo or None, op.campos_resposta)
 
 
+# ───────────────────────── testar e detectar (Construtor) ─────────────────────────
+
+
+def _amostra_de_registro(corpo: Any) -> dict | None:
+    """O registro representativo da resposta, para detectar seus campos: o
+    `response.results[0]` do Bubble, o primeiro de uma lista, `results[0]` no topo,
+    ou o próprio dict. `None` se não há um dict de onde tirar campos."""
+    if isinstance(corpo, dict):
+        resp = corpo.get("response")
+        if isinstance(resp, dict) and isinstance(resp.get("results"), list):
+            lista = resp["results"]
+            return lista[0] if lista and isinstance(lista[0], dict) else None
+        if isinstance(corpo.get("results"), list):
+            lista = corpo["results"]
+            return lista[0] if lista and isinstance(lista[0], dict) else None
+        return corpo
+    if isinstance(corpo, list):
+        return corpo[0] if corpo and isinstance(corpo[0], dict) else None
+    return None
+
+
+def _tipo_amigavel(v: Any) -> str:
+    if isinstance(v, bool):
+        return "sim/não"
+    if isinstance(v, (int, float)):
+        return "número"
+    if isinstance(v, str):
+        return "texto"
+    if isinstance(v, list):
+        return "lista"
+    if isinstance(v, dict):
+        return "objeto"
+    return "vazio"
+
+
+def _exemplo(v: Any) -> Any:
+    if isinstance(v, str):
+        return v[:40] + ("…" if len(v) > 40 else "")
+    if isinstance(v, bool) or isinstance(v, (int, float)):
+        return v
+    if isinstance(v, list):
+        return f"lista ({len(v)})"
+    if isinstance(v, dict):
+        return "objeto"
+    return None
+
+
+def _detectar_campos(corpo: Any) -> list[dict]:
+    """Os campos do registro representativo da resposta (nome + tipo amigável +
+    exemplo), para o Construtor deixar o usuário marcar quais trazer (`campos_resposta`)."""
+    reg = _amostra_de_registro(corpo)
+    if not reg:
+        return []
+    return [
+        {"nome": k, "tipo": _tipo_amigavel(v), "exemplo": _exemplo(v)}
+        for k, v in reg.items()
+    ]
+
+
 class Conector(TipoInstrumento):
     tipo = "conector"
     categoria = "Integrações e dados"
@@ -270,6 +334,27 @@ class Conector(TipoInstrumento):
     def expandir_ferramentas(self, config: ConfigConector) -> list:
         """Cada operação declarada vira uma ferramenta no cinto do agente."""
         return [self._ferramenta_de_operacao(config, op) for op in config.operacoes]
+
+    def testar_operacao(
+        self, config: ConfigConector, nome_operacao: str, valores: dict
+    ) -> dict:
+        """Roda UMA operação com valores de exemplo (o "testar e detectar" do
+        Construtor). Roda SEM o filtro `campos_resposta` — para mostrar a resposta
+        inteira e detectar todos os campos, que é justamente o que o usuário vai
+        escolher. Uma falha da chamada externa volta como dado (`ok=False`), não
+        como erro do Batuta; operação inexistente levanta `FalhaInstrumento`."""
+        op = next((o for o in config.operacoes if o.nome == nome_operacao), None)
+        if op is None:
+            raise FalhaInstrumento(
+                f"operação '{nome_operacao}' não existe neste conector.", retentavel=False
+            )
+        op_cheia = op.model_copy(update={"campos_resposta": []})
+        try:
+            resultado = _executar_operacao(config, op_cheia, valores or {})
+        except FalhaInstrumento as e:
+            return {"ok": False, "erro": str(e), "status": None, "corpo": None,
+                    "campos_detectados": []}
+        return {**resultado, "campos_detectados": _detectar_campos(resultado.get("corpo"))}
 
     def _ferramenta_de_operacao(
         self, config: ConfigConector, op: OperacaoConector

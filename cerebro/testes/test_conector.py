@@ -11,7 +11,10 @@ robustez a nomes de campo não-identificadores (ex.: 'cpo.NomeCliente'), o cofre
 import json
 import uuid
 
+import pytest
+
 import instrumentos as encaixe
+from instrumentos.base import FalhaInstrumento
 from instrumentos.conector import ArgsConector, ConfigConector, Conector
 from modelos import Instrumento
 from orquestracao.agente import _ferramentas_de_instrumento
@@ -202,6 +205,18 @@ def test_cofre_separa_auth_segredo():
     assert publica["operacoes"][0]["nome"] == "x"  # operações preservadas
 
 
+def test_metadados_nao_afetam_execucao():
+    config = {
+        "descricao": "publica fotos",
+        "categoria": "Redes sociais",
+        "operacoes": [{"nome": "a", "url": "https://x", "metodo": "GET"}],
+    }
+    assert encaixe.acao_irreversivel("conector", config) is False  # só olha operações
+    publica, _ = encaixe.preparar_config("conector", config)
+    assert publica["descricao"] == "publica fotos"
+    assert publica["categoria"] == "Redes sociais"
+
+
 def test_irreversivel_conservador_por_instrumento():
     so_leitura = {"operacoes": [{"nome": "l", "url": "https://x", "metodo": "GET"}]}
     com_escrita = {
@@ -224,6 +239,93 @@ def test_conector_oculto_no_catalogo_mas_executavel(cliente, entrar, dados):
     assert "conector" not in tipos  # invisível na tela atual
     assert "chamar_api_rest" in tipos  # os demais tipos seguem visíveis
     assert encaixe.obter_tipo("conector") is not None  # mas é real no motor
+
+
+# ─────────────────────────── testar e detectar (Construtor) ───────────────────────────
+
+
+def test_testar_operacao_detecta_todos_os_campos(monkeypatch):
+    """O 'testar e detectar' roda SEM o filtro campos_resposta — mostra a resposta
+    inteira para o usuário escolher o que trazer."""
+    _mock_http(
+        monkeypatch,
+        _Resp(200, {"results": [{"id": 1, "status": "ok", "extra": "z"}]}),
+        [],
+    )
+    config = ConfigConector(
+        operacoes=[
+            {"nome": "listar", "url": "https://x/i", "metodo": "GET",
+             "campos_resposta": ["id"]}  # filtro configurado é IGNORADO no teste
+        ]
+    )
+    r = Conector().testar_operacao(config, "listar", {})
+    assert r["ok"] is True
+    assert [c["nome"] for c in r["campos_detectados"]] == ["id", "status", "extra"]
+    tipos = {c["nome"]: c["tipo"] for c in r["campos_detectados"]}
+    assert tipos == {"id": "número", "status": "texto", "extra": "texto"}
+
+
+def test_testar_operacao_inexistente_levanta():
+    config = ConfigConector(operacoes=[{"nome": "a", "url": "https://x", "metodo": "GET"}])
+    with pytest.raises(FalhaInstrumento):
+        Conector().testar_operacao(config, "nao-existe", {})
+
+
+def test_testar_operacao_falha_externa_vira_dado(monkeypatch):
+    _mock_http(monkeypatch, _Resp(500), [])
+    config = ConfigConector(operacoes=[{"nome": "a", "url": "https://x", "metodo": "GET"}])
+    r = Conector().testar_operacao(config, "a", {})
+    assert r["ok"] is False and r["campos_detectados"] == []
+
+
+def test_endpoint_testar_operacao_detecta(cliente, entrar, dados, monkeypatch):
+    """Ponta a ponta: cria um conector (segredo ao cofre), testa uma operação —
+    o segredo é decifrado e injetado, e os campos da resposta são detectados."""
+    entrar(dados["admin"])
+    criado = cliente.post(
+        f"/times/{dados['timeA'].id}/instrumentos",
+        json={
+            "nome": "Meu conector",
+            "tipo": "conector",
+            "configuracao": {
+                "auth_tipo": "bearer",
+                "auth_segredo": "tok-abc",
+                "operacoes": [
+                    {"nome": "listar", "url": "https://api.x.com/itens", "metodo": "GET"}
+                ],
+            },
+        },
+    )
+    assert criado.status_code == 201
+    assert "auth_segredo" not in (criado.json()["configuracao"] or {})  # segredo ao cofre
+    inst_id = criado.json()["id"]
+
+    capturas: list = []
+    _mock_http(monkeypatch, _Resp(200, {"results": [{"id": 1, "nome": "A", "lixo": "x"}]}), capturas)
+    r = cliente.post(
+        f"/instrumentos/{inst_id}/testar-operacao",
+        json={"operacao": "listar", "valores": {}},
+    )
+    assert r.status_code == 200
+    corpo = r.json()
+    assert corpo["ok"] is True
+    assert [c["nome"] for c in corpo["campos_detectados"]] == ["id", "nome", "lixo"]
+    assert capturas[0]["headers"]["Authorization"] == "Bearer tok-abc"  # segredo do cofre injetado
+
+
+def test_endpoint_testar_operacao_so_conector(cliente, entrar, dados):
+    """Um instrumento que não é conector recusa o teste de operação (422)."""
+    entrar(dados["admin"])
+    criado = cliente.post(
+        f"/times/{dados['timeA'].id}/instrumentos",
+        json={"nome": "Busca", "tipo": "busca_web", "configuracao": {}},
+    )
+    inst_id = criado.json()["id"]
+    r = cliente.post(
+        f"/instrumentos/{inst_id}/testar-operacao",
+        json={"operacao": "x", "valores": {}},
+    )
+    assert r.status_code == 422
 
 
 def test_falha_de_http_vira_erro_para_ia(monkeypatch):

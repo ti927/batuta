@@ -21,6 +21,7 @@ from esquemas import (
     InstrumentoCriar,
     InstrumentoEditar,
     InstrumentoLer,
+    TestarOperacaoConector,
     TipoInstrumentoLer,
 )
 from modelos import Automacao, Credencial, Instrumento, Usuario
@@ -224,6 +225,35 @@ def editar(
     sessao.commit()
     sessao.refresh(inst)
     return _ler(sessao, inst)
+
+
+@rotas.post("/instrumentos/{instrumento_id}/testar-operacao")
+def testar_operacao(
+    instrumento_id: uuid.UUID,
+    dados: TestarOperacaoConector,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Construtor: roda UMA operação de um conector com valores de exemplo e detecta
+    os campos da resposta. Reusa a config salva + os segredos do cofre; NÃO grava
+    nada. Só operador+ (quem edita instrumento). A chamada externa é limitada a 15s;
+    uma falha dela volta como dado (`ok=False`), não como erro do Batuta."""
+    inst = instrumento_acessivel(sessao, usuario, instrumento_id, minimo="operador")
+    tipo = encaixe.obter_tipo(inst.tipo)
+    if tipo is None or inst.tipo != "conector":
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Só um conector tem operações para testar.",
+        )
+    # Segredos decifrados só em memória (o cofre nunca volta em claro na config).
+    secretos = segredos.decifrar(sessao, inst.id)
+    config = tipo.Config.model_validate({**(inst.configuracao or {}), **secretos})
+    try:
+        return tipo.testar_operacao(config, dados.operacao, dados.valores)
+    except FalhaInstrumento as e:
+        # Só "operação inexistente" chega aqui (a falha da chamada externa já volta
+        # como dado dentro de testar_operacao) — isso é uso inválido do cliente.
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
 
 
 @rotas.delete(

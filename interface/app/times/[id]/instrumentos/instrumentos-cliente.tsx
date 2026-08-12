@@ -10,6 +10,7 @@ import {
   type Time,
 } from "@/lib/api";
 import { podeOperar } from "@/lib/permissoes";
+import { ConstrutorInstrumento } from "@/components/construtor-instrumento";
 import { DrawerInstrumento } from "@/components/drawer-instrumento";
 import { IconeInstrumento } from "@/components/icone-instrumento";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,9 @@ export function InstrumentosCliente({
   const souOperador = podeOperar(meuPapel);
   // null = fechado; "novo" = criando; instrumento = editando.
   const [aberto, setAberto] = useState<null | "novo" | Instrumento>(null);
+  // Construtor de Instrumento (conector): overlay de tela cheia, separado do
+  // formulário genérico. "novo" = criar; instrumento = editar um conector.
+  const [construtor, setConstrutor] = useState<null | "novo" | Instrumento>(null);
 
   return (
     <main className="mx-auto w-full max-w-[1000px] px-5 py-8 sm:px-8">
@@ -45,9 +49,18 @@ export function InstrumentosCliente({
           </p>
         </div>
         {souOperador && (
-          <Button onClick={() => setAberto("novo")} disabled={tipos.length === 0}>
-            <Plus className="size-4" /> Novo instrumento
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => setConstrutor("novo")}>
+              🌟 Criar instrumento
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setAberto("novo")}
+              disabled={tipos.length === 0}
+            >
+              <Plus className="size-4" /> Instrumento pronto
+            </Button>
+          </div>
         )}
       </div>
 
@@ -64,7 +77,10 @@ export function InstrumentosCliente({
             return (
               <button
                 key={inst.id}
-                onClick={() => souOperador && setAberto(inst)}
+                onClick={() =>
+                  souOperador &&
+                  (inst.tipo === "conector" ? setConstrutor(inst) : setAberto(inst))
+                }
                 disabled={!souOperador}
                 className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
                   souOperador ? "hover:bg-accent/50" : "cursor-default"
@@ -109,6 +125,16 @@ export function InstrumentosCliente({
           meuPapel={meuPapel}
           onFechar={() => setAberto(null)}
           onSalvou={(salvo) => setAberto(salvo)}
+        />
+      )}
+
+      {construtor && (
+        <ConstrutorInstrumento
+          key={construtor === "novo" ? "novo" : construtor.id}
+          time={time}
+          instrumento={construtor === "novo" ? null : construtor}
+          onFechar={() => setConstrutor(null)}
+          onSalvou={(salvo) => setConstrutor(salvo)}
         />
       )}
     </main>

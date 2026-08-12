@@ -308,6 +308,14 @@ class AcionarInstrumento(BaseModel):
     argumentos: dict = Field(default_factory=dict)
 
 
+class TestarOperacaoConector(BaseModel):
+    """Construtor de Instrumento: roda UMA operação de um conector com valores de
+    exemplo e detecta os campos da resposta (para escolher `campos_resposta`)."""
+
+    operacao: str = Field(min_length=1)
+    valores: dict = Field(default_factory=dict)
+
+
 class VincularInstrumento(BaseModel):
     """Pendura um instrumento no cinto de um agente."""
 
