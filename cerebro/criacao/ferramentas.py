@@ -87,6 +87,11 @@ def catalogo_de_instrumentos() -> list[dict]:
     pôr portão humano antes na cadeia)."""
     catalogo: list[dict] = []
     for tipo in encaixe.tipos_disponiveis():
+        # Tipos ocultos no catálogo (ex.: o conector) têm ferramenta PRÓPRIA de
+        # criação (montar_conector) — não entram no catálogo genérico do
+        # configurar_instrumento, para não dar sinal misto à IA.
+        if getattr(tipo, "oculto_no_catalogo", False):
+            continue
         esquema = tipo.Config.model_json_schema()
         obrigatorios = set(esquema.get("required", []))
         secretos = set(tipo.campos_secretos)
@@ -340,6 +345,8 @@ MENSAGENS_CRIADORA: dict[str, str] = {
     "remover_agente": "Removendo um agente…",
     "configurar_instrumento": "Configurando um instrumento…",
     "editar_instrumento": "Ajustando um instrumento…",
+    "montar_conector": "Montando o conector…",
+    "testar_operacao_conector": "Testando a operação do conector…",
     "encaixar_instrumento": "Encaixando o instrumento no agente…",
     "desencaixar_instrumento": "Removendo o instrumento do agente…",
     "criar_automacao": "Criando a automação…",
@@ -467,7 +474,9 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         listar_tipos_instrumento para ver os CAMPOS). Em `configuracao` passe os
         campos PÚBLICOS que você coletou do consultor (ex.: WordPress → site_url,
         usuario). NÃO passe segredos (senhas, tokens): ficam pendentes para o cofre.
-        Devolve o `id` (para o cinto) e os segredos pendentes."""
+        Para uma INTEGRAÇÃO com uma API (um conjunto de chamadas GET/POST de um mesmo
+        serviço), use montar_conector — não este. Devolve o `id` (para o cinto) e os
+        segredos pendentes."""
         time = _exigir_time()
         if time is None:
             return _erro("Defina o time primeiro, com definir_time.")
@@ -496,6 +505,110 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         except ConflitoDominio as e:
             return _erro(str(e))
         return _ok(f"Instrumento '{inst.nome}' atualizado.")
+
+    def montar_conector(conector: dict, conector_id: str | None = None) -> str:
+        """Cria (ou edita, se passar `conector_id`) um CONECTOR — um instrumento que
+        reúne VÁRIAS operações de uma mesma API, cada uma virando uma ação no cinto do
+        agente (ex.: "Busca Projetos", "Cria Reembolso"). É como dar ao time uma
+        integração nova SEM código. Em dúvida do formato — sobretudo para APIs do
+        Bubble —, consulte a Central antes (consultar_conhecimento "construir conector").
+
+        Formato de `conector`:
+        {"nome": "Gestão Lure", "descricao": "para que serve (referência humana)",
+         "categoria": "opcional (só agrupa)",
+         "auth_tipo": "nenhuma|bearer|cabecalho|query",
+         "auth_nome": "nome do cabeçalho/parâmetro (só p/ 'cabecalho'/'query')",
+         "operacoes": [
+           {"nome": "Busca Projetos", "descricao": "o que faz / quando o agente usa",
+            "metodo": "GET|POST|PATCH|PUT|DELETE",
+            "url": "https://.../obj/Projeto  (use [colchete] p/ trecho variável)",
+            "campos": [
+              {"nome": "constraints", "papel": "ia|fixo", "destino": "query|corpo|url",
+               "valor": "(só quando papel='fixo')",
+               "descricao": "(ajuda p/ a IA, quando papel='ia')", "obrigatorio": true}
+            ],
+            "campos_resposta": ["_id", "cpo.NomeCliente"]}
+         ]}
+
+        Regras que importam:
+        - VOCÊ NÃO PLUGA O TOKEN. Só declara `auth_tipo`/`auth_nome`; o segredo fica
+          PENDENTE e o CONSULTOR o cola no cofre. Nunca ponha o token aqui.
+        - `papel`: "ia" = a IA preenche na hora de acionar (vira argumento — dê uma
+          `descricao` boa); "fixo" = valor constante que VOCÊ define em `valor`.
+        - `destino`: "query" (na URL depois do ?), "corpo" (JSON, p/ POST/PATCH/PUT)
+          ou "url" (substitui [colchete] na URL).
+        - `campos_resposta`: liste só os campos que o agente usa (nome EXATO da API) —
+          corta MUITO custo em buscas que voltam listas. Vazio = resposta inteira.
+        - Se QUALQUER operação escreve (POST/PUT/PATCH/DELETE), o conector inteiro passa
+          a exigir portão: ponha "gate" no nó do agente que vem ANTES, na cadeia.
+        Depois de montar, TESTE cada operação com testar_operacao_conector — confere se
+        funciona e revela os campos da resposta (para escolher `campos_resposta`)."""
+        time = _exigir_time()
+        if time is None:
+            return _erro("Defina o time primeiro, com definir_time.")
+        dados = {k: v for k, v in (conector or {}).items() if k != "nome"}
+        nome = str((conector or {}).get("nome") or "").strip()
+        dados.pop("auth_segredo", None)  # a IA nunca pluga o token (fica pendente no cofre)
+        auth = str(dados.get("auth_tipo") or "nenhuma")
+        lembrete = (
+            "Peça ao consultor para colar o token no cofre (você não pluga segredo); "
+            "depois teste as operações com testar_operacao_conector."
+            if auth != "nenhuma"
+            else "Sem autenticação. Teste as operações com testar_operacao_conector."
+        )
+        if conector_id:
+            inst = _instrumento(conector_id)
+            if inst is None or inst.tipo != "conector":
+                return _erro(f"Não há conector com id {conector_id} neste time.")
+            try:
+                servicos.editar_instrumento(
+                    sess, inst, nome=(nome or None), configuracao=dados, usuario=ctx.usuario
+                )
+            except ConflitoDominio as e:
+                return _erro(str(e))
+            return _ok(f"Conector '{inst.nome}' atualizado.", id=str(inst.id), lembrete=lembrete)
+        if not nome:
+            return _erro("O conector precisa de um nome (campo 'nome' no objeto).")
+        try:
+            inst, pendentes = servicos.configurar_instrumento(
+                sess, time, nome=nome, tipo="conector", configuracao=dados, usuario=ctx.usuario
+            )
+        except ConflitoDominio as e:
+            return _erro(str(e))
+        # Sem autenticação, `auth_segredo` não é um pendente de verdade (o cálculo
+        # estático dos campos secretos não conhece o auth_tipo) — não confunda a IA.
+        if auth == "nenhuma":
+            pendentes = [p for p in pendentes if p != "auth_segredo"]
+        return _ok(
+            f"Conector '{nome}' criado.", id=str(inst.id),
+            segredos_pendentes=pendentes, lembrete=lembrete,
+        )
+
+    def testar_operacao_conector(
+        conector_id: str, operacao: str, valores: dict | None = None
+    ) -> str:
+        """Testa UMA operação de um conector com valores de exemplo — roda a chamada
+        REAL e devolve a resposta + os CAMPOS detectados (para você escolher
+        `campos_resposta`). É como você confere que a operação funciona e descobre o que
+        a API devolve, sem envolver o consultor. `operacao` = o nome da operação;
+        `valores` = {nome_do_campo: valor} para os campos de papel 'ia' (ex.:
+        {"constraints": "[{...}]"}). Se a API pede token e ele ainda não foi colado no
+        cofre, a resposta volta com ok=false (autenticação) — nesse caso, peça o token
+        ao consultor e teste de novo. DICA: se uma busca devolve o lote inteiro sem
+        filtrar, confira o NOME do campo do filtro (ex.: Bubble usa 'constraints')."""
+        inst = _instrumento(conector_id)
+        if inst is None or inst.tipo != "conector":
+            return _erro(f"Não há conector com id {conector_id} neste time.")
+        from instrumentos.base import FalhaInstrumento, obter_tipo
+
+        tipo = obter_tipo("conector")
+        secretos = segredos.decifrar(sess, inst.id)
+        config = tipo.Config.model_validate({**(inst.configuracao or {}), **secretos})
+        try:
+            resultado = tipo.testar_operacao(config, operacao, valores or {})
+        except FalhaInstrumento as e:
+            return _erro(str(e))
+        return _ok("Teste executado.", resultado=resultado)
 
     def encaixar_instrumento(agente_id: str, instrumento_id: str) -> str:
         """Pendura um instrumento no cinto de um agente (ambos pelo `id`)."""
@@ -927,7 +1040,8 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
 
     funcoes = [
         definir_time, adicionar_agente, editar_agente, remover_agente,
-        configurar_instrumento, editar_instrumento, encaixar_instrumento,
+        configurar_instrumento, editar_instrumento, montar_conector,
+        testar_operacao_conector, encaixar_instrumento,
         desencaixar_instrumento, criar_automacao, renomear_automacao,
         montar_cadeia, definir_gatilho, estimar_custo,
         ativar_time, desativar_time, ver_time, ver_agente, ver_automacao,

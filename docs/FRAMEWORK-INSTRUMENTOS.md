@@ -1,7 +1,8 @@
 # Framework de Instrumentos — Plano Completo (Construtor + Central + IA criadora + Marketplace)
 
-> **Status:** ▶️ **EM EXECUÇÃO (sinal dado 2026-08-12).** **Fatias 0–2 ✅ NO AR** — motor do conector (`3163721`) + o
-> **Construtor de Instrumento** (`c7db8ab`, tela do mockup validado + backend "testar e detectar"); 816 testes verdes,
+> **Status:** ▶️ **EM EXECUÇÃO (sinal dado 2026-08-12).** **Fatias 0–2 + 4 ✅ NO AR** — motor do conector (`3163721`)
+> + o **Construtor de Instrumento** (`c7db8ab`, tela do mockup validado + backend "testar e detectar") + a **IA
+> criadora monta o conector** (Fatia 4: `montar_conector`/`testar_operacao_conector` + capítulo da Central; ver §6);
 > tsc/eslint/build limpos; ver §11. **Próxima: Fatia 2.5** (biblioteca da org — escopo org-wide) ou **Fatia 3** (importar OpenAPI).
 > Mockup validado (2026-08-12, artefato `435b0bdf`). **Sequência:** convive com a **prioridade nº 1**
 > (Unificação de Estado, `docs/UNIFICACAO-ESTADO.md`); a *semente barata* (o tipo "conector" + o construtor)
@@ -229,32 +230,43 @@ instrumentos**: o segredo fica **no próprio instrumento**. Consequências:
 
 ---
 
-## 6. A IA criadora monta o instrumento
+## 6. A IA criadora monta o instrumento — ✅ NO AR (Fatia 4, commit `<pendente>`, 2026-08-13)
 
-Hoje a criadora monta agentes/automações pela **porta única** dos serviços de domínio. Adicionar "montar um
-conector" é a **mesma forma** — e é **seguro**, porque a criadora só preenche **dado declarativo** (não código).
+A criadora monta agentes/automações pela **porta única** dos serviços de domínio. Montar um conector é a
+**mesma forma** — e é **seguro**, porque a criadora só preenche **dado declarativo** (não código).
 
-- **Novas ferramentas da criadora:** `criar_conector`, `adicionar_operacao`, `definir_auth` (a IA preenche a
-  `Config` do conector a partir da conversa).
-- **Fluxo:** *"quero um instrumento que publica no meu Instagram"* → a criadora **consulta a Central** (§7) para
-  saber como montar, propõe as operações (Publicar foto / Ler comentários), monta o conector.
-- **Regra de segurança (já existe):** a criadora **NÃO pluga o segredo** — deixa "pendente"; **o humano cola o
-  token** no cofre. Ver [[project-ia-criadora-credenciais-nomeadas]] (`tipos_credencial_aceitos` +
-  `credencial_id`, referência, nunca toca o segredo).
+**O que a Fatia 4 entregou:**
+- **`montar_conector(conector, conector_id?)`** — cria (sem `conector_id`) ou edita (com ele) o conector com a
+  **spec inteira** (identidade + auth + operações), no mesmo estilo do `montar_cadeia` (dict + docstring que
+  ensina o formato). Reusa a porta validada (`servicos.configurar_instrumento`/`editar_instrumento`), que já
+  separa o segredo pro cofre. **Nunca recebe o token** — descarta `auth_segredo` se vier e o deixa pendente.
+- **`testar_operacao_conector(conector_id, operacao, valores?)`** — a IA **testa e detecta** sozinha (reusa
+  `Conector.testar_operacao` + o cofre via `decifrar`): roda a chamada real, devolve a resposta + os campos
+  detectados, para escolher `campos_resposta` e verificar (se a busca voltar o lote inteiro, ela percebe). É a
+  fricção manual que o maestro sentiu, agora conversada.
+- **Catálogo:** `catalogo_de_instrumentos()` passou a respeitar `oculto_no_catalogo` — o conector saiu do
+  catálogo genérico (do `configurar_instrumento`) para não dar **sinal misto**: a criadora o monta pela
+  ferramenta própria. O `configurar_instrumento` também aponta para o `montar_conector`.
+- **Regra de segurança (já existia):** a criadora **NÃO pluga o segredo** — deixa "pendente"; **o humano cola o
+  token** no cofre. Ver [[project-ia-criadora-credenciais-nomeadas]].
 - **Parede:** um conector com operação irreversível só ATIVA com portão antes — a criadora já respeita a parede.
+- **Fluxo:** *"quero um instrumento que busca meus projetos no Bubble"* → a criadora **consulta a Central** (§7),
+  monta o conector, pede o token ao consultor, **testa e detecta** os campos, refina o `campos_resposta`.
+- **Verificação:** `cerebro/testes/test_criacao_conector.py` (10 testes) — criar/editar, não-pluga-token,
+  sem-auth-sem-pendente, testar+detectar (união de campos esparsos do Bubble), só-conector, Central encontrável.
 
 ---
 
 ## 7. Central de Conhecimento
 
-Novos capítulos (auto-descobertos por `rglob`, `cerebro/central/`):
-- **`instrumentos/construir-instrumento.md`** — o que é um instrumento personalizado, o construtor, os papéis de
-  campo (IA/Fixo/Segredo), auth por menu, `[colchete]`, testar-e-detectar, a parede por operação.
-- **`instrumentos/instrumento-pessoal-vs-saas.md`** — honesto: usar **o próprio app** (Meta/Google) para a
-  **própria conta** evita App Review; o preço é você fazer a configuração e cuidar do token. Quando vale o SaaS.
-
-Atualizar: `instrumentos/chamar-rest.md` (aponta para o conector multi-operação), `INDICE.md`. **A criadora
-consulta esses capítulos** para montar conectores (a Central é a base de conhecimento dela).
+Capítulos (auto-descobertos por `rglob`, `cerebro/central/`):
+- ✅ **`instrumentos/construir-conector.md`** (Fatia 4) — o que é um conector, o formato do objeto (operações,
+  papéis IA/Fixo, destino query/corpo/url), **como o Bubble faz busca (o `constraints` como array JSON — o erro
+  do `contraints` que quebrou o teste ao vivo)**, POST/PATCH (não PUT), `campos_resposta` (custo), testar-e-detectar,
+  a parede por escrita, e as duas ferramentas (`montar_conector`/`testar_operacao_conector`). **A criadora consulta
+  este capítulo** (via `consultar_conhecimento`) para montar conectores certos.
+- 📨 *Futuro:* `instrumentos/instrumento-pessoal-vs-saas.md` — honesto: usar **o próprio app** (Meta/Google) para a
+  **própria conta** evita App Review; o preço é cuidar do token. Quando vale o SaaS.
 
 ---
 
