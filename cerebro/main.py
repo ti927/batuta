@@ -1,5 +1,6 @@
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -73,6 +74,12 @@ app.add_middleware(
 app.add_middleware(MiddlewareLog)
 
 
+# Momento em que ESTE processo subiu (UTC). Na Railway, um deploy novo = contêiner
+# novo = novo boot — então serve de "no ar desde" para o selo de versão da barra
+# lateral (a interface lê daqui, sem precisar do painel do Railway).
+INICIADO_EM = datetime.now(timezone.utc).isoformat()
+
+
 @app.get("/saude")
 def saude():
     # `versao` = commit no ar (a Railway injeta RAILWAY_GIT_COMMIT_SHA). Serve para
@@ -80,6 +87,7 @@ def saude():
     return {
         "mensagem": "Batuta cérebro no ar",
         "versao": os.environ.get("RAILWAY_GIT_COMMIT_SHA", "dev"),
+        "iniciado_em": INICIADO_EM,
     }
 
 

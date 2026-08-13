@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ChevronDown,
   Coins,
@@ -25,6 +25,7 @@ import { criarClienteNavegador } from "@/lib/supabase/cliente-navegador";
 import { gravarOrgAtiva } from "@/lib/org-ativa";
 import { podeAdmin } from "@/lib/permissoes";
 import {
+  URL_CEREBRO,
   type Organizacao,
   type PapelAcesso,
   type Time,
@@ -92,11 +93,14 @@ export function Sidebar({
 
   const corpo = (
     <>
-      {/* Branding */}
-      <Link href="/" className="mb-1 flex items-center gap-2 px-1.5 pt-1">
-        <SimboloBatuta className="size-6" />
-        <span className="font-heading text-lg font-semibold text-white">Batuta</span>
-      </Link>
+      {/* Branding + selo de versão (o maestro vê qual código está no ar sem ir ao Railway) */}
+      <div className="mb-1 flex items-center justify-between gap-2 px-1.5 pt-1">
+        <Link href="/" className="flex items-center gap-2">
+          <SimboloBatuta className="size-6" />
+          <span className="font-heading text-lg font-semibold text-white">Batuta</span>
+        </Link>
+        <VersaoBadge />
+      </div>
 
       {/* Criar com a IA */}
       <Link
@@ -348,6 +352,46 @@ export function Sidebar({
         {corpo}
       </aside>
     </>
+  );
+}
+
+// Selo de versão: lê o /saude do cérebro (público, sem token) e mostra o commit no ar
+// + desde quando — para o maestro saber a versão sem abrir o Railway. É decorativo: se
+// a leitura falhar (rede/cérebro fora), não mostra nada (nunca um erro na barra).
+function VersaoBadge() {
+  const [info, setInfo] = useState<{ versao: string; data: string } | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    fetch(`${URL_CEREBRO}/saude`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!vivo || !d) return;
+        const versao = String(d.versao ?? "").slice(0, 7) || "dev";
+        const data = d.iniciado_em
+          ? new Date(d.iniciado_em).toLocaleDateString("pt-BR", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            })
+          : "";
+        setInfo({ versao, data });
+      })
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  if (!info) return null;
+  return (
+    <div
+      className="flex flex-col items-end leading-tight text-[10px] text-[#8A86A6]"
+      title={`Versão ${info.versao}${info.data ? ` · no ar desde ${info.data}` : ""}`}
+    >
+      <span className="font-mono">{info.versao}</span>
+      {info.data && <span>{info.data}</span>}
+    </div>
   );
 }
 
