@@ -230,7 +230,7 @@ instrumentos**: o segredo fica **no próprio instrumento**. Consequências:
 
 ---
 
-## 6. A IA criadora monta o instrumento — ✅ NO AR (Fatia 4, commit `<pendente>`, 2026-08-13)
+## 6. A IA criadora monta o instrumento — ✅ NO AR (Fatia 4, commit `36d6cca`, 2026-08-13)
 
 A criadora monta agentes/automações pela **porta única** dos serviços de domínio. Montar um conector é a
 **mesma forma** — e é **seguro**, porque a criadora só preenche **dado declarativo** (não código).
