@@ -359,7 +359,11 @@ export function Sidebar({
 // + desde quando — para o maestro saber a versão sem abrir o Railway. É decorativo: se
 // a leitura falhar (rede/cérebro fora), não mostra nada (nunca um erro na barra).
 function VersaoBadge() {
-  const [info, setInfo] = useState<{ versao: string; data: string } | null>(null);
+  const [info, setInfo] = useState<{
+    versao: string;
+    quando: string;
+    titulo: string;
+  } | null>(null);
 
   useEffect(() => {
     let vivo = true;
@@ -368,14 +372,22 @@ function VersaoBadge() {
       .then((d) => {
         if (!vivo || !d) return;
         const versao = String(d.versao ?? "").slice(0, 7) || "dev";
-        const data = d.iniciado_em
-          ? new Date(d.iniciado_em).toLocaleDateString("pt-BR", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-            })
-          : "";
-        setInfo({ versao, data });
+        let quando = "";
+        let titulo = `Versão ${versao}`;
+        if (d.iniciado_em) {
+          // UTC guardado no cérebro → renderizado no fuso do navegador (o do maestro).
+          const dt = new Date(d.iniciado_em);
+          const data = dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+          const hora = dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+          const dataCompleta = dt.toLocaleDateString("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          });
+          quando = `${data} ${hora}`; // vários deploys/dia → a hora distingue
+          titulo = `Versão ${versao} · no ar desde ${dataCompleta} ${hora}`;
+        }
+        setInfo({ versao, quando, titulo });
       })
       .catch(() => {});
     return () => {
@@ -387,10 +399,10 @@ function VersaoBadge() {
   return (
     <div
       className="flex flex-col items-end leading-tight text-[10px] text-[#8A86A6]"
-      title={`Versão ${info.versao}${info.data ? ` · no ar desde ${info.data}` : ""}`}
+      title={info.titulo}
     >
       <span className="font-mono">{info.versao}</span>
-      {info.data && <span>{info.data}</span>}
+      {info.quando && <span>{info.quando}</span>}
     </div>
   );
 }
