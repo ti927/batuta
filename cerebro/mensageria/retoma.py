@@ -97,6 +97,14 @@ def avancar_apos_gate(
         return execucao
 
     execucao.estado = "em_andamento"
+    # Reinicia o relógio de inatividade do sweeper. A execução pode ter ficado HORAS em
+    # `aguardando_humano` e só AGORA volta a rodar os passos pós-portão. `iniciada_em` é o
+    # piso do heartbeat em `fila.recuperar_execucoes_presas`: sem reiniciá-lo aqui, o sweeper
+    # mede o tempo desde ANTES da espera e mata a execução no instante da retomada. O caminho
+    # por CANAL (Telegram) roda INLINE, sem passar pelo `_reivindicar` da fila (que já
+    # reinicia no worker) — e este é o ponto ÚNICO por onde toda retomada entra em
+    # `em_andamento` (mecânico e conversacional, canal e tela). FONTE ÚNICA com o sweeper.
+    execucao.iniciada_em = datetime.now(timezone.utc)
     sessao.commit()
     try:
         with usar_chaves(chaves):

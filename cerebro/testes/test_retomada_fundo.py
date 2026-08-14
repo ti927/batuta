@@ -10,6 +10,8 @@ Agora a rota `responder` ENFILEIRA (guarda a resposta em `retomada_resposta`, vo
 cobrem a rota (enfileira, não roda inline; guardas 409/422) e o worker (avança o fluxo).
 `executar_agente` é mockado — sem LLM."""
 
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import select
 
 from mensageria import retoma
@@ -109,6 +111,77 @@ def test_responder_422_sem_passo_de_pausa(cliente, entrar, dados, sessao):
 
 
 # ─────────────────── o WORKER roda a retomada e avança o fluxo ───────────────────
+
+
+def test_retomada_inline_sobrevive_ao_sweeper_concorrente(sessao, dados, monkeypatch):
+    """Regressão do bug real (execução f5de8d21): retomada INLINE de um portão (o
+    caminho do CANAL/Telegram, que NÃO passa pela fila) após uma longa espera. Ao
+    avançar para `em_andamento`, `iniciada_em` é reiniciado — senão o sweeper de presas,
+    rodando concorrente durante o próximo passo, mata a execução porque o último passo
+    (o do portão) é anterior à espera. Simula o sweeper DENTRO do passo pós-portão."""
+    import fila
+
+    # Cadeia: portão → publicador (nó NÃO-fim, para forçar o em_andamento) → fim.
+    ag = Agente(time_id=dados["timeA"].id, nome="Revisor", papel="agente")
+    pub = Agente(time_id=dados["timeA"].id, nome="Publicador", papel="agente")
+    sessao.add_all([ag, pub])
+    sessao.flush()
+    cadeia = {
+        "inicial": NO_GATE,
+        "nos": [
+            {"id": NO_GATE, "tipo": "agente", "ref": str(ag.id), "gate": True, "saidas": [
+                {"rotulo": "aprovado", "quando": "ok", "destino": "pub"},
+                {"rotulo": "reprovado", "quando": "nao", "destino": "fim"}]},
+            {"id": "pub", "tipo": "agente", "ref": str(pub.id),
+             "saidas": [{"rotulo": "0", "quando": "", "destino": "fim"}]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    auto = Automacao(
+        time_id=dados["timeA"].id, nome="Fluxo", tipo_gatilho="manual",
+        configuracao_gatilho={}, cadeia=cadeia, ativa=False, configuracao={},
+    )
+    sessao.add(auto)
+    sessao.flush()
+
+    velho = datetime.now(timezone.utc) - timedelta(minutes=60)  # ~1h de espera no portão
+    execucao = Execucao(
+        automacao_id=auto.id, estado="aguardando_humano", entrada={"texto": "x"},
+        iniciada_em=velho,
+    )
+    sessao.add(execucao)
+    sessao.flush()
+    sessao.add(PassoExecucao(
+        execucao_id=execucao.id, ordem=1, agente_id=ag.id, no_id=NO_GATE,
+        entrada={"texto": "rascunho"},
+        saida={"texto": "ARTIGO", "instrumentos_acionados": [], "saida_escolhida": None, "uso": []},
+        estado="concluido", finalizado_em=velho,  # passo do portão: anterior à espera
+    ))
+    sessao.flush()
+
+    # Caminho MECÂNICO (permitir_conversa=False, como o CANAL/Telegram): a resposta
+    # escolhe a saída SEM re-rodar o agente — logo NÃO cria um passo novo antes de
+    # avançar, então o único passo (o do portão) segue antigo. É o caso vulnerável.
+    monkeypatch.setattr(retoma, "_escolher_saida", lambda resposta, saidas: (saidas[0], None))
+    # O passo pós-portão: DENTRO dele, o sweeper roda concorrente. Com a correção, a
+    # execução (em_andamento, iniciada_em fresco) sobrevive; sem ela, seria morta aqui.
+    visto = {}
+
+    def cadeia_stub(*a, **k):
+        fila.recuperar_execucoes_presas(sessao)
+        sessao.refresh(execucao)
+        visto["estado_durante"] = execucao.estado
+        return {"estado": "concluida", "resultado": "publicado"}
+
+    monkeypatch.setattr(retoma, "executar_cadeia", cadeia_stub)
+
+    retoma.retomar_execucao(
+        sessao, execucao, "aprovado", chaves={}, origens={}, permitir_conversa=False
+    )
+
+    assert visto["estado_durante"] == "em_andamento"  # NÃO foi morta pelo sweeper
+    sessao.refresh(execucao)
+    assert execucao.estado == "concluida"
 
 
 def test_rodar_retomada_avanca_o_fluxo_e_consome_a_resposta(sessao, dados, monkeypatch):
