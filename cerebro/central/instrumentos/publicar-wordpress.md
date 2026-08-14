@@ -2,8 +2,8 @@
 titulo: "Instrumento — WordPress: publicar"
 area: "instrumentos"
 slug: "publicar-wordpress"
-tags: ["wordpress", "publicar", "blog", "artigo", "post", "imagem-destacada", "instrumento"]
-revisado_em: "2026-07-18"
+tags: ["wordpress", "publicar", "blog", "artigo", "post", "imagem-destacada", "413", "upload", "instrumento"]
+revisado_em: "2026-08-14"
 fontes: ["cerebro/instrumentos/wordpress.py"]
 ---
 
@@ -38,6 +38,10 @@ no ar). A imagem destacada pode vir de um passo de [[instrumentos/gerar-imagem]]
 - **Categorias inexistentes são ignoradas**; **tags** são criadas se ainda não existirem.
 - A **imagem destacada** é subida antes e ligada ao post; se você pediu imagem e o upload falha, não
   publica sem ela (a falha sobe clara).
+- **Imagem pesada → erro 413 "Payload Too Large".** O servidor tem um teto de tamanho de upload (padrão
+  do nginx ~1 MB) e um **PNG** de 1024×1024 (~1,3 MB) o estoura → a publicação falha. Não é resolução nem
+  servidor cheio, é **peso**. Solução simples: no instrumento [[instrumentos/gerar-imagem]], escolha
+  **Formato = JPEG** (mesma resolução, ~150–300 KB). Alternativa: aumentar o limite de upload no servidor.
 
 ## Para a IA
 Parâmetros no catálogo (`publicar_wordpress`): `titulo`, `conteudo` (texto/HTML), `tags`, `resumo`,
