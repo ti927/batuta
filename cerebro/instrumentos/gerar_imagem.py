@@ -24,6 +24,7 @@ chave recusada (401/403), configuração ausente e parâmetro inválido (4xx) n�
 
 import base64
 import uuid
+from typing import Literal
 
 import httpx
 from pydantic import BaseModel, Field, model_validator
@@ -123,6 +124,14 @@ class ConfigImagem(BaseModel):
         title="Qualidade",
         description="low = rascunho rápido e barato; high = melhor acabamento (mais caro).",
         json_schema_extra={"enum": list(_QUALIDADES_GPT)},
+    )
+    formato: Literal["png", "jpeg"] = Field(
+        default="png",
+        title="Formato do arquivo",
+        description=(
+            "png = sem perdas, mais pesado; jpeg = bem mais leve na MESMA resolução "
+            "(evita a recusa de upload por tamanho, ex.: o erro 413 do WordPress)."
+        ),
     )
     chave_api: str = Field(
         default="",
@@ -265,6 +274,12 @@ class GerarImagem(TipoInstrumento):
             "quality": config.qualidade,
             "n": 1,
         }
+        # Formato de saída: a própria OpenAI devolve o b64 já no formato pedido
+        # (`output_format`). Só enviamos o parâmetro para JPEG — PNG é o padrão da
+        # família gpt-image, então o caminho PNG segue byte-idêntico ao de antes.
+        ext, mime = (".jpg", "image/jpeg") if config.formato == "jpeg" else (".png", "image/png")
+        if config.formato == "jpeg":
+            corpo["output_format"] = "jpeg"
         # VIGIA: registra o que SERÁ transmitido. Este instrumento é TEXTO→IMAGEM —
         # NÃO envia imagem de entrada (não há anexo); o diagnóstico deixa isso claro.
         diagnostico_imagem.registrar(
@@ -304,8 +319,8 @@ class GerarImagem(TipoInstrumento):
 
         dados = (resposta.json().get("data") or [{}])[0]
         conteudo = _imagem_bytes(dados)
-        nome = f"{uuid.uuid4().hex}.png"
-        url = arquivos.salvar(nome, conteudo, "image/png")
+        nome = f"{uuid.uuid4().hex}{ext}"
+        url = arquivos.salvar(nome, conteudo, mime)
         return {"ok": True, "arquivo": nome, "url": url}
 
 

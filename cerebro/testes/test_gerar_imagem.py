@@ -174,6 +174,35 @@ def test_payload_tem_qualidade_e_nao_tem_response_format(monkeypatch):
     assert "response_format" not in corpo  # gpt-image sempre devolve base64
 
 
+def test_formato_padrao_png_nao_envia_output_format(monkeypatch):
+    # PNG é o padrão: caminho intocado, sem `output_format` (byte-idêntico ao de antes).
+    capt: dict = {}
+    _mock_post(monkeypatch, _resp_ok(), capt)
+    GerarImagem().executar(ConfigImagem(chave_api="sk-fake"), ArgsImagem(prompt="um gato"))
+    assert "output_format" not in capt["json"]
+
+
+def test_formato_jpeg_pede_output_format_e_salva_jpg(monkeypatch):
+    # JPEG: pede o formato à OpenAI (seletor da API) e salva o arquivo como .jpg.
+    monkeypatch.setattr("arquivos.storage_configurado", lambda: False)
+    capt: dict = {}
+    _mock_post(
+        monkeypatch,
+        _Resp(200, {"data": [{"b64_json": base64.b64encode(b"JPEGDATA").decode()}]}),
+        capt,
+    )
+    r = GerarImagem().executar(
+        ConfigImagem(chave_api="sk-fake", formato="jpeg"), ArgsImagem(prompt="um gato")
+    )
+    assert capt["json"]["output_format"] == "jpeg"
+    assert r["arquivo"].endswith(".jpg")
+    caminho = DIRETORIO_ARQUIVOS / r["arquivo"]
+    try:
+        assert caminho.exists() and caminho.read_bytes() == b"JPEGDATA"
+    finally:
+        caminho.unlink(missing_ok=True)
+
+
 def test_gera_salva_arquivo_e_devolve_link(monkeypatch):
     # Sem Storage (caminho de fallback de dev): o arquivo cai no disco local. O
     # caminho do Supabase Storage é coberto em test_arquivos.
