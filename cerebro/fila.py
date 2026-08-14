@@ -145,10 +145,14 @@ def recuperar_execucoes_presas(sessao) -> int:
     worker travou SEM o processo reiniciar — o boot (`_recuperar_orfas`) não a
     alcança. "Travada" = sem progresso (heartbeat) além de `TETO_INATIVIDADE_EXEC_MIN`.
 
-    O heartbeat é o instante MAIS RECENTE entre o início (`iniciada_em`) e o último
-    passo concluído — assim uma cadeia longa que vai concluindo passos NUNCA é morta;
-    só morre o que ficou pendurado dentro de um passo além do teto. Marca `falhou`
-    de forma visível. Devolve quantas recuperou."""
+    O heartbeat é o instante MAIS RECENTE entre o início desta reivindicação
+    (`iniciada_em`) e o último passo concluído — assim uma cadeia longa que vai
+    concluindo passos NUNCA é morta; só morre o que ficou pendurado dentro de um passo
+    além do teto. `iniciada_em` é reescrito a CADA reivindicação, INCLUSIVE na RETOMADA
+    de um portão: por isso uma execução que ficou horas `aguardando_humano` e acabou de
+    ser aprovada NÃO pode morrer no instante da retomada só porque o último passo
+    (anterior à espera) é antigo. Marca `falhou` de forma visível. Devolve quantas
+    recuperou."""
     corte = datetime.now(timezone.utc) - timedelta(minutes=TETO_INATIVIDADE_EXEC_MIN)
     ultimo_passo = (
         select(func.max(PassoExecucao.finalizado_em))
@@ -156,12 +160,17 @@ def recuperar_execucoes_presas(sessao) -> int:
         .correlate(Execucao)
         .scalar_subquery()
     )
-    heartbeat = func.coalesce(ultimo_passo, Execucao.iniciada_em)
+    # "Presa" só quando OS DOIS sinais de progresso são antigos: o início desta
+    # reivindicação E o último passo concluído. Como a retomada de um portão reescreve
+    # `iniciada_em` para AGORA, a condição `iniciada_em < corte` fica falsa e a execução
+    # recém-retomada sobrevive — antes, o `coalesce(último_passo, …)` preferia o passo
+    # anterior à espera e matava a execução no exato instante em que o humano aprovava.
     presas = sessao.scalars(
         select(Execucao).where(
             Execucao.estado == "em_andamento",
-            heartbeat.is_not(None),
-            heartbeat < corte,
+            Execucao.iniciada_em.is_not(None),
+            Execucao.iniciada_em < corte,
+            func.coalesce(ultimo_passo, Execucao.iniciada_em) < corte,
         )
     ).all()
     agora = datetime.now(timezone.utc)

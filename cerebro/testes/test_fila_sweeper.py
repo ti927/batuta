@@ -96,6 +96,24 @@ def test_travada_dentro_de_um_passo_e_recuperada(dados, sessao):
     assert ex.estado == "falhou"
 
 
+def test_retomada_de_portao_nao_e_morta(dados, sessao):
+    # Regressão do bug real (execução f5de8d21): a execução ficou ~1h em
+    # `aguardando_humano` (último passo há 57 min); ao ser aprovada, o worker a
+    # reivindica de novo (iniciada_em = AGORA) e ela volta a `em_andamento`. O sweeper
+    # NÃO pode matá-la no instante da retomada só porque o passo anterior à espera é
+    # antigo — o iniciada_em fresco conta como progresso.
+    ex = _execucao(
+        sessao,
+        dados["timeA"].id,
+        "em_andamento",
+        _agora() - timedelta(seconds=5),  # acabou de ser reivindicada (retomada)
+        passos_fim=[_agora() - timedelta(minutes=57)],  # passo anterior à espera
+    )
+    fila.recuperar_execucoes_presas(sessao)
+    sessao.refresh(ex)
+    assert ex.estado == "em_andamento"
+
+
 def test_outros_estados_intactos(dados, sessao):
     velho = _agora() - timedelta(minutes=60)
     casos = {
