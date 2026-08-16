@@ -155,6 +155,14 @@ def construir_modelo(
         # `temperature`; só enviamos quando o modelo aceita (GPT-4o/4.1).
         if _envia_temperatura(modelo):
             parametros["temperature"] = temperatura
+        # A família GPT-5.6 é de raciocínio e, na /v1/chat/completions (o endpoint
+        # do motor), NÃO combina ferramentas de função com o raciocínio ligado:
+        # a OpenAI responde 400 pedindo `reasoning_effort='none'` (ou a Responses
+        # API). Como TODO agente do Batuta usa instrumentos (ferramentas), fixamos
+        # 'none' — também deixa o modelo mais rápido/barato, o papel do Luna. Só
+        # para gpt-5* (o GPT-4o não conhece esse parâmetro).
+        if modelo.lower().startswith("gpt-5"):
+            parametros["reasoning_effort"] = "none"
         return ChatOpenAI(**parametros)
 
     if provedor == PROVEDOR_GOOGLE:

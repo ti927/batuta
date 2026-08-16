@@ -129,6 +129,23 @@ def test_construir_modelo_luna_nao_passa_temperature():
     assert getattr(cliente, "temperature", None) is None
 
 
+def test_construir_modelo_gpt_5_6_usa_reasoning_effort_none():
+    # A família GPT-5.6 (raciocínio) na /v1/chat/completions não combina ferramentas
+    # com raciocínio ligado — a OpenAI exige reasoning_effort='none'. O GPT-4o não
+    # conhece esse parâmetro, então NÃO deve recebê-lo.
+    from orquestracao import llm
+
+    with llm.usar_chaves({"openai": "sk-test-openai"}):
+        luna = llm.construir_modelo("gpt-5.6-luna")
+        sol = llm.construir_modelo("gpt-5.6-sol")
+        quatro_o = llm.construir_modelo("gpt-4o")
+    assert luna.reasoning_effort == "none"
+    assert sol.reasoning_effort == "none"
+    assert getattr(quatro_o, "reasoning_effort", None) is None
+    # GPT-4o continua aceitando temperature (não é de raciocínio).
+    assert quatro_o.temperature == 0.0
+
+
 def test_preco_luna_e_ordem_gpt_4o_mini():
     # Luna: 1M entrada (US$0,20) + 1M saída (US$1,20) = 1.40.
     assert precos.custo_usd("gpt-5.6-luna", 1_000_000, 1_000_000) == 1.40
