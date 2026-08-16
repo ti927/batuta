@@ -95,6 +95,50 @@ def test_entradas_das_conversas_ignora_turnos_sem_uso():
     ]
 
 
+# ───────────────── OpenAI GPT-5.6 (Luna barato + tiers) ─────────────────
+
+
+def test_gpt_5_6_luna_no_catalogo_openai():
+    from orquestracao import modelos_ia
+
+    catalogo = modelos_ia.MODELOS_POR_PROVEDOR[modelos_ia.PROVEDOR_OPENAI]
+    for m in ("gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"):
+        assert m in catalogo
+        assert modelos_ia.provedor_do_modelo(m) == "openai"
+
+
+def test_gpt_5_6_omite_temperature_mas_gpt_4o_envia():
+    # A família GPT-5+ (raciocínio) rejeita `temperature`; o GPT-4o aceita.
+    from orquestracao import llm
+
+    assert llm._envia_temperatura("gpt-5.6-luna") is False
+    assert llm._envia_temperatura("gpt-5.6-sol") is False
+    assert llm._envia_temperatura("o3-mini") is False
+    assert llm._envia_temperatura("gpt-4o") is True
+    assert llm._envia_temperatura("claude-haiku-4-5") is True
+
+
+def test_construir_modelo_luna_nao_passa_temperature():
+    # Constrói o cliente OpenAI para o Luna com uma chave de contexto e confere que
+    # `temperature` NÃO foi ao cliente (senão a API responde 400).
+    from orquestracao import llm
+
+    with llm.usar_chaves({"openai": "sk-test-luna"}):
+        cliente = llm.construir_modelo("gpt-5.6-luna")
+    assert cliente.model_name == "gpt-5.6-luna"
+    assert getattr(cliente, "temperature", None) is None
+
+
+def test_preco_luna_e_ordem_gpt_4o_mini():
+    # Luna: 1M entrada (US$0,20) + 1M saída (US$1,20) = 1.40.
+    assert precos.custo_usd("gpt-5.6-luna", 1_000_000, 1_000_000) == 1.40
+    # Sol: US$5 + US$30 = 35.0.
+    assert precos.custo_usd("gpt-5.6-sol", 1_000_000, 1_000_000) == 35.0
+    # -mini casa ANTES de -4o (que é prefixo dele): US$0,15 + US$0,60 = 0.75.
+    assert precos.custo_usd("gpt-4o-mini", 1_000_000, 1_000_000) == 0.75
+    assert precos.custo_usd("gpt-4o", 1_000_000, 1_000_000) == 12.5
+
+
 # ──────────────────────────── helpers de banco ────────────────────────────
 
 

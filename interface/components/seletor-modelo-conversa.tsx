@@ -17,6 +17,7 @@ import {
   NOTA_MODELO_CONVERSA,
   provedorDoModelo,
   provedoresParaSeletor,
+  rotuloModelo,
   ROTULO_PROVEDOR,
   type ProvedoresDisponiveis,
 } from "@/lib/modelos";
@@ -76,7 +77,7 @@ export function SeletorModeloConversa({
           <optgroup key={p} label={ROTULO_PROVEDOR[p]}>
             {MODELOS_POR_PROVEDOR[p].map((m) => (
               <option key={m} value={m}>
-                {m}
+                {rotuloModelo(m)}
               </option>
             ))}
           </optgroup>

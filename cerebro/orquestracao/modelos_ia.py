@@ -18,7 +18,9 @@ PROVEDORES = (PROVEDOR_ANTHROPIC, PROVEDOR_OPENAI, PROVEDOR_GOOGLE)
 # espelha esta lista para montar o seletor agrupado por provedor.
 MODELOS_POR_PROVEDOR: dict[str, list[str]] = {
     PROVEDOR_ANTHROPIC: ["claude-opus-4-8", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5"],
-    PROVEDOR_OPENAI: ["gpt-4.1", "gpt-4o", "gpt-4o-mini"],
+    # OpenAI GPT-5.6 (tiers Sol/Terra/Luna = par de Opus/Sonnet/Haiku). O Luna teve
+    # corte de 80% em 30/jul/2026 (US$0,20/1,20 por 1M) — o barato do mercado.
+    PROVEDOR_OPENAI: ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-4.1", "gpt-4o", "gpt-4o-mini"],
     PROVEDOR_GOOGLE: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
 }
 

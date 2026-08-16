@@ -59,6 +59,21 @@ MAX_RETENTATIVAS_IA = 6
 # quanto para qualquer agente que rode num desses modelos.
 MODELOS_SEM_TEMPERATURA = {"claude-opus-4-8", "claude-sonnet-5"}
 
+
+def _envia_temperatura(modelo: str) -> bool:
+    """Se devemos enviar `temperature` a este modelo. Os modelos de RACIOCÍNIO
+    rejeitam o parâmetro com HTTP 400 e, para eles, omitimos (a API usa o padrão):
+    na Anthropic, os de adaptive thinking (MODELOS_SEM_TEMPERATURA); na OpenAI, a
+    série `o` (o1/o3/o4) e a família GPT-5+ (inclui o GPT-5.6 Sol/Terra/Luna). Os
+    demais (GPT-4o/4.1, Gemini, Claude antigos) aceitam. Ponto único, vale para a
+    conversa e para qualquer agente."""
+    if modelo in MODELOS_SEM_TEMPERATURA:
+        return False
+    m = (modelo or "").lower()
+    if m.startswith(("o1", "o3", "o4")) or m.startswith("gpt-5"):
+        return False
+    return True
+
 # Mapa {provedor: chave} resolvido para a execução em curso (Fases 7.3/7-A). É um
 # contextvar para atravessar o stack do motor sem mudar a assinatura de nenhuma
 # função do grafo: a fronteira (disparo/retomada/agente isolado) põe o mapa aqui
@@ -110,7 +125,7 @@ def construir_modelo(
         }
         # Opus 4.8 (e afins) rejeitam `temperature`; só enviamos quando o modelo
         # aceita.
-        if modelo not in MODELOS_SEM_TEMPERATURA:
+        if _envia_temperatura(modelo):
             parametros["temperature"] = temperatura
         if chave:
             parametros["api_key"] = chave
@@ -129,14 +144,18 @@ def construir_modelo(
             )
         from langchain_openai import ChatOpenAI
 
-        return ChatOpenAI(
-            model=modelo,
-            api_key=chave,
-            max_tokens=MAX_TOKENS,
-            temperature=temperatura,
-            timeout=TIMEOUT_IA_S,
-            max_retries=MAX_RETENTATIVAS_IA,
-        )
+        parametros = {
+            "model": modelo,
+            "api_key": chave,
+            "max_tokens": MAX_TOKENS,
+            "timeout": TIMEOUT_IA_S,
+            "max_retries": MAX_RETENTATIVAS_IA,
+        }
+        # Os modelos de raciocínio da OpenAI (GPT-5+/série o) rejeitam
+        # `temperature`; só enviamos quando o modelo aceita (GPT-4o/4.1).
+        if _envia_temperatura(modelo):
+            parametros["temperature"] = temperatura
+        return ChatOpenAI(**parametros)
 
     if provedor == PROVEDOR_GOOGLE:
         if not chave:

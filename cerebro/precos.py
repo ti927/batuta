@@ -8,10 +8,26 @@ desatualizados — a tela deixa claro que é uma estimativa.
 # (preço de entrada, preço de saída) em USD por 1 milhão de tokens — aproximado.
 # Opus 4.x = $5/$25 (o antigo $15/$75 aqui inflava a tela /uso ~2,3× — corrigido
 # 2026-07-26, achado do estudo de tokens `docs/ESTUDO-TOKENS-MARCO-0.md`).
+# `_preco` casa por SUBSTRING na ordem de inserção: chaves mais específicas ANTES
+# das mais genéricas (ex.: "gpt-4o-mini" antes de "gpt-4o", que é prefixo dele).
+# Espelhado no seletor de modelo da interface (interface/lib/modelos.ts).
 PRECOS_USD_POR_MTOK = {
+    # Anthropic (por família)
     "opus": (5.0, 25.0),
     "sonnet": (3.0, 15.0),
     "haiku": (1.0, 5.0),
+    # OpenAI GPT-5.6 (Luna teve corte de 80% em 30/jul/2026)
+    "gpt-5.6-luna": (0.20, 1.20),
+    "gpt-5.6-terra": (2.0, 12.0),
+    "gpt-5.6-sol": (5.0, 30.0),
+    # OpenAI GPT-4 (legado ainda ofertado; -mini antes de -4o)
+    "gpt-4o-mini": (0.15, 0.60),
+    "gpt-4o": (2.5, 10.0),
+    "gpt-4.1": (2.0, 8.0),
+    # Google Gemini
+    "gemini-2.0-flash": (0.10, 0.40),
+    "gemini-1.5-pro": (1.25, 5.0),
+    "gemini-1.5-flash": (0.075, 0.30),
 }
 
 # Multiplicadores do cache de prompt (Anthropic, Parte D): a RELEITURA do prefixo

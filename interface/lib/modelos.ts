@@ -50,9 +50,45 @@ export const USADA_POR: Record<Servico, string> = {
 
 export const MODELOS_POR_PROVEDOR: Record<Provedor, string[]> = {
   anthropic: ["claude-opus-4-8", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5"],
-  openai: ["gpt-4.1", "gpt-4o", "gpt-4o-mini"],
+  // OpenAI GPT-5.6 (tiers Sol/Terra/Luna = par de Opus/Sonnet/Haiku); Luna teve
+  // corte de 80% em 30/jul/2026. Mantidos os GPT-4 legados abaixo.
+  openai: ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-4.1", "gpt-4o", "gpt-4o-mini"],
   google: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
 };
+
+// Custo aproximado por 1M de tokens [entrada, saída] em USD — espelha
+// cerebro/precos.py (informativo, não cobrança). Alimenta o rótulo do seletor de
+// modelo, para o usuário escolher já vendo o custo (pedido do maestro).
+export const CUSTO_POR_MODELO: Record<string, [number, number]> = {
+  "claude-opus-4-8": [5, 25],
+  "claude-sonnet-5": [3, 15],
+  "claude-sonnet-4-6": [3, 15],
+  "claude-haiku-4-5": [1, 5],
+  "gpt-5.6-luna": [0.2, 1.2],
+  "gpt-5.6-terra": [2, 12],
+  "gpt-5.6-sol": [5, 30],
+  "gpt-4.1": [2, 8],
+  "gpt-4o": [2.5, 10],
+  "gpt-4o-mini": [0.15, 0.6],
+  "gemini-2.0-flash": [0.1, 0.4],
+  "gemini-1.5-pro": [1.25, 5],
+  "gemini-1.5-flash": [0.075, 0.3],
+};
+
+function fmtUSD(v: number): string {
+  return v.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+// Rótulo do modelo no seletor: nome + custo aproximado por 1M tokens
+// (entrada / saída). Modelo sem custo tabelado aparece só com o nome.
+export function rotuloModelo(modelo: string): string {
+  const c = CUSTO_POR_MODELO[modelo];
+  if (!c) return modelo;
+  return `${modelo} (entrada US$ ${fmtUSD(c[0])} / saída US$ ${fmtUSD(c[1])} por 1M)`;
+}
 
 // Disponibilidade de provedor por chave (própria ou da consultoria), vinda do
 // cérebro em GET /organizacoes/{id}/modelos-disponiveis. Só booleanos.
