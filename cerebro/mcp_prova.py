@@ -230,6 +230,15 @@ async def ajustar_agente(
     return await anyio.to_thread.run_sync(_ajustar_agente_sync, agente_id, nome, instrucoes)
 
 
-# O app ASGI standalone (com o próprio lifespan que roda o session manager). É o que
-# o uvicorn sobe: `uvicorn mcp_prova:asgi_app`.
+# O app ASGI standalone (com o próprio lifespan que roda o session manager).
 asgi_app = mcp.streamable_http_app()
+
+
+if __name__ == "__main__":
+    # Ponto de entrada para o Railway: `uv run python mcp_prova.py`. Lê a porta do
+    # ambiente (PORT, que o Railway injeta) em vez de depender de expandir `$PORT` no
+    # comando de start — o builder passa `$PORT` literal e o uvicorn recusa.
+    import uvicorn
+
+    uvicorn.run(asgi_app, host="0.0.0.0", port=int(os.environ.get("PORT", "8000")))
+
