@@ -6,29 +6,33 @@ e montar/ajustar agentes conversando com o Claude — rodando na ASSINATURA dele
 na API do Batuta. É o padrão permitido pela Anthropic (o app do usuário aciona a
 ferramenta; o Batuta não roteia assinatura de ninguém).
 
-ESCOPO DELIBERADAMENTE MÍNIMO E DESCARTÁVEL (ver docs do plano):
+RODA COMO SERVIÇO PRÓPRIO (na RAIZ de um domínio), não montado no cérebro: o
+claude.ai exige OAuth no connector, e as URLs de descoberta do OAuth (`.well-known`)
+que o SDK gera ficam na raiz do domínio — montar sob um subcaminho quebraria a
+descoberta. Sobe com: `uvicorn mcp_prova:asgi_app --host 0.0.0.0 --port $PORT`.
+
+ESCOPO DELIBERADAMENTE MÍNIMO E DESCARTÁVEL:
 - Tudo escopado a UM time de teste fixo (`MCP_PROVA_TIME_ID`) — o raio de dano é um
-  time descartável, mesmo que a URL vaze.
-- Sem autenticação (o connector PESSOAL do claude.ai Pro/Max aceita servidor sem
-  auth para desenvolvimento). Segurança real = OAuth 2.1 + escopo por consultor, que
-  é a PRÓXIMA fatia, fora desta prova.
-- Só liga quando `MCP_PROVA_ATIVA` está setada; com a flag off, este módulo não é
-  montado e nada no cérebro muda.
+  time descartável.
+- Login OAuth AUTO-APROVADO (ver `mcp_auth.py`): cumpre o ritual que o claude.ai
+  exige, sem senha/usuário real. Segurança real (login do Batuta + escopo por
+  consultor) é a PRÓXIMA fatia.
 
 Reuso: as ferramentas NÃO usam os tools da criadora (acoplados a um turno/conversa);
 usam a camada de serviço por baixo — `criacao.servicos` (a MESMA porta validada por
 onde a IA e as rotas REST escrevem no time real).
 """
 
-import contextlib
 import os
 import uuid
 
 import anyio
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from sqlalchemy import func, select
 
+import mcp_auth
 from criacao import servicos
 from modelos import Agente, Time
 from sessao import CriadorDeSessao
@@ -36,24 +40,22 @@ from sessao import CriadorDeSessao
 
 # ───────────────────────────── Configuração ─────────────────────────────
 
-def ativa() -> bool:
-    """Se a prova está ligada. Off = o cérebro não muda em nada."""
-    return os.environ.get("MCP_PROVA_ATIVA", "").strip().lower() in ("1", "true", "yes", "sim")
+# URL pública (raiz) DESTE serviço MCP — precisa bater com o domínio real, senão a
+# descoberta do OAuth não fecha. Ordem: MCP_PROVA_PUBLIC_URL (override manual) →
+# RAILWAY_PUBLIC_DOMAIN (o Railway injeta sozinho no serviço, então nem precisa
+# setar a URL à mão) → localhost (dev). O caminho do MCP é `/mcp`.
+_railway = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+BASE_URL = (
+    os.environ.get("MCP_PROVA_PUBLIC_URL")
+    or (f"https://{_railway}" if _railway else "http://localhost:8000")
+).rstrip("/")
+CAMINHO_MCP = "/mcp"
 
 
 def _time_id() -> str | None:
     return (os.environ.get("MCP_PROVA_TIME_ID") or "").strip() or None
 
 
-# Caminho onde o MCP é montado no cérebro. O consultor cola a URL completa
-# (ex.: https://api.batuta.team/mcp-prova/) no custom connector do claude.ai. Para
-# obscurecer, dá para setar um sufixo aleatório via env (ex.: /mcp-prova-a1b2c3).
-PATH = os.environ.get("MCP_PROVA_PATH", "/mcp-prova").rstrip("/") or "/mcp-prova"
-
-
-# O servidor MCP. Streamable HTTP em modo STATELESS + JSON (o mais simples de montar
-# num app existente; cada chamada é independente). `streamable_http_path="/"` faz o
-# endpoint ficar na raiz do mount (a URL fica limpa: {PATH}/).
 mcp = FastMCP(
     "Batuta — prova (criação de agentes)",
     instructions=(
@@ -63,12 +65,23 @@ mcp = FastMCP(
     ),
     stateless_http=True,
     json_response=True,
-    streamable_http_path="/",
-    # A proteção anti-DNS-rebinding do SDK valida o cabeçalho Host contra uma lista
-    # (vazia por padrão → recusa TUDO com 421). Ela existe para blindar servidores
-    # LOCAIS de navegadores maliciosos; o nosso é remoto e server-to-server
-    # (claude.ai → api.batuta.team, atrás do Cloudflare/Railway), então a
-    # desligamos nesta PROVA. A versão real (com OAuth) volta a travar por host.
+    streamable_http_path=CAMINHO_MCP,
+    # Login OAuth auto-aprovado (o claude.ai exige OAuth no connector). O SDK monta
+    # /authorize, /token, /register e os metadados; o provedor implementa a lógica.
+    auth_server_provider=mcp_auth.ProvedorAutoAprovado(),
+    auth=AuthSettings(
+        issuer_url=BASE_URL,
+        resource_server_url=f"{BASE_URL}{CAMINHO_MCP}",
+        client_registration_options=ClientRegistrationOptions(
+            enabled=True,
+            valid_scopes=[mcp_auth.ESCOPO],
+            default_scopes=[mcp_auth.ESCOPO],
+        ),
+        required_scopes=[],  # basta um token válido (login auto-aprovado)
+    ),
+    # A proteção anti-DNS-rebinding valida o Host contra uma lista (vazia = recusa
+    # tudo). É para blindar servidores LOCAIS de navegadores; o nosso é remoto e
+    # server-to-server (claude.ai → Railway/Cloudflare), então desligamos na PROVA.
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
 
@@ -217,25 +230,6 @@ async def ajustar_agente(
     return await anyio.to_thread.run_sync(_ajustar_agente_sync, agente_id, nome, instrucoes)
 
 
-# ─────────────────────── Montagem no cérebro (main.py) ───────────────────────
-
-_app = None
-
-
-def app():
-    """O sub-app ASGI (Streamable HTTP) para montar no FastAPI do cérebro. Construído
-    uma vez; reusa o mesmo `session_manager` que o `ciclo()` roda no lifespan."""
-    global _app
-    if _app is None:
-        _app = mcp.streamable_http_app()
-    return _app
-
-
-@contextlib.asynccontextmanager
-async def ciclo():
-    """Roda o gerenciador de sessão do Streamable HTTP durante a vida do processo.
-    Precisa entrar no lifespan do cérebro (o sub-app montado NÃO tem o próprio
-    lifespan executado pelo FastAPI — é a armadilha conhecida do SDK #1367)."""
-    app()  # garante que o app e o session_manager existam
-    async with mcp.session_manager.run():
-        yield
+# O app ASGI standalone (com o próprio lifespan que roda o session manager). É o que
+# o uvicorn sobe: `uvicorn mcp_prova:asgi_app`.
+asgi_app = mcp.streamable_http_app()
