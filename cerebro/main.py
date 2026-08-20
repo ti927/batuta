@@ -1,5 +1,5 @@
 import os
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI
@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 import agendador
 import fila
 import fila_turnos
+import mcp_prova
 from arquivos import DIRETORIO_ARQUIVOS
 from orquestracao import memoria_conversa
 from observabilidade.log import configurar_logging
@@ -46,7 +47,13 @@ async def ciclo_de_vida(app: FastAPI):
     fila.iniciar()
     fila_turnos.iniciar()
     agendador.iniciar()
-    yield
+    async with AsyncExitStack() as pilha:
+        # Prova de conceito do MCP (flag off = nada acontece). O gerenciador de sessão
+        # do Streamable HTTP precisa rodar aqui, no lifespan do cérebro — o sub-app
+        # montado não tem o próprio lifespan executado (armadilha do SDK #1367).
+        if mcp_prova.ativa():
+            await pilha.enter_async_context(mcp_prova.ciclo())
+        yield
     agendador.desligar()
     fila_turnos.desligar()
     fila.desligar()
@@ -111,3 +118,8 @@ app.include_router(logs.rotas)
 
 # Arquivos gerados (ex.: PDFs do instrumento gerar_pdf), servidos localmente.
 app.mount("/arquivos", StaticFiles(directory=DIRETORIO_ARQUIVOS), name="arquivos")
+
+# Prova de conceito do MCP: só monta quando a flag está ligada (com a flag off, o
+# cérebro fica byte-a-byte como antes). Ver mcp_prova.py e o plano.
+if mcp_prova.ativa():
+    app.mount(mcp_prova.PATH, mcp_prova.app())
