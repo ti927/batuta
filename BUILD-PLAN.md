@@ -1778,6 +1778,31 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
+## FASE FUTURA — Batuta-MCP profissional (o claude.ai opera o Batuta inteiro pela assinatura do consultor)  📋 PLANO APROVADO (2026-08-21) — aguarda início da Fatia 0
+
+**Documento-fonte:** [`docs/MCP-PROVA.md`](docs/MCP-PROVA.md) (a prova descartável que originou isto) → futuro `docs/MCP-BATUTA.md` (a versão profissional). Detalhe em [[project-mcp-prova-conceito]].
+
+**Origem:** a **prova de 2026-08-20** validou AO VIVO o padrão **permitido** pela Anthropic — o Batuta é um **servidor MCP** que o **claude.ai do próprio consultor** aciona, rodando a IA na **assinatura dele**, não na API do Batuta. Como a criação é trabalho de consultor (técnico, PRODUTO §4), mover a criação para o claude.ai deles **corta o ~70% de custo** da IA criadora (Marco 0), de forma legítima. A prova era mínima (4 ferramentas, time fixo, login **auto-aprovado** = qualquer um com a URL). O maestro pediu a **versão profissional**: o Claude precisa poder fazer **tudo** (criar times/agentes/instrumentos — inclusive montar um **conector a partir de uma doc de API** —, montar automações, ler execuções/conversas/memórias, **diagnosticar problemas e sugerir soluções**), com **login real por consultor** e escopo por organização/papel.
+
+**Decisões travadas (2026-08-21):**
+1. **Login real por consultor** — e-mail/senha do Batuta (Supabase) numa telinha durante a conexão; o token fica amarrado **só** às organizações/times daquele consultor, respeitando o papel (`observador<operador<admin`). Fim do auto-aprovado.
+2. **Alcance = tudo** — inclui as áreas que hoje só vivem nas rotas e mexem em **segredos/permissões** (credenciais, chaves de IA, organizações, membros, config de memória do agente, exclusão/duplicação). Exige **extrair essas rotas para uma camada de serviço reutilizável** com a rota passando a chamar o **mesmo** serviço (uma fonte de verdade, para não recriar o bug de "fontes divergindo").
+3. **Coexistência** — o MCP **coexiste** com a IA criadora; a criadora dentro do Batuta **fica exatamente como está**. O MCP é um caminho a mais, não substituto; nada da criadora é removido/alterado.
+4. **Central de Conhecimento** — o MCP entra nas duas direções: o Claude conectado **consulta a mesma base** ao construir (ferramenta `consultar_conhecimento`, a mesma da criadora) e a **própria Central passa a documentar o caminho MCP** — as duas frentes falam a mesma língua.
+
+**Arquitetura:** 2º serviço Railway (mesmo repo/banco), app ASGI standalone na **raiz de um domínio** (obrigatório: as `.well-known` do OAuth ficam na raiz); **cérebro (`api.batuta.team`) intocado**. Login real = OAuth 2.1 com identidade: `authorize()` devolve a URL de uma telinha de login (preservando PKCE), o POST autentica no Supabase (`grant_type=password`), resolve o `Usuario` e emite token com `subject`+escopo de orgs/papéis; tokens **persistidos no banco**. Toda ferramenta lê a identidade (`get_access_token()`), resolve o alvo dos argumentos, checa acesso pelos guardas canônicos (`rotas/_comum` `time_acessivel`/`exigir_papel`) e passa `usuario=` real (auditoria `origem="mcp"`). Reusa direto: a porta de escrita `criacao/servicos.py` (`flush`-only, `usuario` p/ auditoria, levanta `ConflitoDominio`) e a porta de leitura sem-segredo (`diagnostico_execucao.diagnosticar` com avisos+ação sugerida, `snapshot_time`, leituras de mensageria/`memoria_agente`/`precos.resumir_uso`).
+
+**Faseamento (entregue e verificado por fatias, mesmo sendo "tudo"):**
+- **Fatia 0 — Fundação de login real + escopo.** `mcp_login.py` (Supabase password-grant, telinha de login com a marca, emissão de token com identidade+escopo, store no banco), `mcp_escopo.py` (identidade→`Usuario`→acesso), migração aditiva da tabela de tokens, env vars (`SUPABASE_ANON_KEY`, `MCP_PUBLIC_URL`; sai `MCP_PROVA_TIME_ID`). **Nada fica aberto ao mundo depois desta fatia.**
+- **Fatia 1 — Leitura completa + diagnóstico.** Todas as tools de leitura, escopadas (mais seguro, valor imediato).
+- **Fatia 2 — Criação núcleo.** Tools que reusam `servicos.*` (times/agentes/instrumentos/conector/automações/ativar); `_validar_gatilho` portado para lugar compartilhado.
+- **Fatia 3 — As áreas "tudo" (refator para serviço).** Extrair credenciais/chaves/org/membros/memória-config/exclusão/duplicação para serviço; ligar rota **e** MCP no mesmo serviço. Cuidado máximo: cofre/redação byte-idênticos.
+- **Fatia 4 — Polimento profissional + ops + Central.** `instructions` do servidor, docstrings ricas em PT, retornos estruturados, **erro honesto** (§12-A) + `redigir` defensivo, confirmação de ação irreversível, auditoria `origem="mcp"`; expor `consultar_conhecimento` e **registrar o caminho MCP na Central**; `docs/MCP-BATUTA.md`; aposentar `mcp_prova.py`/`mcp_auth.py`.
+
+**Ponto a verificar (não bloqueia):** agendador roda no cérebro, o MCP é outro processo — para gatilho `agendamento`, confirmar se o agendador relê o banco (sweeper); se for em memória, um gancho interno de resync. **Não muda** o runtime que serve o cliente (segue API key, <3% do custo). Segue sendo o padrão **permitido** (o claude.ai do usuário é quem aciona).
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.

@@ -114,15 +114,25 @@ o time de teste real do banco).
   serviço** no Railway.
 - Os tokens/códigos são **in-memory** (somem no restart do processo).
 
-## O que a prova NÃO faz (deferido — decisões de produto)
+## O que a prova NÃO faz — agora é o plano PROFISSIONAL (aprovado 2026-08-21)
 
-1. **Substituir × coexistir** — a criação passa a ser feita pelo claude.ai (corta o
-   70%), ou o claude.ai vira um caminho a mais ao lado da criadora atual?
-2. **Login REAL** — trocar o auto-aprovado por login do Batuta (Supabase) + **escopo
-   por consultor/organização** (o `authorize` autentica o consultor e amarra o token à
-   org dele; as ferramentas param de usar um time fixo e passam a respeitar o escopo).
-3. **Toolset completo** de criação (hoje são 4 ferramentas).
-4. Nada disto muda o **runtime que serve o cliente** (continua API key; é <3% do custo).
+A prova cumpriu seu papel. A versão de verdade virou uma frente aprovada no
+[`BUILD-PLAN.md`](../BUILD-PLAN.md) ("Batuta-MCP profissional"); futuro
+`docs/MCP-BATUTA.md`. Decisões travadas:
+
+1. **Coexistência (decidido):** o MCP **coexiste** com a IA criadora — a criadora
+   **fica como está**; o claude.ai vira um caminho a mais, não substituto.
+2. **Login REAL (decidido):** login do Batuta (Supabase, `grant_type=password`) numa
+   telinha durante o OAuth, com **escopo por consultor/organização** (o token carrega a
+   identidade; as ferramentas trocam o time fixo pelos guardas `time_acessivel`/
+   `exigir_papel` e passam `usuario=` real para auditoria). Fim do auto-aprovado.
+3. **Toolset = tudo (decidido):** criar times/agentes/instrumentos (incl. conector),
+   automações, ler execuções/conversas/memórias, diagnosticar — **e** as áreas que hoje
+   só vivem nas rotas (credenciais, chaves de IA, organizações, membros, config de
+   memória, exclusão/duplicação), extraídas para uma camada de serviço reutilizável.
+4. **Central de Conhecimento (decidido):** o MCP expõe `consultar_conhecimento` (a mesma
+   base da criadora) e a Central passa a documentar o caminho MCP.
+5. Nada disto muda o **runtime que serve o cliente** (continua API key; é <3% do custo).
 
 ## Relacionado
 - `docs/ECONOMIA-TOKENS-IA-CRIADORA.md` — o 70% que esta prova ataca por outro caminho.
