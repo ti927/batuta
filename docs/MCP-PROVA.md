@@ -1,9 +1,10 @@
 # Prova de conceito — Batuta como servidor MCP (criar/ajustar agentes pelo claude.ai)
 
-> **Status: PROVA validada AO VIVO em 2026-08-20.** Um consultor, conversando no
-> **próprio claude.ai (assinatura dele)**, criou um agente dentro do Batuta via um
-> **connector MCP**. Isto é uma prova descartável — **não** é produção. A versão de
-> verdade (login real + escopo por consultor + toolset completo) é trabalho à parte.
+> **Status: APOSENTADA (histórico).** Esta prova validou o conceito AO VIVO em
+> 2026-08-20 e cumpriu seu papel. A versão de produção (login real + escopo por papel +
+> toolset completo de 44 ferramentas) está NO AR — ver **`docs/MCP-BATUTA.md`**. Os
+> arquivos da prova (`mcp_prova.py`/`mcp_auth.py`) foram **removidos**. Este documento
+> fica como registro do caminho percorrido.
 
 ## Por que isto existe
 

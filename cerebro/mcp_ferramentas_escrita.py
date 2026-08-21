@@ -14,10 +14,13 @@ ROLLBACK + mensagem humana em qualquer erro de domínio/acesso (`ConflitoDominio
 
 import functools
 import json
+import logging
 import uuid
 
 from fastapi import HTTPException
 from sqlalchemy import select
+
+_log = logging.getLogger("batuta.mcp")
 
 import auditoria
 import credenciais_cofre as cofre_cred
@@ -30,7 +33,7 @@ from criacao.ferramentas import _validar_gatilho
 from criacao.servicos import ConflitoDominio
 from instrumentos.base import FalhaInstrumento
 from mcp_escopo import SemAcesso
-from mcp_ferramentas import _traduzir_acesso, _uuid
+from mcp_ferramentas import ERRO_INESPERADO, _traduzir_acesso, _uuid
 from modelos import Credencial, Instrumento, Membro, Organizacao, Time
 from rotas.instrumentos import _validar_credencial
 from sessao import CriadorDeSessao
@@ -60,6 +63,10 @@ def _ferramenta_escrita(fn):
         except (ConflitoDominio, FalhaInstrumento) as e:
             sessao.rollback()
             return f"Não deu para fazer: {e}"
+        except Exception:
+            sessao.rollback()
+            _log.exception("Erro inesperado em ferramenta de escrita do MCP")
+            return ERRO_INESPERADO
         finally:
             sessao.close()
 

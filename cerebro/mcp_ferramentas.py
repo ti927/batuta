@@ -13,10 +13,19 @@ vem por parâmetro porque o contextvar do token não atravessa a thread).
 
 import functools
 import json
+import logging
 import uuid
 
 from fastapi import HTTPException
 from sqlalchemy import and_, or_, select
+
+_log = logging.getLogger("batuta.mcp")
+# Mensagem honesta (§12-A): nunca despeja stack trace no Claude/consultor; o erro real
+# vai para o log do servidor.
+ERRO_INESPERADO = (
+    "Algo deu errado ao executar essa ação no Batuta. Tente de novo; "
+    "se persistir, avise o suporte."
+)
 
 import credenciais_cofre as cofre_cred
 import diagnostico_execucao
@@ -74,6 +83,9 @@ def _ferramenta(fn):
             return str(e)
         except HTTPException as e:
             return _traduzir_acesso(e)
+        except Exception:
+            _log.exception("Erro inesperado em ferramenta de leitura do MCP")
+            return ERRO_INESPERADO
         finally:
             sessao.close()
 

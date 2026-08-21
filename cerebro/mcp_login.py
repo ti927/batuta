@@ -1,7 +1,7 @@
 """Login OAuth 2.1 REAL do Batuta-MCP (Fatia 0 do "Batuta-MCP profissional").
 
-Substitui o auto-aprovado da prova (`mcp_auth.py`, que continua servindo só a prova
-descartável `mcp_prova.py`). O claude.ai exige OAuth no connector; aqui o `authorize`
+Substitui o login auto-aprovado da prova descartável (já aposentada). O claude.ai exige
+OAuth no connector; aqui o `authorize`
 **NÃO auto-aprova** — ele manda o navegador do consultor para uma telinha de login do
 Batuta (e-mail/senha), autentica no **Supabase** (o mesmo Auth do app), resolve o
 `Usuario` do banco e só então emite o código de autorização **amarrado à identidade

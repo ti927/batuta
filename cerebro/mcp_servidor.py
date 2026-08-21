@@ -1,6 +1,6 @@
 """Batuta-MCP profissional — servidor MCP que o claude.ai do consultor aciona.
 
-Diferente da prova (`mcp_prova.py`, descartável, login auto-aprovado, um time fixo),
+Diferente da prova descartável (login auto-aprovado, um time fixo, já aposentada),
 este servidor tem **login real por consultor** (`mcp_login`) e **escopo por
 organização/papel** (`mcp_escopo`): cada ferramenta descobre QUEM está falando pelo
 token e só enxerga/mexe no que aquele consultor pode, pelos MESMOS guardas das rotas
@@ -39,12 +39,20 @@ mcp = FastMCP(
         "de IA que executam tarefas de uma empresa. Modelo mental: uma ORGANIZAÇÃO tem "
         "TIMES; um time tem AGENTES (um deles é o líder), INSTRUMENTOS (as ferramentas do "
         "cinto de cada agente) e AUTOMAÇÕES (o fluxo que encadeia os agentes, disparado "
-        "por um gatilho). Você opera em nome do consultor autenticado e só enxerga as "
-        "organizações/times dele. Comece sempre LENDO o contexto (`listar_organizacoes`, "
-        "`listar_times`, `descrever_time`, `listar_agentes`) antes de agir. Para investigar "
-        "um problema, use `listar_execucoes` (com apenas_problemas) e `diagnosticar_execucao` "
-        "— o diagnóstico traz avisos com ação sugerida. Em dúvida sobre COMO um recurso do "
-        "Batuta funciona, consulte a Central com `consultar_conhecimento` em vez de adivinhar."
+        "por um gatilho). Você opera em nome do consultor autenticado e só enxerga/mexe no "
+        "que ele pode, conforme o papel dele (observador lê; operador cria/edita; admin "
+        "cria organização/time e exclui).\n"
+        "FLUXO: comece sempre LENDO o contexto (`listar_organizacoes`, `listar_times`, "
+        "`descrever_time`, `listar_agentes`, `ver_agente`) antes de agir. Para diagnosticar, "
+        "use `listar_execucoes` (apenas_problemas) e `diagnosticar_execucao` (traz avisos "
+        "com ação sugerida). Em dúvida de COMO um recurso funciona, use "
+        "`consultar_conhecimento` em vez de adivinhar; para montar conector, consulte antes.\n"
+        "SEGURANÇA (respeite sempre): (1) você NUNCA pluga segredo — ao criar credenciais/"
+        "conectores, deixa o segredo pendente e orienta o consultor a colá-lo no cofre do "
+        "Batuta pela tela. (2) A PAREDE de aprovação recusa `ativar_time` se um agente com "
+        "ação irreversível não tiver portão humano antes na cadeia (ponha \"gate\": true no "
+        "nó anterior). (3) Ações IRREVERSÍVEIS (`excluir_*`) apagam de verdade — confirme "
+        "com o consultor antes de chamar."
     ),
     stateless_http=True,
     json_response=True,
