@@ -256,3 +256,16 @@ def test_credenciais_sem_identidade_barram_antes_do_banco():
     assert "identifica" in mcp_ferramentas.ver_chaves_de_ia(None, "org").lower()
     assert "identifica" in escrita.criar_credencial(None, "org", "WP", "wordpress").lower()
     assert "identifica" in escrita.remover_credencial(None, "cred").lower()
+
+
+def test_fatia3b_sem_identidade_barra_antes_do_banco():
+    """As ferramentas da 3b (config, referência, exclusão, duplicação, org) barram sem
+    `sub` antes de tocar o banco."""
+    import mcp_ferramentas_escrita as escrita
+    assert "identifica" in escrita.configurar_memoria_agente(None, "ag", True, "sempre").lower()
+    assert "identifica" in escrita.apontar_credencial(None, "inst", "cred").lower()
+    assert "identifica" in escrita.duplicar_time(None, "t", "Cópia").lower()
+    assert "identifica" in escrita.excluir_time(None, "t").lower()
+    assert "identifica" in escrita.excluir_automacao(None, "a").lower()
+    assert "identifica" in escrita.excluir_instrumento(None, "i").lower()
+    assert "identifica" in escrita.criar_organizacao(None, "Nova Org").lower()

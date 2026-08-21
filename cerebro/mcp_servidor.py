@@ -411,6 +411,62 @@ async def remover_credencial(credencial_id: str) -> str:
     return await anyio.to_thread.run_sync(escrita.remover_credencial, _sub(), credencial_id)
 
 
+# ───────────────────────── Fatia 3b: config, referência, exclusão, duplicação, org ─────────────────────────
+
+@mcp.tool()
+async def configurar_memoria_agente(agente_id: str, ativa: bool, recall: str = "sempre") -> str:
+    """Liga ou desliga a MEMÓRIA de um agente (aprender com o próprio trabalho). `ativa`
+    = true/false; `recall` = 'sempre' (injeta as fichas no contexto, ideal p/ atendimento)
+    ou 'sob_demanda' (só busca quando as instruções mandarem)."""
+    return await anyio.to_thread.run_sync(
+        escrita.configurar_memoria_agente, _sub(), agente_id, ativa, recall
+    )
+
+
+@mcp.tool()
+async def apontar_credencial(instrumento_id: str, credencial_id: str | None = None) -> str:
+    """Faz um instrumento USAR uma credencial nomeada (por id) — o jeito de ligar um
+    conector/instrumento ao segredo que o consultor colou no cofre. Passe `credencial_id`
+    vazio para desvincular. A credencial precisa existir, ser da organização e de um tipo
+    que o instrumento aceita."""
+    return await anyio.to_thread.run_sync(
+        escrita.apontar_credencial, _sub(), instrumento_id, credencial_id
+    )
+
+
+@mcp.tool()
+async def duplicar_time(time_id: str, novo_nome: str) -> str:
+    """Cria uma cópia independente de um time inteiro (agentes, instrumentos, automações)
+    na mesma organização, com um novo nome. Exige ser admin da organização."""
+    return await anyio.to_thread.run_sync(escrita.duplicar_time, _sub(), time_id, novo_nome)
+
+
+@mcp.tool()
+async def excluir_time(time_id: str) -> str:
+    """EXCLUI um time inteiro — junto com seus agentes, instrumentos e automações. AÇÃO
+    IRREVERSÍVEL. Exige ser admin da organização. Confirme com o consultor antes."""
+    return await anyio.to_thread.run_sync(escrita.excluir_time, _sub(), time_id)
+
+
+@mcp.tool()
+async def excluir_automacao(automacao_id: str) -> str:
+    """EXCLUI uma automação (o fluxo). AÇÃO IRREVERSÍVEL. Exige ser admin. Confirme antes."""
+    return await anyio.to_thread.run_sync(escrita.excluir_automacao, _sub(), automacao_id)
+
+
+@mcp.tool()
+async def excluir_instrumento(instrumento_id: str) -> str:
+    """EXCLUI um instrumento. AÇÃO IRREVERSÍVEL. Exige ser admin. Confirme antes."""
+    return await anyio.to_thread.run_sync(escrita.excluir_instrumento, _sub(), instrumento_id)
+
+
+@mcp.tool()
+async def criar_organizacao(nome: str) -> str:
+    """Cria uma organização nova (ex.: para um novo cliente da consultoria). Você vira
+    admin dela automaticamente. Depois crie times dentro com `criar_time`."""
+    return await anyio.to_thread.run_sync(escrita.criar_organizacao, _sub(), nome)
+
+
 # O app ASGI standalone (com o próprio lifespan que roda o session manager).
 asgi_app = mcp.streamable_http_app()
 

@@ -21,6 +21,7 @@ from sqlalchemy import select
 
 import auditoria
 import credenciais_cofre as cofre_cred
+import duplicacao_time
 import mcp_escopo
 import segredos_instrumento as segredos
 import tipos_credencial as tc
@@ -30,8 +31,11 @@ from criacao.servicos import ConflitoDominio
 from instrumentos.base import FalhaInstrumento
 from mcp_escopo import SemAcesso
 from mcp_ferramentas import _traduzir_acesso, _uuid
-from modelos import Credencial, Instrumento, Time
+from modelos import Credencial, Instrumento, Membro, Organizacao, Time
+from rotas.instrumentos import _validar_credencial
 from sessao import CriadorDeSessao
+
+_RECALL_VALIDO = ("sempre", "sob_demanda")
 
 
 def _ferramenta_escrita(fn):
@@ -411,3 +415,132 @@ def remover_credencial(sessao, usuario, credencial_id) -> str:
     sessao.delete(cred)
     sessao.flush()
     return f"Credencial '{nome}' removida."
+
+
+# ───────────────────────── Fatia 3b: config, referência, exclusão, duplicação, org ─────────────────────────
+
+@_ferramenta_escrita
+def configurar_memoria_agente(sessao, usuario, agente_id, ativa, recall) -> str:
+    aid = _uuid(agente_id)
+    if aid is None:
+        return f"Id de agente inválido: {agente_id}."
+    agente = mcp_escopo.agente_acessivel(sessao, usuario, aid, "operador")
+    recall = (recall or "sempre").strip()
+    if recall not in _RECALL_VALIDO:
+        return f"recall deve ser 'sempre' ou 'sob_demanda' (recebi {recall!r})."
+    agente.memoria_ativa = bool(ativa)
+    agente.memoria_recall = recall
+    sessao.flush()
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="agente.memoria_configurada", recurso_tipo="agente",
+        recurso_id=agente.id, organizacao_id=auditoria.org_do_time(sessao, agente.time_id),
+        detalhe={"ativa": bool(ativa), "recall": recall, "origem": "mcp"},
+    )
+    return f"Memória do agente '{agente.nome}' {'ligada' if ativa else 'desligada'} (recall: {recall})."
+
+
+@_ferramenta_escrita
+def apontar_credencial(sessao, usuario, instrumento_id, credencial_id) -> str:
+    iid = _uuid(instrumento_id)
+    if iid is None:
+        return f"Id de instrumento inválido: {instrumento_id}."
+    inst = mcp_escopo.instrumento_acessivel(sessao, usuario, iid, "operador")
+    org_id = auditoria.org_do_time(sessao, inst.time_id)
+    cid = None
+    if credencial_id and str(credencial_id).strip():
+        cid = _uuid(credencial_id)
+        if cid is None:
+            return f"Id de credencial inválido: {credencial_id}."
+    # Valida existência/acesso/tipo-aceito (HTTPException 422 → traduzida pelo decorator).
+    _validar_credencial(sessao, inst.tipo, org_id, cid)
+    inst.credencial_id = cid
+    sessao.flush()
+    return (
+        "Instrumento desvinculado da credencial."
+        if cid is None
+        else f"Instrumento '{inst.nome}' agora usa a credencial {cid}."
+    )
+
+
+@_ferramenta_escrita
+def duplicar_time(sessao, usuario, time_id, novo_nome) -> str:
+    tid = _uuid(time_id)
+    if tid is None:
+        return f"Id de time inválido: {time_id}."
+    novo_nome = (novo_nome or "").strip()
+    if not novo_nome:
+        return "Dê um nome ao novo time (a cópia)."
+    original = mcp_escopo.time_acessivel(sessao, usuario, tid, "admin")
+    try:
+        copia = duplicacao_time.duplicar_time(sessao, original, novo_nome, usuario.id)
+    except ValueError as e:
+        return f"Não deu para duplicar: {e}"
+    return f"Time '{original.nome}' duplicado como '{copia.nome}' (id {copia.id})."
+
+
+@_ferramenta_escrita
+def excluir_time(sessao, usuario, time_id) -> str:
+    tid = _uuid(time_id)
+    if tid is None:
+        return f"Id de time inválido: {time_id}."
+    time = mcp_escopo.time_acessivel(sessao, usuario, tid, "admin")
+    nome = time.nome
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="time.removido", recurso_tipo="time",
+        recurso_id=time.id, organizacao_id=time.organizacao_id,
+        detalhe={"nome": nome, "origem": "mcp"},
+    )
+    sessao.delete(time)
+    sessao.flush()
+    return f"Time '{nome}' excluído (com seus agentes, instrumentos e automações)."
+
+
+@_ferramenta_escrita
+def excluir_automacao(sessao, usuario, automacao_id) -> str:
+    aid = _uuid(automacao_id)
+    if aid is None:
+        return f"Id de automação inválido: {automacao_id}."
+    auto = mcp_escopo.automacao_acessivel(sessao, usuario, aid, "admin")
+    nome = auto.nome
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="automacao.removida", recurso_tipo="automacao",
+        recurso_id=auto.id, organizacao_id=auditoria.org_do_time(sessao, auto.time_id),
+        detalhe={"nome": nome, "origem": "mcp"},
+    )
+    sessao.delete(auto)
+    sessao.flush()
+    return f"Automação '{nome}' excluída. (Se tinha agendamento, sai do relógio em ~1 min.)"
+
+
+@_ferramenta_escrita
+def excluir_instrumento(sessao, usuario, instrumento_id) -> str:
+    iid = _uuid(instrumento_id)
+    if iid is None:
+        return f"Id de instrumento inválido: {instrumento_id}."
+    inst = mcp_escopo.instrumento_acessivel(sessao, usuario, iid, "admin")
+    nome = inst.nome
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="instrumento.removido", recurso_tipo="instrumento",
+        recurso_id=inst.id, organizacao_id=auditoria.org_do_time(sessao, inst.time_id),
+        detalhe={"nome": nome, "origem": "mcp"},
+    )
+    sessao.delete(inst)
+    sessao.flush()
+    return f"Instrumento '{nome}' excluído."
+
+
+@_ferramenta_escrita
+def criar_organizacao(sessao, usuario, nome) -> str:
+    nome = (nome or "").strip()
+    if not nome:
+        return "Dê um nome à organização."
+    org = Organizacao(nome=nome, dono_id=usuario.id)
+    sessao.add(org)
+    sessao.flush()  # garante org.id antes do vínculo de membro
+    sessao.add(Membro(usuario_id=usuario.id, organizacao_id=org.id, papel="admin"))
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="organizacao.criada", recurso_tipo="organizacao",
+        recurso_id=org.id, organizacao_id=org.id, detalhe={"nome": nome, "origem": "mcp"},
+    )
+    sessao.flush()
+    return f"Organização '{nome}' criada (id {org.id}). Você é admin dela."
