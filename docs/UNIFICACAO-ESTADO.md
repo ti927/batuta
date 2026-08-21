@@ -11,6 +11,11 @@
 > [`REMODELAGEM-MOTOR.md`](REMODELAGEM-MOTOR.md) (o runtime), [`ECONOMIA-TOKENS-IA-CRIADORA.md`](ECONOMIA-TOKENS-IA-CRIADORA.md)
 > (a autoria) e [`BENCHMARK-MENSAGERIA-MOTORES.md`](BENCHMARK-MENSAGERIA-MOTORES.md) (a evidência de
 > mercado). O `BUILD-PLAN.md` aponta para cá.
+>
+> **Alavanca complementar (NO AR 2026-08): o Batuta-MCP** ([`MCP-BATUTA.md`](MCP-BATUTA.md)). Enquanto este
+> programa **barateia** a criadora (menos tokens por turno), o Batuta-MCP **move** a criação para o
+> **claude.ai do próprio consultor** (assinatura dele), tirando esse custo (~70%) da conta de API do Batuta
+> de forma permitida. Ortogonal e coexistente — não substitui a criadora nem o motor.
 
 ---
 

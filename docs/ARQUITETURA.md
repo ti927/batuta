@@ -59,6 +59,13 @@ um gatilho externo dispara um fluxo). A interface manda o token de dois contexto
 
 A interface aponta para o cérebro pela env `NEXT_PUBLIC_CEREBRO_URL` (em produção, `https://api.batuta.team`).
 
+**Terceira peça (2026-08): o Batuta-MCP.** Um **2º serviço de backend** (mesmo repositório, mesmo banco)
+expõe o Batuta como **servidor MCP** que o **claude.ai do próprio consultor** aciona para operar a
+plataforma (criar/ajustar/diagnosticar times) na **assinatura dele** — 44 ferramentas, **login real por
+consultor** e escopo por papel. Roda na raiz de um domínio próprio (as `.well-known` do OAuth exigem raiz);
+o cérebro fica intocado (única exceção aditiva: um reconcílio periódico no agendador). A IA **nunca** recebe
+segredo. Ver [`docs/MCP-BATUTA.md`](MCP-BATUTA.md).
+
 ---
 
 ## 4. Modelo de dados (PostgreSQL via SQLAlchemy + Alembic)
