@@ -216,8 +216,16 @@ def test_usuario_do_sub_sem_identidade():
 def test_traduzir_acesso():
     from fastapi import HTTPException
 
-    import mcp_servidor
-    assert "encontr" in mcp_servidor._traduzir_acesso(HTTPException(404, "x")).lower()
-    assert "permiss" in mcp_servidor._traduzir_acesso(
+    import mcp_ferramentas
+    assert "encontr" in mcp_ferramentas._traduzir_acesso(HTTPException(404, "x")).lower()
+    assert "permiss" in mcp_ferramentas._traduzir_acesso(
         HTTPException(403, "Esta ação exige o papel 'operador'.")
     ).lower()
+
+
+def test_ferramenta_sem_identidade_nao_toca_o_banco():
+    """O decorator `_ferramenta` barra quem não tem `sub` ANTES de qualquer query
+    (a sessão abre mas nada é consultado) e devolve a mensagem de acesso, não exceção."""
+    import mcp_ferramentas
+    r = mcp_ferramentas.listar_agentes(None, "algum-time")
+    assert isinstance(r, str) and "identifica" in r.lower()
