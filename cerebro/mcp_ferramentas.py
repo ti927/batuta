@@ -16,19 +16,24 @@ import json
 import uuid
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
+import credenciais_cofre as cofre_cred
 import diagnostico_execucao
 import mcp_escopo
 import memoria_agente
 import precos
+import tipos_credencial as tc
+from chaves import PROVEDORES
 from criacao.ferramentas import catalogo_de_instrumentos
 from mcp_escopo import SemAcesso
 from modelos import (
     Agente,
     AgenteInstrumento,
     Automacao,
+    ChaveApi,
     Conversa,
+    Credencial,
     Execucao,
     Instrumento,
     MensagemConversa,
@@ -375,6 +380,83 @@ def ver_uso(sessao, usuario, time_id) -> str:
 def listar_tipos_instrumento(sessao, usuario) -> str:
     # Catálogo é global; basta estar autenticado (o `_ferramenta` já garante o usuário).
     return json.dumps(catalogo_de_instrumentos(), ensure_ascii=False)
+
+
+@_ferramenta
+def listar_tipos_credencial(sessao, usuario) -> str:
+    # Catálogo global de tipos de credencial (basta estar autenticado). Sem segredo.
+    tipos = [
+        {
+            "tipo": t.tipo,
+            "nome": t.nome_exibicao,
+            "campos": [
+                {"nome": c.nome, "rotulo": c.rotulo, "secreto": c.secreto}
+                for c in t.campos
+            ],
+        }
+        for t in tc.tipos_disponiveis()
+    ]
+    return json.dumps({"tipos_credencial": tipos}, ensure_ascii=False)
+
+
+@_ferramenta
+def listar_credenciais(sessao, usuario, organizacao_id) -> str:
+    org_id = _uuid(organizacao_id)
+    if org_id is None:
+        return f"Id de organização inválido: {organizacao_id}."
+    mcp_escopo.organizacao_acessivel(sessao, usuario, org_id, "operador")
+    # As da organização + as da consultoria marcadas como compartilháveis (como a tela).
+    linhas = sessao.scalars(
+        select(Credencial)
+        .where(
+            or_(
+                Credencial.organizacao_id == org_id,
+                and_(
+                    Credencial.organizacao_id.is_(None),
+                    Credencial.compartilhavel.is_(True),
+                ),
+            )
+        )
+        .order_by(Credencial.nome)
+    ).all()
+    if not linhas:
+        return "Nenhuma credencial nesta organização."
+    itens = [
+        {
+            "id": str(c.id),
+            "nome": c.nome,
+            "tipo": c.tipo,
+            "da_consultoria": c.organizacao_id is None,
+            "usado_por": cofre_cred.usado_por(sessao, c.id),
+            "resumo": c.resumo,  # já mascarado (segredos = só últimos 4)
+            "preenchida": bool(c.dados_cifrado),
+        }
+        for c in linhas
+    ]
+    return json.dumps({"credenciais": itens}, ensure_ascii=False)
+
+
+@_ferramenta
+def ver_chaves_de_ia(sessao, usuario, organizacao_id) -> str:
+    org_id = _uuid(organizacao_id)
+    if org_id is None:
+        return f"Id de organização inválido: {organizacao_id}."
+    mcp_escopo.organizacao_acessivel(sessao, usuario, org_id)  # observador
+    # Existência de chave (da org OU da consultoria-mãe), ativa — SEM decifrar: o MCP não
+    # precisa da chave-mestra do cofre (least-privilege). Só booleanos, nenhum segredo.
+    tem = set(
+        sessao.scalars(
+            select(ChaveApi.provedor).where(
+                or_(
+                    ChaveApi.organizacao_id == org_id,
+                    ChaveApi.organizacao_id.is_(None),
+                ),
+                ChaveApi.ativa.is_(True),
+            )
+        ).all()
+    )
+    mapa = {provedor: (provedor in tem) for provedor in PROVEDORES}
+    return json.dumps({"provedores_com_chave": mapa}, ensure_ascii=False)
 
 
 @_ferramenta

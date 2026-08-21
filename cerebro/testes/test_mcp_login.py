@@ -245,3 +245,14 @@ def test_campos_parciais_ignora_none():
     import mcp_ferramentas_escrita as escrita
     assert escrita._campos(nome="x", papel=None, agent_md="y") == {"nome": "x", "agent_md": "y"}
     assert escrita._campos(nome=None) == {}
+
+
+def test_credenciais_sem_identidade_barram_antes_do_banco():
+    """As ferramentas de credencial (leitura e escrita) barram sem `sub` antes de tocar o
+    banco e devolvem texto, não exceção."""
+    import mcp_ferramentas
+    import mcp_ferramentas_escrita as escrita
+    assert "identifica" in mcp_ferramentas.listar_credenciais(None, "org").lower()
+    assert "identifica" in mcp_ferramentas.ver_chaves_de_ia(None, "org").lower()
+    assert "identifica" in escrita.criar_credencial(None, "org", "WP", "wordpress").lower()
+    assert "identifica" in escrita.remover_credencial(None, "cred").lower()

@@ -189,6 +189,29 @@ async def consultar_conhecimento(topico: str) -> str:
     return await anyio.to_thread.run_sync(mcp_ferramentas.consultar_conhecimento, _sub(), topico)
 
 
+@mcp.tool()
+async def listar_tipos_credencial() -> str:
+    """Lista os tipos de credencial nomeada e seus campos (quais são de identidade e quais
+    são secretos). Use para saber o que uma credencial de cada tipo precisa."""
+    return await anyio.to_thread.run_sync(mcp_ferramentas.listar_tipos_credencial, _sub())
+
+
+@mcp.tool()
+async def listar_credenciais(organizacao_id: str) -> str:
+    """Lista as credenciais nomeadas de uma organização (mascaradas — segredos só aparecem
+    com os 4 últimos dígitos), com o tipo, se já está preenchida e quantos instrumentos a
+    usam."""
+    return await anyio.to_thread.run_sync(mcp_ferramentas.listar_credenciais, _sub(), organizacao_id)
+
+
+@mcp.tool()
+async def ver_chaves_de_ia(organizacao_id: str) -> str:
+    """Mostra quais provedores de IA (Anthropic/OpenAI/Google/…) já têm chave configurada
+    para a organização (só sim/não por provedor — nenhum segredo). Use para saber com quais
+    modelos os agentes podem rodar."""
+    return await anyio.to_thread.run_sync(mcp_ferramentas.ver_chaves_de_ia, _sub(), organizacao_id)
+
+
 # ───────────────────────── Ferramentas de ESCRITA (Fatia 2) ─────────────────────────
 # Criam/editam de verdade, reusando a porta validada `criacao/servicos.py`. Escopadas por
 # papel (a maioria exige 'operador'; criar time exige 'admin'). O commit é do decorator.
@@ -371,6 +394,21 @@ async def ativar_time(automacao_id: str) -> str:
 async def desativar_time(automacao_id: str) -> str:
     """DESLIGA uma automação (para de disparar)."""
     return await anyio.to_thread.run_sync(escrita.desativar_time, _sub(), automacao_id)
+
+
+@mcp.tool()
+async def criar_credencial(organizacao_id: str, nome: str, tipo: str) -> str:
+    """Cria o ESQUELETO de uma credencial nomeada (nome + tipo) numa organização. NÃO
+    recebe segredos: o consultor cola a senha/token no cofre do Batuta pela tela. Veja os
+    tipos e campos em `listar_tipos_credencial`. Depois um instrumento pode apontar para
+    esta credencial. (A IA nunca pluga o segredo.)"""
+    return await anyio.to_thread.run_sync(escrita.criar_credencial, _sub(), organizacao_id, nome, tipo)
+
+
+@mcp.tool()
+async def remover_credencial(credencial_id: str) -> str:
+    """Remove uma credencial da organização (bloqueada se algum instrumento ainda a usa)."""
+    return await anyio.to_thread.run_sync(escrita.remover_credencial, _sub(), credencial_id)
 
 
 # O app ASGI standalone (com o próprio lifespan que roda o session manager).

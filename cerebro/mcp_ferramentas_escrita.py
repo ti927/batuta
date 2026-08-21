@@ -17,16 +17,20 @@ import json
 import uuid
 
 from fastapi import HTTPException
+from sqlalchemy import select
 
+import auditoria
+import credenciais_cofre as cofre_cred
 import mcp_escopo
 import segredos_instrumento as segredos
+import tipos_credencial as tc
 from criacao import servicos
 from criacao.ferramentas import _validar_gatilho
 from criacao.servicos import ConflitoDominio
 from instrumentos.base import FalhaInstrumento
 from mcp_escopo import SemAcesso
 from mcp_ferramentas import _traduzir_acesso, _uuid
-from modelos import Instrumento, Time
+from modelos import Credencial, Instrumento, Time
 from sessao import CriadorDeSessao
 
 
@@ -345,3 +349,65 @@ def desativar_time(sessao, usuario, automacao_id) -> str:
     auto = mcp_escopo.automacao_acessivel(sessao, usuario, aid, "operador")
     servicos.desativar(sessao, auto, usuario=usuario)
     return f"Automação '{auto.nome}' desativada (desligada)."
+
+
+# ─────────────── Credenciais nomeadas (esqueleto — a IA NUNCA pluga o segredo) ───────────────
+# O Claude cria o esqueleto (nome+tipo) e aponta; o SEGREDO o consultor cola no cofre do
+# Batuta pela tela. Segue o princípio "a IA nunca pluga o token" e não passa segredo pelo
+# claude.ai. Só credenciais DA ORGANIZAÇÃO (as da consultoria são geridas só na tela).
+
+@_ferramenta_escrita
+def criar_credencial(sessao, usuario, organizacao_id, nome, tipo) -> str:
+    org_id = _uuid(organizacao_id)
+    if org_id is None:
+        return f"Id de organização inválido: {organizacao_id}."
+    nome = (nome or "").strip()
+    if not nome:
+        return "Dê um nome à credencial."
+    mcp_escopo.organizacao_acessivel(sessao, usuario, org_id, "operador")
+    if tc.obter_tipo(tipo) is None:
+        return f"Tipo de credencial desconhecido: {tipo!r}. Veja listar_tipos_credencial."
+    ja = sessao.scalar(
+        select(Credencial.id).where(
+            Credencial.organizacao_id == org_id, Credencial.nome == nome
+        )
+    )
+    if ja is not None:
+        return f"Já existe uma credencial chamada '{nome}' nesta organização."
+    cred = Credencial(organizacao_id=org_id, nome=nome, tipo=tipo, compartilhavel=False)
+    cred.resumo = cofre_cred.montar_resumo(tipo, {})  # esqueleto mascarado, SEM segredo
+    sessao.add(cred)
+    sessao.flush()
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="credencial.criada", recurso_tipo="credencial",
+        recurso_id=cred.id, organizacao_id=org_id,
+        detalhe={"tipo": tipo, "nome": nome, "origem": "mcp"},
+    )
+    return (
+        f"Credencial '{nome}' ({tipo}) criada como esqueleto (id {cred.id}). "
+        "Agora cole os segredos no cofre do Batuta (tela de Credenciais da organização) — "
+        "a IA não pluga segredo. Depois é só apontar um instrumento para ela."
+    )
+
+
+@_ferramenta_escrita
+def remover_credencial(sessao, usuario, credencial_id) -> str:
+    cid = _uuid(credencial_id)
+    if cid is None:
+        return f"Id de credencial inválido: {credencial_id}."
+    cred = sessao.get(Credencial, cid)
+    if cred is None or cred.organizacao_id is None:
+        return "Não encontrei essa credencial (ou é da consultoria, gerida só na tela)."
+    mcp_escopo.organizacao_acessivel(sessao, usuario, cred.organizacao_id, "operador")
+    n = cofre_cred.usado_por(sessao, cred.id)
+    if n > 0:
+        return f"Credencial em uso por {n} instrumento(s). Troque-os antes de apagá-la."
+    nome = cred.nome
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="credencial.removida", recurso_tipo="credencial",
+        recurso_id=cred.id, organizacao_id=cred.organizacao_id,
+        detalhe={"nome": nome, "origem": "mcp"},
+    )
+    sessao.delete(cred)
+    sessao.flush()
+    return f"Credencial '{nome}' removida."
