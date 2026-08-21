@@ -229,3 +229,19 @@ def test_ferramenta_sem_identidade_nao_toca_o_banco():
     import mcp_ferramentas
     r = mcp_ferramentas.listar_agentes(None, "algum-time")
     assert isinstance(r, str) and "identifica" in r.lower()
+
+
+def test_ferramenta_escrita_sem_identidade_barra_antes_do_banco():
+    """O decorator de ESCRITA também barra sem `sub` antes de tocar o banco (rollback de
+    sessão não usada, sem conexão) e devolve texto, não exceção."""
+    import mcp_ferramentas_escrita as escrita
+    r = escrita.criar_agente(None, "t", "Novo", "agente", None, None, None, None, None)
+    assert isinstance(r, str) and "identifica" in r.lower()
+    r2 = escrita.ativar_time(None, "alguma-automacao")
+    assert isinstance(r2, str) and "identifica" in r2.lower()
+
+
+def test_campos_parciais_ignora_none():
+    import mcp_ferramentas_escrita as escrita
+    assert escrita._campos(nome="x", papel=None, agent_md="y") == {"nome": "x", "agent_md": "y"}
+    assert escrita._campos(nome=None) == {}

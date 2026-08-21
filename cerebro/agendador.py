@@ -107,6 +107,40 @@ def remover(automacao_id: uuid.UUID) -> None:
         _scheduler.remove_job(job_id)
 
 
+def reconciliar(sessao) -> None:
+    """Reconstrói os jobs de agendamento a partir do BANCO: sincroniza toda automação
+    ATIVA de gatilho 'agendamento' e REMOVE os jobs órfãos — automações desativadas ou
+    que mudaram de gatilho por OUTRO processo (ex.: o Batuta-MCP, que roda num serviço
+    separado e não enxerga este relógio em memória). Idempotente; roda no boot e a cada
+    minuto, então uma mudança externa entra no relógio em até ~1 min. Só mexe em jobs de
+    automação (id = UUID); os jobs de sistema (nomeados) ficam intactos."""
+    ativas = sessao.scalars(
+        select(Automacao).where(
+            Automacao.tipo_gatilho == TIPO_AGENDAMENTO,
+            Automacao.ativa.is_(True),
+        )
+    ).all()
+    ids_ativas = {str(a.id) for a in ativas}
+    for auto in ativas:
+        sincronizar(auto)
+    for job in _scheduler.get_jobs():
+        try:
+            uuid.UUID(str(job.id))
+        except (ValueError, AttributeError):
+            continue  # job de sistema (nome não-UUID) — não é de automação
+        if job.id not in ids_ativas:
+            _scheduler.remove_job(job.id)
+
+
+def _reconciliar_job() -> None:
+    """Entrada do reconciliador periódico: abre a própria sessão e reconcilia."""
+    sessao = CriadorDeSessao()
+    try:
+        reconciliar(sessao)
+    finally:
+        sessao.close()
+
+
 # ─────────────── Renovação dos tokens do Instagram (Fase 1) ───────────────
 # O token de longa duração do Instagram dura ~60 dias e precisa ser renovado
 # antes de expirar (a Meta só renova token com ≥24h e <60 dias de vida). Janela
@@ -280,14 +314,7 @@ def iniciar() -> None:
     """Sobe o relógio e reconstrói os jobs a partir do banco."""
     sessao = CriadorDeSessao()
     try:
-        agendadas = sessao.scalars(
-            select(Automacao).where(
-                Automacao.tipo_gatilho == TIPO_AGENDAMENTO,
-                Automacao.ativa.is_(True),
-            )
-        ).all()
-        for auto in agendadas:
-            sincronizar(auto)
+        reconciliar(sessao)
     finally:
         sessao.close()
     # Vigia de inatividade das conversas (mensageria, Fase J): roda a cada minuto.
@@ -331,6 +358,15 @@ def iniciar() -> None:
         _varrer_agendamentos_job,
         trigger=IntervalTrigger(seconds=60),
         id="agendamentos_sweeper",
+        replace_existing=True,
+    )
+    # Reconcílio dos gatilhos de AGENDAMENTO com o banco, a cada minuto: pega mudanças
+    # feitas por OUTRO processo (o Batuta-MCP cria/edita/ativa automações num serviço
+    # separado, sem acesso a este relógio em memória) e entra no relógio em até ~1 min.
+    _scheduler.add_job(
+        _reconciliar_job,
+        trigger=IntervalTrigger(seconds=60),
+        id="agendamento_reconcile",
         replace_existing=True,
     )
     # Poda diária do banco de logs (observabilidade), de madrugada (BRT), fora do pico.
