@@ -3,7 +3,7 @@ titulo: "Índice da Central de Conhecimento"
 area: "meta"
 slug: "indice"
 tags: ["meta", "sumario", "indice"]
-revisado_em: "2026-08-08"
+revisado_em: "2026-08-22"
 fontes: ["PRODUTO.md", "cerebro/modelos.py"]
 ---
 
@@ -98,6 +98,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Credenciais nomeadas | `segredos/credenciais-nomeadas` | Caixa-forte tipada; reuso entre instrumentos | ✅ | ✍️ |
 | Segredos de instrumento | `segredos/segredos-de-instrumento` | Inline × credencial × pool | ✅ | ✍️ |
 | Conectar Google (OAuth) | `segredos/conectar-google` | Conta Google por OAuth (Gmail/Agenda/Drive/Search Console) | ✅ | ✍️ |
+| Certificado digital (mTLS) | `segredos/certificado-digital-mtls` | Pix, boleto e APIs bancárias; upload do .pfx/.pem + token OAuth renovado sozinho | ✅ | ✍️ |
 
 ## 6. Mensageria & Conversação
 | Capítulo | slug | O que cobre | Recurso | Escrita |

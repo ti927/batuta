@@ -136,13 +136,30 @@ Lifespan do FastAPI (`main.py`) sobe a fila e o agendador no boot e os desliga n
 auto-registram ao importar o pacote. O agente recebe cada instrumento do cinto como uma *tool* da
 LLM (via `definicao_para_ia()`).
 
-Tipos implementados hoje (8): **REST** (`chamar_api_rest`), **SQL** (`banco_sql`, com `somente_leitura`),
-**webhook de saída**, **busca na web** (Tavily), **gerar PDF** (fpdf2), **gerar imagem** (OpenAI),
-**WordPress** (publicar post), **MCP** (conectar a servidores MCP).
+Tipos implementados quando este retrato foi escrito (8): **REST** (`chamar_api_rest`), **SQL**
+(`banco_sql`, com `somente_leitura`), **webhook de saída**, **busca na web** (Tavily), **gerar PDF**
+(fpdf2), **gerar imagem** (OpenAI), **WordPress** (publicar post), **MCP** (conectar a servidores MCP).
+*(A lista cresceu bastante desde então — Instagram, vídeo, visão, mensageria, conector declarativo. A
+fonte da verdade é o registro em `cerebro/instrumentos/`, não esta enumeração.)*
 
 A irreversibilidade é resolvida **por instância** (`exige_portao(tipo, config, override)`): ex.: REST
 GET = leitura (sem portão), POST/PUT/DELETE = escrita (com portão); o interruptor `exige_aprovacao`
 sobrepõe. Falhas de instrumento têm **retentativa com backoff** e nunca "morrem em silêncio".
+
+**Material de conexão vindo do cofre (2026-08-22).** Além de segredos escalares (um token, uma senha),
+um instrumento pode receber material de conexão mais rico por referência a uma credencial nomeada. O
+caso que motivou isso é a **API bancária**: ela exige um **certificado digital de cliente** no aperto de
+mão TLS (mTLS) e, quase sempre, um **token de acesso de vida curta** emitido apresentando esse mesmo
+certificado. Duas peças estruturais saíram daí:
+- `TipoInstrumento.campos_secretos_opcionais` — segredo que só existe para quem precisa; vazio **não** é
+  pendência (senão todo REST/conector nasceria "faltando certificado").
+- `CampoCredencial.interno` — campo da credencial que **não** vai para a Config de instrumento nenhum
+  (dado de exibição, ou material que só a borda usa, como a URL do token).
+
+O token é obtido e renovado **pela borda**, em `segredos_instrumento.anexar_aos_instrumentos` — o mesmo
+ponto onde o token do Google já é renovado —, porque o agente não teria como carregar um token de uma
+chamada para a seguinte (cabeçalho é configuração fixa). Ver `certificados.py`, `oauth_mtls.py` e o
+capítulo `segredos/certificado-digital-mtls` da Central.
 
 > **Para a Biblioteca, o ponto-chave:** "o agente consultar a base de conhecimento" encaixa
 > naturalmente como **um novo tipo de instrumento** (ex.: `consultar_biblioteca`) no cinto — sem

@@ -35,6 +35,10 @@ registro. O endereço, o método e os cabeçalhos são fixos (config); a IA pass
 - Respostas legítimas (2xx e mesmo um 404) voltam ao agente como dado; 401/403 e 5xx viram falha do
   instrumento (a de servidor é retentável).
 - Não coloque segredos nos cabeçalhos fixos — use o campo de token.
+- **API de banco** (Pix, boleto) exige mais do que token: pede um **certificado digital** na conexão.
+  Isso não se configura aqui — cadastre uma credencial do tipo certificado e aponte para ela; o token
+  de acesso, quando o banco pedir, é obtido e renovado sozinho. Ver
+  [[segredos/certificado-digital-mtls]].
 - **Respostas grandes custam tokens.** A resposta inteira é reenviada ao agente a cada passo do fluxo. Uma
   busca que traz dezenas de registros com dezenas de campos cada (comum em CRMs e no Bubble) pode custar
   milhares de tokens por chamada. Use **Campos da resposta** (`campos_resposta`) para trazer só os campos
@@ -55,3 +59,4 @@ e o formato `results` do Bubble; formato não reconhecido volta intacto (nunca d
 - [[instrumentos/webhook-saida]]
 - [[instrumentos/mcp]]
 - [[automacoes/portao-de-aprovacao]]
+- [[segredos/certificado-digital-mtls]]

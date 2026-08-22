@@ -1836,6 +1836,38 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
+## FASE — Fundação bancária: certificado digital (mTLS) + token OAuth  ✅ COMPLETA NO CÓDIGO (2026-08-22, commits `9b4897d` + `0020d53` + `fd1a329`, sem migração, núcleo intocado) — ⚠️ FALTA TESTE AO VIVO
+
+**O problema:** uma API de banco (Pix, boleto, extrato) não se conecta como as demais. Além da chave, ela exige que o cliente se identifique com um **certificado digital** no aperto de mão TLS (mTLS) e, quase sempre, um **token de acesso de vida curta** emitido apresentando esse mesmo certificado. O Batuta não tinha nem uma coisa nem outra — e o agente **não teria como** resolver a segunda sozinho: cabeçalho de instrumento é configuração fixa, então um token obtido numa chamada não viajaria até a seguinte.
+
+**Decisão de segurança que rege as três fatias (do maestro):** a **IA nunca recebe o segredo**. O consultor sobe o arquivo pela tela; o par certificado+chave fica cifrado no cofre. Mesma regra da Fatia 3a do Batuta-MCP.
+
+- **Fatia A — o cofre GUARDA o certificado** (`9b4897d`). `certificados.py`: lê os dois formatos reais — `.pfx`/`.p12` (PKCS#12 binário com senha, o A1 brasileiro/ICP-Brasil) e `.pem`/`.crt` (chave no mesmo arquivo ou num `.key` à parte) — e normaliza ambos para o mesmo par PEM, extraindo **titular e validade do próprio certificado**. Sem rede e sem banco: é leitura de bytes. Tipo de credencial novo `certificado_mtls`; `credenciais_cofre.gravar_com_certificado` cifra e deriva `expira_em`; a rota traduz arquivo ilegível/senha errada em **422 humano** (§12-A). Tela do cofre ganhou bloco de **upload** (o certificado não se digita).
+- **Fatia B — o certificado é APRESENTADO na chamada** (`0020d53`). `certificados.material_mtls`: contexto que materializa o par em arquivos temporários (`mkstemp` = 0600), devolve o que o httpx espera em `cert=` e **apaga no `finally`**, inclusive sob exceção. Passa por disco porque o módulo `ssl` do Python só carrega cadeia por CAMINHO — não há API em memória. Ligado nos **DOIS** caminhos de saída (a capacidade é da conexão, não de um instrumento): `chamar_api_rest` e `conector`. Sem certificado, `cert=None` e a chamada sai idêntica à de antes.
+- **Fatia C — o token OAuth, obtido com o certificado e renovado sozinho** (`fd1a329`). `oauth_mtls.py`: `obter_token` (`grant_type=client_credentials` **no corpo do formulário**, com o certificado no aperto de mão) + `garantir_token`, que **espelha `google_oauth.garantir_token`** — devolve o cacheado enquanto vale, renova com margem de 5 min e **nunca levanta** (falha → devolve o token atual, para uma credencial ruim não derrubar o carregamento do cinto inteiro). Chamado da borda em `segredos_instrumento.anexar_aos_instrumentos`, ao lado do Google. O instrumento recebe um token fresco e não sabe de nada disso.
+
+**Dois conceitos novos que a fundação obrigou a criar, e que valem para o resto do sistema:**
+1. **`TipoInstrumento.campos_secretos_opcionais`** — segredo que só existe para quem precisa dele. Sem isso, `segredos_instrumento.pendentes` passaria a acusar **todo** instrumento REST/conector como "faltando segredo", cobrando certificado de quem nunca vai usar um. Quem pegou foi o teste `test_montar_conector_sem_auth_nao_marca_pendente` — a regressão não chegou a existir.
+2. **`CampoCredencial.interno` + `TipoCredencial.nomes_injetaveis`** — campo da credencial que **não vai para a Config de instrumento nenhum**, seja porque é exibição derivada do segredo (titular/validade do certificado), seja porque só a borda o usa (URL do token, escopo, vencimento do token). Existe porque `test_tipos_credencial` exige que todo campo de uma credencial aceita tenha campo correspondente na Config — sem a distinção, "titular" e "validade" virariam campos visíveis do formulário de um instrumento REST.
+
+**Detalhes que importam para quem mexer nisso depois:** o token cacheado vive **no saco** da credencial (`access_token`/`token_expira_em`), **não** no `Credencial.expira_em` — aquele é o vencimento do **certificado** (~1 ano), enquanto o token dura ~1h: relógios diferentes de propósito. Trocar client_id/secret/URL/escopo **ou o certificado** descarta o token cacheado (senão o agente seguiria operando com a conta antiga). Precedência: no REST o `token_bearer` colado à mão vence o token da borda; no Conector, a autenticação declarada vence.
+
+**Verificação:** 886 testes verdes (+33 no arquivo do certificado) e `tsc` limpo. Central de Conhecimento ganhou o capítulo `segredos/certificado-digital-mtls`.
+
+**⚠️ Limites honestos:** (1) **nada foi exercitado contra um banco real** — os testes provam a mecânica (certificado apresentado, formato do pedido de token, momento da renovação, erros legíveis), não que o Itaú aceita; a primeira integração deve começar por uma chamada de **leitura**. (2) As credenciais do token vão **no corpo** do formulário, formato de Inter/Itaú — um banco que exija **HTTP Basic** ainda não é suportado (acréscimo curto). (3) Certificado **A3** (token físico) não serve: o Batuta precisa do arquivo A1.
+
+---
+
+## FASE — Suíte de testes contra Postgres local  ✅ NO AR (2026-08-22, commit `7b0ba23`, sem migração)
+
+**Gatilho:** com o banco migrado para US East, a suíte passou de ~3 min para **~40 min** — cada uma das dezenas de milhares de consultas dos 863 testes atravessava o continente. Caro demais para o ritual "verifique antes de seguir" do `CLAUDE.md`.
+
+**O que mudou:** a suíte passou a rodar contra um **PostgreSQL 17 local** (container Docker `batuta-testes`, porta 5433), com o mesmo schema (`alembic upgrade head`). **~35 segundos** contra ~40 min — e some um risco calado: nenhum teste tem mais como escrever no banco dos clientes. Liga/desliga pela `DATABASE_URL_TESTES` no `.env` (sem ela, tudo volta a rodar contra produção — útil para conferir divergência de schema de tempos em tempos). Detalhe operacional em "Como rodar os testes", no topo deste plano.
+
+**Achado de peso (a causa de testes intermitentes):** em PostgreSQL, `now()` é o horário de **início da transação**. Como a fixture `sessao` roda cada teste inteiro numa transação só, **todas as linhas nasciam com o mesmo `criado_em`** — e as consultas do produto que pedem "a última mensagem" (`ORDER BY criado_em DESC LIMIT 1`, ex.: `_ultima_msg_contato` e `_agente_falou_por_ultimo` em `mensageria/servico.py`) **empatavam**: qual linha volta era indeterminado, e o desempate **muda de servidor para servidor**. Foi exatamente isso que quebrou testes de conversa/portão ao trocar de banco (um deles falhava 5/5 isolado e passava na suíte). O `banco_testes.py` troca o default para `clock_timestamp()` **no banco de testes** — não é maquiagem: em produção cada mensagem chega em sua própria transação e recebe horário distinto, então o `clock_timestamp()` modela a produção com **mais** fidelidade, e mata a classe inteira de teste intermitente. O `db.py` foi ajustado junto para respeitar um `?sslmode=` escrito na URL (Postgres local não serve TLS); sem o parâmetro o padrão continua `require`, então **produção não mudou** (conferido: host e `sslmode` idênticos em modo produção).
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.

@@ -335,6 +335,14 @@ na URL); auth declarativa; `campos_resposta` herdado do REST; robusto a nome de 
 (contrato `base.py` + filtro em `/instrumentos/tipos`) — o motor executa, a tela atual não oferece até a Fatia 2.
 Zero migração, zero toque em `cadeia.py`/`agente.py`. 11 testes novos (`testes/test_conector.py`).
 
+**Acréscimo posterior — mTLS e token bancário (2026-08-22, `0020d53`+`fd1a329`):** o conector passou a
+aceitar credencial do tipo `certificado_mtls` e a apresentar o **certificado de cliente** no aperto de
+mão TLS, além de usar o **token OAuth** que a borda obtém e renova com esse certificado. Foi feito nos
+**dois** caminhos de saída (aqui e no `chamar_api_rest`), porque a capacidade é da conexão, não de um
+instrumento — a alternativa, ligar só no REST, deixaria um conector bancário sem saída. A auth
+declarativa (`auth_tipo`/`auth_segredo`) continua tendo **precedência** sobre o token da borda. Ver a
+FASE "Fundação bancária" no `BUILD-PLAN.md`.
+
 **Dois follow-ups nomeados (esperam uma fatia com toque ADITIVO no motor, evolução dirigida):** (a) **portão
 operação-a-operação** — hoje a irreversibilidade é conservadora por instrumento (qualquer escrita → gateia tudo);
 o refino "GET livre, POST gateado" exige o mapa nome→irreversível por ferramenta expandida em `agente.py`
