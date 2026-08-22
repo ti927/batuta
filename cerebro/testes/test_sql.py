@@ -8,16 +8,21 @@ cobre erro de SQL (volta como dado) e conexão recusada (falha do instrumento).
 import pytest
 
 import instrumentos as encaixe
+from db import SSLMODE
 from db import engine as cerebro_engine
 from instrumentos.base import FalhaInstrumento
 from instrumentos.sql import ArgsSQL, BancoSQL, ConfigSQL, eh_leitura
 
 
 def _config_real(**over) -> ConfigSQL:
+    # O `ssl` vem do próprio cérebro (`db.SSLMODE`), como o resto dos componentes
+    # de conexão: `require` quando o banco é o da nuvem, `disable` quando é o
+    # Postgres local dos testes (que não serve TLS). Fixar `require` aqui
+    # quebraria o caminho feliz no banco local.
     u = cerebro_engine.url
     base = dict(
         host=u.host, porta=u.port, banco=u.database,
-        usuario=u.username, senha=u.password, ssl="require",
+        usuario=u.username, senha=u.password, ssl=SSLMODE,
     )
     base.update(over)
     return ConfigSQL(**base)

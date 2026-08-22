@@ -5,7 +5,28 @@ TestClient é instanciado SEM `with` de propósito: assim o lifespan do app
 (fila de execuções e agendador) NÃO sobe durante os testes.
 """
 
+import os
 import uuid
+
+from dotenv import load_dotenv
+
+# ── Banco DOS TESTES ──────────────────────────────────────────────────────────
+# Se o `.env` definir `DATABASE_URL_TESTES`, os testes usam ESSE banco (um
+# Postgres local, no Docker) em vez do banco de produção. Ganhos: a suíte roda
+# em minutos em vez de ~40 min (some a ida-e-volta até os EUA a cada consulta) e
+# nenhum teste tem como escrever no banco dos clientes.
+#
+# Sem a variável, o comportamento é o de sempre (banco do `DATABASE_URL`) — útil
+# para conferir de tempos em tempos se o schema de produção não divergiu.
+#
+# Isto PRECISA acontecer antes de importar `db`, que cria o engine na
+# importação. O `load_dotenv()` do `db` não sobrescreve variável já presente no
+# ambiente, então este apontamento vence. Como o pytest carrega o conftest antes
+# de qualquer módulo de teste, todo mundo enxerga o banco certo.
+load_dotenv()
+_banco_testes = os.environ.get("DATABASE_URL_TESTES", "").strip()
+if _banco_testes:
+    os.environ["DATABASE_URL"] = _banco_testes
 
 import pytest
 from fastapi.testclient import TestClient

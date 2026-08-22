@@ -28,20 +28,30 @@ Repositório: `github.com/ti927/batuta`, branch `main`. Estrutura: `cerebro/` (P
 
 ## Como rodar os testes (e por que o `.env` importa)
 
-**A suíte do cérebro roda contra o BANCO DE VERDADE.** Não há banco de teste separado: a fixture `sessao` (`cerebro/testes/conftest.py`) abre uma conexão, começa uma **transação externa** e a **reverte sempre** no fim — as escritas das rotas caem em savepoints internos e o rollback descarta tudo. Duas salvaguardas deliberadas, que **não devem ser desfeitas**:
+**A suíte do cérebro roda contra um BANCO DE VERDADE** — não existe banco de mentira. A fixture `sessao` (`cerebro/testes/conftest.py`) abre uma conexão, começa uma **transação externa** e a **reverte sempre** no fim: as escritas das rotas caem em savepoints internos e o rollback descarta tudo. Duas salvaguardas deliberadas, que **não devem ser desfeitas**:
 
 1. o `TestClient` é criado **sem `with`**, de propósito: assim o *lifespan* do app **não sobe** — **agendador e fila não acordam** durante os testes (senão a máquina local dispararia automações de produção — ver [[feedback-cerebro-local-dispara-producao]]);
 2. cada teste esvazia o cofre `chaves_api` **dentro** da transação revertida, para a resolução de chave partir sempre de um cofre vazio e o resultado não depender do estado real do banco.
 
-**Comandos:**
+### O banco local (padrão desde 2026-08-22)
 
-| O quê | Comando (a partir de `cerebro/`) |
+Esse "banco de verdade" **é um Postgres local**, num container Docker. Antes era o banco de produção; com ele nos EUA, cada consulta atravessava o continente e a suíte levava **~40 minutos**. Local, leva **~35 segundos** (medido: 863 testes). E nenhum teste passa a ter como escrever no banco dos clientes.
+
+Os testes não precisam dos **dados** de produção — cada um cria o que precisa e desfaz. Precisam só da **estrutura**, que é o que `alembic upgrade head` produz.
+
+| O quê | Comando |
 |---|---|
+| Subir o container (uma vez) | `docker run -d --name batuta-testes --restart unless-stopped -e POSTGRES_PASSWORD=batuta_testes_local -e POSTGRES_DB=batuta_testes -p 5433:5432 -v batuta-testes-dados:/var/lib/postgresql/data postgres:17` |
+| Preparar/atualizar o banco | `uv run python banco_testes.py` (a partir de `cerebro/`) — **rode de novo a cada migração nova** |
 | Suíte inteira | `uv run pytest -q` |
 | Um arquivo | `uv run pytest testes/test_x.py -q` |
 | Interface (tipos) | `npx tsc --noEmit` (a partir de `interface/`) |
 
-**Pré-requisito:** o `cerebro/.env` precisa apontar para o banco **US East**. As 4 variáveis que importam são `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY`; os valores vivem no `cerebro/.env.migracao` (gitignored) com o sufixo `*_NOVO` — a `DATABASE_URL` se monta como `postgresql://{PGUSER_NOVO}:{PGPASSWORD_NOVO}@{PGHOST_NOVO}:{PGPORT_NOVO}/postgres`. **Nunca troque a `COFRE_CHAVE_MESTRA`**: é ela que decifra os segredos já gravados.
+O que liga o modo local é a variável **`DATABASE_URL_TESTES`** no `cerebro/.env`. **Se ela existir, os testes usam o banco local; se não, usam o `DATABASE_URL` de sempre** (produção) — vale rodar assim de tempos em tempos para conferir que o schema de produção não divergiu. Requisito para o Docker Desktop estar de pé; se ele travar em "starting", matar os processos `*docker*` e reabrir resolve.
+
+**Por que o `banco_testes.py` troca o default das datas para `clock_timestamp()`:** em PostgreSQL, `now()` é o horário de **início da transação** — constante até o commit. Como cada teste roda numa transação só, todas as linhas nasceriam com o **mesmo** `criado_em`, e as consultas do produto que pedem "a última mensagem" (`ORDER BY criado_em DESC LIMIT 1`) empatariam: qual linha volta fica indeterminado e o desempate **muda de servidor para servidor**. Foi exatamente o que fez testes de conversa/portão quebrarem ao trocar de banco. Em produção não existe esse empate (cada mensagem chega em sua própria transação), então o `clock_timestamp()` faz o banco de testes modelar a produção com **mais** fidelidade — e mata uma classe inteira de teste intermitente. O `db.py` foi ajustado junto para respeitar um `?sslmode=` escrito na URL (o Postgres local não serve TLS); sem esse parâmetro o padrão continua `require`, então **produção não mudou**.
+
+**Rodando contra a produção:** as 4 variáveis que importam no `.env` são `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY`; os valores vivem no `cerebro/.env.migracao` (gitignored) com o sufixo `*_NOVO` — a `DATABASE_URL` se monta como `postgresql://{PGUSER_NOVO}:{PGPASSWORD_NOVO}@{PGHOST_NOVO}:{PGPORT_NOVO}/postgres`. **Nunca troque a `COFRE_CHAVE_MESTRA`**: é ela que decifra os segredos já gravados.
 
 **Sintoma de `.env` desatualizado:** centenas de erros `sqlalchemy.exc.OperationalError` no `setup` dos testes (foi o que aconteceu em 2026-08-21, quando o projeto antigo de São Paulo foi apagado). Diagnóstico rápido: `uv run python db.py` — imprime a versão do Postgres se a conexão estiver boa.
 
