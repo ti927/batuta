@@ -19,7 +19,11 @@ Nada de rede nem de banco aqui: é só leitura de bytes. A gravação cifrada é
 """
 
 import base64
+import os
+import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
+from typing import Iterator
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
@@ -142,3 +146,48 @@ def normalizar(
         chave, cert = _abrir_pfx(dados, senha_bytes)
 
     return _cert_pem(cert), _chave_pem(chave), _titular(cert), _expira_em(cert)
+
+
+# ─────────────────────── apresentar o certificado (mTLS) ───────────────────────
+
+
+@contextmanager
+def material_mtls(
+    certificado: str, chave_privada: str
+) -> Iterator[tuple[str, str] | None]:
+    """Materializa o par PEM em arquivos temporários e devolve `(cert, chave)` —
+    exatamente o que o `httpx` (e o `ssl` da biblioteca padrão por baixo) espera
+    no parâmetro `cert=`. Sem os dois, devolve `None`: a chamada sai sem
+    certificado, como sempre saiu.
+
+    **Por que passa por disco:** o módulo `ssl` do Python só carrega cadeia de
+    certificado a partir de CAMINHO de arquivo (`load_cert_chain`) — não existe
+    API que aceite os bytes em memória. Então os arquivos são criados com
+    permissão restrita ao dono (o `mkstemp` já nasce 0600), vivem o tempo exato
+    da requisição e são **apagados no `finally`**, inclusive se a chamada
+    explodir. Nada fica para trás.
+
+    Use como contexto, envolvendo a requisição:
+
+        with certificados.material_mtls(cert_pem, chave_pem) as par:
+            with httpx.Client(cert=par) as cliente:
+                ...
+    """
+    if not (certificado or "").strip() or not (chave_privada or "").strip():
+        yield None
+        return
+
+    caminhos: list[str] = []
+    try:
+        for conteudo in (certificado, chave_privada):
+            fd, caminho = tempfile.mkstemp(prefix="batuta_mtls_", suffix=".pem")
+            caminhos.append(caminho)
+            with os.fdopen(fd, "w") as arq:
+                arq.write(conteudo)
+        yield (caminhos[0], caminhos[1])
+    finally:
+        for caminho in caminhos:
+            try:
+                os.unlink(caminho)
+            except OSError:  # já removido / sem permissão: não derruba a chamada
+                pass

@@ -71,7 +71,14 @@ def _instrumento(configuracao: dict) -> Instrumento:
 def test_conector_registrado():
     t = encaixe.obter_tipo("conector")
     assert t is not None
-    assert t.campos_secretos == ("auth_segredo",)
+    # O segredo da autenticação declarada + o material de mTLS/OAuth (opcional,
+    # vindo do cofre): vazio nele NÃO conta como segredo pendente.
+    assert t.campos_secretos == (
+        "auth_segredo", "certificado", "chave_privada", "client_secret",
+    )
+    assert t.campos_secretos_opcionais == (
+        "certificado", "chave_privada", "client_secret",
+    )
     assert "conector" in [x.tipo for x in encaixe.tipos_disponiveis()]
 
 

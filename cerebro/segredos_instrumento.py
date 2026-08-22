@@ -185,9 +185,12 @@ def pendentes(
     cobertos = set(guardados) | set(cobertos_por_credencial)
     tipo_obj = obter_tipo(tipo)
     compart = getattr(tipo_obj, "chave_compartilhada", None) if tipo_obj else None
+    # (4) segredos OPCIONAIS do tipo: vazio é o estado normal, não pendência (ex.:
+    # o certificado mTLS, que só APIs bancárias exigem). Ver TipoInstrumento.
+    opcionais = set(getattr(tipo_obj, "campos_secretos_opcionais", ()) or ())
     faltando: list[str] = []
     for campo in campos_secretos(tipo):
-        if campo in cobertos:
+        if campo in cobertos or campo in opcionais:
             continue
         if compart and campo == compart[0] and compart[1] in servicos_resolviveis:
             continue

@@ -25,6 +25,11 @@ class CampoCredencial:
     nome: str  # bate com o nome do campo na Config do instrumento
     rotulo: str  # rótulo para a interface
     secreto: bool = True  # True = mascarado (últimos 4); False = identidade visível
+    # Campo DERIVADO do próprio segredo, que existe só para a pessoa reconhecer a
+    # credencial na tela (ex.: o titular e a validade lidos do certificado). Não é
+    # material de conexão: nenhum instrumento o recebe, então ele NÃO precisa ter
+    # campo correspondente na Config de quem aceita este tipo.
+    so_exibicao: bool = False
 
 
 @dataclass(frozen=True)
@@ -42,6 +47,13 @@ class TipoCredencial:
     @property
     def nomes_campos(self) -> tuple[str, ...]:
         return tuple(c.nome for c in self.campos)
+
+    @property
+    def nomes_injetaveis(self) -> tuple[str, ...]:
+        """Os campos que viram configuração de um instrumento — todos menos os de
+        exibição. É esta lista que precisa ter correspondência na Config de quem
+        aceita o tipo (o `nomes_campos` inteiro segue sendo o saco guardado)."""
+        return tuple(c.nome for c in self.campos if not c.so_exibicao)
 
 
 _REGISTRO: dict[str, TipoCredencial] = {}
@@ -135,10 +147,12 @@ registrar(
             CampoCredencial("client_id", "Client ID (OAuth, se houver)", secreto=False),
             CampoCredencial("client_secret", "Client Secret (OAuth, se houver)"),
             CampoCredencial(
-                "titular", "Titular (preenchido automaticamente)", secreto=False
+                "titular", "Titular (preenchido automaticamente)",
+                secreto=False, so_exibicao=True,
             ),
             CampoCredencial(
-                "validade", "Validade (preenchida automaticamente)", secreto=False
+                "validade", "Validade (preenchida automaticamente)",
+                secreto=False, so_exibicao=True,
             ),
         ),
     )

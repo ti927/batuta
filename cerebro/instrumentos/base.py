@@ -82,6 +82,13 @@ class TipoInstrumento(ABC):
     # `instrumentos.configuracao` (JSONB em claro), são cifrados no cofre de
     # segredos do instrumento e injetados só na execução. Top-level, string.
     campos_secretos: tuple[str, ...] = ()
+    # SEGREDOS OPCIONAIS: subconjunto de `campos_secretos` que só existe para
+    # integrações que os exigem — vazio é o normal, não uma pendência. Ex.: o
+    # certificado de cliente (mTLS) que APIs bancárias pedem: cobrar um
+    # certificado de todo instrumento REST/conector seria alarme falso. O cálculo
+    # de "faltam segredos" (`segredos_instrumento.pendentes`) os ignora; quando
+    # preenchidos (via credencial do cofre), valem normalmente.
+    campos_secretos_opcionais: tuple[str, ...] = ()
     # AÇÃO IRREVERSÍVEL: o instrumento age no mundo externo de forma que não dá
     # para desfazer (publicar, enviar, gravar em sistema de terceiros). É a base
     # da parede de ativação: um agente com instrumento irreversível só pode ser

@@ -11,6 +11,7 @@ from typing import Any, Literal
 import httpx
 from pydantic import BaseModel, Field
 
+import certificados
 from instrumentos.base import (
     FalhaInstrumento,
     TipoInstrumento,
@@ -78,6 +79,24 @@ class ConfigRest(BaseModel):
             "Aplica-se a respostas em lista, inclusive o formato \"results\" do Bubble."
         ),
     )
+    # Certificado de cliente (mTLS) — chega da caixa-forte, por referência a uma
+    # credencial do tipo `certificado_mtls`; NÃO se digita aqui. É o que APIs
+    # bancárias (Pix, boleto) exigem além do token. Vazio = chamada sem
+    # certificado, como sempre foi.
+    certificado: str = Field(
+        default="", description="Certificado de cliente em PEM (vem do cofre)."
+    )
+    chave_privada: str = Field(
+        default="", description="Chave privada do certificado em PEM (vem do cofre)."
+    )
+    # OAuth do banco: vem junto da mesma credencial. O transporte (esta fatia) não
+    # os usa — quem os usa é o passo de obter/renovar o token de acesso. Existem
+    # aqui porque a credencial é UMA só: aceitar o tipo obriga a ter onde injetar
+    # cada campo dele (regra conferida em test_tipos_credencial).
+    client_id: str = Field(default="", description="Client ID do OAuth (vem do cofre).")
+    client_secret: str = Field(
+        default="", description="Client Secret do OAuth (vem do cofre)."
+    )
 
 
 class ArgsRest(BaseModel):
@@ -101,8 +120,13 @@ class ChamarApiRest(TipoInstrumento):
     )
     Config = ConfigRest
     Args = ArgsRest
-    campos_secretos = ("token_bearer",)
-    tipos_credencial_aceitos = ("token_bearer",)
+    campos_secretos = (
+        "token_bearer", "certificado", "chave_privada", "client_secret",
+    )
+    # O material de mTLS/OAuth só existe para quem integra com API que o exige —
+    # vazio não é pendência (senão todo REST nasceria "faltando certificado").
+    campos_secretos_opcionais = ("certificado", "chave_privada", "client_secret")
+    tipos_credencial_aceitos = ("token_bearer", "certificado_mtls")
     # Baseline irreversível (default seguro), mas a irreversibilidade REAL depende
     # do método: uma leitura (GET/HEAD/OPTIONS) não muda nada e não exige portão.
     acao_irreversivel = True
@@ -120,14 +144,20 @@ class ChamarApiRest(TipoInstrumento):
             cabecalhos["Authorization"] = f"Bearer {config.token_bearer}"
         validar_cabecalhos_ascii(cabecalhos)
         try:
-            with httpx.Client(timeout=TIMEOUT_S) as cliente:
-                resposta = cliente.request(
-                    config.metodo,
-                    config.url,
-                    headers=cabecalhos or None,
-                    params=args.parametros_query or None,
-                    json=args.corpo,
-                )
+            # mTLS: se houver certificado de cliente (credencial do cofre), ele é
+            # apresentado no aperto de mão TLS. Sem certificado, `par` é None e a
+            # chamada sai idêntica à de sempre.
+            with certificados.material_mtls(
+                config.certificado, config.chave_privada
+            ) as par:
+                with httpx.Client(timeout=TIMEOUT_S, cert=par) as cliente:
+                    resposta = cliente.request(
+                        config.metodo,
+                        config.url,
+                        headers=cabecalhos or None,
+                        params=args.parametros_query or None,
+                        json=args.corpo,
+                    )
         except httpx.HTTPError as e:
             # Transporte: conexão recusada, DNS, timeout — transitório, vale retentar.
             raise FalhaInstrumento(

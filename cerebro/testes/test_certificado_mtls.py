@@ -173,3 +173,166 @@ def test_criar_sem_arquivo_recusa():
     cred = Credencial(tipo="certificado_mtls", nome="sem cert")
     with pytest.raises(certificados.CertificadoInvalido):
         cofre_cred.gravar_com_certificado(cred, {"client_id": "x"})
+
+
+# ═══════════════ Fatia B — apresentar o certificado na conexão ════════════════
+# O par PEM sai do cofre e é apresentado no aperto de mão TLS. Cobre o
+# materializador (arquivos temporários que morrem no fim) e os DOIS caminhos de
+# saída HTTP do Batuta: o "Chamar API REST" e o Conector.
+
+import instrumentos.conector as conector_mod  # noqa: E402
+import instrumentos.rest as rest  # noqa: E402
+from instrumentos.conector import (  # noqa: E402
+    CampoOperacao,
+    ConfigConector,
+    OperacaoConector,
+    _executar_operacao,
+)
+from instrumentos.rest import ChamarApiRest, ConfigRest  # noqa: E402
+
+CERT_PEM = "-----BEGIN CERTIFICATE-----\nfalso\n-----END CERTIFICATE-----\n"
+CHAVE_PEM = "-----BEGIN PRIVATE KEY-----\nfalsa\n-----END PRIVATE KEY-----\n"
+
+
+def test_material_mtls_escreve_o_par_e_apaga_depois():
+    with certificados.material_mtls(CERT_PEM, CHAVE_PEM) as par:
+        assert par is not None
+        caminho_cert, caminho_chave = par
+        # Durante a chamada, os dois arquivos existem com o conteúdo exato.
+        with open(caminho_cert) as a:
+            assert a.read() == CERT_PEM
+        with open(caminho_chave) as a:
+            assert a.read() == CHAVE_PEM
+    # Ao sair, nada fica para trás.
+    assert not os.path.exists(caminho_cert)
+    assert not os.path.exists(caminho_chave)
+
+
+def test_material_mtls_sem_certificado_devolve_none():
+    # Sem par (ou só metade dele), a chamada sai como sempre saiu: sem certificado.
+    with certificados.material_mtls("", "") as par:
+        assert par is None
+    with certificados.material_mtls(CERT_PEM, "   ") as par:
+        assert par is None
+
+
+def test_material_mtls_apaga_ate_se_a_chamada_explodir():
+    caminhos = []
+    with pytest.raises(RuntimeError):
+        with certificados.material_mtls(CERT_PEM, CHAVE_PEM) as par:
+            caminhos = list(par)
+            raise RuntimeError("a API caiu no meio")
+    assert caminhos and not any(os.path.exists(c) for c in caminhos)
+
+
+class _RespFake:
+    status_code = 200
+    is_success = True
+    text = "{}"
+
+    def json(self):
+        return {"ok": True}
+
+
+class _ClienteFake:
+    """Captura o `cert=` que o instrumento passou ao httpx e confere que os
+    arquivos ainda EXISTEM na hora da requisição (morrem só depois)."""
+
+    def __init__(self, capturado, **kwargs):
+        self.capturado = capturado
+        capturado["cert"] = kwargs.get("cert")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def request(self, *a, **k):
+        par = self.capturado.get("cert")
+        self.capturado["existiam_na_hora"] = bool(par) and all(
+            os.path.exists(c) for c in par
+        )
+        return _RespFake()
+
+
+def _espionar_httpx(monkeypatch, modulo):
+    capturado: dict = {}
+    monkeypatch.setattr(
+        modulo.httpx, "Client", lambda **k: _ClienteFake(capturado, **k)
+    )
+    if modulo is rest:  # o log TEMP de diagnóstico escreve no banco — silencia
+        monkeypatch.setattr(rest, "registrar_evento", lambda **k: None)
+    return capturado
+
+
+def test_rest_apresenta_o_certificado(monkeypatch):
+    capturado = _espionar_httpx(monkeypatch, rest)
+    ChamarApiRest().executar(
+        ConfigRest(
+            url="https://api.banco.exemplo/pix", metodo="GET",
+            certificado=CERT_PEM, chave_privada=CHAVE_PEM,
+        ),
+        rest.ArgsRest(),
+    )
+    par = capturado["cert"]
+    assert par is not None and len(par) == 2
+    assert capturado["existiam_na_hora"] is True   # vivos durante a requisição
+    assert not any(os.path.exists(c) for c in par)  # e apagados ao fim
+
+
+def test_rest_sem_certificado_segue_como_antes(monkeypatch):
+    capturado = _espionar_httpx(monkeypatch, rest)
+    ChamarApiRest().executar(
+        ConfigRest(url="https://api.exemplo/x", metodo="GET"), rest.ArgsRest()
+    )
+    assert capturado["cert"] is None
+
+
+def _op() -> OperacaoConector:
+    return OperacaoConector(
+        nome="Consultar saldo", metodo="GET",
+        url="https://api.banco.exemplo/saldo",
+        campos=[CampoOperacao(nome="conta", papel="fixo", valor="1", destino="query")],
+    )
+
+
+def test_conector_apresenta_o_certificado(monkeypatch):
+    capturado = _espionar_httpx(monkeypatch, conector_mod)
+    _executar_operacao(
+        ConfigConector(certificado=CERT_PEM, chave_privada=CHAVE_PEM), _op(), {}
+    )
+    par = capturado["cert"]
+    assert par is not None and len(par) == 2
+    assert capturado["existiam_na_hora"] is True
+    assert not any(os.path.exists(c) for c in par)
+
+
+def test_conector_sem_certificado_segue_como_antes(monkeypatch):
+    capturado = _espionar_httpx(monkeypatch, conector_mod)
+    _executar_operacao(ConfigConector(), _op(), {})
+    assert capturado["cert"] is None
+
+
+def test_certificado_vazio_nao_vira_segredo_pendente():
+    """O material de mTLS é OPCIONAL: só APIs bancárias o exigem. Um REST ou um
+    conector sem certificado não pode aparecer como 'faltando segredo' — senão
+    todo instrumento de integração nasceria cobrando um certificado que ninguém
+    precisa (alarme falso na tela e na IA criadora)."""
+    import segredos_instrumento as si
+
+    for tipo in ("chamar_api_rest", "conector"):
+        faltando = si.pendentes(tipo, guardados=set())
+        assert "certificado" not in faltando
+        assert "chave_privada" not in faltando
+        assert "client_secret" not in faltando
+
+
+def test_os_dois_caminhos_de_saida_aceitam_a_credencial_do_cofre():
+    # A capacidade vale nos DOIS instrumentos que fazem chamada externa — e por
+    # REFERÊNCIA ao cofre (o segredo não é digitado no instrumento).
+    assert "certificado_mtls" in ChamarApiRest.tipos_credencial_aceitos
+    assert "certificado_mtls" in conector_mod.Conector.tipos_credencial_aceitos
+    for tipo in (ChamarApiRest, conector_mod.Conector):
+        assert "certificado" in tipo.campos_secretos
+        assert "chave_privada" in tipo.campos_secretos

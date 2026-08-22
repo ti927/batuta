@@ -39,7 +39,9 @@ def test_campos_da_credencial_existem_na_config_do_instrumento():
             assert tcred is not None, (
                 f"{inst.tipo} aceita credencial '{tipo_cred}' não registrada"
             )
-            faltando = [c for c in tcred.nomes_campos if c not in campos_config]
+            # Só os campos INJETÁVEIS: os de exibição (titular/validade de um
+            # certificado, derivados do segredo) não vão para instrumento nenhum.
+            faltando = [c for c in tcred.nomes_injetaveis if c not in campos_config]
             assert not faltando, (
                 f"{inst.tipo} aceita '{tipo_cred}', mas a Config não tem {faltando}"
             )

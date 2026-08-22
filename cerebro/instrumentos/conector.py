@@ -28,6 +28,7 @@ import httpx
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field, create_model
 
+import certificados
 from instrumentos.base import (
     FalhaInstrumento,
     TipoInstrumento,
@@ -94,6 +95,23 @@ class ConfigConector(BaseModel):
     )
     auth_segredo: str = Field(
         default="", description="Token/chave de autenticação (SEGREDO → cofre)."
+    )
+    # Certificado de cliente (mTLS) — vem da caixa-forte por referência a uma
+    # credencial `certificado_mtls`, nunca digitado. Vale para TODAS as operações
+    # do conector (é propriedade da conexão com o serviço, não de uma chamada).
+    # Vazio = sem certificado, como sempre foi.
+    certificado: str = Field(
+        default="", description="Certificado de cliente em PEM (vem do cofre)."
+    )
+    chave_privada: str = Field(
+        default="", description="Chave privada do certificado em PEM (vem do cofre)."
+    )
+    # OAuth do banco: acompanha a mesma credencial. O transporte não os usa; estão
+    # aqui porque aceitar um tipo de credencial obriga a ter onde injetar cada
+    # campo dele (regra conferida em test_tipos_credencial).
+    client_id: str = Field(default="", description="Client ID do OAuth (vem do cofre).")
+    client_secret: str = Field(
+        default="", description="Client Secret do OAuth (vem do cofre)."
     )
     operacoes: list[OperacaoConector] = Field(default_factory=list)
     # Metadados do Construtor — NÃO afetam a execução (o motor os ignora). A
@@ -164,13 +182,16 @@ def _args_da_operacao(op: OperacaoConector) -> type[BaseModel]:
 
 def _chamar_http(
     metodo: str, url: str, cabecalhos: dict, params: dict, corpo: dict | None,
-    campos_resposta: list[str],
+    campos_resposta: list[str], mtls: tuple[str, str] | None = None,
 ) -> dict:
     """A chamada HTTP em si — espelha o núcleo provado do `rest.py`: erros de
     transporte e 5xx/429 viram falha retentável; 401/403 falha não-retentável;
-    2xx e demais 4xx (ex.: 404) voltam ao agente como dado."""
+    2xx e demais 4xx (ex.: 404) voltam ao agente como dado.
+
+    `mtls` é o par (certificado, chave) já materializado em arquivo, quando o
+    conector tem certificado de cliente; None = chamada sem certificado."""
     try:
-        with httpx.Client(timeout=TIMEOUT_S) as cliente:
+        with httpx.Client(timeout=TIMEOUT_S, cert=mtls) as cliente:
             resposta = cliente.request(
                 metodo, url, headers=cabecalhos or None, params=params or None, json=corpo
             )
@@ -230,7 +251,13 @@ def _executar_operacao(
             params[config.auth_nome or "api_key"] = config.auth_segredo
     validar_cabecalhos_ascii(cabecalhos)
 
-    return _chamar_http(op.metodo, url, cabecalhos, params, corpo or None, op.campos_resposta)
+    # 4) certificado de cliente (mTLS), se a conexão tiver um: vale para toda
+    # operação do conector. Os arquivos temporários morrem ao sair do contexto.
+    with certificados.material_mtls(config.certificado, config.chave_privada) as par:
+        return _chamar_http(
+            op.metodo, url, cabecalhos, params, corpo or None, op.campos_resposta,
+            mtls=par,
+        )
 
 
 # ───────────────────────── testar e detectar (Construtor) ─────────────────────────
@@ -308,7 +335,15 @@ class Conector(TipoInstrumento):
     )
     Config = ConfigConector
     Args = ArgsConector
-    campos_secretos = ("auth_segredo",)
+    campos_secretos = (
+        "auth_segredo", "certificado", "chave_privada", "client_secret",
+    )
+    # O material de mTLS/OAuth é opcional: só APIs que o exigem o usam, e vazio
+    # não pode virar "conector com segredo pendente".
+    campos_secretos_opcionais = ("certificado", "chave_privada", "client_secret")
+    # Caixa-forte: o conector aceita apontar para um certificado guardado no cofre
+    # (o segredo não é digitado aqui nem passa pela IA).
+    tipos_credencial_aceitos = ("certificado_mtls",)
     # Baseline seguro; a irreversibilidade REAL depende das operações (ver abaixo).
     acao_irreversivel = True
     # Fase 1 (o motor): o tipo é REAL e executável, mas fica FORA do dropdown de
