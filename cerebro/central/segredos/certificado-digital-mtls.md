@@ -31,10 +31,25 @@ de nenhum cadastro à parte.
    como `.pfx`/`.p12` (um arquivo só, com senha) ou como `.pem`/`.crt` acompanhado de um `.key`.
 2. Crie o instrumento no **Construtor** e vá ao passo **Autenticação**.
 3. No bloco **Certificado digital**, suba o arquivo e informe a senha, se houver.
-4. Se o banco exigir token de acesso (a maioria exige), escolha o tipo de autenticação
-   **OAuth 2.0** e preencha **Client ID**, **Client Secret**, **Endereço do token** e **Escopo**,
-   conforme a documentação dele. O Batuta passa a renovar o token sozinho.
+4. Escolha o **tipo de autenticação** conforme o que o serviço pede **além** do certificado (veja o
+   quadro abaixo).
 5. Salve. O agente faz as chamadas normalmente.
+
+### Qual tipo de autenticação escolher
+
+O certificado **não é** um tipo de autenticação: ele é a identificação da conexão e vale **junto com
+qualquer opção** do seletor. O que você escolhe ali é o que o serviço pede *além* dele:
+
+| O serviço pede… | Escolha |
+|---|---|
+| Só o certificado | **Sem autenticação** |
+| Certificado + Client ID/Secret + endereço de token | **OAuth 2.0** |
+| Certificado + um token fixo que já te deram | **Token de acesso (Bearer)** |
+
+> **"Sem autenticação" não quer dizer "sem segurança".** Quer dizer "nada além do certificado" — e
+> nesse caso é o próprio certificado que identifica você. É o caso mais comum das APIs de **governo**
+> (Receita Federal, SEFAZ, e-Social, notas fiscais), onde se usa um **e-CNPJ**. **Banco** é que
+> normalmente pede certificado **e** OAuth 2.0.
 
 > Também existe o caminho antigo, pela caixa-forte: criar uma credencial do tipo **Certificado
 > digital (mTLS)** em Chaves e credenciais e apontar o instrumento para ela. Continua funcionando
@@ -50,7 +65,9 @@ de nenhum cadastro à parte.
 ## Limites e cuidados
 - **O certificado vence** (normalmente em 1 ano). A tela mostra a data; quando renovar com o banco,
   suba o arquivo novo na mesma credencial.
-- **A senha do arquivo não é guardada.** Ela serve só para abrir o `.pfx` no momento do envio.
+- **A senha do arquivo não é guardada.** Ela serve só para abrir o `.pfx` no momento do envio. Vale
+  conferir se a senha não está no **nome do arquivo** (acontece com frequência: `..._SENHA abc123.pfx`)
+  — um `.pfx` sem a senha é inútil para quem o pegue; com a senha no nome, vira uma chave completa.
 - **Trocar o Client ID, o segredo, o endereço ou o próprio certificado descarta o token guardado** —
   o próximo acionamento busca um novo. Isso é proposital: evita continuar operando com a conta antiga.
 - **Certificado A3** (token físico/cartão) **não serve** — o Batuta precisa do arquivo (A1).

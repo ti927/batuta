@@ -47,9 +47,15 @@ tela do instrumento. Nunca ponha token, senha ou certificado no objeto — são 
   resolvido pela plataforma.
 
 **Certificado digital (mTLS)** é outra coisa e **combina** com qualquer `auth_tipo`: é o arquivo com
-que o cliente se identifica na conexão, exigido por APIs bancárias (Pix, boleto). Um banco costuma
-pedir certificado **e** `oauth2` juntos. Você não o configura: o consultor sobe o arquivo na tela do
-instrumento. Ver [[segredos/certificado-digital-mtls]].
+que o cliente se identifica na conexão. Você não o configura — o consultor sobe o arquivo na tela do
+instrumento —, mas você escolhe o `auth_tipo` que vai **junto** com ele:
+- serviço que pede **só o certificado** (o caso comum de API de governo com e-CNPJ: Receita, SEFAZ,
+  e-Social, nota fiscal) → `auth_tipo: "nenhuma"`. Aqui "nenhuma" significa "nada além do
+  certificado", não "sem segurança";
+- **banco** (Pix, boleto) → quase sempre `auth_tipo: "oauth2"`, certificado **e** token.
+
+Se o consultor não souber qual é o caso, pergunte **com qual serviço** o instrumento vai falar antes
+de montar. Ver [[segredos/certificado-digital-mtls]].
 
 ## APIs do Bubble (o caso mais comum aqui — leia com atenção)
 A **Data API** do Bubble tem um endereço por tabela: `https://<app>/api/1.1/obj/<Tabela>`.

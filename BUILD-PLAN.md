@@ -1858,6 +1858,27 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
+## FASE — O instrumento se basta: certificado, Basic e OAuth 2.0 dentro do Construtor  ✅ NO AR (2026-08-22, commit `2348436`, sem migração, aditivo)
+
+**Correção de rumo do maestro.** A fundação bancária nasceu na **caixa-forte** (credencial nomeada `certificado_mtls`) e ele recusou o lugar: *"eu queria que isso fizesse parte da criação do instrumento; as credenciais ficam na criação do instrumento; a central de chaves é só pra chaves de IA"*. Delimitou junto: *"não é pra mexer em nada do que tá pronto — é pra deixar o Construtor INDEPENDENTE, centralizar tudo que um instrumento precisa lá; a central de credenciamentos a gente mexe no futuro"*. **Isso já era a decisão (5) do Framework de Instrumentos (§12, 2026-08-12)** e não tinha sido aplicada — daí a volta. Regra derivada em [[feedback-instrumento-se-basta]]: conferir as decisões já tomadas ANTES de escolher onde construir.
+
+**O passo "Autenticação" do Construtor tinha dois `em breve` desabilitados e nenhum jeito de subir certificado.** Os três buracos fecharam:
+- **`basic`** — `auth_usuario` (não-secreto) + a senha (segredo) → cabeçalho Basic.
+- **`oauth2`** — `auth_usuario` é o Client ID, o segredo é o Client Secret, mais `url_token` e `escopo`. A **borda** troca isso por um `access_token` e o renova antes de vencer; no cabeçalho vai o **token**, nunca o Client Secret (há teste provando que ele não vaza).
+- **Certificado digital** — em **bloco próprio, não no seletor**: certificado **não é** um tipo de autenticação, é a conexão, e um banco exige certificado **E** OAuth ao mesmo tempo. Combina com qualquer tipo. O mesmo par de campos serve Basic e OAuth, então a tela ganhou uma caixa a mais, não quatro.
+
+**Duas peças estruturais (aditivas):**
+1. **`TipoInstrumento.normalizar_config`** — o tipo pode TRANSFORMAR a config crua antes da validação e da separação de segredos. O conector a usa para converter o `.pfx` enviado no par PEM guardado; arquivo e senha são **transitórios** (não viram config nem segredo). Fica pendurada em `preparar_config`, o ponto único por onde criar e editar instrumento já passavam — **sem rota nova e sem caminho duplicado**. Arquivo ilegível levanta `ValueError`, que as rotas já traduzem em 422 humano.
+2. **`oauth_mtls.garantir_material`** — o núcleo do token (cache, margem de 5 min, nunca levanta) virou **uma fonte só** com dois chamadores: a credencial da caixa-forte (como antes) e o instrumento. O token do instrumento é cacheado no cofre **dele**; `salvar_segredos` é upsert campo a campo, então não encosta no certificado nem no segredo da autenticação.
+
+**Nada do que existia mudou:** o caminho pela caixa-forte segue funcionando (a autenticação declarada tem precedência sobre o token da borda), nenhum instrumento existente foi tocado e a central de credenciais não foi mexida.
+
+**Verificação:** 894 testes (+8), `tsc`/`eslint`/`next build` limpos. Central atualizada (`instrumentos/construir-conector` e `segredos/certificado-digital-mtls`) — é o que a IA criadora lê, inclusive a regra de qual `auth_tipo` acompanha o certificado.
+
+**📋 Pendência de UX (proposta, aguarda decisão do maestro):** com um certificado carregado, a opção **"Sem autenticação"** parece contradição — foi a dúvida real dele ao usar a tela ("que tipo de autenticação eu tenho que colocar?"). Proposto: quando houver certificado, essa opção se explicar ("só o certificado, nada além dele") e o bloco dizer que combina com qualquer tipo acima. Só texto, sem mudar layout.
+
+---
+
 ## FASE — Suíte de testes contra Postgres local  ✅ NO AR (2026-08-22, commit `7b0ba23`, sem migração)
 
 **Gatilho:** com o banco migrado para US East, a suíte passou de ~3 min para **~40 min** — cada uma das dezenas de milhares de consultas dos 863 testes atravessava o continente. Caro demais para o ritual "verifique antes de seguir" do `CLAUDE.md`.
