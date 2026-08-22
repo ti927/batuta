@@ -539,6 +539,94 @@ def test_conector_auth_declarada_tem_precedencia(monkeypatch):
     assert capturado["cabecalhos"]["Authorization"] == "Bearer declarado"
 
 
+# ═════ O instrumento se basta: certificado e OAuth montados no Construtor ═════
+# Decisão do maestro (2026-08-22): tudo o que um instrumento precisa vive na
+# criação DELE; a caixa-forte fica para chaves de IA. Aqui o certificado é subido
+# no próprio instrumento — sem passar por credencial nomeada.
+
+
+def test_instrumento_recebe_o_arquivo_e_guarda_o_par_pem():
+    """Quem monta sobe um `.pfx`; o que fica guardado é o par PEM que a conexão
+    usa. O arquivo e a senha são transitórios — não viram config nem segredo."""
+    import instrumentos as encaixe
+
+    config, segredos = encaixe.preparar_config(
+        "conector",
+        {
+            "auth_tipo": "nenhuma",
+            "operacoes": [],
+            "arquivo": _pfx_b64(b"s3nha"),
+            "senha_certificado": "s3nha",
+        },
+    )
+    assert "BEGIN CERTIFICATE" in segredos["certificado"]
+    assert "BEGIN PRIVATE KEY" in segredos["chave_privada"]
+    # Nada de segredo na config pública, e nada de resíduo do upload.
+    for sumido in ("certificado", "chave_privada", "arquivo", "senha_certificado"):
+        assert sumido not in config
+
+
+def test_instrumento_sem_arquivo_preserva_o_certificado_guardado():
+    """Editar o instrumento sem reenviar o arquivo não pode apagar o certificado:
+    campo secreto ausente preserva o atual (mesma regra do token)."""
+    import instrumentos as encaixe
+
+    config, segredos = encaixe.preparar_config(
+        "conector", {"auth_tipo": "bearer", "operacoes": []}
+    )
+    assert "certificado" not in segredos and "chave_privada" not in segredos
+
+
+def test_instrumento_com_arquivo_ruim_da_erro_humano():
+    """Arquivo ilegível vira `ValueError` — que a rota já traduz em 422 claro."""
+    import instrumentos as encaixe
+
+    with pytest.raises(ValueError) as e:
+        encaixe.preparar_config(
+            "conector",
+            {"operacoes": [], "arquivo": base64.b64encode(b"nao sou cert").decode()},
+        )
+    assert "certificado" in str(e.value).lower()
+
+
+def test_borda_troca_usuario_e_segredo_por_token(monkeypatch):
+    """O instrumento traz o OAuth em si mesmo: a borda usa `auth_usuario` como
+    Client ID e `auth_segredo` como Client Secret (o mesmo par do Basic), e
+    apresenta o certificado do próprio instrumento ao pedir o token."""
+    capturado = {}
+
+    def fake_obter(**k):
+        capturado.update(k)
+        return "tok-novo", datetime.datetime.now(
+            datetime.timezone.utc
+        ) + datetime.timedelta(hours=1)
+
+    monkeypatch.setattr(oauth_mtls, "obter_token", fake_obter)
+    monkeypatch.setattr(oauth_mtls, "_persistir_no_instrumento", lambda *a: None)
+
+    token = oauth_mtls.garantir_token_instrumento(
+        "id-do-instrumento",
+        {"url_token": "https://banco/token", "escopo": "cob.read",
+         "auth_usuario": "cliente-123"},
+        {"auth_segredo": "segredo-abc", "certificado": CERT_PEM,
+         "chave_privada": CHAVE_PEM},
+    )
+    assert token == "tok-novo"
+    assert capturado["client_id"] == "cliente-123"
+    assert capturado["client_secret"] == "segredo-abc"
+    assert capturado["escopo"] == "cob.read"
+    assert capturado["certificado"] == CERT_PEM
+
+
+def test_instrumento_sem_oauth_nao_busca_token(monkeypatch):
+    """Sem endereço de token, nada de rede: é o caso de um conector comum."""
+    monkeypatch.setattr(
+        oauth_mtls, "obter_token",
+        lambda **k: (_ for _ in ()).throw(AssertionError("não devia buscar token")),
+    )
+    assert oauth_mtls.garantir_token_instrumento("x", {}, {}) == ""
+
+
 def test_certificado_vazio_nao_vira_segredo_pendente():
     """O material de mTLS é OPCIONAL: só APIs bancárias o exigem. Um REST ou um
     conector sem certificado não pode aparecer como 'faltando segredo' — senão

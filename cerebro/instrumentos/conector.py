@@ -19,6 +19,7 @@ portão operação-a-operação ("GET livre, POST gateado") exige um toque aditi
 motor (`agente.py`) e vem numa fatia própria, aprovada à parte pela evolução dirigida.
 """
 
+import base64
 import json
 import re
 import unicodedata
@@ -88,14 +89,33 @@ class ConfigConector(BaseModel):
     `auth_segredo` é SEGREDO (cofre): nunca vai para a `instrumentos.configuracao`
     em claro — é cifrado e injetado só na execução, como todos os campos secretos."""
 
-    auth_tipo: Literal["nenhuma", "bearer", "cabecalho", "query"] = "nenhuma"
+    auth_tipo: Literal["nenhuma", "bearer", "cabecalho", "query", "basic", "oauth2"] = (
+        "nenhuma"
+    )
     auth_nome: str = Field(
         default="",
         description="Nome do cabeçalho/parâmetro que leva o segredo (para 'cabecalho'/'query').",
     )
-    auth_segredo: str = Field(
-        default="", description="Token/chave de autenticação (SEGREDO → cofre)."
+    auth_usuario: str = Field(
+        default="",
+        description=(
+            "Identificação não-secreta do par de autenticação: o USUÁRIO no Basic, "
+            "o Client ID no OAuth 2.0."
+        ),
     )
+    auth_segredo: str = Field(
+        default="",
+        description=(
+            "A metade secreta da autenticação (→ cofre): o token no Bearer, a chave "
+            "no cabeçalho/query, a SENHA no Basic, o Client Secret no OAuth 2.0."
+        ),
+    )
+    # OAuth 2.0 (client credentials): o Batuta troca usuário+segredo por um token
+    # de acesso no endereço abaixo e o RENOVA sozinho antes de vencer.
+    url_token: str = Field(
+        default="", description="Endereço que emite o token (OAuth 2.0)."
+    )
+    escopo: str = Field(default="", description="Escopo pedido ao emitir o token.")
     # Certificado de cliente (mTLS) — vem da caixa-forte por referência a uma
     # credencial `certificado_mtls`, nunca digitado. Vale para TODAS as operações
     # do conector (é propriedade da conexão com o serviço, não de uma chamada).
@@ -247,15 +267,24 @@ def _executar_operacao(
 
     # 3) autenticação (declarativa, reusa o segredo do cofre).
     cabecalhos = dict(op.cabecalhos or {})
-    if config.auth_segredo:
+    if config.auth_tipo == "oauth2":
+        # O segredo aqui é o Client Secret: quem vai no cabeçalho é o token que a
+        # BORDA já trocou por ele (e renova sozinha). Sem token, a chamada sai sem
+        # Authorization e o serviço responde 401 — com recado claro.
+        if config.access_token:
+            cabecalhos["Authorization"] = f"Bearer {config.access_token}"
+    elif config.auth_tipo == "basic" and (config.auth_usuario or config.auth_segredo):
+        par = f"{config.auth_usuario}:{config.auth_segredo}".encode()
+        cabecalhos["Authorization"] = f"Basic {base64.b64encode(par).decode()}"
+    elif config.auth_segredo:
         if config.auth_tipo == "bearer":
             cabecalhos["Authorization"] = f"Bearer {config.auth_segredo}"
         elif config.auth_tipo == "cabecalho":
             cabecalhos[config.auth_nome or "Authorization"] = config.auth_segredo
         elif config.auth_tipo == "query":
             params[config.auth_nome or "api_key"] = config.auth_segredo
-    # Token do OAuth do banco (obtido pela borda a partir da credencial mTLS):
-    # entra como Bearer quando a autenticação declarada não já definiu um.
+    # Token vindo de uma CREDENCIAL da caixa-forte (o caminho antigo, preservado):
+    # entra como Bearer quando a autenticação declarada não definiu nenhum.
     elif config.access_token:
         cabecalhos["Authorization"] = f"Bearer {config.access_token}"
     validar_cabecalhos_ascii(cabecalhos)
@@ -362,6 +391,28 @@ class Conector(TipoInstrumento):
     # criar instrumento da tela atual — seu formulário cru (lista de operações) só
     # faz sentido no Construtor de Instrumento (Fase 2). Até lá, invisível na UI.
     oculto_no_catalogo = True
+
+    # Campos que a pessoa preenche no Construtor e que NÃO viram configuração: o
+    # arquivo do certificado (e sua senha) só existem na hora de subir.
+    _TRANSITORIOS = ("arquivo", "chave_arquivo", "senha_certificado")
+
+    def normalizar_config(self, bruta: dict) -> dict:
+        """Converte o ARQUIVO de certificado enviado pelo Construtor no par PEM
+        que a conexão usa — para o instrumento ser completo sem passar pela
+        caixa-forte. Sem arquivo, não mexe em nada (o certificado guardado antes
+        é preservado, como todo campo secreto em branco).
+
+        A senha do arquivo abre o `.pfx` e NÃO é guardada."""
+        limpa = {k: v for k, v in bruta.items() if k not in self._TRANSITORIOS}
+        arquivo = str(bruta.get("arquivo", "") or "").strip()
+        if not arquivo:
+            return limpa
+        cert_pem, chave_pem, _titular, _expira = certificados.normalizar(
+            arquivo,
+            senha=str(bruta.get("senha_certificado", "") or ""),
+            chave_b64=str(bruta.get("chave_arquivo", "") or ""),
+        )
+        return {**limpa, "certificado": cert_pem, "chave_privada": chave_pem}
 
     def irreversivel_para(self, configuracao: dict) -> bool:
         """Conservador POR INSTRUMENTO nesta fatia: irreversível se QUALQUER operação

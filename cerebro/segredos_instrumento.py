@@ -150,6 +150,20 @@ def anexar_aos_instrumentos(sessao: Session, instrumentos: list) -> None:
             # Campo ainda vazio (nem inline nem credencial) → reusa a do pool.
             if not (valores.get(campo) or "").strip() and pool.get(servico):
                 valores = {**valores, campo: pool[servico]}
+        # (4) OAuth 2.0 declarado NO PRÓPRIO INSTRUMENTO (montado no Construtor,
+        # sem caixa-forte): troca usuário+segredo por um token de acesso e o
+        # renova antes de vencer, apresentando o certificado se houver um. Nunca
+        # levanta — no pior caso o instrumento recebe o token velho e o serviço
+        # responde 401 com recado claro.
+        if (inst.configuracao or {}).get("auth_tipo") == "oauth2":
+            import oauth_mtls
+
+            valores = {
+                **valores,
+                "access_token": oauth_mtls.garantir_token_instrumento(
+                    inst.id, inst.configuracao or {}, valores
+                ),
+            }
         inst.segredos_decifrados = valores
 
 

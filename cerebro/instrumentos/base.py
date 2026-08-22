@@ -124,6 +124,23 @@ class TipoInstrumento(ABC):
     # por isto; a criação/execução por tipo seguem funcionando normalmente.
     oculto_no_catalogo: bool = False
 
+    def normalizar_config(self, bruta: dict) -> dict:
+        """Chance de o tipo TRANSFORMAR a configuração crua antes de ela ser
+        validada e ter os segredos separados.
+
+        Serve para campos que a pessoa PREENCHE de um jeito e o instrumento
+        GUARDA de outro. O caso que motivou: o certificado digital — quem monta o
+        instrumento sobe um arquivo `.pfx`, e o que fica guardado é o par PEM que
+        a conexão usa. Assim o Construtor não precisa mandar ninguém à caixa-forte
+        para completar o instrumento.
+
+        Os campos de entrada (o arquivo, a senha) são TRANSITÓRIOS: existem só
+        nesta passagem e não viram configuração nem segredo.
+
+        Levante `ValueError` (com mensagem humana) se a entrada não presta — as
+        rotas já a traduzem em 422. O padrão não mexe em nada."""
+        return bruta
+
     def irreversivel_para(self, configuracao: dict) -> bool:
         """Se ESTA instância (com esta configuração) faz ação irreversível.
 
@@ -260,7 +277,7 @@ def preparar_config(tipo: str, configuracao: dict | None) -> tuple[dict, dict]:
     if t is None:
         raise ValueError(f"Tipo de instrumento desconhecido: {tipo!r}")
     secretos = set(t.campos_secretos)
-    bruta = dict(configuracao or {})
+    bruta = t.normalizar_config(dict(configuracao or {}))
     segredos = {
         campo: str(bruta[campo])
         for campo in secretos

@@ -161,6 +161,58 @@ def test_montagem_url_auth_query_corpo_e_filtro(monkeypatch):
     assert saida["corpo"]["results"] == [{"id": 1, "status": "ok"}]
 
 
+def test_auth_basic_monta_o_cabecalho(monkeypatch):
+    """Usuário e senha (Basic) — um dos 'em breve' que o Construtor tinha. O par
+    vira o cabeçalho padrão; a senha é a metade secreta (vem do cofre)."""
+    import base64
+
+    capturas: list = []
+    _mock_http(monkeypatch, _Resp(200, {"ok": True}), capturas)
+    config = ConfigConector(
+        auth_tipo="basic",
+        auth_usuario="maria",
+        auth_segredo="s3nha",
+        operacoes=[{"nome": "buscar", "url": "https://api.x.com/s", "metodo": "GET"}],
+    )
+    Conector().expandir_ferramentas(config)[0].invoke({})
+    esperado = base64.b64encode(b"maria:s3nha").decode()
+    assert capturas[0]["headers"]["Authorization"] == f"Basic {esperado}"
+
+
+def test_auth_oauth2_usa_o_token_que_a_borda_obteve(monkeypatch):
+    """No OAuth 2.0 quem vai no cabeçalho é o TOKEN (que a borda troca pelo
+    segredo e renova sozinha), nunca o Client Secret."""
+    capturas: list = []
+    _mock_http(monkeypatch, _Resp(200, {"ok": True}), capturas)
+    config = ConfigConector(
+        auth_tipo="oauth2",
+        auth_usuario="cliente-123",
+        auth_segredo="NAO-DEVE-VAZAR",
+        url_token="https://api.x.com/oauth/token",
+        access_token="tok-da-borda",
+        operacoes=[{"nome": "buscar", "url": "https://api.x.com/s", "metodo": "GET"}],
+    )
+    Conector().expandir_ferramentas(config)[0].invoke({})
+    assert capturas[0]["headers"]["Authorization"] == "Bearer tok-da-borda"
+    assert "NAO-DEVE-VAZAR" not in json.dumps(capturas[0], default=str)
+
+
+def test_auth_oauth2_sem_token_nao_quebra(monkeypatch):
+    """Token ainda não obtido (ex.: credenciais erradas): a chamada sai sem
+    Authorization e o serviço responde 401 com recado claro — não explode aqui."""
+    capturas: list = []
+    _mock_http(monkeypatch, _Resp(200, {"ok": True}), capturas)
+    config = ConfigConector(
+        auth_tipo="oauth2",
+        auth_usuario="cliente-123",
+        auth_segredo="seg",
+        url_token="https://api.x.com/oauth/token",
+        operacoes=[{"nome": "buscar", "url": "https://api.x.com/s", "metodo": "GET"}],
+    )
+    Conector().expandir_ferramentas(config)[0].invoke({})
+    assert "Authorization" not in (capturas[0]["headers"] or {})
+
+
 def test_auth_em_cabecalho_e_query(monkeypatch):
     capturas: list = []
     _mock_http(monkeypatch, _Resp(200, {"ok": True}), capturas)

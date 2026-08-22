@@ -71,6 +71,8 @@ const AUTHS: { valor: TipoAuthConector; rotulo: string }[] = [
   { valor: "bearer", rotulo: "Token de acesso (Bearer)" },
   { valor: "cabecalho", rotulo: "Chave no cabeçalho" },
   { valor: "query", rotulo: "Chave na URL (query)" },
+  { valor: "basic", rotulo: "Usuário e senha (Basic)" },
+  { valor: "oauth2", rotulo: "OAuth 2.0 (o Batuta renova o token)" },
 ];
 
 function opVazia(n: number): OperacaoConector {
@@ -119,7 +121,19 @@ export function ConstrutorInstrumento({
 
   const [authTipo, setAuthTipo] = useState<TipoAuthConector>(cfg.auth_tipo ?? "nenhuma");
   const [authNome, setAuthNome] = useState(cfg.auth_nome ?? "");
+  const [authUsuario, setAuthUsuario] = useState(cfg.auth_usuario ?? "");
   const [authSegredo, setAuthSegredo] = useState(""); // vazio = manter o guardado (edição)
+  const [urlToken, setUrlToken] = useState(cfg.url_token ?? "");
+  const [escopo, setEscopo] = useState(cfg.escopo ?? "");
+
+  // Certificado digital (mTLS): o arquivo vive só até salvar — o cérebro o
+  // converte no par PEM guardado no cofre. `certArquivo` é o base64 do que a
+  // pessoa escolheu agora; vazio = manter o certificado já guardado.
+  const [certArquivo, setCertArquivo] = useState("");
+  const [certNomeArquivo, setCertNomeArquivo] = useState("");
+  const [certChave, setCertChave] = useState("");
+  const [certNomeChave, setCertNomeChave] = useState("");
+  const [certSenha, setCertSenha] = useState("");
 
   const [operacoes, setOperacoes] = useState<OperacaoConector[]>(
     cfg.operacoes?.length ? cfg.operacoes : [opVazia(1)],
@@ -203,15 +217,52 @@ export function ConstrutorInstrumento({
 
   // ─────────────────────────── salvar / testar ───────────────────────────
 
+  /** Lê o certificado escolhido e guarda o conteúdo em base64 até salvar. O
+   *  navegador não abre um `.pfx` — quem o lê é o cérebro, ao gravar. */
+  async function escolherCertificado(
+    arquivo: File | undefined,
+    guardarConteudo: (b64: string) => void,
+    guardarNome: (nome: string) => void,
+  ) {
+    if (!arquivo) return;
+    try {
+      const b64 = await new Promise<string>((resolve, reject) => {
+        const leitor = new FileReader();
+        leitor.onload = () => {
+          const res = String(leitor.result ?? "");
+          const virgula = res.indexOf(",");
+          resolve(virgula >= 0 ? res.slice(virgula + 1) : res);
+        };
+        leitor.onerror = () => reject(leitor.error);
+        leitor.readAsDataURL(arquivo);
+      });
+      guardarConteudo(b64);
+      guardarNome(arquivo.name);
+      setErro(null);
+    } catch {
+      setErro("Não consegui ler o arquivo. Tente escolher de novo.");
+    }
+  }
+
   function montarConfig(): ConfigConector {
     const c: ConfigConector = {
       auth_tipo: authTipo,
       auth_nome: authNome,
+      auth_usuario: authUsuario,
+      url_token: urlToken,
+      escopo,
       operacoes,
       descricao,
       categoria,
     };
+    // Segredo e certificado seguem a regra de campo de senha: em branco PRESERVA
+    // o que já está guardado (o cofre nunca reexibe nada).
     if (authSegredo.trim()) c.auth_segredo = authSegredo.trim();
+    if (certArquivo) {
+      c.arquivo = certArquivo;
+      if (certChave) c.chave_arquivo = certChave;
+      if (certSenha) c.senha_certificado = certSenha;
+    }
     return c;
   }
 
@@ -245,7 +296,11 @@ export function ConstrutorInstrumento({
             tipo: "conector",
           });
       setSalvoId(salvo.id);
-      setAuthSegredo(""); // não reter o segredo digitado depois de gravado
+      // Não reter segredo nem certificado depois de gravados (ficam no cofre).
+      setAuthSegredo("");
+      setCertArquivo("");
+      setCertChave("");
+      setCertSenha("");
       if (!silencioso) toast.success(eraNovo ? "Instrumento criado" : "Instrumento salvo");
       onSalvou?.(salvo);
       router.refresh();
@@ -435,11 +490,24 @@ export function ConstrutorInstrumento({
               <SecaoAuth
                 authTipo={authTipo}
                 authNome={authNome}
+                authUsuario={authUsuario}
                 authSegredo={authSegredo}
+                urlToken={urlToken}
+                escopo={escopo}
                 jaGuardado={jaGuardadoAuth}
+                certGuardado={Boolean(instrumento?.segredos?.certificado)}
+                certNomeArquivo={certNomeArquivo}
+                certNomeChave={certNomeChave}
+                certSenha={certSenha}
                 onTipo={setAuthTipo}
                 onNome={setAuthNome}
+                onUsuario={setAuthUsuario}
                 onSegredo={setAuthSegredo}
+                onUrlToken={setUrlToken}
+                onEscopo={setEscopo}
+                onArquivo={(a) => escolherCertificado(a, setCertArquivo, setCertNomeArquivo)}
+                onChaveArquivo={(a) => escolherCertificado(a, setCertChave, setCertNomeChave)}
+                onCertSenha={setCertSenha}
               />
             )}
 
@@ -982,20 +1050,56 @@ function SecaoIdentidade({
 function SecaoAuth({
   authTipo,
   authNome,
+  authUsuario,
   authSegredo,
+  urlToken,
+  escopo,
   jaGuardado,
+  certGuardado,
+  certNomeArquivo,
+  certNomeChave,
+  certSenha,
   onTipo,
   onNome,
+  onUsuario,
   onSegredo,
+  onUrlToken,
+  onEscopo,
+  onArquivo,
+  onChaveArquivo,
+  onCertSenha,
 }: {
   authTipo: TipoAuthConector;
   authNome: string;
+  authUsuario: string;
   authSegredo: string;
+  urlToken: string;
+  escopo: string;
   jaGuardado: string | undefined;
+  certGuardado: boolean;
+  certNomeArquivo: string;
+  certNomeChave: string;
+  certSenha: string;
   onTipo: (v: TipoAuthConector) => void;
   onNome: (v: string) => void;
+  onUsuario: (v: string) => void;
   onSegredo: (v: string) => void;
+  onUrlToken: (v: string) => void;
+  onEscopo: (v: string) => void;
+  onArquivo: (arquivo: File | undefined) => void;
+  onChaveArquivo: (arquivo: File | undefined) => void;
+  onCertSenha: (v: string) => void;
 }) {
+  // Rótulo da metade secreta — muda com o tipo, porque a mesma caixa guarda
+  // coisas diferentes (token, chave, senha, client secret).
+  const rotuloSegredo =
+    authTipo === "bearer"
+      ? "Token de acesso"
+      : authTipo === "basic"
+        ? "Senha"
+        : authTipo === "oauth2"
+          ? "Client Secret"
+          : "Chave / segredo";
   return (
     <div>
       <header className="mb-5">
@@ -1014,12 +1118,6 @@ function SecaoAuth({
                 {a.rotulo}
               </option>
             ))}
-            <option value="_basic" disabled>
-              Usuário e senha (Basic) — em breve
-            </option>
-            <option value="_oauth" disabled>
-              OAuth 2.0 (login do usuário) — em breve
-            </option>
           </Select>
         </Label>
 
@@ -1035,11 +1133,22 @@ function SecaoAuth({
           </Label>
         )}
 
+        {(authTipo === "basic" || authTipo === "oauth2") && (
+          <Label className="flex-col items-start gap-1">
+            {authTipo === "basic" ? "Usuário" : "Client ID"}
+            <Input
+              value={authUsuario}
+              onChange={(e) => onUsuario(e.target.value)}
+              placeholder={authTipo === "basic" ? "maria@empresa.com" : "o identificador que o serviço deu"}
+            />
+          </Label>
+        )}
+
         {authTipo !== "nenhuma" && (
           <Label className="flex-col items-start gap-1">
             <span className="flex items-center gap-1.5">
               <Lock className="size-3 text-muted-foreground" />
-              {authTipo === "bearer" ? "Token de acesso" : "Chave / segredo"}
+              {rotuloSegredo}
             </span>
             <Input
               type="password"
@@ -1049,7 +1158,7 @@ function SecaoAuth({
               placeholder={
                 jaGuardado
                   ? `•••• ${jaGuardado} — em branco para manter`
-                  : "cole o token/chave aqui"
+                  : "cole aqui"
               }
             />
             <span className="text-xs font-normal text-muted-foreground">
@@ -1058,11 +1167,101 @@ function SecaoAuth({
           </Label>
         )}
 
-        <Aviso variant="atencao">
-          Alguns tokens (ex.: Instagram) duram ~60 dias. O Batuta avisa quando estiver perto de
-          expirar para você regerar — a renovação automática vem numa próxima fatia.
-        </Aviso>
+        {authTipo === "oauth2" && (
+          <>
+            <Label className="flex-col items-start gap-1">
+              Endereço do token
+              <Input
+                value={urlToken}
+                onChange={(e) => onUrlToken(e.target.value)}
+                placeholder="https://servico.com/oauth/token"
+                className="font-mono text-[13px]"
+              />
+              <span className="text-xs font-normal text-muted-foreground">
+                O Batuta troca o Client ID e o Client Secret por um token neste endereço, e
+                renova sozinho antes de vencer.
+              </span>
+            </Label>
+            <Label className="flex-col items-start gap-1">
+              Escopo
+              <Input
+                value={escopo}
+                onChange={(e) => onEscopo(e.target.value)}
+                placeholder="deixe em branco se o serviço não pedir"
+                className="font-mono text-[13px]"
+              />
+            </Label>
+          </>
+        )}
       </div>
+
+      {/* Certificado digital — não é um "tipo" de autenticação: é a conexão em si.
+          Um banco costuma exigir certificado E OAuth ao mesmo tempo, por isso vive
+          num bloco próprio, combinável com qualquer tipo acima. */}
+      <header className="mb-5 mt-8">
+        <h2 className="text-base font-medium tracking-tight text-foreground">
+          Certificado digital
+        </h2>
+        <p className="mt-1.5 max-w-prose text-sm text-muted-foreground">
+          Só para serviços que exigem se identificar com um certificado — é o caso de APIs
+          bancárias (Pix, boleto). A maioria das APIs não pede; pule este bloco.
+        </p>
+      </header>
+      <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
+        {certGuardado && !certNomeArquivo && (
+          <Aviso variant="sucesso">
+            Já há um certificado guardado neste instrumento. Envie um arquivo novo só para
+            trocá-lo.
+          </Aviso>
+        )}
+
+        <Label className="flex-col items-start gap-1">
+          <span className="flex items-center gap-1.5">
+            <Lock className="size-3 text-muted-foreground" />
+            Arquivo do certificado
+          </span>
+          <input
+            type="file"
+            accept=".pfx,.p12,.pem,.crt,.cer"
+            className="text-sm text-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-background file:px-3 file:py-1.5 file:text-sm file:text-foreground hover:file:bg-muted"
+            onChange={(e) => onArquivo(e.target.files?.[0])}
+          />
+          <span className="text-xs font-normal text-muted-foreground">
+            {certNomeArquivo
+              ? `Selecionado: ${certNomeArquivo}`
+              : "Aceita .pfx/.p12 (com senha) ou .pem/.crt. Vai cifrado para o cofre."}
+          </span>
+        </Label>
+
+        <Label className="flex-col items-start gap-1">
+          Senha do certificado
+          <Input
+            type="password"
+            value={certSenha}
+            onChange={(e) => onCertSenha(e.target.value)}
+            autoComplete="new-password"
+            placeholder="só se o arquivo tiver senha; é usada para abrir e não fica guardada"
+          />
+        </Label>
+
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer">Minha chave está num arquivo .key separado</summary>
+          <div className="mt-2 flex flex-col gap-1">
+            <input
+              type="file"
+              accept=".key,.pem"
+              className="text-sm text-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-background file:px-3 file:py-1.5 file:text-sm file:text-foreground hover:file:bg-muted"
+              onChange={(e) => onChaveArquivo(e.target.files?.[0])}
+            />
+            {certNomeChave && <span>Selecionado: {certNomeChave}</span>}
+          </div>
+        </details>
+      </div>
+
+      <Aviso variant="atencao" className="mt-4">
+        Alguns tokens (ex.: Instagram) duram ~60 dias e são regerados à mão. No OAuth 2.0 acima, a
+        renovação é automática.
+      </Aviso>
     </div>
   );
 }

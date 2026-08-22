@@ -271,7 +271,13 @@ export type TipoInstrumento = {
 export type PapelCampoConector = "ia" | "fixo";
 export type DestinoCampoConector = "query" | "corpo" | "url";
 export type MetodoHttp = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-export type TipoAuthConector = "nenhuma" | "bearer" | "cabecalho" | "query";
+export type TipoAuthConector =
+  | "nenhuma"
+  | "bearer"
+  | "cabecalho"
+  | "query"
+  | "basic"
+  | "oauth2";
 
 export type CampoConector = {
   nome: string;
@@ -295,7 +301,15 @@ export type OperacaoConector = {
 export type ConfigConector = {
   auth_tipo: TipoAuthConector;
   auth_nome: string; // nome do cabeçalho/parâmetro (para "cabecalho"/"query")
+  auth_usuario?: string; // metade não-secreta: usuário no Basic, Client ID no OAuth 2.0
   auth_segredo?: string; // SÓ no envio; nunca volta (fica no cofre)
+  url_token?: string; // OAuth 2.0: endereço que emite o token
+  escopo?: string; // OAuth 2.0: escopo pedido
+  // Certificado digital (mTLS): o arquivo e a senha são SÓ do envio — o cérebro
+  // os converte no par PEM guardado no cofre e não os devolve nunca.
+  arquivo?: string; // .pfx/.p12/.pem em base64
+  chave_arquivo?: string; // .key separado, em base64 (opcional)
+  senha_certificado?: string; // abre o .pfx; não é guardada
   operacoes: OperacaoConector[];
   descricao: string; // para que serve (referência humana)
   categoria: string; // agrupamento cosmético

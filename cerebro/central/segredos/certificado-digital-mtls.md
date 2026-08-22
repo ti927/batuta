@@ -24,15 +24,22 @@ Use este tipo de credencial sempre que a documentação da API falar em "certifi
 também alguns órgãos públicos.
 
 ## Como usar (na tela)
+O caminho recomendado é montar tudo **dentro do próprio instrumento**, no Construtor — sem depender
+de nenhum cadastro à parte.
+
 1. Peça ao banco o **certificado do cliente** (tipo A1 — arquivo, não token físico). Ele costuma vir
    como `.pfx`/`.p12` (um arquivo só, com senha) ou como `.pem`/`.crt` acompanhado de um `.key`.
-2. Em **Chaves e credenciais**, crie uma credencial do tipo **Certificado digital (mTLS)**.
-3. **Suba o arquivo** e informe a senha, se houver. O Batuta lê o certificado e mostra o titular e a
-   data de vencimento — confira se é a conta certa.
-4. Se o banco exigir token de acesso (a maioria exige), preencha **Client ID**, **Client Secret**,
-   **Endereço do token** e **Escopo**, todos conforme a documentação dele.
-5. No instrumento **Chamar API REST** (ou num Conector), aponte para essa credencial em
-   **Credencial da central**. Pronto — o agente faz a chamada normalmente.
+2. Crie o instrumento no **Construtor** e vá ao passo **Autenticação**.
+3. No bloco **Certificado digital**, suba o arquivo e informe a senha, se houver.
+4. Se o banco exigir token de acesso (a maioria exige), escolha o tipo de autenticação
+   **OAuth 2.0** e preencha **Client ID**, **Client Secret**, **Endereço do token** e **Escopo**,
+   conforme a documentação dele. O Batuta passa a renovar o token sozinho.
+5. Salve. O agente faz as chamadas normalmente.
+
+> Também existe o caminho antigo, pela caixa-forte: criar uma credencial do tipo **Certificado
+> digital (mTLS)** em Chaves e credenciais e apontar o instrumento para ela. Continua funcionando
+> para quem já usa, mas para um instrumento novo prefira o Construtor — tudo o que ele precisa
+> mora nele.
 
 ## Exemplos
 - **Consultar um boleto no Inter:** credencial com o certificado + Client ID/Secret + o endereço de
@@ -55,15 +62,14 @@ também alguns órgãos públicos.
 
 ## Para a IA
 Você **nunca** recebe nem pede o certificado — ele é um arquivo que só a pessoa sobe pela tela. Ao
-montar um agente que fala com banco: crie o instrumento REST/Conector apontando para o endpoint certo,
-deixe a credencial **pendente** e diga com todas as letras que falta a pessoa criar a credencial do
-tipo certificado digital e subir o arquivo. **Não diga que está pronto ou ligado enquanto isso não
-acontecer.**
+montar um agente que fala com banco: monte o conector com as operações certas e `auth_tipo: "oauth2"`
+(com `auth_usuario`, `url_token` e `escopo`), deixe o segredo e o certificado **pendentes**, e diga
+com todas as letras que falta a pessoa abrir o instrumento e subir o arquivo do certificado. **Não
+diga que está pronto ou ligado enquanto isso não acontecer.**
 
-Você não precisa configurar nada de token no instrumento: se a credencial tiver o OAuth preenchido, a
-borda obtém e renova o `access_token` sozinha e o entrega ao instrumento como `Authorization`. Não
-invente um instrumento separado "para pegar o token" — isso não funciona (o token não viaja de uma
-chamada para outra) e já é resolvido pela plataforma.
+Você não configura nada de token: a borda obtém e renova o `access_token` sozinha e o entrega ao
+instrumento como `Authorization`. Não invente uma operação separada "para pegar o token" — isso não
+funciona (o token não viaja de uma chamada para outra) e já é resolvido pela plataforma.
 
 Ação em banco é **irreversível** por natureza: fluxo que paga, transfere ou emite cobrança precisa de
 **portão de aprovação humano** antes — a parede de ativação vai exigir isso de qualquer forma.

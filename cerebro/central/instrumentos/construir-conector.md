@@ -31,10 +31,25 @@ tem um `metodo`, uma `url`, os `campos` (o que entra na requisição) e, opciona
 Regra de ouro: **um campo só existe se você o DECLARA**. Para a IA poder mandar um dado (o corpo de
 um POST, o filtro de uma busca), esse campo precisa estar na lista `campos` com o `destino` certo.
 
-## Autenticação — você NÃO pluga o token
-Você declara só COMO a API autentica (`auth_tipo`: `bearer`, `cabecalho`, `query` ou `nenhuma`) e,
-para `cabecalho`/`query`, o `auth_nome`. O **token em si é segredo**: fica PENDENTE e o consultor o
-cola no cofre. Nunca ponha o token no objeto — ele é ignorado de propósito.
+## Autenticação — você NÃO pluga o segredo
+Você declara só COMO a API autentica; o **segredo em si fica PENDENTE** para o consultor preencher na
+tela do instrumento. Nunca ponha token, senha ou certificado no objeto — são ignorados de propósito.
+
+`auth_tipo` aceita:
+- **`nenhuma`** — API aberta.
+- **`bearer`** — token no cabeçalho `Authorization`.
+- **`cabecalho`** / **`query`** — chave num cabeçalho ou parâmetro; diga qual em `auth_nome`.
+- **`basic`** — usuário e senha. O usuário (não-secreto) vai em `auth_usuario`; a senha é o segredo.
+- **`oauth2`** — o serviço emite um token de curta duração. Preencha `auth_usuario` (o Client ID),
+  `url_token` (o endereço que emite) e, se o serviço pedir, `escopo`. O Client Secret é o segredo. **O
+  Batuta busca e renova esse token sozinho** — não invente uma operação "pegar token" nem peça ao
+  agente que carregue o token entre chamadas: não funcionaria (os cabeçalhos são fixos) e já está
+  resolvido pela plataforma.
+
+**Certificado digital (mTLS)** é outra coisa e **combina** com qualquer `auth_tipo`: é o arquivo com
+que o cliente se identifica na conexão, exigido por APIs bancárias (Pix, boleto). Um banco costuma
+pedir certificado **e** `oauth2` juntos. Você não o configura: o consultor sobe o arquivo na tela do
+instrumento. Ver [[segredos/certificado-digital-mtls]].
 
 ## APIs do Bubble (o caso mais comum aqui — leia com atenção)
 A **Data API** do Bubble tem um endereço por tabela: `https://<app>/api/1.1/obj/<Tabela>`.

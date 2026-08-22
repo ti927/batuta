@@ -114,43 +114,103 @@ def _vencimento(dados: dict) -> datetime | None:
     return quando if quando.tzinfo else quando.replace(tzinfo=timezone.utc)
 
 
-def garantir_token(credencial) -> str:
-    """Devolve um `access_token` válido da credencial `certificado_mtls`,
-    renovando sob demanda. Chamado pela borda ao resolver as credenciais.
+def garantir_material(material: dict, guardar) -> str:
+    """O NÚCLEO: dado o material de uma conexão, devolve um `access_token` válido,
+    renovando sob demanda. Uma fonte só para os dois caminhos que existem hoje —
+    a credencial da caixa-forte e o instrumento que traz o OAuth em si mesmo.
 
-    Credencial sem OAuth configurado (sem `url_token`/`client_id`) devolve `""` —
-    a conexão usa só o certificado, que é um cenário legítimo.
+    `material` usa as chaves canônicas `url_token`, `client_id`, `client_secret`,
+    `escopo`, `certificado`, `chave_privada`, `access_token`, `token_expira_em`
+    (quem chama traduz os nomes de casa para estes). `guardar(token, expira)`
+    persiste o token renovado onde ele mora.
+
+    Sem OAuth configurado (sem `url_token`/`client_id`) devolve `""` — a conexão
+    usa só o certificado, ou nenhuma autenticação: cenários legítimos.
 
     **Nunca levanta**: numa falha de renovação devolve o token atual (o
     instrumento trata o 401 com recado claro), para não derrubar o carregamento do
-    cinto inteiro por causa de uma credencial."""
-    import credenciais_cofre
-
-    dados = credenciais_cofre.decifrar(credencial)
-    if not (dados.get("url_token") or "").strip():
+    cinto inteiro por causa de uma conexão."""
+    if not (material.get("url_token") or "").strip():
         return ""
-    if not (dados.get("client_id") or "").strip():
+    if not (material.get("client_id") or "").strip():
         return ""
 
-    atual = dados.get("access_token", "")
-    vence = _vencimento(dados)
+    atual = material.get("access_token", "")
+    vence = _vencimento(material)
     if atual and vence and vence > datetime.now(timezone.utc) + MARGEM_RENOVACAO:
         return atual
 
     try:
         token, expira = obter_token(
-            url_token=dados["url_token"],
-            client_id=dados["client_id"],
-            client_secret=dados.get("client_secret", ""),
-            escopo=dados.get("escopo", ""),
-            certificado=dados.get("certificado", ""),
-            chave_privada=dados.get("chave_privada", ""),
+            url_token=material["url_token"],
+            client_id=material["client_id"],
+            client_secret=material.get("client_secret", ""),
+            escopo=material.get("escopo", ""),
+            certificado=material.get("certificado", ""),
+            chave_privada=material.get("chave_privada", ""),
         )
     except FalhaInstrumento:
         return atual
 
-    _persistir_token(credencial.id, token, expira)
+    guardar(token, expira)
     return token
+
+
+def garantir_token(credencial) -> str:
+    """Token de uma credencial `certificado_mtls` da caixa-forte."""
+    import credenciais_cofre
+
+    dados = credenciais_cofre.decifrar(credencial)
+    return garantir_material(
+        dados, lambda token, expira: _persistir_token(credencial.id, token, expira)
+    )
+
+
+def garantir_token_instrumento(instrumento_id, config: dict, segredos: dict) -> str:
+    """Token de um instrumento que traz o OAuth EM SI MESMO (montado no
+    Construtor, sem passar pela caixa-forte).
+
+    Traduz os nomes de casa do conector para as chaves canônicas: `auth_usuario`
+    é o Client ID e `auth_segredo` é o Client Secret — o mesmo par que serve o
+    Basic, para o Construtor ter um campo só de cada."""
+    material = {
+        "url_token": config.get("url_token", ""),
+        "escopo": config.get("escopo", ""),
+        "client_id": config.get("auth_usuario", ""),
+        "client_secret": segredos.get("auth_segredo", ""),
+        "certificado": segredos.get("certificado", ""),
+        "chave_privada": segredos.get("chave_privada", ""),
+        "access_token": segredos.get("access_token", ""),
+        "token_expira_em": segredos.get("token_expira_em", ""),
+    }
+    return garantir_material(
+        material,
+        lambda token, expira: _persistir_no_instrumento(instrumento_id, token, expira),
+    )
+
+
+def _persistir_no_instrumento(instrumento_id, token: str, expira_em: datetime) -> None:
+    """Guarda o token do instrumento no cofre dele (upsert campo a campo — não
+    encosta no certificado nem no segredo da autenticação). Sessão própria e
+    curta, best-effort: falhar aqui só significa não cachear."""
+    import segredos_instrumento
+    from sessao import CriadorDeSessao
+
+    sessao = CriadorDeSessao()
+    try:
+        segredos_instrumento.salvar_segredos(
+            sessao,
+            instrumento_id,
+            {
+                "access_token": token,
+                "token_expira_em": expira_em.astimezone(timezone.utc).isoformat(),
+            },
+        )
+        sessao.commit()
+    except Exception:  # noqa: BLE001 — cache é conveniência, nunca derruba a execução
+        sessao.rollback()
+    finally:
+        sessao.close()
 
 
 def _persistir_token(credencial_id, token: str, expira_em: datetime) -> None:
