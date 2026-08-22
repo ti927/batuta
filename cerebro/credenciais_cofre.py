@@ -93,6 +93,53 @@ def gravar_com_validacao_ig(credencial: Credencial, dados: dict) -> None:
     credencial.expira_em = datetime.now(timezone.utc) + timedelta(seconds=_VALIDADE_IG_S)
 
 
+def gravar_com_certificado(credencial: Credencial, dados: dict) -> None:
+    """Grava o tipo `certificado_mtls`: o consultor SOBE um arquivo (.pfx/.p12 ou
+    .pem/.crt) — a borda o normaliza para PEM (`certificados.normalizar`), guarda o
+    par cifrado e deriva `titular`/`validade` + `expira_em` do próprio certificado.
+    A IA nunca recebe o segredo; a senha do arquivo é usada só aqui e não é guardada.
+
+    Campos transitórios no `dados` (não são campos do tipo, não persistem):
+    - `arquivo`      — o certificado, em base64 (obrigatório na criação);
+    - `chave_arquivo`— uma chave `.key` separada, em base64 (opcional);
+    - `senha_certificado` — senha do .pfx/chave (opcional), usada só para abrir.
+
+    `client_id`/`client_secret` seguem a regra de campo secreto: em branco preserva
+    o atual. Levanta `certificados.CertificadoInvalido` (a rota traduz em 422)."""
+    import certificados
+
+    base = decifrar(credencial) if credencial.dados_cifrado else {}
+    arquivo = str(dados.get("arquivo", "") or "").strip()
+
+    if arquivo:
+        cert_pem, chave_pem, titular, expira = certificados.normalizar(
+            arquivo,
+            senha=str(dados.get("senha_certificado", "") or ""),
+            chave_b64=str(dados.get("chave_arquivo", "") or ""),
+        )
+        base["certificado"] = cert_pem
+        base["chave_privada"] = chave_pem
+        base["titular"] = titular
+        base["validade"] = expira.astimezone(timezone.utc).strftime("%d/%m/%Y")
+        credencial.expira_em = expira
+    elif not base.get("certificado"):
+        raise certificados.CertificadoInvalido(
+            "envie o arquivo do certificado (.pfx/.p12 ou .pem/.crt)."
+        )
+
+    # client_id / client_secret (OAuth, opcionais): em branco preserva o atual.
+    for campo in ("client_id", "client_secret"):
+        novo = str(dados.get(campo, "") or "")
+        if novo.strip():
+            base[campo] = novo
+
+    tcred = tc.obter_tipo(credencial.tipo)
+    nomes = tcred.nomes_campos if tcred else ()
+    base = {k: v for k, v in base.items() if k in nomes}
+    credencial.dados_cifrado = cofre.cifrar(json.dumps(base, ensure_ascii=False))
+    credencial.resumo = montar_resumo(credencial.tipo, base)
+
+
 def gravar_token_renovado(
     credencial: Credencial, token: str, expira_em: datetime
 ) -> None:

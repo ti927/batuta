@@ -20,6 +20,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 import auditoria
+import certificados
 import credenciais_cofre as cofre_cred
 import tipos_credencial as tc
 from auth import usuario_atual
@@ -74,11 +75,19 @@ def _exigir_nome_livre(
 
 
 def _gravar(cred: Credencial, dados: dict) -> None:
-    """Grava o saco da credencial. Para o tipo `instagram`, valida o token no
-    Instagram (descobre o `ig_user_id` e fixa a validade); um token recusado vira
-    422 claro. Para os demais tipos, é o gravar normal (não levanta FalhaInstrumento)."""
+    """Grava o saco da credencial. Casos especiais:
+    - `instagram`: valida o token na Meta (descobre o `ig_user_id` e fixa a
+      validade); um token recusado vira 422 claro;
+    - `certificado_mtls`: normaliza o arquivo do certificado (.pfx/.pem) para PEM,
+      cifra e deriva titular/validade; arquivo/senha inválidos viram 422 claro.
+    Para os demais tipos, é o gravar normal."""
     try:
-        cofre_cred.gravar_com_validacao_ig(cred, dados)
+        if cred.tipo == "certificado_mtls":
+            cofre_cred.gravar_com_certificado(cred, dados)
+        else:
+            cofre_cred.gravar_com_validacao_ig(cred, dados)
+    except certificados.CertificadoInvalido as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
     except FalhaInstrumento as e:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,

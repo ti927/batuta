@@ -118,6 +118,31 @@ registrar(
         ),
     )
 )
+# Certificado digital de cliente (mTLS) — fundação das integrações bancárias
+# (Pix, boleto) e de qualquer API que exija certificado. O consultor SOBE o arquivo
+# (.pfx/.p12 ou .pem/.crt) na tela; a borda normaliza para PEM e guarda cifrado — a
+# IA NUNCA recebe o segredo (decisão do maestro). `certificado`/`chave_privada` não
+# são digitados: vêm do arquivo. `client_id`/`client_secret` (OAuth) são opcionais —
+# em branco, a conexão usa só o certificado. `titular`/`validade` são derivados do
+# próprio certificado (preenchidos automaticamente), como o `ig_user_id` do Instagram.
+registrar(
+    TipoCredencial(
+        "certificado_mtls",
+        "Certificado digital (mTLS) — Pix, boleto e APIs bancárias",
+        (
+            CampoCredencial("certificado", "Certificado (arquivo)"),
+            CampoCredencial("chave_privada", "Chave privada"),
+            CampoCredencial("client_id", "Client ID (OAuth, se houver)", secreto=False),
+            CampoCredencial("client_secret", "Client Secret (OAuth, se houver)"),
+            CampoCredencial(
+                "titular", "Titular (preenchido automaticamente)", secreto=False
+            ),
+            CampoCredencial(
+                "validade", "Validade (preenchida automaticamente)", secreto=False
+            ),
+        ),
+    )
+)
 # Google (Gmail/Agenda/Drive/Search Console) — conta conectada por OAuth (balde 3).
 # O usuário NÃO cola nada: o fluxo "Conectar Google" preenche todos os campos. O
 # `access_token` (~1h) é renovado sob demanda pela borda a partir do `refresh_token`
