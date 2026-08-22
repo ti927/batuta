@@ -113,6 +113,11 @@ class ConfigConector(BaseModel):
     client_secret: str = Field(
         default="", description="Client Secret do OAuth (vem do cofre)."
     )
+    # Token de acesso obtido e renovado pela BORDA a partir da credencial mTLS
+    # (ver `oauth_mtls`). Não se digita: chega pronto.
+    access_token: str = Field(
+        default="", description="Token de acesso OAuth (obtido automaticamente)."
+    )
     operacoes: list[OperacaoConector] = Field(default_factory=list)
     # Metadados do Construtor — NÃO afetam a execução (o motor os ignora). A
     # descrição geral é referência humana; cada OPERAÇÃO tem a sua, que é a que o
@@ -249,6 +254,10 @@ def _executar_operacao(
             cabecalhos[config.auth_nome or "Authorization"] = config.auth_segredo
         elif config.auth_tipo == "query":
             params[config.auth_nome or "api_key"] = config.auth_segredo
+    # Token do OAuth do banco (obtido pela borda a partir da credencial mTLS):
+    # entra como Bearer quando a autenticação declarada não já definiu um.
+    elif config.access_token:
+        cabecalhos["Authorization"] = f"Bearer {config.access_token}"
     validar_cabecalhos_ascii(cabecalhos)
 
     # 4) certificado de cliente (mTLS), se a conexão tiver um: vale para toda
@@ -337,10 +346,13 @@ class Conector(TipoInstrumento):
     Args = ArgsConector
     campos_secretos = (
         "auth_segredo", "certificado", "chave_privada", "client_secret",
+        "access_token",
     )
     # O material de mTLS/OAuth é opcional: só APIs que o exigem o usam, e vazio
     # não pode virar "conector com segredo pendente".
-    campos_secretos_opcionais = ("certificado", "chave_privada", "client_secret")
+    campos_secretos_opcionais = (
+        "certificado", "chave_privada", "client_secret", "access_token",
+    )
     # Caixa-forte: o conector aceita apontar para um certificado guardado no cofre
     # (o segredo não é digitado aqui nem passa pela IA).
     tipos_credencial_aceitos = ("certificado_mtls",)

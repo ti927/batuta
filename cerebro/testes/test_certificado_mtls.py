@@ -6,6 +6,7 @@ sem banco nem rede. Gera certificados de teste em memória (auto-assinados)."""
 
 import base64
 import datetime
+import json
 import os
 
 import pytest
@@ -253,6 +254,7 @@ class _ClienteFake:
         self.capturado["existiam_na_hora"] = bool(par) and all(
             os.path.exists(c) for c in par
         )
+        self.capturado["cabecalhos"] = k.get("headers") or {}
         return _RespFake()
 
 
@@ -312,6 +314,229 @@ def test_conector_sem_certificado_segue_como_antes(monkeypatch):
     capturado = _espionar_httpx(monkeypatch, conector_mod)
     _executar_operacao(ConfigConector(), _op(), {})
     assert capturado["cert"] is None
+
+
+# ═══════════ Fatia C — o token OAuth obtido COM o certificado ════════════════
+# Um banco de verdade exige certificado E um access_token de vida curta. Quem o
+# obtém e renova é a BORDA (o agente não teria como carregar um token de uma
+# chamada para a outra). Espelha o que já se faz com o Google.
+
+import oauth_mtls  # noqa: E402
+from instrumentos.base import FalhaInstrumento  # noqa: E402
+
+
+class _RespToken:
+    def __init__(self, payload, status=200, texto=None):
+        self._payload = payload
+        self.status_code = status
+        self.text = texto if texto is not None else json.dumps(payload or {})
+
+    def json(self):
+        if self._payload is None:
+            raise ValueError("não é JSON")
+        return self._payload
+
+
+class _ClienteToken:
+    """Cliente falso que registra o que foi postado e com qual certificado."""
+
+    def __init__(self, registro, resposta, **kwargs):
+        self.registro = registro
+        self.resposta = resposta
+        registro["cert"] = kwargs.get("cert")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def post(self, url, data=None, **k):
+        self.registro["url"] = url
+        self.registro["corpo"] = data
+        par = self.registro.get("cert")
+        self.registro["cert_existia"] = bool(par) and all(
+            os.path.exists(c) for c in par
+        )
+        return self.resposta
+
+
+def _mock_token(monkeypatch, resposta):
+    registro: dict = {}
+    monkeypatch.setattr(
+        oauth_mtls.httpx, "Client",
+        lambda **k: _ClienteToken(registro, resposta, **k),
+    )
+    return registro
+
+
+def test_obter_token_manda_client_credentials_com_o_certificado(monkeypatch):
+    registro = _mock_token(
+        monkeypatch, _RespToken({"access_token": "tok-123", "expires_in": 3600})
+    )
+    antes = datetime.datetime.now(datetime.timezone.utc)
+    token, expira = oauth_mtls.obter_token(
+        url_token="https://banco.exemplo/oauth/token",
+        client_id="cli", client_secret="seg", escopo="pix.read",
+        certificado=CERT_PEM, chave_privada=CHAVE_PEM,
+    )
+    assert token == "tok-123"
+    assert registro["url"] == "https://banco.exemplo/oauth/token"
+    assert registro["corpo"] == {
+        "grant_type": "client_credentials",
+        "client_id": "cli",
+        "client_secret": "seg",
+        "scope": "pix.read",
+    }
+    # O certificado é apresentado TAMBÉM na busca do token (o banco exige mTLS lá).
+    assert registro["cert_existia"] is True
+    # ~1h a partir de agora (a folga cobre o tempo da própria chamada).
+    assert 3500 < (expira - antes).total_seconds() < 3700
+
+
+def test_obter_token_sem_escopo_nao_manda_scope(monkeypatch):
+    registro = _mock_token(monkeypatch, _RespToken({"access_token": "t"}))
+    oauth_mtls.obter_token(
+        url_token="https://b/token", client_id="c", client_secret="s"
+    )
+    assert "scope" not in registro["corpo"]
+
+
+def test_obter_token_credencial_recusada_vira_erro_humano(monkeypatch):
+    _mock_token(monkeypatch, _RespToken({"error": "invalid_client"}, status=401))
+    with pytest.raises(FalhaInstrumento) as e:
+        oauth_mtls.obter_token(
+            url_token="https://b/token", client_id="c", client_secret="errado"
+        )
+    assert "recusou as credenciais" in str(e.value)
+
+
+def test_obter_token_resposta_estranha_vira_erro_humano(monkeypatch):
+    _mock_token(monkeypatch, _RespToken(None, texto="<html>página de login</html>"))
+    with pytest.raises(FalhaInstrumento) as e:
+        oauth_mtls.obter_token(url_token="https://b/errada", client_id="c", client_secret="s")
+    assert "não é JSON" in str(e.value) or "URL do token" in str(e.value)
+
+
+def test_obter_token_sem_access_token_vira_erro_humano(monkeypatch):
+    _mock_token(monkeypatch, _RespToken({"outra_coisa": 1}))
+    with pytest.raises(FalhaInstrumento):
+        oauth_mtls.obter_token(url_token="https://b/token", client_id="c", client_secret="s")
+
+
+def _cred_com_oauth(**extra) -> Credencial:
+    cred = Credencial(tipo="certificado_mtls", nome="Banco")
+    cofre_cred.gravar_com_certificado(
+        cred,
+        {
+            "arquivo": _pfx_b64(None),
+            "client_id": "cli", "client_secret": "seg",
+            "url_token": "https://banco.exemplo/oauth/token",
+            **extra,
+        },
+    )
+    return cred
+
+
+def test_garantir_token_sem_oauth_configurado_devolve_vazio():
+    """Certificado sem OAuth é cenário legítimo (a conexão usa só o certificado):
+    não pode explodir nem inventar chamada de rede."""
+    cred = Credencial(tipo="certificado_mtls", nome="Só certificado")
+    cofre_cred.gravar_com_certificado(cred, {"arquivo": _pfx_b64(None)})
+    assert oauth_mtls.garantir_token(cred) == ""
+
+
+def test_garantir_token_reusa_o_cacheado_enquanto_vale(monkeypatch):
+    cred = _cred_com_oauth()
+    futuro = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)
+    cofre_cred.gravar(
+        cred, {"access_token": "cacheado", "token_expira_em": futuro.isoformat()}
+    )
+
+    def _nao_chama(**k):
+        raise AssertionError("não deveria buscar token novo com o cache válido")
+
+    monkeypatch.setattr(oauth_mtls, "obter_token", _nao_chama)
+    assert oauth_mtls.garantir_token(cred) == "cacheado"
+
+
+def test_garantir_token_renova_o_vencido(monkeypatch):
+    cred = _cred_com_oauth()
+    passado = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=1)
+    cofre_cred.gravar(
+        cred, {"access_token": "velho", "token_expira_em": passado.isoformat()}
+    )
+    monkeypatch.setattr(
+        oauth_mtls, "obter_token",
+        lambda **k: ("novo", datetime.datetime.now(datetime.timezone.utc)
+                     + datetime.timedelta(hours=1)),
+    )
+    monkeypatch.setattr(oauth_mtls, "_persistir_token", lambda *a, **k: None)
+    assert oauth_mtls.garantir_token(cred) == "novo"
+
+
+def test_garantir_token_nunca_derruba_o_cinto(monkeypatch):
+    """Se a renovação falhar, devolve o token atual — o instrumento trata o 401
+    com recado claro. Uma credencial ruim não pode impedir o agente de carregar."""
+    cred = _cred_com_oauth()
+    passado = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=1)
+    cofre_cred.gravar(
+        cred, {"access_token": "velho", "token_expira_em": passado.isoformat()}
+    )
+
+    def _explode(**k):
+        raise FalhaInstrumento("banco fora do ar", retentavel=True)
+
+    monkeypatch.setattr(oauth_mtls, "obter_token", _explode)
+    assert oauth_mtls.garantir_token(cred) == "velho"
+
+
+def test_trocar_o_oauth_invalida_o_token_cacheado():
+    """Trocar client_id/segredo/URL (ou o próprio certificado) não pode deixar o
+    agente seguir usando o token da conta antiga."""
+    cred = _cred_com_oauth()
+    cofre_cred.gravar(cred, {"access_token": "da-conta-antiga"})
+    assert cofre_cred.decifrar(cred)["access_token"] == "da-conta-antiga"
+    cofre_cred.gravar_com_certificado(cred, {"client_id": "outra-conta"})
+    saco = cofre_cred.decifrar(cred)
+    assert "access_token" not in saco
+    assert "token_expira_em" not in saco
+
+
+def test_rest_usa_o_token_obtido_pela_borda(monkeypatch):
+    capturado = _espionar_httpx(monkeypatch, rest)
+    ChamarApiRest().executar(
+        ConfigRest(url="https://banco/pix", metodo="GET", access_token="tok-borda"),
+        rest.ArgsRest(),
+    )
+    assert capturado["cabecalhos"]["Authorization"] == "Bearer tok-borda"
+
+
+def test_rest_token_colado_a_mao_tem_precedencia(monkeypatch):
+    capturado = _espionar_httpx(monkeypatch, rest)
+    ChamarApiRest().executar(
+        ConfigRest(
+            url="https://x", metodo="GET",
+            token_bearer="colado", access_token="da-borda",
+        ),
+        rest.ArgsRest(),
+    )
+    assert capturado["cabecalhos"]["Authorization"] == "Bearer colado"
+
+
+def test_conector_usa_o_token_obtido_pela_borda(monkeypatch):
+    capturado = _espionar_httpx(monkeypatch, conector_mod)
+    _executar_operacao(ConfigConector(access_token="tok-borda"), _op(), {})
+    assert capturado["cabecalhos"]["Authorization"] == "Bearer tok-borda"
+
+
+def test_conector_auth_declarada_tem_precedencia(monkeypatch):
+    capturado = _espionar_httpx(monkeypatch, conector_mod)
+    _executar_operacao(
+        ConfigConector(auth_tipo="bearer", auth_segredo="declarado", access_token="borda"),
+        _op(), {},
+    )
+    assert capturado["cabecalhos"]["Authorization"] == "Bearer declarado"
 
 
 def test_certificado_vazio_nao_vira_segredo_pendente():

@@ -25,11 +25,12 @@ class CampoCredencial:
     nome: str  # bate com o nome do campo na Config do instrumento
     rotulo: str  # rótulo para a interface
     secreto: bool = True  # True = mascarado (últimos 4); False = identidade visível
-    # Campo DERIVADO do próprio segredo, que existe só para a pessoa reconhecer a
-    # credencial na tela (ex.: o titular e a validade lidos do certificado). Não é
-    # material de conexão: nenhum instrumento o recebe, então ele NÃO precisa ter
-    # campo correspondente na Config de quem aceita este tipo.
-    so_exibicao: bool = False
+    # Campo que NÃO vai para a Config de instrumento nenhum — ou porque é dado de
+    # exibição derivado do segredo (o titular e a validade lidos do certificado),
+    # ou porque só a BORDA o usa (a URL do token OAuth, o escopo, o cache do
+    # token). Como não é injetado, não precisa ter campo correspondente na Config
+    # de quem aceita este tipo (ver test_tipos_credencial).
+    interno: bool = False
 
 
 @dataclass(frozen=True)
@@ -50,10 +51,10 @@ class TipoCredencial:
 
     @property
     def nomes_injetaveis(self) -> tuple[str, ...]:
-        """Os campos que viram configuração de um instrumento — todos menos os de
-        exibição. É esta lista que precisa ter correspondência na Config de quem
+        """Os campos que viram configuração de um instrumento — todos menos os
+        internos. É esta lista que precisa ter correspondência na Config de quem
         aceita o tipo (o `nomes_campos` inteiro segue sendo o saco guardado)."""
-        return tuple(c.nome for c in self.campos if not c.so_exibicao)
+        return tuple(c.nome for c in self.campos if not c.interno)
 
 
 _REGISTRO: dict[str, TipoCredencial] = {}
@@ -134,9 +135,14 @@ registrar(
 # (Pix, boleto) e de qualquer API que exija certificado. O consultor SOBE o arquivo
 # (.pfx/.p12 ou .pem/.crt) na tela; a borda normaliza para PEM e guarda cifrado — a
 # IA NUNCA recebe o segredo (decisão do maestro). `certificado`/`chave_privada` não
-# são digitados: vêm do arquivo. `client_id`/`client_secret` (OAuth) são opcionais —
-# em branco, a conexão usa só o certificado. `titular`/`validade` são derivados do
-# próprio certificado (preenchidos automaticamente), como o `ig_user_id` do Instagram.
+# são digitados: vêm do arquivo. `titular`/`validade` são derivados do próprio
+# certificado (preenchidos automaticamente), como o `ig_user_id` do Instagram.
+#
+# OAuth (opcional, mas é o que um banco de verdade exige): preenchidos
+# `client_id`/`client_secret`/`url_token`, a borda troca essas credenciais por um
+# `access_token` no endpoint do banco — apresentando o MESMO certificado — e o
+# renova sozinha antes de vencer. O `access_token` é o único desses campos que
+# chega ao instrumento; a URL, o escopo e o vencimento do token são internos.
 registrar(
     TipoCredencial(
         "certificado_mtls",
@@ -147,12 +153,29 @@ registrar(
             CampoCredencial("client_id", "Client ID (OAuth, se houver)", secreto=False),
             CampoCredencial("client_secret", "Client Secret (OAuth, se houver)"),
             CampoCredencial(
+                "url_token", "URL do token OAuth (se houver)",
+                secreto=False, interno=True,
+            ),
+            CampoCredencial(
+                "escopo", "Escopo do token (se houver)", secreto=False, interno=True,
+            ),
+            CampoCredencial(
                 "titular", "Titular (preenchido automaticamente)",
-                secreto=False, so_exibicao=True,
+                secreto=False, interno=True,
             ),
             CampoCredencial(
                 "validade", "Validade (preenchida automaticamente)",
-                secreto=False, so_exibicao=True,
+                secreto=False, interno=True,
+            ),
+            # Cache do token de acesso: obtido e renovado pela borda, nunca
+            # digitado. O `access_token` é injetado no instrumento (vira o
+            # cabeçalho Authorization); o vencimento é só bookkeeping da borda.
+            # O vencimento do CERTIFICADO segue no `Credencial.expira_em` — são
+            # relógios diferentes (o certificado dura ~1 ano; o token, ~1 hora).
+            CampoCredencial("access_token", "Token de acesso (automático)"),
+            CampoCredencial(
+                "token_expira_em", "Vencimento do token (automático)",
+                secreto=False, interno=True,
             ),
         ),
     )

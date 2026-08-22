@@ -127,11 +127,20 @@ def gravar_com_certificado(credencial: Credencial, dados: dict) -> None:
             "envie o arquivo do certificado (.pfx/.p12 ou .pem/.crt)."
         )
 
-    # client_id / client_secret (OAuth, opcionais): em branco preserva o atual.
-    for campo in ("client_id", "client_secret"):
+    # OAuth do banco (opcional): em branco preserva o atual, como todo campo de
+    # segredo. Com `url_token` + `client_id` preenchidos, a borda passa a trocar
+    # essas credenciais por um `access_token` (ver `oauth_mtls.garantir_token`).
+    for campo in ("client_id", "client_secret", "url_token", "escopo"):
         novo = str(dados.get(campo, "") or "")
         if novo.strip():
             base[campo] = novo
+
+    # Trocar o material do OAuth invalida o token cacheado: o próximo acionamento
+    # busca um novo (senão o agente seguiria usando um token da conta antiga).
+    if any(str(dados.get(c, "") or "").strip() for c in
+           ("client_id", "client_secret", "url_token", "escopo", "arquivo")):
+        base.pop("access_token", None)
+        base.pop("token_expira_em", None)
 
     tcred = tc.obter_tipo(credencial.tipo)
     nomes = tcred.nomes_campos if tcred else ()

@@ -127,6 +127,14 @@ def anexar_aos_instrumentos(sessao: Session, instrumentos: list) -> None:
             # instrumento sempre receber um token válido. Nunca levanta.
             if c.tipo == "google":
                 valores_cred["access_token"] = google_oauth.garantir_token(c)
+            # Certificado mTLS com OAuth (banco): mesma ideia — troca
+            # client_id/secret por um access_token APRESENTANDO o certificado, e
+            # renova antes de vencer. Sem OAuth configurado devolve "" (a conexão
+            # usa só o certificado, cenário legítimo). Nunca levanta.
+            elif c.tipo == "certificado_mtls":
+                import oauth_mtls
+
+                valores_cred["access_token"] = oauth_mtls.garantir_token(c)
             por_credencial[c.id] = valores_cred
 
     pool = chaves_atuais()

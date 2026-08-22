@@ -75,9 +75,10 @@ def test_conector_registrado():
     # vindo do cofre): vazio nele NÃO conta como segredo pendente.
     assert t.campos_secretos == (
         "auth_segredo", "certificado", "chave_privada", "client_secret",
+        "access_token",
     )
     assert t.campos_secretos_opcionais == (
-        "certificado", "chave_privada", "client_secret",
+        "certificado", "chave_privada", "client_secret", "access_token",
     )
     assert "conector" in [x.tipo for x in encaixe.tipos_disponiveis()]
 

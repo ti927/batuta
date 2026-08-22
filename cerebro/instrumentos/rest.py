@@ -97,6 +97,11 @@ class ConfigRest(BaseModel):
     client_secret: str = Field(
         default="", description="Client Secret do OAuth (vem do cofre)."
     )
+    # Token de acesso obtido e renovado pela BORDA a partir da credencial mTLS
+    # (ver `oauth_mtls`). Não se digita: chega pronto e vira o Authorization.
+    access_token: str = Field(
+        default="", description="Token de acesso OAuth (obtido automaticamente)."
+    )
 
 
 class ArgsRest(BaseModel):
@@ -122,10 +127,13 @@ class ChamarApiRest(TipoInstrumento):
     Args = ArgsRest
     campos_secretos = (
         "token_bearer", "certificado", "chave_privada", "client_secret",
+        "access_token",
     )
     # O material de mTLS/OAuth só existe para quem integra com API que o exige —
     # vazio não é pendência (senão todo REST nasceria "faltando certificado").
-    campos_secretos_opcionais = ("certificado", "chave_privada", "client_secret")
+    campos_secretos_opcionais = (
+        "certificado", "chave_privada", "client_secret", "access_token",
+    )
     tipos_credencial_aceitos = ("token_bearer", "certificado_mtls")
     # Baseline irreversível (default seguro), mas a irreversibilidade REAL depende
     # do método: uma leitura (GET/HEAD/OPTIONS) não muda nada e não exige portão.
@@ -140,8 +148,11 @@ class ChamarApiRest(TipoInstrumento):
 
     def executar(self, config: ConfigRest, args: ArgsRest) -> dict:
         cabecalhos = dict(config.cabecalhos or {})
-        if config.token_bearer:
-            cabecalhos["Authorization"] = f"Bearer {config.token_bearer}"
+        # O token colado à mão manda; na falta dele, o obtido pela borda a partir
+        # da credencial mTLS (OAuth do banco). Nenhum dos dois = sem Authorization.
+        bearer = config.token_bearer or config.access_token
+        if bearer:
+            cabecalhos["Authorization"] = f"Bearer {bearer}"
         validar_cabecalhos_ascii(cabecalhos)
         try:
             # mTLS: se houver certificado de cliente (credencial do cofre), ele é

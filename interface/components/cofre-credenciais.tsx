@@ -354,6 +354,8 @@ function FormularioCredencial({
           "senha_certificado",
           "client_id",
           "client_secret",
+          "url_token",
+          "escopo",
         ]) {
           const v = (valores[c] ?? "").trim();
           if (v) dados[c] = v;
@@ -552,6 +554,14 @@ function FormularioCredencial({
             <span className="h-px flex-1 bg-border" />
           </div>
 
+          <p className="text-xs text-muted-foreground">
+            A maioria dos bancos pede, além do certificado, um <em>token de
+            acesso</em> de curta duração. Preenchendo os campos abaixo, o Batuta
+            busca esse token sozinho e o renova antes de vencer — o agente não
+            precisa saber que ele existe. Deixe em branco se a API usar só o
+            certificado.
+          </p>
+
           <div className="flex flex-col gap-1">
             <Label htmlFor="cred-cert-clientid">Client ID</Label>
             <Input
@@ -580,6 +590,39 @@ function FormularioCredencial({
                 setValores((v) => ({ ...v, client_secret: e.target.value }))
               }
             />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="cred-cert-urltoken">Endereço do token</Label>
+            <Input
+              id="cred-cert-urltoken"
+              type="text"
+              autoComplete="off"
+              placeholder="https://cdpj.partners.bancointer.com.br/oauth/v2/token"
+              value={valores.url_token ?? ""}
+              onChange={(e) =>
+                setValores((v) => ({ ...v, url_token: e.target.value }))
+              }
+            />
+            <span className="text-xs text-muted-foreground">
+              O endereço que o banco informa para emitir o token.
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="cred-cert-escopo">Escopo</Label>
+            <Input
+              id="cred-cert-escopo"
+              type="text"
+              autoComplete="off"
+              placeholder="Ex.: cob.read cob.write pix.read"
+              value={valores.escopo ?? ""}
+              onChange={(e) => setValores((v) => ({ ...v, escopo: e.target.value }))}
+            />
+            <span className="text-xs text-muted-foreground">
+              O que essa credencial pode fazer, conforme a documentação do banco.
+              Deixe em branco se ele não pedir.
+            </span>
           </div>
         </div>
       )}
