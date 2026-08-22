@@ -6,10 +6,15 @@
 > evidência**. A **decisão** continua sendo do maestro; este documento entrega o número na mão e uma
 > **recomendação**.
 >
-> **Fonte dos números:** medição **somente-leitura** no banco que o `.env` local aponta — o
-> **snapshot de São Paulo congelado em 2026-07-20** (o banco antigo, pré-migração, mantido para
-> rollback). Dados reais de produção até essa data. Scripts em `scratchpad` (não versionados);
-> reprodutíveis com as funções de `cerebro/precos.py`.
+> **Fonte dos números:** medição **somente-leitura** no banco que o `.env` local apontava **na época
+> do estudo** — o **snapshot de São Paulo congelado em 2026-07-20** (o banco antigo, pré-migração,
+> mantido para rollback). Dados reais de produção até essa data. Scripts em `scratchpad` (não
+> versionados); reprodutíveis com as funções de `cerebro/precos.py`.
+>
+> ⚠️ **Nota de reprodução (2026-08-21):** aquele snapshot **não existe mais** — o projeto de SP foi
+> apagado, e o `.env` local agora aponta para o banco **US East de produção**. Rodar os scripts hoje
+> mede a **produção viva** (com os dados posteriores a 20/07), não o Marco 0. Os números abaixo são
+> uma **fotografia histórica** e não se reproduzem mais tal e qual.
 
 ---
 

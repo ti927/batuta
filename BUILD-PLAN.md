@@ -24,7 +24,26 @@ Fatos verificados na máquina — não alterar sem re-verificar:
 | Next.js | 16.2.6 |
 | React | 19.2.4 |
 
-Repositório: `github.com/ti927/batuta`, branch `main`. Estrutura: `cerebro/` (Python) + `interface/` (Next.js). Banco: Supabase `lxprnyommztfgcvcjrzf`, conexão direta (IPv6 disponível).
+Repositório: `github.com/ti927/batuta`, branch `main`. Estrutura: `cerebro/` (Python) + `interface/` (Next.js). Banco: Supabase `vpedosymamgdghegjmjj` (**US East**, co-locado com o Railway), pelo **Session pooler** `aws-0-us-east-1.pooler.supabase.com:5432` — desde a migração de 2026-07-20. O projeto antigo de São Paulo (`lxprnyommztfgcvcjrzf`) foi **apagado**: não existe mais nem em DNS.
+
+## Como rodar os testes (e por que o `.env` importa)
+
+**A suíte do cérebro roda contra o BANCO DE VERDADE.** Não há banco de teste separado: a fixture `sessao` (`cerebro/testes/conftest.py`) abre uma conexão, começa uma **transação externa** e a **reverte sempre** no fim — as escritas das rotas caem em savepoints internos e o rollback descarta tudo. Duas salvaguardas deliberadas, que **não devem ser desfeitas**:
+
+1. o `TestClient` é criado **sem `with`**, de propósito: assim o *lifespan* do app **não sobe** — **agendador e fila não acordam** durante os testes (senão a máquina local dispararia automações de produção — ver [[feedback-cerebro-local-dispara-producao]]);
+2. cada teste esvazia o cofre `chaves_api` **dentro** da transação revertida, para a resolução de chave partir sempre de um cofre vazio e o resultado não depender do estado real do banco.
+
+**Comandos:**
+
+| O quê | Comando (a partir de `cerebro/`) |
+|---|---|
+| Suíte inteira | `uv run pytest -q` |
+| Um arquivo | `uv run pytest testes/test_x.py -q` |
+| Interface (tipos) | `npx tsc --noEmit` (a partir de `interface/`) |
+
+**Pré-requisito:** o `cerebro/.env` precisa apontar para o banco **US East**. As 4 variáveis que importam são `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY`; os valores vivem no `cerebro/.env.migracao` (gitignored) com o sufixo `*_NOVO` — a `DATABASE_URL` se monta como `postgresql://{PGUSER_NOVO}:{PGPASSWORD_NOVO}@{PGHOST_NOVO}:{PGPORT_NOVO}/postgres`. **Nunca troque a `COFRE_CHAVE_MESTRA`**: é ela que decifra os segredos já gravados.
+
+**Sintoma de `.env` desatualizado:** centenas de erros `sqlalchemy.exc.OperationalError` no `setup` dos testes (foi o que aconteceu em 2026-08-21, quando o projeto antigo de São Paulo foi apagado). Diagnóstico rápido: `uv run python db.py` — imprime a versão do Postgres se a conexão estiver boa.
 
 ---
 
@@ -858,11 +877,11 @@ O Batuta está **no ar em produção**, no domínio próprio, com HTTPS. **Pré-
 
 **Arquitetura de produção:**
 - **Railway** (projeto "batuta"), 2 serviços do repo `ti927/batuta`, cada um com Root Directory (`cerebro/` e `interface/`) e **Dockerfile** próprio (cérebro: python:3.13-slim + uv; interface: Node 22, Next standalone, `NEXT_PUBLIC_*` como build args). Região **US East** (mais perto do banco em São Paulo — Railway não tem região no Brasil). 1 réplica (agendador/fila em processo).
-- **Banco:** o **Supabase atual** (sa-east-1 São Paulo) — reusado, sem migração; mesmas chaves (inclusive `COFRE_CHAVE_MESTRA`).
+- **Banco:** o **Supabase atual** (sa-east-1 São Paulo) — reusado, sem migração; mesmas chaves (inclusive `COFRE_CHAVE_MESTRA`). ⚠️ **SUPERADO em 2026-07-20:** o banco foi migrado para **US East** (projeto `vpedosymamgdghegjmjj`, Session pooler) e o projeto de SP **foi apagado** — ver a fase "Migração do banco Supabase Brasil → EUA" adiante. Leia os itens desta seção que citam São Paulo como registro histórico.
 - **Domínio:** `batuta.team` (interface) e `api.batuta.team` (cérebro), via **Cloudflare** (DNS, CNAME flatten na raiz) com registros em **DNS only (cinza)**; HTTPS automático do Railway.
 - **CORS** por ambiente (`INTERFACE_ORIGINS`); a interface fala com o cérebro em `https://api.batuta.team`.
 
-**Gotchas resolvidos (importam p/ futuras mudanças):** (1) Supabase é IPv6 → ligar **"Enable Outbound IPv6"** no serviço Railway (senão `Network is unreachable`). (2) `NEXT_PUBLIC_*` são **congeladas no build** → mudar a URL do cérebro exige rebuild da interface. (3) Cloudflare: registros que apontam pro Railway têm que ser **DNS only (nuvem cinza)**, nunca proxied. (4) Latência: manter Railway em **US East** (perto do banco SP). Detalhe operacional completo na memória [[reference-producao-railway]].
+**Gotchas resolvidos (importam p/ futuras mudanças):** (1) ~~Supabase é IPv6 → ligar **"Enable Outbound IPv6"**~~ — **deixou de valer** com a migração: o Session pooler novo é IPv4. (2) `NEXT_PUBLIC_*` são **congeladas no build** → mudar a URL do cérebro exige rebuild da interface. (3) Cloudflare: registros que apontam pro Railway têm que ser **DNS only (nuvem cinza)**, nunca proxied. (4) Latência: manter Railway em **US East** — agora **co-locado** com o banco (era "perto do banco SP", o que nunca foi verdade de fato; foi o motivo da migração). Detalhe operacional completo na memória [[reference-producao-railway]].
 
 **Limitação conhecida (follow-up):** `gerar_pdf`/`gerar_imagem` gravam em disco efêmero do Railway → migrar p/ Supabase Storage depois.
 
@@ -1696,7 +1715,9 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 **Gotchas:** (1) O **`db.py` não mudou** — ele já fazia parsing por componentes (senha com `$ * ,`); o pooler novo é **IPv4** (Session pooler `aws-0-us-east-1.pooler.supabase.com:5432`), então o antigo gotcha de IPv6 do Railway **deixou de existir**. (2) No 1º deploy o cérebro caiu em loop com `FATAL: database "postgres" does not exist` — era a **`DATABASE_URL` que chegou CORTADA no Railway** (colagem; o Supavisor sem o sufixo `postgres.<ref>` no usuário reclama assim). Provado que a string exata funciona (rodando `db.py` local contra o banco novo) → recolar exata resolveu; o `$` da senha **não** era o culpado.
 
-**PENDÊNCIAS pós-virada:** (a) **rotacionar a senha do banco + as chaves** (passaram pelo chat) — higiene; (b) manter o **projeto antigo (`lxprnyommztfgcvcjrzf`) vivo alguns dias** como rollback (reverter = trocar as 3 vars do cérebro de volta); (c) depois de estável, **apagar** o antigo + os scripts `_mig_*.py` e o `.env.migracao`. Runbook atualizado em [[reference-producao-railway]].
+**PENDÊNCIAS pós-virada:** (a) **rotacionar a senha do banco + as chaves** (passaram pelo chat) — higiene, **ainda aberta**; (b) ~~manter o projeto antigo vivo como rollback~~ ✅ **encerrado**; (c) ✅ **feito** — os scripts `_mig_*.py` foram apagados (2026-08-09) e o **projeto antigo `lxprnyommztfgcvcjrzf` foi APAGADO** (2026-08-21: o host não resolve mais em DNS; a janela de rollback fechou). **O `.env.migracao` FICA** (decisão revista): ele guarda as credenciais do banco NOVO (`PG*_NOVO`, `SUPABASE_*_NOVO`) e é a fonte de onde o `.env` local é repontado. Runbook atualizado em [[reference-producao-railway]].
+
+**Consequência para o ambiente local (2026-08-21):** com o projeto de SP apagado, todo `.env` local que ainda apontasse para lá **quebrou** — a suíte do cérebro morria com 460 erros de conexão (`sqlalchemy.exc.OperationalError`), porque os testes com a fixture `sessao` conectam no `DATABASE_URL` de verdade. **Conserto (feito):** repontar as 4 variáveis do `.env` — `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — para os valores `*_NOVO` do `.env.migracao`, **sem tocar em `COFRE_CHAVE_MESTRA`** (ela decifra os segredos já gravados; trocá-la perderia o cofre). Ver "Como rodar os testes" no início deste plano.
 
 ---
 

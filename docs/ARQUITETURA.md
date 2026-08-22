@@ -37,7 +37,7 @@ seus clientes. Não é um SaaS self-service ainda.
 **Interface (frontend)** — pasta `interface/`, **Next.js 16** (App Router) + **React 19** + **TypeScript** + **Tailwind v4** + componentes estilo shadcn + ícones **lucide-react**; **@supabase/ssr** + **@supabase/supabase-js**, **framer-motion**, **sonner** (toasts).
 
 **Infra gerenciada:**
-- **Supabase** (PostgreSQL + Auth + Storage). Projeto na região **São Paulo (sa-east-1)**.
+- **Supabase** (PostgreSQL + Auth + Storage). Projeto na região **US East (us-east-1)**, co-locado com o Railway — migrado de São Paulo em 2026-07-20; o projeto antigo de SP foi apagado.
 - **Railway** (hospedagem do cérebro e da interface, via Docker). Região **US East**.
 - **Cloudflare** (DNS do domínio `batuta.team`).
 
@@ -219,7 +219,7 @@ há mais interruptor de aprovação por instrumento**.
 ## 10. Implantação (produção)
 
 - **Railway**, projeto com **2 serviços** do mesmo repo, cada um com Dockerfile próprio: `cerebro/` (python:3.13 + uv; no start roda `alembic upgrade head` + uvicorn) e `interface/` (Node 22, Next `output:"standalone"`; as `NEXT_PUBLIC_*` entram como **build args**, congeladas no build). Região **US East**, **1 réplica**.
-- **Banco:** o Supabase de sempre (**São Paulo**). O cérebro alcança o Postgres do Supabase por IPv6 (precisou ligar "Outbound IPv6" no Railway).
+- **Banco:** Supabase em **US East**, co-locado com o Railway (migrado de São Paulo em 2026-07-20 — a latência caiu muito). A conexão é pelo **pooler** (`aws-0-us-east-1.pooler.supabase.com`), o que dispensou o "Outbound IPv6" que a conexão direta de SP exigia.
 - **Domínio:** `batuta.team` (interface) e `api.batuta.team` (cérebro), via **Cloudflare** (DNS only). HTTPS automático do Railway.
 - **Storage:** o **Supabase Storage está disponível mas ainda NÃO é usado**. Hoje os instrumentos `gerar_pdf`/`gerar_imagem` gravam em **disco efêmero** do Railway (o arquivo some no próximo deploy — limitação aberta). **O pgvector do Supabase está disponível** (Postgres), caso se opte por RAG.
 
