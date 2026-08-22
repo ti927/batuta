@@ -17,6 +17,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel
+from sqlalchemy import update
 
 import orquestracao.agente as agente_mod
 from instrumentos.base import TipoInstrumento, registrar
@@ -235,12 +236,31 @@ def test_ponta_a_ponta_pausa_e_retoma_via_processar_turno(sessao, dados, monkeyp
     monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
 
     def _entrar(texto):
+        """Entra pela borda REAL. Ressalva: aqui quem carimba o `criado_em` é o
+        BANCO (`server_default=now()`), e no Postgres `now()` é o horário de
+        INÍCIO DA TRANSAÇÃO — como a fixture roda o teste inteiro numa transação
+        só, todas as mensagens nasceriam com o MESMO instante e a "última
+        mensagem do contato" (a que decide a aprovação) empataria: o banco pode
+        devolver a primeira, o 'sim' vira resposta ambígua e a retomada não
+        acontece. É a mesma armadilha que o `_contato` já contorna; por isso
+        carimbamos a recém-criada com um instante crescente ANTES do turno."""
         conv, deve = servico.registrar_entrada(
             sessao, canal,
             servico.telegram.MensagemEntrante(
                 contato_chave="555", contato_nome="Cliente", texto=texto, midia=None),
         )
         assert deve
+        _n["i"] += 1
+        sessao.execute(
+            update(MensagemConversa)
+            .where(
+                MensagemConversa.conversa_id == conv.id,
+                MensagemConversa.papel == "contato",
+                MensagemConversa.conteudo == texto,
+            )
+            .values(criado_em=datetime.now(timezone.utc) + timedelta(seconds=_n["i"]))
+        )
+        sessao.flush()
         servico.processar_turno(conv.id)
         return conv
 
