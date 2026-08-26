@@ -46,6 +46,9 @@ TIMEOUT_S = 15.0
 MAX_CORPO = 10_000
 # Métodos que só LEEM — não mudam o estado do sistema externo (base da parede).
 _METODOS_LEITURA = {"GET", "HEAD", "OPTIONS"}
+# `[campo]` no endereço — o lugar onde um campo de destino "url" é substituído. Serve
+# para conferir, DEPOIS da substituição, que não sobrou nenhum buraco (ver `_executar_operacao`).
+_PLACEHOLDER = re.compile(r"\[([^\]/?#]+)\]")
 
 
 class CampoOperacao(BaseModel):
@@ -265,6 +268,21 @@ def _executar_operacao(
             corpo[c.nome] = v
         else:  # query
             params[c.nome] = v
+
+    # 2b) Nenhum `[campo]` pode sobrar na URL. Se sobrou, a operação foi montada
+    # errada — quase sempre o campo existe mas está com o destino trocado (ex.: `id`
+    # marcado como "query" numa URL `/obj/Tbl/[id]`). Antes disso, a chamada saía com
+    # o colchete literal no endereço, o serviço respondia 404 e o agente inventava uma
+    # explicação. Falhar aqui, com o nome do campo, é honesto e não-retentável (§12-A).
+    faltando = _PLACEHOLDER.findall(url)
+    if faltando:
+        nomes = ", ".join(f"«{n}»" for n in faltando)
+        raise FalhaInstrumento(
+            f"a operação '{op.nome}' tem {nomes} no endereço e nenhum campo preenchendo "
+            f"esse lugar — marque o destino do campo como 'url' (hoje ele está em outro "
+            f"destino, ou não existe). Endereço montado: {url}",
+            retentavel=False,
+        )
 
     # 3) autenticação (declarativa, reusa o segredo do cofre).
     cabecalhos = dict(op.cabecalhos or {})

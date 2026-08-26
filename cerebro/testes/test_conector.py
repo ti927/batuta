@@ -15,7 +15,14 @@ import pytest
 
 import instrumentos as encaixe
 from instrumentos.base import FalhaInstrumento
-from instrumentos.conector import ArgsConector, ConfigConector, Conector
+from instrumentos.conector import (
+    ArgsConector,
+    CampoOperacao,
+    ConfigConector,
+    Conector,
+    OperacaoConector,
+    _executar_operacao,
+)
 from modelos import Instrumento
 from orquestracao.agente import _ferramentas_de_instrumento
 
@@ -53,7 +60,7 @@ def _mock_http(monkeypatch, resp, capturas):
             )
             return resp
 
-    monkeypatch.setattr("instrumentos.conector.httpx.Client", _Cliente)
+    monkeypatch.setattr("instrumentos.conector.http_saida.cliente", _Cliente)
 
 
 def _instrumento(configuracao: dict) -> Instrumento:
@@ -416,3 +423,36 @@ def test_falha_de_http_vira_erro_para_ia(monkeypatch):
     saida = json.loads(Conector().expandir_ferramentas(config)[0].invoke({}))
     assert saida["ok"] is False
     assert "falhou" in saida["erro"]
+
+
+# ───────────── endereço com buraco não preenchido (2026-08-26) ─────────────
+# Caso real: a operação "Altera Reembolso" apontava para `/obj/Tbl/[id]` com o campo
+# `id` marcado como destino "query". O `[id]` nunca era substituído, a chamada saía
+# com o colchete literal no endereço e o serviço respondia 404 — o agente então
+# inventava uma explicação. Falhar aqui, dizendo QUAL campo, é honesto.
+
+
+def _op_com_buraco(destino: str) -> OperacaoConector:
+    return OperacaoConector(
+        nome="Altera Reembolso", metodo="PATCH",
+        url="https://api.exemplo/obj/Tbl.Reembolsos/[id]",
+        campos=[CampoOperacao(nome="id", papel="ia", destino=destino, obrigatorio=True)],
+    )
+
+
+def test_placeholder_sem_campo_de_url_falha_claro(monkeypatch):
+    capturas: list = []
+    _mock_http(monkeypatch, _Resp(200, {}), capturas)
+    with pytest.raises(FalhaInstrumento) as e:
+        _executar_operacao(ConfigConector(), _op_com_buraco("query"), {"id": "123"})
+    assert "«id»" in str(e.value)
+    assert "destino" in str(e.value).lower()
+    assert not capturas, "não pode chamar o serviço com o endereço quebrado"
+
+
+def test_placeholder_com_destino_url_funciona(monkeypatch):
+    """O contraste: com o destino certo, o endereço é montado e a chamada sai."""
+    capturas: list = []
+    _mock_http(monkeypatch, _Resp(200, {"ok": True}), capturas)
+    _executar_operacao(ConfigConector(), _op_com_buraco("url"), {"id": "123"})
+    assert capturas[0]["url"] == "https://api.exemplo/obj/Tbl.Reembolsos/123"
