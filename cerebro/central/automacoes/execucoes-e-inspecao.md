@@ -3,8 +3,8 @@ titulo: "Execuções e inspeção"
 area: "automacoes"
 slug: "execucoes-e-inspecao"
 tags: ["execucao", "inspecao", "rodar", "ao-vivo", "diagnostico", "passo-a-passo"]
-revisado_em: "2026-07-17"
-fontes: ["PRODUTO.md §15", "cerebro/orquestracao/disparo.py", "project_navegacao-time-centrica", "feedback_feedback-constante-ao-usuario"]
+revisado_em: "2026-08-26"
+fontes: ["PRODUTO.md §15", "cerebro/orquestracao/disparo.py", "cerebro/diagnostico_execucao.py", "project_navegacao-time-centrica", "feedback_feedback-constante-ao-usuario"]
 ---
 
 # Execuções e inspeção
@@ -31,10 +31,21 @@ está acontecendo agora") — você nunca fica no escuro achando que travou.
 - Um fluxo pode ficar **parado num portão** esperando o humano — isso é normal, não é falha.
 - Uma execução pode **falhar** e, dependendo do erro, ser **retentada** automaticamente — veja
   [[operacao/falhas-e-retentativa]].
+- **Execução "concluída" não garante que tudo deu certo.** Uma ferramenta pode ter respondido "não deu" sem
+  derrubar o fluxo; o passo guarda essa falha crua e o diagnóstico a levanta como aviso, mesmo quando o
+  agente escreveu que deu certo.
+- **As conversas também deixam rastro.** O atendimento por mensageria gera sua própria linha do tempo, com
+  os mesmos passos, instrumentos acionados e custo — dá para inspecionar um agente conversacional como se
+  inspeciona uma automação.
 
 ## Para a IA
 Ao diagnosticar com o consultor, baseie-se no **estado real** da execução (o que a inspeção mostra), não em
 suposição. Um fluxo "parado" costuma ser um portão aguardando resposta, não um erro.
+O diagnóstico já entrega, quando dá para saber: **qual instrumento** falhou (pelo nome que o próprio erro
+cita), **qual agente** o carrega e uma **ação sugerida derivada do tipo de erro** — arquivo grande demais
+pede ajuste de configuração, não cadastro de credencial. Use essas referências em vez de deduzir pelo
+instrumento que aparece por último no passo: o que falhou pode nem ter chegado a registrar passo, se o
+agente estourou antes.
 
 ## Relacionado
 - [[automacoes/automacao]]

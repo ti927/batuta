@@ -3,8 +3,8 @@ titulo: "Operar o Batuta pelo Claude (conector MCP)"
 area: "operacao"
 slug: "operar-pelo-claude-mcp"
 tags: ["mcp", "claude", "conector", "consultor", "custo", "integração"]
-revisado_em: "2026-08-21"
-fontes: ["docs/MCP-BATUTA.md", "cerebro/mcp_servidor.py", "cerebro/mcp_login.py"]
+revisado_em: "2026-08-26"
+fontes: ["docs/MCP-BATUTA.md", "cerebro/mcp_servidor.py", "cerebro/mcp_login.py", "cerebro/mcp_ferramentas.py", "cerebro/mcp_ferramentas_escrita.py"]
 ---
 
 # Operar o Batuta pelo Claude (conector MCP)
@@ -47,7 +47,14 @@ de forma permitida pela Anthropic (o app do usuário é que aciona a ferramenta)
   no chat. Segredo não passa pelo claude.ai.
 - **A parede de aprovação continua valendo:** ativar uma automação com ação irreversível
   sem portão humano é recusado.
-- **Exclusões são irreversíveis.** O Claude confirma com você antes.
+- **Exclusões são irreversíveis.** O Claude confirma com você antes. Excluir uma **organização** só é
+  possível quando ela está **vazia** (sem nenhum time): o Batuta recusa e explica o que precisa sair antes,
+  em vez de apagar times, execuções e credenciais em cascata.
+- **Depois de uma atualização do Batuta, reconecte o conector** (remova e adicione de novo). O claude.ai
+  guarda a lista de ferramentas; sem reconectar, ferramentas novas não aparecem e nomes antigos continuam
+  visíveis mesmo já tendo mudado.
+- **Se uma ferramenta falhar**, a resposta traz um **código** — cite-o ao pedir ajuda: ele aponta o registro
+  exato do erro no servidor (veja [[operacao/sinais-e-diagnostico]]).
 
 ## Para a IA
 
@@ -57,6 +64,15 @@ de forma permitida pela Anthropic (o app do usuário é que aciona a ferramenta)
 - Ordem de trabalho pelo MCP: **ler antes de escrever** (retrato do time, agentes,
   execuções); consultar a Central quando não souber COMO um recurso funciona; deixar
   segredos pendentes para o humano; pôr portão antes de ação irreversível.
+- **Instrumento se lê, não se adivinha.** O cinto de um agente vem como uma lista de ids;
+  para saber o que cada um é (nome, tipo, configuração, segredos que faltam), use as
+  ferramentas de listar/ver instrumento — inclusive para conferir o que foi criado pela
+  tela. Nunca deduza a configuração de um instrumento pelo nome dele.
+- **Ligar/desligar é da AUTOMAÇÃO, não do time.** As ferramentas de ativar e desativar
+  recebem o id de uma automação e não mexem no time nem nos agentes. Ao confirmar com o
+  consultor, diga o nome da automação — dizer "vou desligar o time" descreve outra coisa.
+- **Gatilho e cadeia convivem:** definir o gatilho e montar a cadeia podem ser feitos em
+  qualquer ordem; o Batuta mantém os dois coerentes sozinho.
 
 ## Relacionado
 

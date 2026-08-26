@@ -3,8 +3,8 @@ titulo: "Falhas e retentativa"
 area: "operacao"
 slug: "falhas-e-retentativa"
 tags: ["falha", "erro", "retentavel", "idempotencia", "retentativa", "sweeper"]
-revisado_em: "2026-07-17"
-fontes: ["cerebro/instrumentos/base.py", "PRODUTO.md §16"]
+revisado_em: "2026-08-26"
+fontes: ["cerebro/instrumentos/base.py", "cerebro/http_saida.py", "PRODUTO.md §16"]
 ---
 
 # Falhas e retentativa
@@ -35,6 +35,14 @@ Entender por que um fluxo às vezes se recupera sozinho e às vezes para na sua 
   aconteceu, qualquer falha vira **não-retentável** — para nunca publicar/cobrar em dobro.
 - Geração de vídeo/imagem pesada tem **teto de tempo**: se estourar, falha limpo numa vez só (não fica
   reprocessando e multiplicando custo).
+- **Nem toda falha derruba o fluxo.** Um sistema externo pode responder "não deu" (por exemplo, arquivo
+  grande demais) sem que isso seja um erro do Batuta: o agente recebe essa resposta como **dado** e decide
+  como seguir — e às vezes narra sucesso. A falha fica registrada no rastro do passo, então confira o
+  registro em vez de confiar no texto do agente (veja [[operacao/sinais-e-diagnostico]]).
+- **Falha de rede tem recado próprio.** Quando o servidor do Batuta não consegue alcançar o endereço, a
+  mensagem nomeia o host e diz que a segunda tentativa (por outro caminho de rede) também falhou. Nesse caso
+  confira o endereço; se estiver certo, o destino provavelmente está fora do ar ou bloqueia servidores de
+  nuvem. Repetir a chamada não costuma resolver.
 
 ## Para a IA
 Traduza o erro para o consultor: se é retentável, o Batuta cuida; se é definitivo, diga **o que ele precisa
