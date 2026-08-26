@@ -385,3 +385,10 @@ def desligar() -> None:
     """Desliga o relógio (no encerramento do app)."""
     if _scheduler.running:
         _scheduler.shutdown(wait=False)
+
+
+def esta_saudavel() -> bool:
+    """Se o relógio está rodando (gatilhos de agendamento disparam). Lido pelo
+    `/saude`: um agendador parado não derruba o app, só faz as automações agendadas
+    nunca acontecerem — falha silenciosa clássica."""
+    return bool(_scheduler.running)

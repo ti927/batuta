@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
+  AlertTriangle,
   ChevronDown,
   Coins,
   Gauge,
@@ -355,54 +356,92 @@ export function Sidebar({
   );
 }
 
-// Selo de versão: lê o /saude do cérebro (público, sem token) e mostra o commit no ar
-// + desde quando — para o maestro saber a versão sem abrir o Railway. É decorativo: se
-// a leitura falhar (rede/cérebro fora), não mostra nada (nunca um erro na barra).
+// O que cada peça de segundo plano do cérebro significa PARA QUEM USA — o /saude
+// devolve nomes técnicos; aqui vira consequência prática, que é o que interessa
+// a quem lê o aviso na barra.
+const EFEITO_DEGRADADO: Record<string, string> = {
+  memoria_conversa:
+    "memória das conversas: os agentes recomeçam do zero a cada mensagem e a confirmação automática de ações irreversíveis está inativa",
+  fila: "processador de automações: nada roda até voltar",
+  agendador: "relógio dos agendamentos: automações agendadas não disparam",
+};
+
+// Selo de versão e SAÚDE: lê o /saude do cérebro (público, sem token) e mostra o commit
+// no ar + desde quando — para o maestro saber a versão sem abrir o Railway. Quando um
+// subsistema está degradado, fica ÂMBAR com ícone e explica no tooltip: o app continua
+// respondendo mesmo com uma peça morta por dentro, e foi assim que uma queda passou três
+// dias invisível (CLAUDE.md §12-A). Estado nunca só por cor (DESIGN-SYSTEM): cor + ícone
+// + texto. Segue decorativo: se a leitura falhar, não mostra nada (nunca um erro na barra).
 function VersaoBadge() {
   const [info, setInfo] = useState<{
     versao: string;
     quando: string;
     titulo: string;
+    degradados: string[];
   } | null>(null);
 
   useEffect(() => {
     let vivo = true;
-    fetch(`${URL_CEREBRO}/saude`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!vivo || !d) return;
-        const versao = String(d.versao ?? "").slice(0, 7) || "dev";
-        let quando = "";
-        let titulo = `Versão ${versao}`;
-        if (d.iniciado_em) {
-          // UTC guardado no cérebro → renderizado no fuso do navegador (o do maestro).
-          const dt = new Date(d.iniciado_em);
-          const data = dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-          const hora = dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-          const dataCompleta = dt.toLocaleDateString("pt-BR", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-          });
-          quando = `${data} ${hora}`; // vários deploys/dia → a hora distingue
-          titulo = `Versão ${versao} · no ar desde ${dataCompleta} ${hora}`;
-        }
-        setInfo({ versao, quando, titulo });
-      })
-      .catch(() => {});
+    const ler = () =>
+      fetch(`${URL_CEREBRO}/saude`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!vivo || !d) return;
+          const versao = String(d.versao ?? "").slice(0, 7) || "dev";
+          const degradados: string[] = Array.isArray(d.degradados) ? d.degradados : [];
+          let quando = "";
+          let titulo = `Versão ${versao}`;
+          if (d.iniciado_em) {
+            // UTC guardado no cérebro → renderizado no fuso do navegador (o do maestro).
+            const dt = new Date(d.iniciado_em);
+            const data = dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+            const hora = dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+            const dataCompleta = dt.toLocaleDateString("pt-BR", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            });
+            quando = `${data} ${hora}`; // vários deploys/dia → a hora distingue
+            titulo = `Versão ${versao} · no ar desde ${dataCompleta} ${hora}`;
+          }
+          if (degradados.length > 0) {
+            const efeitos = degradados
+              .map((nome) => EFEITO_DEGRADADO[nome] ?? nome)
+              .join("; ");
+            titulo = `⚠️ O Batuta está funcionando com limitação — ${efeitos}. Avise o suporte. (${titulo})`;
+          }
+          setInfo({ versao, quando, titulo, degradados });
+        })
+        .catch(() => {});
+    ler();
+    // Reconsulta de tempos em tempos: um subsistema pode cair (ou voltar) com a tela
+    // aberta, e o aviso não pode depender de recarregar a página.
+    const id = setInterval(ler, 60_000);
     return () => {
       vivo = false;
+      clearInterval(id);
     };
   }, []);
 
   if (!info) return null;
+  const degradado = info.degradados.length > 0;
   return (
     <div
-      className="flex flex-col items-end leading-tight text-[10px] text-[#8A86A6]"
+      className={`flex flex-col items-end leading-tight text-[10px] ${
+        degradado ? "text-[#E89638]" : "text-[#8A86A6]"
+      }`}
       title={info.titulo}
     >
-      <span className="font-mono">{info.versao}</span>
-      {info.quando && <span>{info.quando}</span>}
+      <span className="flex items-center gap-1 font-mono">
+        {degradado && <AlertTriangle className="size-3" aria-hidden />}
+        {info.versao}
+      </span>
+      {degradado ? (
+        <span className="font-sans">com limitação</span>
+      ) : (
+        info.quando && <span>{info.quando}</span>
+      )}
+      {degradado && <span className="sr-only">{info.titulo}</span>}
     </div>
   );
 }

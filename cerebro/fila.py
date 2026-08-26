@@ -219,3 +219,10 @@ def desligar() -> None:
     """Pede para os trabalhadores pararem (são daemon; não bloqueia o shutdown)."""
     _parar.set()
     _acordar.set()
+
+
+def esta_saudavel() -> bool:
+    """Se o pool de trabalhadores está de pé (alguém para pegar execução da fila).
+    Lido pelo `/saude` — sem isto, "no ar" diria pouco: o app responde HTTP mesmo
+    com a fila morta, e nenhuma automação rodaria."""
+    return bool(_threads) and any(t.is_alive() for t in _threads)

@@ -1119,6 +1119,14 @@ function SecaoAuth({
               </option>
             ))}
           </Select>
+          {/* Com um certificado carregado abaixo, "Sem autenticação" parece contradição
+              (dúvida real de quem usou a tela). O texto resolve: o certificado não é um
+              tipo daqui — é a conexão, e vale junto com qualquer opção. */}
+          <span className="mt-1 text-xs text-muted-foreground">
+            {authTipo === "nenhuma"
+              ? "Nada além do certificado, se houver: o serviço não pede token nem senha."
+              : "O segredo vai para o cofre e nunca aparece em claro."}
+          </span>
         </Label>
 
         {(authTipo === "cabecalho" || authTipo === "query") && (
@@ -1204,7 +1212,12 @@ function SecaoAuth({
         </h2>
         <p className="mt-1.5 max-w-prose text-sm text-muted-foreground">
           Só para serviços que exigem se identificar com um certificado — é o caso de APIs
-          bancárias (Pix, boleto). A maioria das APIs não pede; pule este bloco.
+          bancárias (Pix, boleto). A maioria das APIs não pede; pule este bloco.{" "}
+          <strong className="font-medium text-foreground">
+            O certificado não substitui a autenticação acima: ele combina com qualquer tipo
+          </strong>{" "}
+          — inclusive com &ldquo;Sem autenticação&rdquo;, quando o certificado é a única
+          identificação exigida. Um banco costuma pedir os dois ao mesmo tempo.
         </p>
       </header>
       <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">

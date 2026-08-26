@@ -82,12 +82,34 @@ INICIADO_EM = datetime.now(timezone.utc).isoformat()
 
 @app.get("/saude")
 def saude():
-    # `versao` = commit no ar (a Railway injeta RAILWAY_GIT_COMMIT_SHA). Serve para
-    # confirmar, sem adivinhação, qual código produção está realmente rodando.
+    """Sinal de vida do cérebro — e dos seus ÓRGÃOS.
+
+    Até 2026-08-26 esta rota só dizia "estou no ar", e foi assim que ela enganou:
+    o app respondia normalmente enquanto a memória de conversa estava caída havia
+    dias (levando junto a trava de ação irreversível). Um subsistema morto não
+    derruba o HTTP — só faz o produto perder capacidade em silêncio. Por isso o
+    `/saude` agora responde por cada peça de segundo plano, e a barra lateral usa
+    isso para avisar. Público e barato: só lê estado em memória, sem tocar o banco.
+    """
+    subsistemas = {
+        # Memória entre turnos da conversa (checkpointer). Degradado = conversa
+        # recomeça do texto a cada turno e o portão nativo não segura o irreversível.
+        "memoria_conversa": memoria_conversa.esta_saudavel(),
+        # Pool que tira execução da fila. Parado = nada roda, nem gatilho nem botão.
+        "fila": fila.esta_saudavel(),
+        # Relógio dos gatilhos de agendamento. Parado = automação agendada nunca dispara.
+        "agendador": agendador.esta_saudavel(),
+    }
+    degradados = sorted(nome for nome, ok in subsistemas.items() if not ok)
     return {
         "mensagem": "Batuta cérebro no ar",
+        # `versao` = commit no ar (a Railway injeta RAILWAY_GIT_COMMIT_SHA). Serve para
+        # confirmar, sem adivinhação, qual código produção está realmente rodando.
         "versao": os.environ.get("RAILWAY_GIT_COMMIT_SHA", "dev"),
         "iniciado_em": INICIADO_EM,
+        "subsistemas": subsistemas,
+        "degradados": degradados,
+        "saudavel": not degradados,
     }
 
 

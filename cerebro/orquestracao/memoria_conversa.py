@@ -99,6 +99,14 @@ def obter():
     return _saver
 
 
+def esta_saudavel() -> bool:
+    """Se a memória entre turnos está de pé. `False` = modo degradado: a conversa
+    ainda atende, mas cada turno recomeça do texto e a trava nativa de ação
+    irreversível fica inativa. Lido pelo `/saude` para o selo da barra lateral
+    avisar — foi a queda que passou três dias invisível em agosto/2026."""
+    return _saver is not None
+
+
 def tem_estado(thread_id: str) -> bool:
     """Se a conversa já tem fio salvo (para decidir SEMEAR o histórico no 1º turno)."""
     s = obter()

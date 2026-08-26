@@ -19,7 +19,6 @@ from instrumentos.base import (
     registrar,
     validar_cabecalhos_ascii,
 )
-from observabilidade.escritor import registrar_evento  # TEMP-DIAG: remover após diagnóstico
 
 # Limites de segurança para uma resposta — evita estourar memória/contexto.
 TIMEOUT_S = 15.0
@@ -198,35 +197,9 @@ class ChamarApiRest(TipoInstrumento):
             corpo = resposta.text[:MAX_CORPO]
 
         # Filtro de campos (corte de custo): enxuga cada registro da resposta aos
-        # campos escolhidos. Vazio = resposta inteira (retrocompatível). Feito ANTES
-        # do diag para o `rest.diag` medir o tamanho JÁ reduzido (prova a economia).
+        # campos escolhidos. Vazio = resposta inteira (retrocompatível).
         if config.campos_resposta:
             corpo = _projetar_registros(corpo, config.campos_resposta)
-
-        # TEMP-DIAG (remover após diagnóstico de custo/constraints): registra O QUE o
-        # agente enviou (query com o `constraints`, corpo do POST — que mostra a data) e
-        # o TAMANHO da resposta (results_count/remaining revelam se a busca veio filtrada
-        # ou trouxe a tabela inteira). Best-effort: nunca derruba a chamada.
-        try:
-            _resp = corpo.get("response") if isinstance(corpo, dict) else None
-            _results = _resp.get("results") if isinstance(_resp, dict) else None
-            registrar_evento(
-                categoria="instrumento",
-                acao="rest.diag",
-                persistir=True,
-                detalhe={
-                    "url": config.url,
-                    "metodo": config.metodo,
-                    "query": args.parametros_query or {},
-                    "corpo_enviado": args.corpo,
-                    "status": status,
-                    "resposta_chars": len(str(corpo)),
-                    "results_count": len(_results) if isinstance(_results, list) else None,
-                    "remaining": _resp.get("remaining") if isinstance(_resp, dict) else None,
-                },
-            )
-        except Exception:  # noqa: BLE001 — log de diagnóstico nunca pode derrubar a chamada
-            pass
 
         return {
             "ok": resposta.is_success,

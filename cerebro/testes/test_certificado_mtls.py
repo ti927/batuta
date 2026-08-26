@@ -265,8 +265,6 @@ def _espionar_httpx(monkeypatch, modulo):
     monkeypatch.setattr(
         modulo.http_saida, "cliente", lambda **k: _ClienteFake(capturado, **k)
     )
-    if modulo is rest:  # o log TEMP de diagnóstico escreve no banco — silencia
-        monkeypatch.setattr(rest, "registrar_evento", lambda **k: None)
     return capturado
 
 

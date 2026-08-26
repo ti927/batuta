@@ -77,9 +77,9 @@ class _ClienteFake:
 
 
 def _mock_httpx(monkeypatch, payload):
-    monkeypatch.setattr(rest.httpx, "Client", lambda **k: _ClienteFake(payload))
-    # o log de diagnóstico TEMP escreve no banco — silencia no teste
-    monkeypatch.setattr(rest, "registrar_evento", lambda **k: None)
+    # A porta de saída (`http_saida.cliente`) é por onde o REST chama desde a queda
+    # para IPv4 — é ela que o teste intercepta.
+    monkeypatch.setattr(rest.http_saida, "cliente", lambda **k: _ClienteFake(payload))
 
 
 def test_executar_com_filtro_enxuga_a_resposta(monkeypatch):
