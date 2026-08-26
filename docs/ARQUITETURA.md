@@ -126,6 +126,18 @@ nº 1): colapsar os dois numa **timeline única com memória entre turnos**.
 
 Lifespan do FastAPI (`main.py`) sobe a fila e o agendador no boot e os desliga no shutdown. **Por isso o cérebro roda em 1 réplica** (escalar duplicaria os gatilhos agendados).
 
+**Fail-safe não pode ser mudo (2026-08-26).** O lifespan também prepara o checkpointer da memória de
+conversa (`orquestracao/memoria_conversa.preparar()`), à prova de falha: se ele não subir, a conversa cai
+no modo legado e o atendimento continua. Em agosto essa proteção escondeu uma regressão por **três dias**
+— o checkpointer caiu, ninguém soube, e com ele foi junto a trava nativa de ação irreversível. A regra que
+saiu daí, e que vale para todo fallback do projeto: **degradar é aceitável, degradar em silêncio não.**
+Todo caminho degradado precisa de (a) evento no banco de logs, (b) vigia que destrave o que ficou preso e
+(c) recado honesto a quem estava esperando. Materializações: o evento `memoria.checkpointer_indisponivel`;
+o carimbo `memoria: duravel|legado` em cada passo de conversa; `sweeper.varrer_turnos_presos` (turno de
+mensageria que começou e não voltou — a conversa ficava presa **para sempre**, porque o vigia de
+inatividade só olhava quem esperava o contato); e os eventos `turno.iniciado`/`turno.concluido`/
+`turno.morreu`. Ver o capítulo `operacao/sinais-e-diagnostico` da Central.
+
 ---
 
 ## 6. Instrumentos (capacidades plugáveis)
@@ -145,6 +157,20 @@ fonte da verdade é o registro em `cerebro/instrumentos/`, não esta enumeraçã
 A irreversibilidade é resolvida **por instância** (`exige_portao(tipo, config, override)`): ex.: REST
 GET = leitura (sem portão), POST/PUT/DELETE = escrita (com portão); o interruptor `exige_aprovacao`
 sobrepõe. Falhas de instrumento têm **retentativa com backoff** e nunca "morrem em silêncio".
+
+**Duas falhas de instrumento, dois caminhos (2026-08-26).** Uma exceção (`FalhaInstrumento`) derruba ou
+desvia o fluxo; mas há um segundo caminho, mais traiçoeiro: o instrumento **devolve a falha como dado**
+(`{"ok": false, …}`, ex.: HTTP 4xx do REST/conector) para o agente decidir o que fazer. Esse caso não
+mudava estado nenhum e **não deixava rastro** — o agente narrava sucesso e a execução parecia limpa. Hoje
+o resultado com `ok: false` também entra em `erros_instrumentos` (com `origem="resposta"`), e o
+diagnóstico o levanta como aviso mesmo numa execução "concluída".
+
+**Saída HTTP para host escolhido pelo usuário: `cerebro/http_saida.py`.** REST, conector, webhook e
+WordPress passam por uma porta única que (a) numa falha de **rota** refaz a chamada uma vez amarrada a
+IPv4 — um host com endereço IPv6 e sem rota até ele fazia a chamada morrer com `ENETUNREACH` mesmo
+havendo IPv4 alcançável, porque o erro que sobra é o da última tentativa — e (b) traduz o erro de rede
+para linguagem humana, nomeando o host. Instrumentos de serviço fixo (Telegram, Instagram, OpenAI,
+Firecrawl, Tavily) seguem com o cliente HTTP direto.
 
 **Material de conexão vindo do cofre (2026-08-22).** Além de segredos escalares (um token, uma senha),
 um instrumento pode receber material de conexão mais rico por referência a uma credencial nomeada. O

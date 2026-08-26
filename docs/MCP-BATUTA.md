@@ -38,24 +38,34 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
 - **Matriz de papéis:** observador lê; **operador** cria/edita; **admin** cria
   organização/time, duplica e exclui.
 
-## As ferramentas (44)
+## As ferramentas (47)
 
 - **Leitura/diagnóstico:** `listar_organizacoes`, `listar_times`, `descrever_time`,
-  `listar_agentes`, `ver_agente`, `ver_memoria_agente`, `listar_automacoes`,
-  `ver_automacao`, `listar_execucoes`, `diagnosticar_execucao` (avisos + ação sugerida),
+  `listar_agentes`, `ver_agente`, `ver_memoria_agente`, `listar_instrumentos`/
+  `ver_instrumento` (o que é cada id do cinto: nome, tipo, config pública, segredos que
+  faltam — nunca o valor de um segredo), `listar_automacoes`, `ver_automacao`,
+  `listar_execucoes`, `diagnosticar_execucao` (avisos + ação sugerida),
   `listar_conversas`, `ler_conversa`, `ver_uso`, `listar_tipos_instrumento`,
   `consultar_conhecimento` (a Central).
 - **Criação núcleo:** `criar_time`/`editar_time`, `criar_agente`/`editar_agente`/
   `remover_agente`, `configurar_instrumento`/`editar_instrumento`, `montar_conector`/
   `testar_operacao_conector`, `encaixar_instrumento`/`desencaixar_instrumento`,
-  `criar_automacao`/`renomear_automacao`/`montar_cadeia`/`definir_gatilho`/`ativar_time`/
-  `desativar_time`. Reusa a porta validada `criacao/servicos.py`.
+  `criar_automacao`/`renomear_automacao`/`montar_cadeia`/`definir_gatilho`/
+  `ativar_automacao`/`desativar_automacao`. Reusa a porta validada `criacao/servicos.py`.
 - **Credenciais/chaves (esqueleto — a IA NUNCA recebe segredo):** `listar_tipos_credencial`,
   `listar_credenciais` (mascarado), `ver_chaves_de_ia` (quais provedores têm chave, por
   existência — não decifra), `criar_credencial` (esqueleto), `remover_credencial`.
 - **Config/referência/exclusão/duplicação/org:** `configurar_memoria_agente`,
   `apontar_credencial` (instrumento→credencial), `duplicar_time`, `excluir_time`/
-  `excluir_automacao`/`excluir_instrumento`, `criar_organizacao`.
+  `excluir_automacao`/`excluir_instrumento`, `criar_organizacao`/`excluir_organizacao`
+  (esta só apaga organização **vazia** — nunca em cascata).
+
+> **Nomes que mudaram (2026-08-26):** `ativar_time`/`desativar_time` viraram
+> `ativar_automacao`/`desativar_automacao` — recebiam `automacao_id` e operavam sobre uma
+> automação, e o nome antigo convidava ao acidente de achar que desligava o time inteiro.
+> Depois de qualquer atualização, **reconecte o conector** no claude.ai (remover e
+> adicionar): ele guarda a lista de ferramentas, e sem isso nomes antigos continuam
+> visíveis e as novas não aparecem.
 
 Arquivos: `cerebro/mcp_ferramentas.py` (leitura), `cerebro/mcp_ferramentas_escrita.py`
 (escrita). Cada uma abre a própria sessão, resolve a identidade, checa o acesso e traduz
@@ -69,8 +79,11 @@ erros de domínio/acesso em texto humano (nunca stack trace — §12-A).
   segredo o consultor cola no **cofre do Batuta pela tela**. Nada de senha/chave passa pelo
   claude.ai. (Decisão do maestro, 2026-08-21.)
 - **Least-privilege:** o 2º serviço **não** recebe a chave-mestra do cofre —
-  `ver_chaves_de_ia` confere existência sem decifrar.
-- **A parede de aprovação** continua valendo: `ativar_time` recusa automação com ação
+  `ver_chaves_de_ia` confere existência sem decifrar. **Isso tem consequência prática:**
+  nenhum caminho do MCP pode depender de decifrar. Foi assim que a criação de instrumento
+  quebrou por semanas (o cálculo de segredos pendentes decifrava as chaves do pool só para
+  ler o NOME do serviço) — hoje `chaves.servicos_com_chave` responde por existência.
+- **A parede de aprovação** continua valendo: `ativar_automacao` recusa automação com ação
   irreversível sem portão humano.
 - **Ações irreversíveis** (`excluir_*`) têm docstring que orienta o Claude a confirmar
   antes.
@@ -99,6 +112,12 @@ até ~1 min. Aditivo, na borda; o núcleo de orquestração segue intocado.
 - Suíte focada offline `cerebro/testes/test_mcp_login.py` (cripto dos tokens, fluxo
   code→access→refresh carregando o `subject`, DCR persistido, Supabase mockado, portões de
   identidade das ferramentas).
+- **`cerebro/testes/test_mcp_escrita_real.py` — o caminho FELIZ, com banco.** Existe porque
+  a suíte antiga era toda "offline" (só provava a barreira de acesso) e por isso três
+  ferramentas foram para produção quebradas. Ele cria instrumento, conector, credencial e
+  agente de verdade, e reproduz a condição real do serviço MCP: organização **com** chave
+  no cofre e chave-mestra **ausente** — a combinação em que o bug aparecia (o teste passava
+  antes porque a fixture esvazia o cofre, e sem chave nada era decifrado).
 - Por fora, com um cliente HTTP: metadados AS/RS 200 → `/mcp` sem token 401 → raiz 404.
 - Ao vivo: o consultor conecta, loga, e as ferramentas escopam certo (Fatias 0–3 provadas
   ao vivo em 2026-08-21).

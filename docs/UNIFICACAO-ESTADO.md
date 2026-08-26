@@ -7,6 +7,16 @@
 > de campos do REST (−84% no Bubble). **Resta:** limpar o "Confirma?" manual dos agentes (o maestro faz) +
 > P4 (limpeza opcional). Cada fatia foi executada com sinal explícito do maestro, uma por vez.
 >
+> **⚠️ Lição de operação (2026-08-26), que este programa precisa carregar:** a memória entre turnos —
+> a cura que este documento defende — **caiu em produção por três dias sem ninguém saber**. Uma mudança
+> de infraestrutura (a suíte local, `7b0ba23`) quebrou o desempacotamento da conexão em
+> `memoria_conversa._conninfo`, e o à-prova-de-falha, que existe para o atendimento não parar, engoliu o
+> erro: toda conversa voltou ao modo legado (turno começa do zero) e **a trava nativa de ação
+> irreversível ficou inativa junto**. Só apareceu por inspeção manual do banco. O conserto veio com a
+> regra que agora vale para todo fallback: **degradar é aceitável, degradar em silêncio não** — evento no
+> banco de logs, carimbo `memoria: duravel|legado` em cada passo, e aviso a quem esperava. Persistência
+> de estado é infraestrutura crítica: quando ela cai, o produto perde memória E governança ao mesmo tempo.
+>
 > **Este é o documento-âncora.** Ele reúne e coordena três estudos que antes viviam soltos:
 > [`REMODELAGEM-MOTOR.md`](REMODELAGEM-MOTOR.md) (o runtime), [`ECONOMIA-TOKENS-IA-CRIADORA.md`](ECONOMIA-TOKENS-IA-CRIADORA.md)
 > (a autoria) e [`BENCHMARK-MENSAGERIA-MOTORES.md`](BENCHMARK-MENSAGERIA-MOTORES.md) (a evidência de
