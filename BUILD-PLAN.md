@@ -1950,7 +1950,17 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 **Melhoria transversal — o erro genérico deixou de ser mudo.** *"Algo deu errado…"* sem código, campo ou causa custou ao maestro uma matriz de tentativas às cegas. Agora a resposta traz um **código de rastreio** e o erro é registrado no **banco de logs** (`mcp.escrita.falhou` / `mcp.leitura.falhou`, consultável em GET /logs) com esse mesmo código — antes ia só para o stdout do serviço MCP, que ninguém abre. O stack trace continua fora da resposta.
 
-**Verificação:** 923 testes (13 novos) e import smoke com **47 tools** registradas. **Falta:** o maestro reconectar o connector no claude.ai (as tools renomeadas/novas só aparecem depois) e refazer o teste de campo.
+**Verificação:** 923 testes (13 novos) e import smoke com **47 tools** registradas.
+
+### 2ª bateria do teste de campo (2026-08-26, commit `2234ef3`) — os dois consertos que ficaram pela metade
+
+O maestro reconectou e refez a auditoria. **Confirmados ao vivo:** os três bloqueantes (1, 2, 3) voltaram a funcionar — inclusive `testar_operacao_conector` fazendo chamada real ao ViaCEP e devolvendo `campos_detectados` —, o `cinto_dos_agentes` (6) veio preenchido e as duas ferramentas novas (8) resolveram o problema de não saber o que era cada UUID do cinto. **Persistiam três**, e a análise dele isolou melhor dois deles:
+
+- **Bug 7 — o reset vinha de `montar_cadeia`, não de `definir_gatilho`.** A cadeia que chega descreve só os nós de agente; a normalização cria o nó `gatilho` com o default `"manual"`. Na 1ª rodada espelhei o tipo em `definir_gatilho` e **não** em `definir_cadeia` — então a ordem natural (montar a cadeia depois de definir o gatilho) continuava apagando o gatilho do grafo. Agora as duas portas espelham, pela mesma função pura.
+- **Bug 5 — a busca estava no lugar errado.** O agente publicador **estoura antes de gravar o passo dele**, então o «Publicar no WordPress» não aparece em passo nenhum (confirmado nos dados da execução `8309da6f`: os 6 passos são de outros cinco agentes). Procurar só no cinto dos agentes dos passos devolvia o instrumento errado na 1ª bateria e `null` na 2ª. O nome está no texto do erro — agora é procurado **no time inteiro**, e o `agente_id` sai de quem carrega o instrumento no cinto. A `acao_sugerida` deixou de ser fixa: com o instrumento identificado abre **ele** (num 413 o ajuste é de formato/tamanho, com o motivo carimbado); sem identificar, só erro de autenticação sugere cadastrar credencial.
+- **Bugs 4 e 9 já estavam no ar** desde `ed522df` — o relatório não os viu por **lista de ferramentas desatualizada no cliente** (verificado no servidor: `ativar_time` não existe mais; `ativar_automacao` e `excluir_organizacao` existem). Resolve reconectando o connector.
+
+**Verificação:** 926 testes (4 novos: a ordem que quebrava o gatilho, e o caso real do 413 com o instrumento fora dos passos).
 
 ---
 
