@@ -6,8 +6,10 @@ agente, e um turno completo com `executar_agente` e o envio mockados (sem bot
 real). NÃO tocam o núcleo de orquestração.
 """
 
+import uuid
 from datetime import datetime, timedelta, timezone
 
+import pytest
 import segredos_instrumento as si
 from sqlalchemy import select
 
@@ -758,6 +760,118 @@ def test_sweeper_cutuca_e_depois_encerra(sessao, dados, monkeypatch):
     sessao.refresh(conversa)
     assert conversa.estado == "fechada"
     assert enviados[-1] == sweeper.DESPEDIDA_MSG
+
+
+# ───────────── turno PRESO: a conversa nunca fica travada em silêncio ─────────
+# Incidente de 2026-08-26: o turno de uma aprovação de portão começou e nunca voltou;
+# a conversa ficou `bot_respondendo` ~1h sem que nenhum vigia olhasse para ela e sem
+# o contato receber nada. Estes testes trancam o buraco.
+
+
+def _conversa_presa(sessao, dados, monkeypatch, *, minutos, portao=False):
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "T"})
+    _agente_com(sessao, dados, inst)
+    conversa, _ = servico.registrar_entrada(sessao, inst, _msg("Aprovado"))
+    conversa.estado = "bot_respondendo"  # turno em andamento…
+    conversa.ultima_entrada_em = datetime.now(timezone.utc) - timedelta(minutes=minutos)
+    if portao:
+        ex = Execucao(automacao_id=None, modo="fluxo", estado="aguardando_humano",
+                      entrada={"texto": "x"})
+        sessao.add(ex)
+        sessao.flush()
+        conversa.execucao_id = ex.id
+    sessao.commit()
+    return conversa
+
+
+def test_turno_preso_e_destravado_com_aviso_honesto(sessao, dados, monkeypatch):
+    """Passado o teto, o vigia avisa o contato (o que houve + o que fazer) e devolve
+    a conversa ao relógio normal — em vez de deixá-la presa para sempre."""
+    from mensageria import sweeper
+
+    conversa = _conversa_presa(
+        sessao, dados, monkeypatch, minutos=sweeper.TETO_TURNO_PRESO_MIN + 5
+    )
+    enviados = []
+    monkeypatch.setattr(
+        "mensageria.telegram.enviar",
+        lambda t, c, x: enviados.append(x) or {"ok": True},
+    )
+
+    assert sweeper.varrer_turnos_presos(sessao) == 1
+    sessao.refresh(conversa)
+    assert conversa.estado == "aguardando_resposta"     # destravada
+    assert conversa.aguardando_ate is not None          # relógio normal re-armado
+    assert enviados[-1] == sweeper.TURNO_PRESO_MSG      # o contato soube
+    # o aviso fica na thread (a falha não some do histórico)
+    ultima = sessao.scalars(
+        select(MensagemConversa)
+        .where(MensagemConversa.conversa_id == conversa.id)
+        .order_by(MensagemConversa.criado_em.desc())
+    ).first()
+    assert "não consegui concluir" in (ultima.conteudo or "")
+
+
+def test_turno_preso_de_portao_preserva_a_execucao(sessao, dados, monkeypatch):
+    """No portão, destravar a conversa NÃO pode resolver o fluxo: a execução segue
+    `aguardando_humano` (retomável pelo canal ou pela tela) e o aviso diz isso."""
+    from mensageria import sweeper
+
+    conversa = _conversa_presa(
+        sessao, dados, monkeypatch, minutos=sweeper.TETO_TURNO_PRESO_MIN + 1, portao=True
+    )
+    execucao_id = conversa.execucao_id
+    enviados = []
+    monkeypatch.setattr(
+        "mensageria.telegram.enviar",
+        lambda t, c, x: enviados.append(x) or {"ok": True},
+    )
+
+    assert sweeper.varrer_turnos_presos(sessao) == 1
+    sessao.refresh(conversa)
+    ex = sessao.get(Execucao, execucao_id)
+    assert ex.estado == "aguardando_humano"          # o fluxo não foi perdido
+    assert conversa.execucao_id == execucao_id       # segue vinculada (resposta tardia religa)
+    assert enviados[-1] == sweeper.TURNO_PRESO_PORTAO_MSG
+
+
+def test_turno_recente_nao_e_tocado(sessao, dados, monkeypatch):
+    """Turno lento de verdade (chamada de IA com retentativas) não pode ser
+    interrompido — só passa do teto o que está realmente preso."""
+    from mensageria import sweeper
+
+    _conversa_presa(sessao, dados, monkeypatch, minutos=2)
+    assert sweeper.varrer_turnos_presos(sessao) == 0
+
+
+def test_turno_registra_inicio_e_fim(sessao, dados, monkeypatch):
+    """Sinal de vida nas duas pontas: um turno que começa e não termina fica
+    evidente no banco de logs (era o que faltava para diagnosticar sem achismo)."""
+    eventos = []
+    monkeypatch.setattr(servico, "registrar_evento", lambda **kw: eventos.append(kw))
+    monkeypatch.setattr(servico, "_processar_turno", lambda cid: None)
+
+    servico.processar_turno(uuid.uuid4())
+    assert [e["acao"] for e in eventos] == ["turno.iniciado", "turno.concluido"]
+    assert eventos[-1]["detalhe"]["segundos"] >= 0
+
+
+def test_turno_que_morre_deixa_rastro(sessao, dados, monkeypatch):
+    """Se a tarefa de fundo morre, o erro vai para o banco de logs (antes ia só para
+    o log do servidor, e a conversa ficava presa sem ninguém saber)."""
+    eventos = []
+    monkeypatch.setattr(servico, "registrar_evento", lambda **kw: eventos.append(kw))
+
+    def explode(_):
+        raise RuntimeError("morreu no meio")
+
+    monkeypatch.setattr(servico, "_processar_turno", explode)
+
+    with pytest.raises(RuntimeError):
+        servico.processar_turno(uuid.uuid4())
+    assert [e["acao"] for e in eventos] == ["turno.iniciado", "turno.morreu"]
+    assert eventos[-1]["nivel"] == "error"
 
 
 # ─────────────────────── endpoint de entrada (HTTP) ──────────────────────────

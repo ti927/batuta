@@ -67,6 +67,25 @@ DESPEDIDA_PORTAO_CANCELA_MSG = (
     "Como não houve resposta, estou encerrando a conversa e cancelando o fluxo."
 )
 
+# ── Turno PRESO (§12-A: nada que o usuário dispara pode ficar sem sinal de vida) ──
+# Um turno roda em segundo plano; enquanto ele corre, a conversa fica `bot_respondendo`.
+# Se a tarefa morrer ou pendurar (reinício do servidor, chamada externa sem retorno), a
+# conversa ficava nesse estado PARA SEMPRE: nenhum vigia olhava para ela e o contato não
+# recebia nada — foi o que aconteceu em 2026-08-26 (aprovação de portão parada ~1h em
+# silêncio). Teto generoso: o pior caso legítimo é uma chamada de IA esgotando as
+# retentativas (300 s × 6), então 30 min não interrompe turno lento de verdade.
+TETO_TURNO_PRESO_MIN = 30
+# Aviso honesto ao contato quando o turno dele não voltou (o que houve + o que fazer).
+TURNO_PRESO_PORTAO_MSG = (
+    "⚠️ Tive uma falha interna e não consegui concluir o processamento da sua resposta. "
+    "Ela NÃO foi perdida e a aprovação continua pendente: reenvie sua resposta aqui, ou "
+    f"aprove direto no {URL_APP}."
+)
+TURNO_PRESO_MSG = (
+    "⚠️ Tive uma falha interna e não consegui concluir a resposta à sua última mensagem. "
+    "Pode reenviá-la, por favor?"
+)
+
 # ── Padrão GLOBAL: o efetivo quando nada mais especifica. Os valores batem com o
 # comportamento de HOJE (instrumento sem chave → estes defaults). As chaves dos
 # botões de atendimento usam os MESMOS nomes que `instrumento.configuracao` já usa,

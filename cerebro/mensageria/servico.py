@@ -1273,6 +1273,39 @@ def _turno_de_portao(
 
 
 def processar_turno(conversa_id: uuid.UUID) -> None:
+    """Roda um turno em segundo plano, com SINAL DE VIDA nas duas pontas (§12-A).
+
+    O trabalho de verdade está em `_processar_turno`. Esta casca existe para que o
+    turno nunca mais possa começar e sumir sem deixar rastro: grava `turno.iniciado`
+    ao entrar e `turno.concluido` ao sair — e, se a tarefa MORRER, `turno.morreu` com
+    o erro. Antes, uma exceção aqui (fora do `try` interno de `_rodar_turno`) ia só
+    para o log do servidor: a conversa ficava `bot_respondendo` para sempre e não
+    havia como saber, no Batuta, que o turno tinha começado — foi o buraco do
+    incidente de 2026-08-26. Quem destrava a conversa é `sweeper.varrer_turnos_presos`;
+    aqui é só a evidência."""
+    inicio = time.monotonic()
+    registrar_evento(
+        categoria="mensageria", acao="turno.iniciado", nivel="info", persistir=True,
+        recurso_tipo="conversa", recurso_id=conversa_id,
+    )
+    try:
+        _processar_turno(conversa_id)
+    except BaseException as e:  # noqa: BLE001 — inclusive o que mata a tarefa de fundo
+        registrar_evento(
+            categoria="mensageria", acao="turno.morreu", nivel="error",
+            resultado="falha", erro=e, persistir=True,
+            recurso_tipo="conversa", recurso_id=conversa_id,
+            detalhe={"segundos": round(time.monotonic() - inicio, 1)},
+        )
+        raise
+    registrar_evento(
+        categoria="mensageria", acao="turno.concluido", nivel="info", persistir=True,
+        resultado="sucesso", recurso_tipo="conversa", recurso_id=conversa_id,
+        detalhe={"segundos": round(time.monotonic() - inicio, 1)},
+    )
+
+
+def _processar_turno(conversa_id: uuid.UUID) -> None:
     """Roda UM turno do agente para a conversa e entrega a resposta ao contato.
     Pensado para rodar em segundo plano (a resposta ao Telegram já foi dada).
     Abre a própria sessão de banco (a do request já fechou).

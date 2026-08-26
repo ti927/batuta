@@ -19,11 +19,15 @@ from mensageria.config import (  # noqa: F401 (compat sweeper.X)
     DESPEDIDA_PORTAO_CANCELA_MSG,
     DESPEDIDA_PORTAO_MSG,
     NUDGE_MSG,
+    TETO_TURNO_PRESO_MIN,
+    TURNO_PRESO_MSG,
+    TURNO_PRESO_PORTAO_MSG,
     com_ajuste_do_no,
     complemento_nudge_portao,
     resolver_config,
 )
 from modelos import Conversa, Execucao, Instrumento, MensagemConversa
+from observabilidade.escritor import registrar_evento
 from sessao import CriadorDeSessao
 
 
@@ -115,10 +119,79 @@ def varrer(sessao: Session) -> int:
     return len(vencidas)
 
 
+def varrer_turnos_presos(sessao: Session) -> int:
+    """Destrava a conversa cujo TURNO começou e nunca voltou (§12-A).
+
+    Enquanto o turno roda em segundo plano a conversa fica `bot_respondendo`. Se a
+    tarefa morrer (reinício do servidor) ou pendurar (chamada externa sem retorno),
+    esse estado NÃO era varrido por ninguém: a conversa ficava presa para sempre e o
+    contato não recebia sinal nenhum — exatamente o que aconteceu em 2026-08-26, com
+    uma aprovação de portão parada ~1h em silêncio até ser descoberta por inspeção
+    manual do banco.
+
+    Aqui a falha deixa de ser silenciosa em três frentes: registra um evento de ERRO
+    (visível em GET /logs, com há quanto tempo travou), AVISA o contato com um texto
+    honesto (o que houve + o que fazer) e DESTRAVA a conversa para
+    `aguardando_resposta`, devolvendo-a ao relógio normal do sweeper. Não reprocessa
+    o turno sozinho: o turno pendurado pode ainda estar correndo e ter efeito externo
+    (publicar, enviar), e disparar de novo arriscaria repetir a ação — a pessoa
+    reenvia a mensagem, que é barato e seguro.
+
+    O portão NÃO é resolvido aqui: a execução segue `aguardando_humano` e retomável
+    (por resposta tardia no canal ou pela tela) — só a conversa é destravada."""
+    agora = datetime.now(timezone.utc)
+    limite = agora - timedelta(minutes=TETO_TURNO_PRESO_MIN)
+    presas = sessao.scalars(
+        select(Conversa).where(
+            Conversa.estado == "bot_respondendo",
+            Conversa.ultima_entrada_em.is_not(None),
+            Conversa.ultima_entrada_em <= limite,
+        )
+    ).all()
+    for conversa in presas:
+        parado_min = int((agora - conversa.ultima_entrada_em).total_seconds() // 60)
+        instrumento = sessao.get(Instrumento, conversa.instrumento_id)
+        token = (
+            segredos_instrumento.decifrar(sessao, instrumento.id).get("token_bot")
+            if instrumento
+            else None
+        )
+        eh_portao = bool(conversa.execucao_id)
+        msg = TURNO_PRESO_PORTAO_MSG if eh_portao else TURNO_PRESO_MSG
+        entregue = _enviar(token, conversa.contato_chave, msg)
+        _registrar(sessao, conversa, msg, entregue)
+        conversa.estado = "aguardando_resposta"
+        # Relógio normal de inatividade re-armado: sem isto a conversa destravada
+        # ficaria fora tanto deste vigia quanto do sweeper de silêncio.
+        conf = resolver_config(sessao, conversa)
+        conversa.aguardando_ate = agora + timedelta(minutes=int(conf["timeout_min"]))
+        registrar_evento(
+            categoria="mensageria",
+            acao="turno.preso",
+            nivel="error",
+            resultado="falha",
+            persistir=True,
+            recurso_tipo="conversa",
+            recurso_id=conversa.id,
+            detalhe={
+                "parado_min": parado_min,
+                "canal": conversa.canal,
+                "portao": eh_portao,
+                "execucao_id": str(conversa.execucao_id) if eh_portao else None,
+                "aviso_entregue": entregue,
+                "efeito": "conversa destravada; o contato foi avisado e pode reenviar",
+            },
+        )
+    if presas:
+        sessao.commit()
+    return len(presas)
+
+
 def varrer_job() -> None:
-    """Entrada do agendador: abre a própria sessão e varre."""
+    """Entrada do agendador: abre a própria sessão e varre (silêncio + turno preso)."""
     sessao = CriadorDeSessao()
     try:
         varrer(sessao)
+        varrer_turnos_presos(sessao)
     finally:
         sessao.close()
