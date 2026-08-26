@@ -2012,6 +2012,22 @@ Pedido do maestro ao fim do dia: *"atualize a central de conhecimento com o que 
 
 ---
 
+## FASE — Atendimento tem pressa: espera curta de IA + aviso ao contato quando o turno falha  ✅ NO AR (2026-08-26, commit `9f8cc0e`, sem migração)
+
+**Gatilho, ao vivo:** o maestro acionou o time de Reembolsos e a conversa travou em "bot respondendo". **A observabilidade instalada horas antes deu o diagnóstico em dois minutos**, sem escavação: `turno.iniciado` presente, `turno.concluido` e `turno.morreu` ausentes — o turno não estourou, estava **pendurado numa chamada de IA** (o agente está configurado com `gpt-5.6-luna`). Confirmado no banco: a conexão ficou `idle in transaction` desde o início do turno, com a última consulta sendo o carregamento dos segredos do cinto — ou seja, o Python já tinha tudo e esperava a resposta da IA. O turno seguiu pendurado por **~30 minutos**, exatamente o teto que o código antigo permitia.
+
+**Duas falhas de produto apareceram aí — e nenhuma é do modelo:**
+1. **A chamada de IA do atendimento usava os limites das automações de fundo:** 300 s × 6 retentativas, quase **meia hora** antes de desistir. Razoável quando ninguém está olhando; inaceitável num chat, onde a pessoa está vendo a tela. `construir_modelo(..., interativo=True)` passa a usar **60 s × 1 retentativa** (pior caso ~2 min) e o turno de mensageria pede o modelo assim. Automação de fundo não muda em nada — a distinção é entre *ter gente esperando* ou não.
+2. **A falha do turno não chegava ao contato:** o erro virava nota interna (`entregue=False`) e quem mandou a mensagem ficava esperando uma resposta que nunca vinha — só o vigia de turno preso o socorreria, 30 minutos depois. Agora a falha manda um recado honesto pelo próprio canal ("não consegui responder agora — pode reenviar?") e a conversa volta a ficar aberta.
+
+**Somando:** no pior caso o contato sabe em ~2 minutos, em vez de ~1 hora de silêncio. O vigia volta a ser rede de segurança, não primeira linha.
+
+**Verificação:** 939 testes (4 novos: o aviso chega ao contato pelo canal e fica na thread como entregue; chat e fundo pedem limites diferentes ao mesmo modelo; o atendimento repassa o modo interativo). Central atualizada — "modelo lento = atendimento ruim; deixe os modelos pesados para as automações".
+
+**Nota honesta:** o conserto elimina a espera longa e o silêncio, **não** faz o `gpt-5.6-luna` responder rápido. Para o time de Reembolsos voltar a atender bem, o agente precisa de um modelo rápido (Haiku/Sonnet) — decisão do maestro, que estava testando o Luna de propósito.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
