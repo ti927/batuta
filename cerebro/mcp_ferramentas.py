@@ -27,14 +27,45 @@ ERRO_INESPERADO = (
     "se persistir, avise o suporte."
 )
 
+
+def relatar_erro_inesperado(e: BaseException, *, ferramenta: str, escrita: bool) -> str:
+    """A mensagem que o Claude recebe quando algo estoura — com um CÓDIGO de rastreio.
+
+    O texto genérico sozinho custou caro: no teste do MCP (26/08), três ferramentas
+    quebradas devolviam a mesma frase sem código, campo nem causa, e isolar o problema
+    exigiu uma matriz de tentativas às cegas. O erro real continua fora da resposta
+    (nunca stack trace ao consultor), mas agora nasce com um código curto que aparece
+    nos dois lugares — na resposta e no registro —, e o registro vai também para o
+    BANCO de logs (GET /logs), não só para o stdout do servidor MCP, que ninguém abre."""
+    codigo = uuid.uuid4().hex[:8]
+    _log.exception("Erro inesperado no MCP [%s] em %s", codigo, ferramenta)
+    registrar_evento(
+        categoria="mcp",
+        acao=f"mcp.{'escrita' if escrita else 'leitura'}.falhou",
+        nivel="error",
+        resultado="falha",
+        erro=e,
+        persistir=True,
+        detalhe={"codigo": codigo, "ferramenta": ferramenta,
+                 "erro_tipo": type(e).__name__},
+    )
+    return (
+        f"{ERRO_INESPERADO} Código para o suporte: {codigo} "
+        f"(ferramenta '{ferramenta}')."
+    )
+
 import credenciais_cofre as cofre_cred
 import diagnostico_execucao
+import instrumentos as encaixe
+from observabilidade.escritor import registrar_evento
 import mcp_escopo
 import memoria_agente
 import precos
+import segredos_instrumento
 import tipos_credencial as tc
 from chaves import PROVEDORES
 from criacao.ferramentas import catalogo_de_instrumentos
+from instrumentos.base import acao_irreversivel
 from mcp_escopo import SemAcesso
 from modelos import (
     Agente,
@@ -47,6 +78,7 @@ from modelos import (
     Instrumento,
     MensagemConversa,
     PassoExecucao,
+    Time,
 )
 from orquestracao import grafo
 from sessao import CriadorDeSessao
@@ -83,9 +115,8 @@ def _ferramenta(fn):
             return str(e)
         except HTTPException as e:
             return _traduzir_acesso(e)
-        except Exception:
-            _log.exception("Erro inesperado em ferramenta de leitura do MCP")
-            return ERRO_INESPERADO
+        except Exception as e:
+            return relatar_erro_inesperado(e, ferramenta=fn.__name__, escrita=False)
         finally:
             sessao.close()
 
@@ -205,6 +236,79 @@ def ver_memoria_agente(sessao, usuario, agente_id) -> str:
     return json.dumps(
         {"agente": agente.nome, "memorias": fichas}, ensure_ascii=False
     )
+
+
+# ───────────────────────────── Instrumentos ─────────────────────────────
+# Lacuna fechada em 26/08: dava para CRIAR instrumento pelo MCP, mas não para ver
+# nenhum — o cinto do agente vinha como uma lista de UUIDs crus, sem nome nem tipo,
+# e não havia como conferir a configuração de um instrumento feito pela tela.
+# Nunca devolve segredo: só se o campo secreto está preenchido e o que falta.
+
+
+def _instrumento_resumido(sessao, inst) -> dict:
+    """Um instrumento como o consultor precisa vê-lo — sem nenhum segredo. Do cofre
+    vem só QUAIS campos estão preenchidos (`resumo` traz os últimos 4, que não são
+    devolvidos aqui)."""
+    tipo = encaixe.obter_tipo(inst.tipo)
+    return {
+        "id": str(inst.id),
+        "nome": inst.nome,
+        "tipo": inst.tipo,
+        "descricao_do_tipo": tipo.descricao if tipo else "(tipo desconhecido)",
+        "configuracao": inst.configuracao or {},  # pública: os segredos vivem no cofre
+        "segredos_preenchidos": sorted(segredos_instrumento.resumo(sessao, inst.id)),
+        "credencial_id": str(inst.credencial_id) if inst.credencial_id else None,
+        "acao_irreversivel": acao_irreversivel(inst.tipo, inst.configuracao or {}),
+    }
+
+
+def _cobertos_por_credencial(sessao, inst) -> frozenset:
+    """Campos que a credencial nomeada apontada já cobre (mesma regra da fotografia
+    do time em `criacao/ferramentas.py`)."""
+    if not inst.credencial_id:
+        return frozenset()
+    cred = sessao.get(Credencial, inst.credencial_id)
+    tipo = tc.obter_tipo(cred.tipo) if cred else None
+    return frozenset(tipo.nomes_campos) if tipo else frozenset()
+
+
+@_ferramenta
+def listar_instrumentos(sessao, usuario, time_id) -> str:
+    tid = _uuid(time_id)
+    if tid is None:
+        return f"Id de time inválido: {time_id}."
+    time = mcp_escopo.time_acessivel(sessao, usuario, tid)
+    insts = sessao.scalars(
+        select(Instrumento).where(Instrumento.time_id == time.id).order_by(Instrumento.nome)
+    ).all()
+    if not insts:
+        return f"O time '{time.nome}' ainda não tem instrumentos."
+    return json.dumps(
+        {"time": time.nome,
+         "instrumentos": [_instrumento_resumido(sessao, i) for i in insts]},
+        ensure_ascii=False,
+    )
+
+
+@_ferramenta
+def ver_instrumento(sessao, usuario, instrumento_id) -> str:
+    iid = _uuid(instrumento_id)
+    if iid is None:
+        return f"Id de instrumento inválido: {instrumento_id}."
+    inst = mcp_escopo.instrumento_acessivel(sessao, usuario, iid)
+    dados = _instrumento_resumido(sessao, inst)
+    time = sessao.get(Time, inst.time_id)
+    dados["time"] = {"id": str(inst.time_id), "nome": time.nome if time else None}
+    # O que ainda falta para o instrumento funcionar (nenhuma das fontes cobre).
+    dados["segredos_pendentes"] = segredos_instrumento.pendentes(
+        inst.tipo,
+        guardados=set(dados["segredos_preenchidos"]),
+        cobertos_por_credencial=_cobertos_por_credencial(sessao, inst),
+        servicos_resolviveis=segredos_instrumento.servicos_resolviveis(
+            sessao, time.organizacao_id if time else None
+        ),
+    )
+    return json.dumps(dados, ensure_ascii=False)
 
 
 # ───────────────────────────── Automações ─────────────────────────────

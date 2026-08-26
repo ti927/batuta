@@ -49,7 +49,7 @@ mcp = FastMCP(
         "`consultar_conhecimento` em vez de adivinhar; para montar conector, consulte antes.\n"
         "SEGURANÇA (respeite sempre): (1) você NUNCA pluga segredo — ao criar credenciais/"
         "conectores, deixa o segredo pendente e orienta o consultor a colá-lo no cofre do "
-        "Batuta pela tela. (2) A PAREDE de aprovação recusa `ativar_time` se um agente com "
+        "Batuta pela tela. (2) A PAREDE de aprovação recusa `ativar_automacao` se um agente com "
         "ação irreversível não tiver portão humano antes na cadeia (ponha \"gate\": true no "
         "nó anterior). (3) Ações IRREVERSÍVEIS (`excluir_*`) apagam de verdade — confirme "
         "com o consultor antes de chamar."
@@ -187,6 +187,25 @@ async def listar_tipos_instrumento() -> str:
     configuração (obrigatório/secreto) e se a ação é irreversível. Use para saber o que é
     possível montar e o que precisa de portão de aprovação."""
     return await anyio.to_thread.run_sync(mcp_ferramentas.listar_tipos_instrumento, _sub())
+
+
+@mcp.tool()
+async def listar_instrumentos(time_id: str) -> str:
+    """Lista os instrumentos JÁ CRIADOS num time — id, nome, tipo, configuração pública,
+    quais segredos estão preenchidos e se a ação é irreversível. Use para saber o que
+    cada id do `cinto` de um agente é, e para conferir um instrumento feito pela tela.
+    (Diferente de `listar_tipos_instrumento`, que mostra o catálogo do que dá para criar.)"""
+    return await anyio.to_thread.run_sync(mcp_ferramentas.listar_instrumentos, _sub(), time_id)
+
+
+@mcp.tool()
+async def ver_instrumento(instrumento_id: str) -> str:
+    """Mostra um instrumento a fundo: configuração pública, credencial apontada, segredos
+    preenchidos e os que ainda FALTAM para ele funcionar. Nunca devolve o valor de um
+    segredo."""
+    return await anyio.to_thread.run_sync(
+        mcp_ferramentas.ver_instrumento, _sub(), instrumento_id
+    )
 
 
 @mcp.tool()
@@ -391,17 +410,18 @@ async def definir_gatilho(
 
 
 @mcp.tool()
-async def ativar_time(automacao_id: str) -> str:
-    """LIGA uma automação (passa a poder disparar). A PAREDE de aprovação: se algum agente
-    com ação irreversível (publicar/enviar/gravar) não tiver portão humano antes na
-    cadeia, a ativação é recusada com a explicação — ajuste a cadeia e tente de novo."""
-    return await anyio.to_thread.run_sync(escrita.ativar_time, _sub(), automacao_id)
+async def ativar_automacao(automacao_id: str) -> str:
+    """LIGA uma AUTOMAÇÃO (passa a poder disparar) — não mexe no time. A PAREDE de
+    aprovação: se algum agente com ação irreversível (publicar/enviar/gravar) não tiver
+    portão humano antes na cadeia, a ativação é recusada com a explicação — ajuste a
+    cadeia e tente de novo."""
+    return await anyio.to_thread.run_sync(escrita.ativar_automacao, _sub(), automacao_id)
 
 
 @mcp.tool()
-async def desativar_time(automacao_id: str) -> str:
-    """DESLIGA uma automação (para de disparar)."""
-    return await anyio.to_thread.run_sync(escrita.desativar_time, _sub(), automacao_id)
+async def desativar_automacao(automacao_id: str) -> str:
+    """DESLIGA uma AUTOMAÇÃO (para de disparar) — não mexe no time nem nos agentes."""
+    return await anyio.to_thread.run_sync(escrita.desativar_automacao, _sub(), automacao_id)
 
 
 @mcp.tool()
@@ -473,6 +493,16 @@ async def criar_organizacao(nome: str) -> str:
     """Cria uma organização nova (ex.: para um novo cliente da consultoria). Você vira
     admin dela automaticamente. Depois crie times dentro com `criar_time`."""
     return await anyio.to_thread.run_sync(escrita.criar_organizacao, _sub(), nome)
+
+
+@mcp.tool()
+async def excluir_organizacao(organizacao_id: str) -> str:
+    """Exclui uma organização VAZIA (sem nenhum time) — o par de `criar_organizacao`,
+    útil para desfazer uma criação. Com times dentro, recusa e diz o que precisa sair
+    antes: nunca apaga times/execuções/credenciais em cascata. Exige admin."""
+    return await anyio.to_thread.run_sync(
+        escrita.excluir_organizacao, _sub(), organizacao_id
+    )
 
 
 # O app ASGI standalone (com o próprio lifespan que roda o session manager).

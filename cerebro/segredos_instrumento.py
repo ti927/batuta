@@ -178,9 +178,13 @@ def servicos_resolviveis(
     """Serviços de chave compartilhada que a organização CONSEGUE resolver — pelo
     pool (cofre da org → cofre da consultoria) ou pela queda de legado no `.env`.
     Serve para o cálculo de segredos pendentes não acusar como 'faltando' uma chave
-    que o instrumento já reusa do pool (ex.: a Tavily da busca, a OpenAI da imagem)."""
-    pool, _ = chaves.resolver_chaves_por_organizacao(sessao, organizacao_id)
-    resolviveis = set(pool)
+    que o instrumento já reusa do pool (ex.: a Tavily da busca, a OpenAI da imagem).
+
+    Pergunta só pela EXISTÊNCIA (`chaves.servicos_com_chave`): aqui basta o NOME do
+    serviço, e decifrar cada chave para depois jogar o valor fora exigia a
+    chave-mestra do cofre à toa — era o que quebrava a criação de instrumento pelo
+    Batuta-MCP, que roda sem ela de propósito."""
+    resolviveis = chaves.servicos_com_chave(sessao, organizacao_id)
     for servico, env in _ENV_LEGADO_SERVICO.items():
         if servico in chaves.SERVICOS_COM_LEGADO and os.environ.get(env):
             resolviveis.add(servico)

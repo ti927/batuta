@@ -19,6 +19,7 @@ import uuid
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 import auditoria
 import instrumentos as encaixe
@@ -353,6 +354,10 @@ def definir_gatilho(
     auto = resolver_automacao(sessao, time, automacao_id)
     auto.tipo_gatilho = tipo_gatilho
     auto.configuracao_gatilho = configuracao_gatilho or {}
+    # O nó `gatilho` do grafo é projeção deste campo — sem espelhar aqui, a tela
+    # continuava mostrando o gatilho antigo (duas fontes para o mesmo dado).
+    auto.cadeia = grafo.sincronizar_gatilho(auto.cadeia, tipo_gatilho)
+    flag_modified(auto, "cadeia")
     sessao.flush()
     _audit(sessao, usuario, "automacao.definida", "automacao", auto.id, time.organizacao_id)
     return auto
@@ -371,6 +376,8 @@ def definir_automacao(
     except ValueError as e:
         raise ConflitoDominio(f"Cadeia inválida: {e}")
     cadeia = grafo.normalizar(cadeia)  # grava no formato canônico de grafo
+    # O nó `gatilho` do grafo espelha o tipo (fonte única com o campo de topo).
+    cadeia = grafo.sincronizar_gatilho(cadeia, tipo_gatilho)
     auto = sessao.scalars(
         select(Automacao).where(Automacao.time_id == time.id).order_by(Automacao.criado_em)
     ).first()

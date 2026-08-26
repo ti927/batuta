@@ -195,6 +195,26 @@ def _completar(cadeia: dict) -> dict:
     return {"inicial": inicial, "nos": nos}
 
 
+def sincronizar_gatilho(cadeia: dict | None, tipo_gatilho: str | None) -> dict | None:
+    """Espelha no nó `gatilho` do grafo o tipo definido na automação.
+
+    A verdade é o campo de topo `automacoes.tipo_gatilho` — é dele que o motor e o
+    agendador disparam. O nó `gatilho` do grafo é a PROJEÇÃO que a tela desenha, e
+    até 26/08 ninguém o atualizava ao mudar o gatilho: definir 'agendamento' deixava
+    o topo certo e o nó dizendo 'manual' para sempre, duas fontes divergentes para o
+    mesmo dado. Puro (não toca o banco), como o resto deste módulo; cadeia vazia ou
+    sem nó de gatilho volta intacta."""
+    if not cadeia or tipo_gatilho not in TIPOS_GATILHO:
+        return cadeia
+    nos = cadeia.get("nos")
+    if not isinstance(nos, list):
+        return cadeia
+    for n in nos:
+        if isinstance(n, dict) and n.get("tipo") == "gatilho":
+            n["gatilho"] = tipo_gatilho
+    return cadeia
+
+
 def _auto_layout(nos: list[dict], inicial: str | None, id_fim: str) -> None:
     """Preenche `x`/`y` só onde faltam, em colunas por profundidade (BFS) a partir
     do gatilho/inicial. Puramente visual: o motor ignora x/y."""

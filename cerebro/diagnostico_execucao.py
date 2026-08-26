@@ -258,7 +258,8 @@ def diagnosticar(sessao: Session, execucao_id, *, seguir_webhook: bool = True) -
             for p in passos[-MAX_PASSOS:]
         ],
         "no_pausado": None,
-        "cinto_dos_agentes": {},
+        # O cinto de cada agente que atuou (antes só era preenchido no portão).
+        "cinto_dos_agentes": _cintos_dos_passos(sessao, passos),
         "canais_de_aprovacao": [],
         "conversas_vinculadas": [],
         "webhook_alvo": None,
@@ -351,9 +352,9 @@ def _verificar_falha(sessao, d, ex, passos, avisos, nomes) -> None:
         "o instrumento", "acesso negado", "http 401", "http 403",
         "não configurado", "nao configurado", "verifique a autenticação",
     )):
-        # Tenta apontar o instrumento envolvido (último passo com instrumentos).
-        inst = _instrumento_da_falha(sessao, passos)
-        ref = {"instrumento_id": inst.id, "agente_id": None} if inst else {}
+        # Aponta o instrumento envolvido — pelo NOME citado no erro, quando houver.
+        inst, agente_id = _instrumento_da_falha(sessao, passos, erro)
+        ref = {"instrumento_id": inst.id, "agente_id": agente_id} if inst else {}
         avisos.append(_aviso(
             "falha_instrumento", "erro",
             "Um instrumento falhou",
@@ -434,9 +435,22 @@ def _verificar_memoria_legado(ex, passos, avisos) -> None:
     ))
 
 
-def _instrumento_da_falha(sessao, passos) -> Instrumento | None:
-    """O instrumento provável da falha: do último passo que acionou algo, o primeiro
-    de ação irreversível (publicar/enviar) que aparece. Best-effort."""
+def _nome_no_erro(erro: str) -> str | None:
+    """O nome do instrumento que o próprio texto do erro nomeia. A mensagem nasce em
+    `agente._ferramenta_unica` como: O instrumento 'X' falhou: …"""
+    achado = re.search(r"O instrumento '([^']+)' falhou", erro or "")
+    return achado.group(1) if achado else None
+
+
+def _instrumento_da_falha(sessao, passos, erro: str = "") -> tuple[Instrumento | None, object]:
+    """O instrumento que falhou, e o agente do passo. Devolve `(None, None)` se não der.
+
+    A fonte mais confiável é o NOME que o próprio erro cita — antes isto era ignorado
+    e devolvíamos o último instrumento acionado no passo, o que mandava o consultor
+    editar a ferramenta errada: numa execução real, o erro era do «Publicar no
+    WordPress» (HTTP 413) e a ação sugerida apontava o «Gerar imagem», acionado no
+    mesmo passo. Sem nome no texto, cai no palpite antigo (best-effort)."""
+    alvo = _nome_no_erro(erro)
     for p in reversed(passos):
         acionados = (p.saida or {}).get("instrumentos_acionados") or []
         if not acionados or p.agente_id is None:
@@ -446,10 +460,24 @@ def _instrumento_da_falha(sessao, passos) -> Instrumento | None:
             .join(AgenteInstrumento, AgenteInstrumento.instrumento_id == Instrumento.id)
             .where(AgenteInstrumento.agente_id == p.agente_id)
         ).all()
+        if alvo:
+            por_nome = [i for i in insts if i.nome == alvo]
+            if por_nome:
+                return por_nome[0], p.agente_id
         acionou = [i for i in insts if _acionou(i, acionados)]
-        if acionou:
-            return acionou[-1]
-    return None
+        if acionou and not alvo:
+            return acionou[-1], p.agente_id
+    return None, None
+
+
+def _cintos_dos_passos(sessao, passos) -> dict:
+    """O cinto de cada agente que aparece nos passos — o campo `cinto_dos_agentes` só
+    era preenchido quando a execução estava parada num portão; numa execução que
+    FALHOU (o caso em que mais se precisa dele) vinha sempre vazio."""
+    cintos: dict = {}
+    for agente_id in {p.agente_id for p in passos if p.agente_id is not None}:
+        cintos[str(agente_id)] = _cinto(sessao, agente_id)
+    return cintos
 
 
 def _verificar_portao(sessao, d, ex, no_id, no, passos, avisos, nomes) -> None:

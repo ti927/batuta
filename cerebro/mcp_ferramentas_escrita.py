@@ -18,7 +18,7 @@ import logging
 import uuid
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 _log = logging.getLogger("batuta.mcp")
 
@@ -33,7 +33,12 @@ from criacao.ferramentas import _validar_gatilho
 from criacao.servicos import ConflitoDominio
 from instrumentos.base import FalhaInstrumento
 from mcp_escopo import SemAcesso
-from mcp_ferramentas import ERRO_INESPERADO, _traduzir_acesso, _uuid
+from mcp_ferramentas import (
+    ERRO_INESPERADO,
+    _traduzir_acesso,
+    _uuid,
+    relatar_erro_inesperado,
+)
 from modelos import Credencial, Instrumento, Membro, Organizacao, Time
 from rotas.instrumentos import _validar_credencial
 from sessao import CriadorDeSessao
@@ -63,10 +68,9 @@ def _ferramenta_escrita(fn):
         except (ConflitoDominio, FalhaInstrumento) as e:
             sessao.rollback()
             return f"Não deu para fazer: {e}"
-        except Exception:
+        except Exception as e:
             sessao.rollback()
-            _log.exception("Erro inesperado em ferramenta de escrita do MCP")
-            return ERRO_INESPERADO
+            return relatar_erro_inesperado(e, ferramenta=fn.__name__, escrita=True)
         finally:
             sessao.close()
 
@@ -342,7 +346,7 @@ def definir_gatilho(sessao, usuario, automacao_id, tipo_gatilho, configuracao_ga
 
 
 @_ferramenta_escrita
-def ativar_time(sessao, usuario, automacao_id) -> str:
+def ativar_automacao(sessao, usuario, automacao_id) -> str:
     aid = _uuid(automacao_id)
     if aid is None:
         return f"Id de automação inválido: {automacao_id}."
@@ -353,7 +357,7 @@ def ativar_time(sessao, usuario, automacao_id) -> str:
 
 
 @_ferramenta_escrita
-def desativar_time(sessao, usuario, automacao_id) -> str:
+def desativar_automacao(sessao, usuario, automacao_id) -> str:
     aid = _uuid(automacao_id)
     if aid is None:
         return f"Id de automação inválido: {automacao_id}."
@@ -387,6 +391,13 @@ def criar_credencial(sessao, usuario, organizacao_id, nome, tipo) -> str:
         return f"Já existe uma credencial chamada '{nome}' nesta organização."
     cred = Credencial(organizacao_id=org_id, nome=nome, tipo=tipo, compartilhavel=False)
     cred.resumo = cofre_cred.montar_resumo(tipo, {})  # esqueleto mascarado, SEM segredo
+    # Esqueleto = nenhum saco cifrado ainda. A coluna é NOT NULL (toda credencial da
+    # TELA nasce com segredo), então o vazio se escreve como "" — que todo o cofre já
+    # lê como "nada guardado" (`if not dados_cifrado: return {}`; `preenchida` False).
+    # Sem isto o INSERT violava a constraint e a ferramenta morria no erro genérico.
+    # Cifrar um saco vazio resolveria também, mas exigiria a chave-mestra do cofre,
+    # que este serviço não tem de propósito (least-privilege da Fatia 3a).
+    cred.dados_cifrado = ""
     sessao.add(cred)
     sessao.flush()
     auditoria.registrar(
@@ -551,3 +562,36 @@ def criar_organizacao(sessao, usuario, nome) -> str:
     )
     sessao.flush()
     return f"Organização '{nome}' criada (id {org.id}). Você é admin dela."
+
+
+@_ferramenta_escrita
+def excluir_organizacao(sessao, usuario, organizacao_id) -> str:
+    """Só apaga organização VAZIA — o par que faltava para `criar_organizacao`.
+
+    Deliberadamente NÃO apaga em cascata: uma organização carrega times, agentes,
+    execuções, credenciais e histórico de custo, e uma exclusão dessas por engano de
+    uma IA seria catastrófica e irreversível. Com time dentro, a resposta explica o
+    que precisa sair antes — o consultor decide time a time (`excluir_time`)."""
+    org_id = _uuid(organizacao_id)
+    if org_id is None:
+        return f"Id de organização inválido: {organizacao_id}."
+    org = mcp_escopo.organizacao_acessivel(sessao, usuario, org_id, "admin")
+    times = sessao.scalars(select(Time).where(Time.organizacao_id == org.id)).all()
+    if times:
+        nomes = ", ".join(f"'{t.nome}'" for t in times[:5])
+        resto = f" (e mais {len(times) - 5})" if len(times) > 5 else ""
+        return (
+            f"A organização '{org.nome}' ainda tem {len(times)} time(s): {nomes}{resto}. "
+            "Por segurança só apago organização vazia — exclua os times primeiro "
+            "(`excluir_time`), conferindo com o consultor, e chame de novo."
+        )
+    nome = org.nome
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="organizacao.removida", recurso_tipo="organizacao",
+        recurso_id=org.id, organizacao_id=org.id,
+        detalhe={"nome": nome, "origem": "mcp"},
+    )
+    sessao.execute(delete(Membro).where(Membro.organizacao_id == org.id))
+    sessao.delete(org)
+    sessao.flush()
+    return f"Organização '{nome}' (vazia) excluída."

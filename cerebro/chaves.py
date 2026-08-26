@@ -45,15 +45,11 @@ SERVICOS = (*PROVEDORES, SERVICO_TAVILY, SERVICO_EXA, SERVICO_FIRECRAWL, SERVICO
 SERVICOS_COM_LEGADO = frozenset({PROVEDOR_ANTHROPIC, SERVICO_TAVILY})
 
 
-def _buscar(
-    sessao: Session,
-    organizacao_id: uuid.UUID | None,
-    provedor: str,
-    *,
-    mae: bool,
-) -> str | None:
-    """Busca uma chave ativa e a decifra. `mae=True` busca a chave da consultoria
-    (organizacao_id nulo); `mae=False`, a chave da organização dada."""
+def _condicoes(
+    organizacao_id: uuid.UUID | None, provedor: str, *, mae: bool
+) -> list:
+    """As condições que definem QUAL chave vale — fonte única de `_buscar` (que
+    decifra) e `_existe` (que só confere). Separadas para as duas nunca divergirem."""
     condicao_org = (
         ChaveApi.organizacao_id.is_(None)
         if mae
@@ -69,8 +65,54 @@ def _buscar(
     # passa por esse filtro (é dela). Ver docs/CAIXA-FORTE-PLANO.md.
     if mae:
         condicoes.append(ChaveApi.compartilhavel.is_(True))
-    chave = sessao.scalars(select(ChaveApi).where(*condicoes)).first()
+    return condicoes
+
+
+def _buscar(
+    sessao: Session,
+    organizacao_id: uuid.UUID | None,
+    provedor: str,
+    *,
+    mae: bool,
+) -> str | None:
+    """Busca uma chave ativa e a decifra. `mae=True` busca a chave da consultoria
+    (organizacao_id nulo); `mae=False`, a chave da organização dada."""
+    chave = sessao.scalars(
+        select(ChaveApi).where(*_condicoes(organizacao_id, provedor, mae=mae))
+    ).first()
     return decifrar(chave.valor_cifrado) if chave else None
+
+
+def _existe(
+    sessao: Session, organizacao_id: uuid.UUID | None, provedor: str, *, mae: bool
+) -> bool:
+    """Se HÁ uma chave que vale — sem decifrar nada."""
+    return sessao.scalar(
+        select(ChaveApi.id).where(*_condicoes(organizacao_id, provedor, mae=mae)).limit(1)
+    ) is not None
+
+
+def servicos_com_chave(
+    sessao: Session, organizacao_id: uuid.UUID | None
+) -> set[str]:
+    """Quais serviços a organização consegue resolver pelo pool (cofre da org →
+    cofre da consultoria compartilhável), decidido por EXISTÊNCIA — sem decifrar.
+
+    Existe porque saber "tem chave?" não deveria exigir a CHAVE-MESTRA do cofre.
+    Quem só precisa do nome do serviço (o cálculo de segredos pendentes ao criar
+    um instrumento) passava por `resolver_chaves_por_organizacao`, que decifra
+    cada chave achada — e isso quebrava o Batuta-MCP, que roda em outro serviço,
+    deliberadamente SEM a chave-mestra (least-privilege da Fatia 3a): criar
+    instrumento ou conector falhava com erro genérico em toda organização que
+    tivesse alguma chave cadastrada. Mesma cascata, mesmas condições (`_condicoes`),
+    sem tocar segredo."""
+    achados: set[str] = set()
+    for servico in SERVICOS:
+        if organizacao_id is not None and _existe(sessao, organizacao_id, servico, mae=False):
+            achados.add(servico)
+        elif _existe(sessao, None, servico, mae=True):
+            achados.add(servico)
+    return achados
 
 
 # Rótulos de ORIGEM da chave, para a medição refinada (Fase 7.6): de qual chave

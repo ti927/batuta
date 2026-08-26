@@ -237,7 +237,7 @@ def test_ferramenta_escrita_sem_identidade_barra_antes_do_banco():
     import mcp_ferramentas_escrita as escrita
     r = escrita.criar_agente(None, "t", "Novo", "agente", None, None, None, None, None)
     assert isinstance(r, str) and "identifica" in r.lower()
-    r2 = escrita.ativar_time(None, "alguma-automacao")
+    r2 = escrita.ativar_automacao(None, "alguma-automacao")
     assert isinstance(r2, str) and "identifica" in r2.lower()
 
 
