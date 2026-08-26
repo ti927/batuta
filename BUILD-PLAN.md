@@ -1889,6 +1889,25 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
+## FASE — Queda silenciosa do checkpointer: conserto + rastro que não mente  ✅ NO AR (2026-08-25, commit `b1d151e`, sem migração, núcleo de orquestração intocado)
+
+**Gatilho:** o maestro trocou o modelo do time de Reembolsos para GPT-5.6 (Luna e Terra) e o agente **dizia** que lançava o reembolso mas **não lançava** (Haiku funcionava). O diagnóstico das execuções `d7db9fa5`/`c8c677c4` revelou **duas coisas empilhadas** — e a segunda era mais grave que a reclamação.
+
+**Achado 1 — regressão de 22/08: a memória de conversa estava CAÍDA em produção, em silêncio.** O commit `7b0ba23` (suíte local) mudou `db._montar_url` para devolver `(URL, sslmode)` e o único outro chamador — `orquestracao/memoria_conversa._conninfo` — não acompanhou: `AttributeError` no boot, **engolido pelo à-prova-de-falha** (§12-A), e toda conversa voltou ao modo legado (cada turno recomeça do texto; **a trava nativa de aprovação desligada junto**). Prova: o checkpoint mais recente do banco inteiro era de 21/08 11:02 UTC. A suíte não pegou porque, em teste, o checkpointer é `None` por design — o fail-safe escondeu a regressão de todos.
+
+**Achado 2 — por que Luna/Terra falham e Haiku não (sobre a base degradada):** sem memória, o turno do lançamento começa sem os IDs que `Busca_Projetos` devolveu no turno anterior. O **Haiku se recupera sozinho** (chamou `Cria_Reembolso` → HTTP 400 → re-chamou `Busca_Projetos` → `Cria_Reembolso` de novo → lançou). Os **GPT-5.6** (rodando com `reasoning_effort='none'`, exigência da API OpenAI com ferramentas) **não**: o Terra disse "vou lançar" e nunca chamou a ferramenta; o Luna narrou "lancei com sucesso" **sem chamar nada**, depois chamou 1× com ID inválido, falhou e desistiu. E o HTTP 400 do Bubble **não aparecia em lugar nenhum**: o conector devolve falha como dado (`ok: false`) para a IA decidir, e nada disso entrava no rastro — a execução parecia limpa e só restava a palavra do agente.
+
+**O que entrou (tudo backend; as telas não mudaram):**
+1. **O conserto** — `_conninfo` desempacota `(URL, sslmode)` e passa a honrar o `sslmode` da URL (produção continua `require`). Provado ao vivo lendo um fio real de produção com o código consertado.
+2. **Camada 1 — modo degradado nunca é silencioso:** o fallback do checkpointer registra `memoria.checkpointer_indisponivel` (nível `error`) no banco de observabilidade (`evento_log`, visível em GET /logs), com o efeito descrito em português.
+3. **Camada 4 — o rastro não mente:** (a) resultado de ferramenta com `ok: false` entra em `erros_instrumentos` com `origem="resposta"`, nos DOIS caminhos (ferramenta única e expandidas do conector/MCP — estas nunca registravam nada, nem exceção); (b) cada turno de conversa é carimbado `memoria: duravel|legado` no passo-sombra; (c) o diagnóstico (`diagnosticar_execucao`) ganhou dois avisos: falha de resposta SEMPRE aparece — mesmo em ação irreversível, com "confira se a ação foi de fato concluída antes de confiar no que ele narrou" — e conversa em modo legado ganha o aviso `conversa_sem_memoria`.
+
+**Verificação:** 905 testes verdes (11 novos, incluindo o teste de regressão que morre se `_montar_url` e `_conninfo` divergirem de novo); prova só-leitura contra produção (pool abre e lê fio real).
+
+**Pendências desta frente (aguardam desenho/aval do maestro):** camada 2 — `/saude` reportar subsistemas + selo da sidebar em âmbar quando degradado (mexe em tela); camada 3 — notificação ativa (Telegram ao operador) quando um subsistema degrada/recupera + vigia que tenta religar o checkpointer caído sem esperar deploy. **Re-teste ao vivo:** maestro reenviar um reembolso (Haiku) para confirmar o checkpoint voltando a ser gravado; re-testar Luna/Terra com a memória de pé antes de qualquer conclusão sobre GPT-5.6.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
