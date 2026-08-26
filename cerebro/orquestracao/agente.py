@@ -73,6 +73,71 @@ def _nome_de_ferramenta(inst: Instrumento, tipo_fallback: str) -> str:
     return f"{base or tipo_fallback}_{inst.id.hex[:8]}"
 
 
+def _registrar_resposta_com_falha(
+    dados, *, ferramenta: str, tipo: str, instrumento_id: str,
+    irreversivel: bool, erros: list[dict],
+) -> None:
+    """Se o RESULTADO da ferramenta veio com `ok: false` (falha devolvida como DADO
+    para a IA decidir — ex.: HTTP 4xx do REST/conector), registra no rastro cru.
+
+    Sem isto, a falha só existe na narração do agente e a execução parece limpa —
+    foi assim que um lançamento que falhou no Bubble ficou invisível (2026-08-25):
+    o agente disse "lancei" e nenhum rastro dizia o contrário. `origem="resposta"`
+    distingue do erro por exceção (`FalhaInstrumento`), que já era registrado."""
+    if not isinstance(dados, dict) or dados.get("ok") is not False:
+        return
+    erro = dados.get("erro")
+    if not erro:
+        status = dados.get("status")
+        erro = f"resposta com falha (HTTP {status})" if status else "resposta com ok=false"
+        corpo = dados.get("corpo")
+        if corpo:
+            erro += f": {str(corpo)[:200]}"
+    erros.append({
+        "ferramenta": ferramenta,
+        "tipo": tipo,
+        "instrumento_id": instrumento_id,
+        "erro": str(erro)[:500],
+        "retentavel": None,
+        "irreversivel": irreversivel,
+        "origem": "resposta",
+    })
+
+
+def _com_rastro_de_resposta(
+    ferramenta: StructuredTool, inst, tipo_nome: str, irreversivel: bool,
+    erros: list[dict],
+) -> StructuredTool:
+    """Embrulha uma ferramenta EXPANDIDA (conector/MCP) para que uma resposta com
+    `ok: false` também entre no rastro — essas ferramentas tratam a própria falha
+    e devolvem-na como dado, sem passar pelo registro de `_ferramenta_unica`."""
+
+    def _observar(retorno):
+        dados = retorno
+        if isinstance(retorno, str):
+            try:
+                dados = json.loads(retorno)
+            except ValueError:
+                return retorno
+        _registrar_resposta_com_falha(
+            dados, ferramenta=ferramenta.name, tipo=tipo_nome,
+            instrumento_id=str(inst.id), irreversivel=irreversivel, erros=erros,
+        )
+        return retorno
+
+    original_func = ferramenta.func
+    original_coro = ferramenta.coroutine
+    func = None
+    coro = None
+    if original_func is not None:
+        def func(*args, **kwargs):
+            return _observar(original_func(*args, **kwargs))
+    if original_coro is not None:
+        async def coro(*args, **kwargs):
+            return _observar(await original_coro(*args, **kwargs))
+    return ferramenta.model_copy(update={"func": func, "coroutine": coro})
+
+
 def _ferramenta_unica(
     inst, tipo, config, falhas: list[str], mensagens_enviadas: dict[str, list[str]],
     erros: list[dict],
@@ -133,6 +198,12 @@ def _ferramenta_unica(
                 },
                 ensure_ascii=False,
             )
+        # Falha devolvida como DADO (`ok: false`, ex.: HTTP 4xx que não levanta
+        # exceção): entra no rastro também — a execução não pode parecer limpa.
+        _registrar_resposta_com_falha(
+            resultado, ferramenta=inst.nome, tipo=tipo.tipo,
+            instrumento_id=str(inst.id), irreversivel=irreversivel, erros=erros,
+        )
         # Envio bem-sucedido por um canal: registra o texto apresentado ao humano.
         if campo_msg:
             texto = getattr(args, campo_msg, None)
@@ -167,7 +238,11 @@ def _ferramentas_de_instrumento(
     )
     expandidas = tipo.expandir_ferramentas(config)
     if expandidas is not None:
-        return expandidas
+        irrev = acao_irreversivel(inst.tipo, inst.configuracao or {})
+        return [
+            _com_rastro_de_resposta(f, inst, tipo.tipo, irrev, erros)
+            for f in expandidas
+        ]
     return [_ferramenta_unica(inst, tipo, config, falhas, mensagens_enviadas, erros)]
 
 
@@ -639,6 +714,7 @@ def executar_agente(
             "erros_instrumentos": erros_instrumentos,
             "ramo_escolhido": None,
             "uso": uso,
+            "memoria": "duravel" if memoria else "legado",
         }
 
     return {
@@ -649,4 +725,8 @@ def executar_agente(
         "erros_instrumentos": erros_instrumentos,
         "ramo_escolhido": escolha.get("rotulo"),
         "uso": uso,
+        # De onde veio o contexto deste turno: "duravel" = fio do checkpointer;
+        # "legado" = reconstruído do texto. Na CONVERSA, "legado" é modo degradado
+        # (o carimbo no rastro é o que denuncia — ver a queda de 2026-08-22).
+        "memoria": "duravel" if memoria else "legado",
     }

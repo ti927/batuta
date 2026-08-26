@@ -314,6 +314,9 @@ def diagnosticar(sessao: Session, execucao_id, *, seguir_webhook: bool = True) -
     # Não fica visível no estado (a execução "concluiu"); o erro cru mora no passo.
     _verificar_erros_instrumentos(d, passos, avisos)
 
+    # ── Conversa rodando SEM memória entre turnos (modo degradado) ──
+    _verificar_memoria_legado(ex, passos, avisos)
+
     # ── Seguir o webhook (1 hop, mesma organização) ──
     if seguir_webhook:
         _verificar_webhook(sessao, d, auto, passos, avisos)
@@ -374,23 +377,61 @@ def _verificar_erros_instrumentos(d, passos, avisos) -> None:
     execução (ex.: `gerar_video` recusado por dimensão/moderação). Esse erro é
     "engolido" — o agente narra à sua maneira e o estado fica "concluída" —, então
     aqui trazemos o TEXTO CRU que o instrumento devolveu. Falhas de ação IRREVERSÍVEL
-    já aparecem via `_verificar_falha` (a execução fica 'falhou') — não repetimos."""
+    por exceção já aparecem via `_verificar_falha` (a execução fica 'falhou') — não
+    repetimos. EXCEÇÃO da exceção: `origem="resposta"` (a falha voltou como DADO,
+    ex.: HTTP 4xx do REST/conector) nunca muda o estado da execução — mesmo numa
+    ação irreversível o agente segue e pode narrar sucesso; o aviso é o único lugar
+    onde essa falha aparece, então ele SEMPRE sai."""
     for p in passos:
         for e in (p.saida or {}).get("erros_instrumentos") or []:
-            if e.get("irreversivel"):
+            de_resposta = e.get("origem") == "resposta"
+            if e.get("irreversivel") and not de_resposta:
                 continue
+            if de_resposta:
+                detalhe = (
+                    f"No passo {p.ordem}, «{e.get('ferramenta')}» respondeu com falha: "
+                    f"{_trunc(e.get('erro'), 240)}. O agente recebeu essa falha como "
+                    "resposta e decidiu sozinho como seguir — confira se a ação foi "
+                    "de fato concluída antes de confiar no que ele narrou."
+                )
+            else:
+                detalhe = (
+                    f"No passo {p.ordem}, «{e.get('ferramenta')}» não concluiu: "
+                    f"{_trunc(e.get('erro'), 240)}. O fluxo seguiu (não é ação "
+                    "irreversível), mas o resultado desse passo pode estar incompleto."
+                )
             avisos.append(_aviso(
                 "instrumento_falhou_seguiu", "alerta",
                 f"O instrumento «{e.get('ferramenta')}» falhou",
-                f"No passo {p.ordem}, «{e.get('ferramenta')}» não concluiu: "
-                f"{_trunc(e.get('erro'), 240)}. O fluxo seguiu (não é ação irreversível), "
-                "mas o resultado desse passo pode estar incompleto.",
+                detalhe,
                 acao=(
                     {"tipo": "editar_instrumento", "instrumento_id": e.get("instrumento_id")}
                     if e.get("instrumento_id") else {"tipo": "aguardar"}
                 ),
                 instrumento_id=_coagir_uuid(e.get("instrumento_id")),
             ))
+
+
+def _verificar_memoria_legado(ex, passos, avisos) -> None:
+    """Aviso quando uma CONVERSA rodou turno(s) no modo LEGADO (sem memória entre
+    turnos): o agente re-deriva do texto — re-busca dados, perde resultados de
+    ferramenta e a trava nativa de aprovação fica inativa. É modo degradado (o
+    checkpointer caiu); o carimbo `saida.memoria` de cada turno é quem denuncia.
+    Passos antigos (sem o carimbo) não geram aviso."""
+    if getattr(ex, "modo", None) != "conversa":
+        return
+    legados = [p.ordem for p in passos if (p.saida or {}).get("memoria") == "legado"]
+    if not legados:
+        return
+    avisos.append(_aviso(
+        "conversa_sem_memoria", "alerta",
+        "Conversa rodou sem memória entre turnos",
+        f"{len(legados)} turno(s) desta conversa rodaram no modo degradado (sem o fio "
+        "salvo): o agente recomeça do texto a cada turno e a trava nativa de aprovação "
+        "fica inativa. Verifique os logs do sistema (memoria.checkpointer_indisponivel) "
+        "e o serviço do cérebro.",
+        acao={"tipo": "aguardar"},
+    ))
 
 
 def _instrumento_da_falha(sessao, passos) -> Instrumento | None:

@@ -168,6 +168,23 @@ def test_rastro_captura_erros_de_instrumento(sessao, dados, monkeypatch):
     assert passos[0].saida["erros_instrumentos"] == erros
 
 
+def test_rastro_carimba_o_modo_de_memoria(sessao, dados, monkeypatch):
+    """O passo registra se o turno rodou com fio durável ou no modo legado — é o
+    carimbo que denuncia uma queda do checkpointer (2026-08-22: 3 dias invisível)."""
+    enviados = []
+    canal, ag = _setup_conversa(sessao, dados, monkeypatch, enviados)
+
+    def fake(agente, cinto, entrada, **k):
+        return {"saida": "olá", "instrumentos_acionados": [], "uso": [],
+                "mensagens_enviadas": {}, "ramo_escolhido": None, "memoria": "legado"}
+
+    monkeypatch.setattr(servico, "executar_agente", fake)
+
+    conv = _responder(sessao, canal, "oi")
+    passos = _passos(sessao, _sombra(sessao, conv.id).id)
+    assert passos[0].saida["memoria"] == "legado"
+
+
 def test_falha_dura_vira_passo_de_erro(sessao, dados, monkeypatch):
     """Se o agente estoura (LLM/instrumento cai), o rastro registra um passo de ERRO —
     o atendimento falha com graça (não quebra) e a falha não fica em silêncio."""

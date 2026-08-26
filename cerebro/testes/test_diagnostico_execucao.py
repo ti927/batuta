@@ -187,6 +187,67 @@ def test_erro_irreversivel_nao_duplica_no_aviso(sessao, dados):
     assert "instrumento_falhou_seguiu" not in _codigos(diag.diagnosticar(sessao, ex.id))
 
 
+def test_resposta_com_falha_avisa_mesmo_em_acao_irreversivel(sessao, dados):
+    """`origem="resposta"` (falha devolvida como DADO, ex.: HTTP 400 do conector)
+    nunca muda o estado da execução — o aviso é o único lugar onde ela aparece,
+    então sai mesmo com `irreversivel=True` (caso real: Cria_Reembolso, 2026-08-25,
+    em que o agente narrou "lancei" e o rastro parecia limpo)."""
+    at = _agente(sessao, dados, "Atendente")
+    inst = _instr(sessao, dados, "Gestão Lure", "conector")
+    _encaixar(sessao, at, inst)
+    auto = _auto(sessao, dados)
+    ex = _exec(sessao, auto, "concluida")
+    _passo(sessao, ex, agente=at, acionados=["Cria_Reembolso"], erros=[{
+        "ferramenta": "Cria_Reembolso", "tipo": "conector",
+        "instrumento_id": str(inst.id),
+        "erro": "resposta com falha (HTTP 400): Invalid id",
+        "retentavel": None, "irreversivel": True, "origem": "resposta",
+    }])
+    d = diag.diagnosticar(sessao, ex.id)
+    a = next(a for a in d["avisos"] if a["codigo"] == "instrumento_falhou_seguiu")
+    assert "HTTP 400" in a["detalhe"]
+    assert "confira se a ação foi de fato concluída" in a["detalhe"]
+
+
+def test_conversa_sem_memoria_avisa(sessao, dados):
+    """Turno de conversa carimbado `memoria="legado"` = modo degradado (checkpointer
+    caído): o diagnóstico denuncia — foi o que faltou na queda de 2026-08-22."""
+    ex = Execucao(automacao_id=None, modo="conversa", estado="conversa",
+                  entrada={"texto": "Atendimento"})
+    sessao.add(ex)
+    sessao.flush()
+    sessao.add(PassoExecucao(
+        execucao_id=ex.id, ordem=1, entrada={"texto": "oi"},
+        saida={"texto": "olá", "instrumentos_acionados": [], "memoria": "legado"},
+        estado="concluido",
+    ))
+    sessao.flush()
+    a = next(a for a in diag.diagnosticar(sessao, ex.id)["avisos"]
+             if a["codigo"] == "conversa_sem_memoria")
+    assert "trava nativa" in a["detalhe"]
+
+
+def test_conversa_com_memoria_ou_sem_carimbo_nao_avisa(sessao, dados):
+    """`duravel` é o estado saudável; passo antigo (sem o carimbo) não pode gerar
+    alarme falso."""
+    ex = Execucao(automacao_id=None, modo="conversa", estado="conversa",
+                  entrada={"texto": "Atendimento"})
+    sessao.add(ex)
+    sessao.flush()
+    sessao.add(PassoExecucao(
+        execucao_id=ex.id, ordem=1, entrada={"texto": "a"},
+        saida={"texto": "b", "instrumentos_acionados": [], "memoria": "duravel"},
+        estado="concluido",
+    ))
+    sessao.add(PassoExecucao(
+        execucao_id=ex.id, ordem=2, entrada={"texto": "c"},
+        saida={"texto": "d", "instrumentos_acionados": []},
+        estado="concluido",
+    ))
+    sessao.flush()
+    assert "conversa_sem_memoria" not in _codigos(diag.diagnosticar(sessao, ex.id))
+
+
 # ───────────────────────────── presas ─────────────────────────────
 
 def test_em_andamento_sem_progresso(sessao, dados):

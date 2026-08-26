@@ -770,6 +770,11 @@ def _gravar_rastro_conversa(
                 # ao da orquestração (o diagnóstico lê com `.get(...) or []`).
                 if r.get("erros_instrumentos"):
                     saida["erros_instrumentos"] = r["erros_instrumentos"]
+                # Carimbo do modo de memória do turno ("duravel"/"legado") — na
+                # conversa, "legado" = degradado (sem fio entre turnos, sem trava
+                # nativa); é o que deixa a queda do checkpointer visível no rastro.
+                if r.get("memoria"):
+                    saida["memoria"] = r["memoria"]
                 estado = "concluido"
             s.add(
                 PassoExecucao(

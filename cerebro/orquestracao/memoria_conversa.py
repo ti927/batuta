@@ -20,6 +20,7 @@ from psycopg.conninfo import make_conninfo
 from psycopg_pool import ConnectionPool
 
 from db import _montar_url
+from observabilidade.escritor import registrar_evento
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +31,13 @@ _indisponivel = False
 
 def _conninfo() -> str:
     """Conninfo libpq a partir da MESMA fonte do app (`db._montar_url`), montada por
-    componentes para não quebrar com caracteres especiais na senha ($ * ,)."""
-    u = _montar_url()
+    componentes para não quebrar com caracteres especiais na senha ($ * ,). O
+    `sslmode` também vem de lá (`require` na nuvem; um `?sslmode=` na URL manda,
+    como no banco local de testes)."""
+    u, sslmode = _montar_url()
     return make_conninfo(
         host=u.host, port=u.port, user=u.username,
-        password=u.password, dbname=u.database, sslmode="require",
+        password=u.password, dbname=u.database, sslmode=sslmode,
     )
 
 
@@ -60,7 +63,7 @@ def preparar() -> None:
         _saver = saver
         _indisponivel = False
         logger.info("memoria_conversa: checkpointer PostgresSaver pronto.")
-    except Exception:
+    except Exception as e:
         _indisponivel = True
         _saver = None
         if _pool is not None:
@@ -72,6 +75,21 @@ def preparar() -> None:
         logger.warning(
             "memoria_conversa: checkpointer INDISPONÍVEL — a conversa usa o modo legado "
             "(reconstrói do texto). Não afeta o atendimento.", exc_info=True,
+        )
+        # Modo degradado NUNCA é silencioso: além do log técnico, o evento fica no
+        # banco de observabilidade (GET /logs) — sem isto, a queda de 2026-08-22
+        # passou 3 dias invisível (só descoberta por inspeção externa).
+        registrar_evento(
+            categoria="sistema",
+            acao="memoria.checkpointer_indisponivel",
+            nivel="error",
+            resultado="falha",
+            erro=e,
+            persistir=True,
+            detalhe={
+                "efeito": "conversas seguem no modo legado (sem memória entre "
+                "turnos e sem a trava nativa de aprovação) até o próximo deploy/restart",
+            },
         )
 
 

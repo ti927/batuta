@@ -163,6 +163,43 @@ def test_sem_memoria_conta_o_fio_inteiro(monkeypatch):
     assert chamou["config"] == "ausente"       # invoke chamado SEM config (fake de 1 arg)
 
 
+def test_conninfo_acompanha_a_fonte_de_conexao_do_app():
+    """REGRESSÃO de 2026-08-22: `db._montar_url` passou a devolver (URL, sslmode) e o
+    `_conninfo` não acompanhou → AttributeError engolido pelo à-prova-de-falha → o
+    checkpointer ficou 3 dias caído em produção, em silêncio (sem memória entre
+    turnos e sem a trava nativa). Se as duas fontes divergirem de novo, este teste
+    morre ANTES do deploy."""
+    from orquestracao.memoria_conversa import _conninfo
+
+    info = _conninfo()
+    assert isinstance(info, str)
+    assert "host=" in info and "sslmode=" in info
+
+
+def test_fallback_do_checkpointer_registra_evento(monkeypatch):
+    """Modo degradado nunca é silencioso: se o checkpointer não sobe, além do log
+    técnico sai um evento `memoria.checkpointer_indisponivel` (nível error) no banco
+    de observabilidade — visível em GET /logs."""
+    import orquestracao.memoria_conversa as mc
+
+    eventos: list[dict] = []
+    monkeypatch.setattr(mc, "registrar_evento", lambda **kw: eventos.append(kw))
+
+    def pool_que_cai(*a, **k):
+        raise RuntimeError("pool caiu")
+
+    monkeypatch.setattr(mc, "ConnectionPool", pool_que_cai)
+    mc.desligar()  # zera o estado do módulo (preparar() early-return se já preparado)
+    try:
+        mc.preparar()
+        assert mc.obter() is None                       # caiu para o modo legado
+        assert eventos, "o fallback tem que registrar o evento de degradação"
+        assert eventos[0]["acao"] == "memoria.checkpointer_indisponivel"
+        assert eventos[0]["nivel"] == "error"
+    finally:
+        mc.desligar()
+
+
 def test_preambulo_vai_para_o_prompt_de_sistema(monkeypatch):
     """O enquadramento do transporte entra no prompt de sistema (persistente/cacheado)."""
     capt = {}
