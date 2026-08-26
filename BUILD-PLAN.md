@@ -1993,6 +1993,25 @@ Pedido do maestro ao fim do dia: *"atualize a central de conhecimento com o que 
 
 ---
 
+## FASE — O selo da barra lateral avisa quando o Batuta está com limitação (camada 2)  ✅ NO AR (2026-08-26, commit `cf68003`, sem migração, núcleo intocado)
+
+**Aprovada pelo maestro** depois que a 4ª bateria confirmou as correções do MCP e da rede. É a resposta direta à pergunta dele — *"e se acontecer por outro motivo, como saber sem achismo?"* — na superfície que ele olha todo dia.
+
+**O problema:** o `/saude` só dizia "estou no ar". Foi assim que ele enganou: o app respondia normalmente enquanto a memória de conversa estava caída havia três dias (e com ela a trava de ação irreversível). **Um subsistema morto não derruba o HTTP** — só faz o produto perder capacidade em silêncio.
+
+- **Backend:** `/saude` passou a responder por cada peça de segundo plano — `memoria_conversa`, `fila`, `agendador` —, cada uma com um `esta_saudavel()` que lê estado em memória (sem tocar o banco; a rota é pública e barata). Campos novos `subsistemas`, `degradados` (ordenado) e `saudavel`; `versao` e `iniciado_em` seguem intactos.
+- **Tela:** o selo de versão fica **âmbar** (`#E89638`, o token de atenção do design system) com ícone e o texto "com limitação"; o tooltip diz **a consequência**, não o nome técnico — "os agentes recomeçam do zero a cada mensagem e a confirmação automática de ações irreversíveis está inativa". Cor + ícone + texto, com o mesmo texto para leitor de tela (DESIGN-SYSTEM: estado nunca só por cor). Reconsulta a cada 60 s — uma peça pode cair com a tela aberta. Segue decorativo: leitura falhou, não mostra nada.
+
+**Na mesma leva, dois itens aprovados:**
+- **Removido o log temporário `rest.diag`**, que persistia no banco cada chamada REST (com query e corpo enviados) desde a depuração do Bubble.
+- **Construtor de instrumento, só texto:** com um certificado carregado, "Sem autenticação" parecia contradição (dúvida real do maestro usando a tela). A opção agora se explica e o bloco do certificado diz que ele **combina com qualquer tipo** — um banco costuma pedir os dois.
+
+**Verificação:** 936 testes (5 novos no `/saude`, incluindo o de que as peças dizem a verdade quando o lifespan não subiu — um retorno otimista seria pior que nenhum); `tsc`, `eslint` e `next build` limpos.
+
+**Não feito por decisão do maestro:** a camada 3 (alerta ativo no Telegram + vigia que religa o checkpointer) — *"não precisa por enquanto"*.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
