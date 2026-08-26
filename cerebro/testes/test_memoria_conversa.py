@@ -163,6 +163,42 @@ def test_sem_memoria_conta_o_fio_inteiro(monkeypatch):
     assert chamou["config"] == "ausente"       # invoke chamado SEM config (fake de 1 arg)
 
 
+def test_conexao_do_checkpointer_nao_pode_pendurar():
+    """REGRESSÃO de 2026-08-26: um atendimento inteiro ficou preso em "bot
+    respondendo" porque o pool entregou uma conexão que o pooler do Supabase já
+    tinha matado — a primeira leitura do checkpointer esperou resposta para sempre
+    (zero checkpoints gravados: travou ANTES de o agente rodar). Três defesas, e
+    este teste existe para nenhuma delas sumir num refactor futuro."""
+    from psycopg_pool import ConnectionPool
+
+    import orquestracao.memoria_conversa as mc
+
+    info = mc._conninfo()
+    assert "keepalives=1" in info                 # detecta socket morto
+    assert "statement_timeout=20000" in info      # nada pendura para sempre
+    assert "connect_timeout=10" in info
+
+    capturado = {}
+
+    def pool_falso(conninfo, **kwargs):
+        capturado.update(kwargs)
+        raise RuntimeError("não abre de verdade no teste")
+
+    import pytest
+
+    monkey = pytest.MonkeyPatch()
+    try:
+        monkey.setattr(mc, "ConnectionPool", pool_falso)
+        mc.desligar()
+        mc.preparar()
+    finally:
+        monkey.undo()
+        mc.desligar()
+    # a terceira defesa: validar a conexão ANTES de emprestá-la
+    assert capturado.get("check") is ConnectionPool.check_connection
+    assert capturado.get("max_idle") == 120.0
+
+
 def test_conninfo_acompanha_a_fonte_de_conexao_do_app():
     """REGRESSÃO de 2026-08-22: `db._montar_url` passou a devolver (URL, sslmode) e o
     `_conninfo` não acompanhou → AttributeError engolido pelo à-prova-de-falha → o

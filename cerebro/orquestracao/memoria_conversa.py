@@ -24,6 +24,10 @@ from observabilidade.escritor import registrar_evento
 
 logger = logging.getLogger(__name__)
 
+# Validador de conexão do próprio psycopg, resolvido uma vez: o pool o chama antes de
+# emprestar uma conexão e descarta a que não responde (ver `preparar`).
+_CHECAR_CONEXAO = ConnectionPool.check_connection
+
 _pool: ConnectionPool | None = None
 _saver = None
 _indisponivel = False
@@ -38,6 +42,16 @@ def _conninfo() -> str:
     return make_conninfo(
         host=u.host, port=u.port, user=u.username,
         password=u.password, dbname=u.database, sslmode=sslmode,
+        connect_timeout=10,
+        # TCP keepalive: sem isto, uma conexão que o pooler do Supabase matou do lado
+        # dele parece viva aqui, e a próxima consulta espera uma resposta que nunca vem
+        # — sem erro, sem fim. O keepalive detecta o socket morto em ~1 min.
+        keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=3,
+        # Cinto de segurança final: NENHUMA operação do checkpointer pode pendurar o
+        # turno para sempre. As consultas dele são de milissegundos; 20 s é folga
+        # enorme e ainda assim finito. Falhar rápido cai no modo legado (a conversa
+        # atende sem memória) — infinitamente melhor que o atendimento travar.
+        options="-c statement_timeout=20000",
     )
 
 
@@ -53,6 +67,17 @@ def preparar() -> None:
 
         _pool = ConnectionPool(
             _conninfo(), min_size=1, max_size=4, open=True, timeout=10,
+            # `check` é a correção do travamento de 2026-08-26: SEM ele (o padrão do
+            # psycopg é não checar), o pool entrega a conexão que estava guardada há
+            # horas — e se o pooler do Supabase a matou nesse meio-tempo, a consulta
+            # fica esperando resposta para sempre. Foi o que prendeu um atendimento
+            # inteiro em "bot respondendo": o turno travou ANTES do agente rodar, na
+            # primeira leitura do checkpointer (zero checkpoints gravados). Com o
+            # check, o pool testa a conexão ao emprestar e descarta a morta.
+            check=_CHECAR_CONEXAO,
+            # E não guarda conexão ociosa por muito tempo: recicla antes de ela virar
+            # candidata a ser morta do outro lado.
+            max_idle=120.0,
             # autocommit + prepare_threshold=0: exigência do PostgresSaver e
             # compatível com o pooler do Supabase (sem prepared statements presas).
             # connect_timeout: nunca deixa o boot travar se o banco demorar.
