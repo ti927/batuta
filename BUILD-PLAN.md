@@ -2024,7 +2024,19 @@ Pedido do maestro ao fim do dia: *"atualize a central de conhecimento com o que 
 
 **Verificação:** 939 testes (4 novos: o aviso chega ao contato pelo canal e fica na thread como entregue; chat e fundo pedem limites diferentes ao mesmo modelo; o atendimento repassa o modo interativo). Central atualizada — "modelo lento = atendimento ruim; deixe os modelos pesados para as automações".
 
-**Nota honesta:** o conserto elimina a espera longa e o silêncio, **não** faz o `gpt-5.6-luna` responder rápido. Para o time de Reembolsos voltar a atender bem, o agente precisa de um modelo rápido (Haiku/Sonnet) — decisão do maestro, que estava testando o Luna de propósito.
+### ⚠️ Correção do diagnóstico — a causa era outra (commit `4afe1a5`)
+
+**Eu atribuí o travamento ao modelo, e estava errado.** O maestro recusou a explicação — *"tem que funcionar com qualquer modelo; por que não funciona com o Luna?"* — e mandou investigar de verdade. Medição real das duas pontas: **o `gpt-5.6-luna` responde em 1,6 s e chama a ferramenta corretamente** (Haiku, 0,9 s). O modelo não tinha nada a ver.
+
+**A causa real estava nos dados desde o começo, e eu não a li direito:** **zero checkpoints** gravados para aquela conversa, e a sessão parada em `idle in transaction` logo depois de carregar os segredos do cinto. O passo seguinte é a **primeira leitura do checkpointer** — e é ali que o turno ficou, **antes de o agente rodar**.
+
+**Por quê:** o pool do checkpointer foi aberto no boot com o padrão do psycopg, que **não valida a conexão ao emprestar**. O pooler do Supabase mata conexão ociosa do lado dele; o pool entregou uma conexão já morta e a consulta ficou esperando uma resposta que nunca viria — sem keepalive para detectar o socket morto, sem `statement_timeout` para desistir. **Espera infinita, sem erro e sem rastro.** Também explica por que só apareceu agora: de 22 a 25/08 o checkpointer estava caído (o outro bug), então esse caminho não existia; voltou na véspera, e a primeira conversa do dia pegou o pool ocioso havia horas.
+
+**Três defesas** (uma só não basta): `check=ConnectionPool.check_connection` (testa e descarta a conexão morta antes de emprestar); **keepalive TCP** de 30 s no conninfo; e **`statement_timeout` de 20 s** + `max_idle` de 120 s — nenhuma operação do checkpointer pende para sempre, e falhar rápido cai no modo legado (atende sem memória), que é infinitamente melhor que travar. Verificado contra a produção: `preparar()` em 2,4 s, leitura em 0,65 s. 940 testes (1 novo tranca as três defesas).
+
+**O conserto anterior (`9f8cc0e`) continua válido pelo mérito próprio** — atendimento com espera curta de IA e aviso ao contato quando o turno falha —, mas **não** era a causa deste travamento.
+
+**Lição, que vale mais que o conserto:** eu tinha levantado a hipótese da conexão morta no dia anterior e a **descartei cedo demais**, por um teste que não reproduzia a condição (conexão nova responde rápido; o problema é a conexão VELHA). Quando os dados dizem "travou antes de qualquer escrita", a investigação tem de ir até o primeiro ponto de I/O — não parar na explicação mais confortável.
 
 ---
 
