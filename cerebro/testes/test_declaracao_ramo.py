@@ -46,7 +46,7 @@ def _fake_app(monkeypatch, *, chama_rotulo=None, capturar=None):
 
         return App()
 
-    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m: object())
+    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m, **k: object())
     monkeypatch.setattr(agente_mod, "create_agent", fake_create)
 
 
@@ -125,7 +125,7 @@ def test_executar_agente_injeta_portao_md_no_prompt(monkeypatch):
 
         return App()
 
-    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m: object())
+    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m, **k: object())
     monkeypatch.setattr(agente_mod, "create_agent", fake_create)
     agente_mod.executar_agente(
         _agente(), [], "entrada", saidas=_saidas_duas(), gate=True,

@@ -46,7 +46,7 @@ def test_com_memoria_mede_so_o_delta(monkeypatch):
 
         return App()
 
-    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m: object())
+    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m, **k: object())
     monkeypatch.setattr(agente_mod, "create_agent", fake_create)
 
     r = agente_mod.executar_agente(
@@ -88,7 +88,7 @@ def test_delta_por_identidade_quando_o_resumo_encolhe(monkeypatch):
 
         return App()
 
-    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m: object())
+    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m, **k: object())
     monkeypatch.setattr(agente_mod, "create_agent", fake_create)
 
     r = agente_mod.executar_agente(
@@ -122,7 +122,7 @@ def test_middleware_de_resumo_so_no_chat(monkeypatch):
 
         return App()
 
-    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m: ModeloFake())
+    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m, **k: ModeloFake())
     monkeypatch.setattr(agente_mod, "create_agent", fake_create)
 
     agente_mod.executar_agente(_agente(), [], "oi", checkpointer=object(), thread_id="t1")
@@ -154,7 +154,7 @@ def test_sem_memoria_conta_o_fio_inteiro(monkeypatch):
 
         return App()
 
-    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m: object())
+    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m, **k: object())
     monkeypatch.setattr(agente_mod, "create_agent", fake_create)
 
     r = agente_mod.executar_agente(_agente(), [], "entrada")  # sem memória
@@ -216,7 +216,7 @@ def test_preambulo_vai_para_o_prompt_de_sistema(monkeypatch):
 
         return App()
 
-    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m: object())
+    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m, **k: object())
     monkeypatch.setattr(agente_mod, "create_agent", fake_create)
 
     agente_mod.executar_agente(

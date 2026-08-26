@@ -539,6 +539,7 @@ def executar_agente(
     preambulo_sistema: str | None = None,
     portao_nativo: bool = False,
     retomar: dict | None = None,
+    interativo: bool = False,
 ) -> dict:
     """Roda um agente sozinho sobre uma entrada. Devolve a saída em texto e a
     lista de instrumentos que ele acionou (para inspeção).
@@ -551,7 +552,10 @@ def executar_agente(
     `FalhaInstrumento` ao fim do laço — a execução fica num estado de falha claro
     e visível (Tarefa 5.1). Falha de instrumento de LEITURA não derruba o fluxo:
     volta para o agente decidir (ver `_ferramenta_unica`)."""
-    modelo = construir_modelo(agente.modelo_ia)
+    # `interativo` = tem gente esperando (atendimento por mensageria): a chamada de IA
+    # usa os limites CURTOS, para a falha chegar em ~1 min em vez de meia hora. Sem ele
+    # (automação de fundo), nada muda.
+    modelo = construir_modelo(agente.modelo_ia, interativo=interativo)
     falhas: list[str] = []
     # Por instrumento (id → textos): o que o agente APRESENTOU a um humano por canal
     # neste turno. O portão de aprovação usa isto para carregar adiante o que a

@@ -85,6 +85,13 @@ TURNO_PRESO_MSG = (
     "⚠️ Tive uma falha interna e não consegui concluir a resposta à sua última mensagem. "
     "Pode reenviá-la, por favor?"
 )
+# O turno FALHOU (a IA não respondeu a tempo, um instrumento estourou). Diferente do turno
+# preso: aqui o Batuta sabe na hora que deu errado, então avisa na hora — em vez de deixar
+# o contato no vácuo esperando uma resposta que não vem.
+FALHA_TURNO_MSG = (
+    "⚠️ Não consegui responder agora — tive um problema para processar sua mensagem. "
+    "Pode reenviar, por favor? Se continuar, avise o responsável pelo atendimento."
+)
 
 # ── Padrão GLOBAL: o efetivo quando nada mais especifica. Os valores batem com o
 # comportamento de HOJE (instrumento sem chave → estes defaults). As chaves dos

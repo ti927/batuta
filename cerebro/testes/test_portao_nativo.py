@@ -111,7 +111,7 @@ def _montar(monkeypatch):
     _NOMES["pub"] = agente_mod._nome_de_ferramenta(pub, "p3_pub")
     # `construir_modelo` é chamado p/ o agente E p/ o resumidor (P2b); o fake serve aos
     # dois (o resumo não dispara — fio minúsculo).
-    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m: _FakeModelo())
+    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m, **k: _FakeModelo())
     return ag, [ler, pub]
 
 

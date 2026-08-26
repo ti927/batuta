@@ -29,6 +29,7 @@ import segredos_instrumento
 from chaves import resolver_chaves_por_time
 from mensageria import aprovacao, retoma, telegram, transcricao, visao
 from mensageria.config import (  # MSG_LIMITE: compat servico.X
+    FALHA_TURNO_MSG,
     MSG_LIMITE,
     com_ajuste_do_no,
     portao_nativo_ligado,
@@ -1038,7 +1039,10 @@ def _rodar_turno(
         ):
             resultado = executar_agente(
                 agente, cinto, entrada, saidas=saidas, gate=gate,
-                texto_portao=texto_portao, **kwargs_mem,
+                texto_portao=texto_portao,
+                # Atendimento = alguém esperando do outro lado: limites curtos de IA.
+                interativo=True,
+                **kwargs_mem,
             )
     except Exception as e:  # falha de LLM/instrumento — não morre em silêncio
         sessao.add(
@@ -1047,6 +1051,10 @@ def _rodar_turno(
                 conteudo=f"Falha ao gerar a resposta: {e}", entregue=False,
             )
         )
+        # …e o CONTATO precisa saber (§12-A). Antes, a falha virava só uma nota interna
+        # (`entregue=False`): quem mandou a mensagem ficava no vácuo, sem resposta e sem
+        # explicação, e só o vigia de turno preso o socorreria — 30 minutos depois.
+        _enviar_e_registrar(sessao, conversa, token, FALHA_TURNO_MSG)
         conversa.estado = "aberta"
         sessao.commit()
         registrar_evento(

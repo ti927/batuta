@@ -110,7 +110,7 @@ def _cenario(sessao, dados, monkeypatch, saver, *, ligado=True, texto_acao=""):
     sessao.flush()
 
     enviados: list[str] = []
-    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m: _FakeModelo())
+    monkeypatch.setattr(agente_mod, "construir_modelo", lambda m, **k: _FakeModelo())
     monkeypatch.setattr(memoria_conversa, "obter", lambda: saver)
     monkeypatch.setattr(
         servico.telegram, "enviar",

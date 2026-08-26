@@ -52,6 +52,17 @@ TIMEOUT_IA_S = 300
 # (Anthropic/OpenAI/Google) por este ponto único.
 MAX_RETENTATIVAS_IA = 6
 
+# ── Os mesmos limites, para quem tem GENTE ESPERANDO do outro lado (2026-08-26) ──
+# Numa automação de fundo, insistir por minutos é barato: ninguém está olhando. Num
+# ATENDIMENTO por mensageria é o oposto — a pessoa mandou uma mensagem e está vendo a
+# tela. Com os limites de fundo, uma chamada de IA lenta podia consumir 300s × 6 ≈ 30
+# minutos ANTES de o Batuta desistir; foi o que aconteceu no time de Reembolsos com o
+# GPT-5.6 (o contato ficou no vácuo, e a conversa presa em "bot respondendo"). Aqui a
+# falha acontece rápido, o contato recebe um recado honesto e pode reenviar — melhor
+# uma resposta franca em 2 minutos do que meia hora de silêncio.
+TIMEOUT_IA_CHAT_S = 60
+MAX_RETENTATIVAS_IA_CHAT = 1
+
 # Modelos que NÃO aceitam o parâmetro `temperature` (a API responde 400
 # "temperature is deprecated for this model"). Para eles, omitimos o parâmetro.
 # São da geração de "adaptive thinking" (sempre ligado, com parâmetro `effort`):
@@ -106,22 +117,29 @@ def chaves_atuais() -> dict[str, str]:
 
 
 def construir_modelo(
-    modelo_ia: str | None = None, temperatura: float = 0.0
+    modelo_ia: str | None = None, temperatura: float = 0.0, *, interativo: bool = False
 ) -> BaseChatModel:
     """Cria o cliente de chat para o modelo dado, do provedor certo, com a chave
     resolvida no contexto (`usar_chaves`). A Anthropic cai na ANTHROPIC_API_KEY do
     ambiente quando não há chave de cofre; OpenAI e Google exigem a chave no cofre
-    (sem fallback de ambiente) e falham de forma clara se faltar."""
+    (sem fallback de ambiente) e falham de forma clara se faltar.
+
+    `interativo=True` = tem gente esperando a resposta (atendimento por mensageria):
+    usa os limites curtos (`TIMEOUT_IA_CHAT_S`/`MAX_RETENTATIVAS_IA_CHAT`), para a
+    falha chegar em ~1 minuto em vez de meia hora. O padrão (`False`) mantém os
+    limites generosos das automações de fundo, onde insistir é barato."""
     modelo = modelo_ia or MODELO_PADRAO
     provedor = provedor_do_modelo(modelo)
     chave = _chaves_ia.get().get(provedor)
+    espera = TIMEOUT_IA_CHAT_S if interativo else TIMEOUT_IA_S
+    tentativas = MAX_RETENTATIVAS_IA_CHAT if interativo else MAX_RETENTATIVAS_IA
 
     if provedor == PROVEDOR_ANTHROPIC:
         parametros: dict = {
             "model": modelo,
             "max_tokens": MAX_TOKENS,
-            "timeout": TIMEOUT_IA_S,
-            "max_retries": MAX_RETENTATIVAS_IA,
+            "timeout": espera,
+            "max_retries": tentativas,
         }
         # Opus 4.8 (e afins) rejeitam `temperature`; só enviamos quando o modelo
         # aceita.
@@ -148,8 +166,8 @@ def construir_modelo(
             "model": modelo,
             "api_key": chave,
             "max_tokens": MAX_TOKENS,
-            "timeout": TIMEOUT_IA_S,
-            "max_retries": MAX_RETENTATIVAS_IA,
+            "timeout": espera,
+            "max_retries": tentativas,
         }
         # Os modelos de raciocínio da OpenAI (GPT-5+/série o) rejeitam
         # `temperature`; só enviamos quando o modelo aceita (GPT-4o/4.1).
@@ -178,8 +196,8 @@ def construir_modelo(
             api_key=chave,
             max_output_tokens=MAX_TOKENS,
             temperature=temperatura,
-            timeout=TIMEOUT_IA_S,
-            max_retries=MAX_RETENTATIVAS_IA,
+            timeout=espera,
+            max_retries=tentativas,
         )
 
     raise ValueError(f"Provedor de IA não suportado: {provedor}")
