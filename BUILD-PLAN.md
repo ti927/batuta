@@ -1930,6 +1930,30 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
+## FASE — Batuta-MCP: os 9 defeitos do teste de campo, corrigidos  ✅ NO AR (2026-08-26, commit `ed522df`, sem migração, núcleo intocado)
+
+**Gatilho:** o maestro auditou as 44 ferramentas pelo próprio claude.ai e trouxe um **relatório com matriz de testes** — 33 funcionaram, 3 estavam quebradas, 4 não puderam ser testadas e 5 tinham defeitos. O diagnóstico dele já eliminava as causas fáceis (escopo, permissão, validação de parâmetro, acento no nome) e apontava a hipótese certa: as três quebradas mexiam com o cofre.
+
+**Por que passou despercebido:** **nenhum teste do MCP exercitava o caminho feliz.** Todos eram "offline" — provavam a barreira de acesso (sem identidade, sem banco), nunca uma criação de verdade. O arquivo novo `testes/test_mcp_escrita_real.py` fecha isso: liga o decorator à sessão de teste e cria instrumento, conector, credencial e agente contra o banco.
+
+**Bugs 1 e 2 — `configurar_instrumento` e `montar_conector` (bloqueantes).** Criar instrumento calcula os segredos pendentes, que chamava `segredos_instrumento.servicos_resolviveis` → `chaves.resolver_chaves_por_organizacao` → **`decifrar()`** em cada chave achada, só para ficar com o NOME do serviço. O serviço MCP roda **sem a `COFRE_CHAVE_MESTRA`** de propósito (least-privilege da Fatia 3a) → `CofreNaoConfigurado` → erro genérico, em toda organização que tivesse qualquer chave cadastrada. Conserto: **`chaves.servicos_com_chave`**, que responde por **existência** e não toca segredo, com as condições de "qual chave vale" extraídas para `_condicoes` — uma fonte só para quem decifra e quem só confere. (O teste local passava porque a fixture esvazia o cofre: sem chave, nada era decifrado. A regressão nova cria a chave e apaga a chave-mestra — a condição real de produção.)
+
+**Bug 3 — `criar_credencial`.** O esqueleto nascia sem `dados_cifrado`, que é `NOT NULL` → `NotNullViolation`. Grava `""`, que todo o cofre já lê como "nada guardado" (`if not dados_cifrado: return {}`, `preenchida` False). Cifrar um saco vazio também resolveria, mas exigiria a chave-mestra que este serviço não tem.
+
+**Os outros seis:**
+- **4 (alta, risco de engano):** `ativar_time`/`desativar_time` recebiam `automacao_id` e mexiam numa **automação** — o nome sugeria desligar o time inteiro. Renomeadas para `ativar_automacao`/`desativar_automacao`.
+- **5 (alta):** `diagnosticar_execucao` apontava o instrumento errado — devolvia o último acionado no passo, mandando editar o «Gerar imagem» quando quem falhou foi o «Publicar no WordPress» (HTTP 413). Agora casa pelo **nome que o próprio erro cita** e devolve o agente do passo (vinha `null`).
+- **6 (média):** `cinto_dos_agentes` só era preenchido quando a execução estava parada num portão; numa execução que falhou — quando mais se precisa dele — vinha vazio.
+- **7 (média):** `definir_gatilho` gravava o tipo no campo de topo e **não** no nó `gatilho` do grafo: duas fontes divergentes para o mesmo dado (o campo dizia "agendamento", a tela mostrava "manual"). `grafo.sincronizar_gatilho` espelha, chamado na fonte única (`servicos.definir_gatilho` e `definir_automacao`).
+- **8 (alta, lacuna):** não havia como VER instrumento nenhum — o cinto do agente vinha como UUIDs crus. Ferramentas novas **`listar_instrumentos`** e **`ver_instrumento`** (nome, tipo, config pública, segredos preenchidos e os que faltam; nunca o valor de um segredo).
+- **9 (baixa):** `criar_organizacao` sem par. **`excluir_organizacao`** só apaga organização **vazia** — deliberadamente sem cascata: uma organização carrega times, execuções, credenciais e histórico, e uma exclusão dessas por engano de uma IA seria catastrófica.
+
+**Melhoria transversal — o erro genérico deixou de ser mudo.** *"Algo deu errado…"* sem código, campo ou causa custou ao maestro uma matriz de tentativas às cegas. Agora a resposta traz um **código de rastreio** e o erro é registrado no **banco de logs** (`mcp.escrita.falhou` / `mcp.leitura.falhou`, consultável em GET /logs) com esse mesmo código — antes ia só para o stdout do serviço MCP, que ninguém abre. O stack trace continua fora da resposta.
+
+**Verificação:** 923 testes (13 novos) e import smoke com **47 tools** registradas. **Falta:** o maestro reconectar o connector no claude.ai (as tools renomeadas/novas só aparecem depois) e refazer o teste de campo.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
