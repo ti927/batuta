@@ -1964,6 +1964,24 @@ O maestro reconectou e refez a auditoria. **Confirmados ao vivo:** os três bloq
 
 ---
 
+## FASE — Saída HTTP resiliente a rota (queda para IPv4) + erro de rede honesto  ✅ NO AR (2026-08-26, commit `e404fe0`, sem migração, núcleo intocado)
+
+**Gatilho (3ª bateria do teste de campo):** a mesma chamada ao ViaCEP que respondera **HTTP 200 no dia anterior** passou a morrer com `[Errno 101] Network is unreachable`, enquanto `api.github.com` respondia normalmente **no mesmo conector** — o maestro isolou trocando só a URL, o que já eliminava conector, ferramenta e payload.
+
+**A causa está no DNS dos dois hosts:** `viacep.com.br` publica endereço **IPv6** (`AAAA`); `api.github.com` não. O servidor resolve o nome, recebe a lista de endereços e tenta um por um; quando a rota IPv6 do container não existe, essa tentativa morre com `ENETUNREACH` — e **o erro que sobra é o da última tentativa**, mesmo havendo um IPv4 alcançável. Verificação que refina a hipótese: `api.telegram.org` e `graph.facebook.com` **também têm AAAA** e funcionam todo dia, o que descarta "IPv6 sempre falha" e é consistente com a ordem das tentativas.
+
+**`cerebro/http_saida.py` — a porta única de saída para hosts que o CONSULTOR escolhe:**
+- **Queda para IPv4:** numa falha de **rota** — e só nela; DNS, recusa e timeout sobem na hora, porque repetir pelo outro protocolo não mudaria nada —, a chamada é refeita uma vez amarrada a IPv4 (`local_address="0.0.0.0"`, que ignora os endereços IPv6). Só o caminho de falha muda: quem conecta de primeira não passa por ali.
+- **Erro honesto (§12-A):** "Network is unreachable" não diz nada a quem montou o instrumento. A mensagem passa a nomear o host, dizer que a queda para IPv4 também foi tentada e o que costuma ser (destino fora do ar ou bloqueando servidores de nuvem), com o detalhe técnico no fim.
+
+**Onde foi aplicado:** REST, conector, webhook de saída e WordPress (inclusive o download da imagem externa) — os caminhos em que a URL é do usuário. Os instrumentos de serviço fixo (Telegram, Instagram, OpenAI, Firecrawl, Tavily) seguem como estavam: falam com hosts conhecidos e comprovadamente alcançáveis.
+
+**Verificação:** 931 testes (5 novos). Os testes de mTLS e de WordPress passaram a espionar a **porta de saída** em vez do `httpx.Client` de cada módulo — provam a mesma garantia (o certificado é apresentado; os temporários somem), agora através da camada real.
+
+**Placar dos 9 achados do teste de campo: 9 fechados**, mais esta regressão de rede.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
