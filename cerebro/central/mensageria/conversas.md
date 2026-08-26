@@ -32,6 +32,12 @@ conversa e sabe quando chamar uma pessoa. Cada canal tem **um agente atendente**
   idas e vindas antes de chamar um humano, **timeout** com aviso de retomada (nudge), proteção contra
   injeção de instruções, transcrição de **áudio** (Whisper) e leitura de **imagem** (visão — o agente
   "enxerga" a foto que o contato manda; veja [[instrumentos/arquivar-imagem]] para guardá-la).
+- **O atendimento tem pressa, e o Batuta respeita isso.** Numa automação de fundo o motor insiste por
+  minutos quando a IA está lenta (ninguém está olhando); no atendimento, não: a chamada tem espera curta e
+  quase nenhuma retentativa, porque há alguém do outro lado vendo a tela. Se a IA não responder a tempo, o
+  contato recebe em cerca de dois minutos um recado dizendo que não deu e pedindo para reenviar — em vez de
+  ficar meia hora sem resposta. **Modelo lento = atendimento ruim:** um agente atendente pede um modelo
+  rápido; deixe os modelos pesados para as automações.
 - Uma conversa parada é retomada/encerrada pelo mecanismo de tempo — não fica presa em silêncio. Isso vale
   para os **dois** tipos de espera: quando a bola está com o contato (ele não respondeu) e quando a bola está
   com o Batuta (**o agente começou a responder e o turno não voltou**, por queda ou travamento). Neste
