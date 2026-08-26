@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, Field
 
+import http_saida
 from instrumentos.base import (
     FalhaInstrumento,
     TipoInstrumento,
@@ -75,7 +76,7 @@ class DispararWebhook(TipoInstrumento):
             cabecalhos["Authorization"] = f"Bearer {config.token_bearer}"
         validar_cabecalhos_ascii(cabecalhos)
         try:
-            with httpx.Client(timeout=TIMEOUT_S) as cliente:
+            with http_saida.cliente(timeout=TIMEOUT_S) as cliente:
                 resposta = cliente.post(
                     config.url,
                     headers=cabecalhos or None,
@@ -83,7 +84,7 @@ class DispararWebhook(TipoInstrumento):
                 )
         except httpx.HTTPError as e:
             raise FalhaInstrumento(
-                f"não foi possível chamar {config.url}: {e}", retentavel=True
+                http_saida.mensagem_de_rede(config.url, e), retentavel=True
             )
 
         status = resposta.status_code

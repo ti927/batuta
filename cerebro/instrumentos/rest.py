@@ -12,6 +12,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 import certificados
+import http_saida
 from instrumentos.base import (
     FalhaInstrumento,
     TipoInstrumento,
@@ -161,7 +162,7 @@ class ChamarApiRest(TipoInstrumento):
             with certificados.material_mtls(
                 config.certificado, config.chave_privada
             ) as par:
-                with httpx.Client(timeout=TIMEOUT_S, cert=par) as cliente:
+                with http_saida.cliente(timeout=TIMEOUT_S, cert=par) as cliente:
                     resposta = cliente.request(
                         config.metodo,
                         config.url,
@@ -172,7 +173,7 @@ class ChamarApiRest(TipoInstrumento):
         except httpx.HTTPError as e:
             # Transporte: conexão recusada, DNS, timeout — transitório, vale retentar.
             raise FalhaInstrumento(
-                f"não foi possível chamar {config.url}: {e}", retentavel=True
+                http_saida.mensagem_de_rede(config.url, e), retentavel=True
             )
 
         # Falhas de operação do sistema externo (PRODUTO §16) viram falha do

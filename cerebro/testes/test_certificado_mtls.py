@@ -259,9 +259,11 @@ class _ClienteFake:
 
 
 def _espionar_httpx(monkeypatch, modulo):
+    """Intercepta a PORTA DE SAÍDA (`http_saida.cliente`), por onde REST e conector
+    passam desde a queda para IPv4 — antes era o `httpx.Client` de cada módulo."""
     capturado: dict = {}
     monkeypatch.setattr(
-        modulo.httpx, "Client", lambda **k: _ClienteFake(capturado, **k)
+        modulo.http_saida, "cliente", lambda **k: _ClienteFake(capturado, **k)
     )
     if modulo is rest:  # o log TEMP de diagnóstico escreve no banco — silencia
         monkeypatch.setattr(rest, "registrar_evento", lambda **k: None)

@@ -16,14 +16,19 @@ from instrumentos.base import FalhaInstrumento
 
 
 class _Resp:
-    def __init__(self, status=200, payload=None, text=""):
+    def __init__(self, status=200, payload=None, text="", content=b""):
         self.status_code = status
         self.is_success = 200 <= status < 300
         self._payload = {} if payload is None else payload
         self.text = text
+        self.content = content
 
     def json(self):
         return self._payload
+
+    def raise_for_status(self):
+        if not self.is_success:
+            raise AssertionError(f"HTTP {self.status_code}")
 
 
 def _suf(url: str) -> str:
@@ -70,7 +75,7 @@ def _arquivo_local(nome: str, conteudo: bytes = b"PNGDATA"):
 def test_publica_sem_imagem_uma_chamada(monkeypatch):
     registro: list = []
     respostas = {("POST", "posts"): _Resp(201, {"id": 10, "link": "http://x/10", "status": "draft"})}
-    monkeypatch.setattr(wp.httpx, "Client", _factory(respostas, registro))
+    monkeypatch.setattr(wp.http_saida, "cliente", _factory(respostas, registro))
     r = wp.PublicarWordpress().executar(
         _config(), wp.ArgsWordpress(titulo="T", conteudo="C")
     )
@@ -89,7 +94,7 @@ def test_publica_com_imagem_destacada(monkeypatch):
             ("POST", "media"): _Resp(201, {"id": 77, "source_url": "http://b/img.png"}),
             ("POST", "posts"): _Resp(201, {"id": 10, "link": "http://x/10", "status": "publish"}),
         }
-        monkeypatch.setattr(wp.httpx, "Client", _factory(respostas, registro))
+        monkeypatch.setattr(wp.http_saida, "cliente", _factory(respostas, registro))
         r = wp.PublicarWordpress().executar(
             _config(), wp.ArgsWordpress(titulo="T", conteudo="C", imagem_url="wptest_img.png")
         )
@@ -113,7 +118,7 @@ def test_falha_no_upload_da_imagem_nao_publica(monkeypatch):
     try:
         registro: list = []
         respostas = {("POST", "media"): _Resp(400, {}, text="bad image")}
-        monkeypatch.setattr(wp.httpx, "Client", _factory(respostas, registro))
+        monkeypatch.setattr(wp.http_saida, "cliente", _factory(respostas, registro))
         with pytest.raises(FalhaInstrumento, match="imagem"):
             wp.PublicarWordpress().executar(
                 _config(), wp.ArgsWordpress(titulo="T", conteudo="C", imagem_url="wptest_img2.png")
@@ -127,7 +132,7 @@ def test_upload_403_fala_de_permissao(monkeypatch):
     arq = _arquivo_local("wptest_img3.png", b"X")
     try:
         monkeypatch.setattr(
-            wp.httpx, "Client", _factory({("POST", "media"): _Resp(403, {})}, [])
+            wp.http_saida, "cliente", _factory({("POST", "media"): _Resp(403, {})}, [])
         )
         with pytest.raises(FalhaInstrumento, match="permissão"):
             wp.PublicarWordpress().executar(
@@ -145,7 +150,7 @@ def test_mime_sai_do_sufixo_jpg(monkeypatch):
             ("POST", "media"): _Resp(201, {"id": 5}),
             ("POST", "posts"): _Resp(201, {"id": 1, "link": "x"}),
         }
-        monkeypatch.setattr(wp.httpx, "Client", _factory(respostas, registro))
+        monkeypatch.setattr(wp.http_saida, "cliente", _factory(respostas, registro))
         wp.PublicarWordpress().executar(
             _config(), wp.ArgsWordpress(titulo="T", conteudo="C", imagem_url="wptest_img.jpg")
         )
@@ -161,15 +166,9 @@ def test_imagem_externa_e_baixada(monkeypatch):
         ("POST", "media"): _Resp(201, {"id": 9}),
         ("POST", "posts"): _Resp(201, {"id": 1, "link": "x"}),
     }
-    monkeypatch.setattr(wp.httpx, "Client", _factory(respostas, registro))
-
-    class _G:
-        content = b"EXTBYTES"
-
-        def raise_for_status(self):
-            pass
-
-    monkeypatch.setattr(wp.httpx, "get", lambda *a, **k: _G())
+    # O download da imagem externa passa pela MESMA porta de saída (queda p/ IPv4).
+    respostas[("GET", "foto.webp")] = _Resp(200, content=b"EXTBYTES")
+    monkeypatch.setattr(wp.http_saida, "cliente", _factory(respostas, registro))
     r = wp.PublicarWordpress().executar(
         _config(),
         wp.ArgsWordpress(

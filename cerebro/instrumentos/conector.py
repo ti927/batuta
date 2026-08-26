@@ -30,6 +30,7 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field, create_model
 
 import certificados
+import http_saida
 from instrumentos.base import (
     FalhaInstrumento,
     TipoInstrumento,
@@ -216,12 +217,12 @@ def _chamar_http(
     `mtls` é o par (certificado, chave) já materializado em arquivo, quando o
     conector tem certificado de cliente; None = chamada sem certificado."""
     try:
-        with httpx.Client(timeout=TIMEOUT_S, cert=mtls) as cliente:
+        with http_saida.cliente(timeout=TIMEOUT_S, cert=mtls) as cliente:
             resposta = cliente.request(
                 metodo, url, headers=cabecalhos or None, params=params or None, json=corpo
             )
     except httpx.HTTPError as e:
-        raise FalhaInstrumento(f"não foi possível chamar {url}: {e}", retentavel=True)
+        raise FalhaInstrumento(http_saida.mensagem_de_rede(url, e), retentavel=True)
 
     status = resposta.status_code
     if status in (401, 403):

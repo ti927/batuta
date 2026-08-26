@@ -20,6 +20,7 @@ from typing import Literal
 import httpx
 from pydantic import BaseModel, Field
 
+import http_saida
 from arquivos import BASE_PUBLICA, DIRETORIO_ARQUIVOS
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 
@@ -161,11 +162,13 @@ def _bytes_da_imagem(fonte: str) -> tuple[bytes, str]:
 
     if "://" in fonte:
         try:
-            r = httpx.get(fonte, timeout=TIMEOUT_S, follow_redirects=True)
+            with http_saida.cliente(timeout=TIMEOUT_S, follow_redirects=True) as cli:
+                r = cli.get(fonte)
             r.raise_for_status()
         except httpx.HTTPError as e:
             raise FalhaInstrumento(
-                f"não foi possível baixar a imagem: {e}", retentavel=True
+                f"não foi possível baixar a imagem: {http_saida.mensagem_de_rede(fonte, e)}",
+                retentavel=True,
             )
         return r.content, nome
 
@@ -249,7 +252,9 @@ class PublicarWordpress(TipoInstrumento):
         senha = senha.replace(" ", "")
         base = url.rstrip("/") + "/wp-json/wp/v2"
 
-        with httpx.Client(timeout=TIMEOUT_S, auth=httpx.BasicAuth(usuario, senha)) as cliente:
+        with http_saida.cliente(
+            timeout=TIMEOUT_S, auth=httpx.BasicAuth(usuario, senha)
+        ) as cliente:
             cat_ids = _categorias_para_ids(cliente, base, config.categorias)
             tag_ids = _tags_para_ids(cliente, base, args.tags)
 
