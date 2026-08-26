@@ -1982,6 +1982,17 @@ O maestro reconectou e refez a auditoria. **Confirmados ao vivo:** os três bloq
 
 ---
 
+## FASE — Central de Conhecimento e documentação alinhadas ao dia da observabilidade  ✅ (2026-08-26, commits `14d2c4a` + `a4c74f1`)
+
+Pedido do maestro ao fim do dia: *"atualize a central de conhecimento com o que foi feito hoje para as IAs não terem dúvidas"*. A Central é o que a IA criadora e o Claude conectado pelo MCP consultam — sem isso, os três consertos do dia existiriam no código e não no que as IAs sabem.
+
+- **Capítulo novo `operacao/sinais-e-diagnostico`:** o princípio (proteger o atendimento não pode virar esconder o problema), o que cada sinal significa (turno que começou e não terminou, turno preso, memória de conversa indisponível, código de erro do MCP), por que o vigia não reprocessa sozinho, e a **ordem de investigação** — ler o rastro antes de opinar; ferramenta ausente dos instrumentos acionados não foi chamada; procurar falha devolvida como resposta; só então discutir prompt/modelo. Verificado: a Central o descobre (55 capítulos navegáveis) e a busca por "turno preso conversa travada" o traz no topo.
+- **Revisados:** `mensageria/conversas` (a espera tem dois lados; "respondi e não aconteceu nada" é turno preso ou modo degradado, não o agente ignorando), `automacoes/execucoes-e-inspecao` (execução "concluída" não garante sucesso; o diagnóstico entrega instrumento, agente e ação derivada do erro), `operacao/falhas-e-retentativa` (falha como dado + recado de rede), `operacao/operar-pelo-claude-mcp` (instrumento se lê, não se adivinha; ativar/desativar é da automação; reconectar o conector; código de erro) e o `INDICE`.
+- **`instructions` do servidor MCP:** as mesmas regras na porta de entrada do Claude.
+- **Documentação do projeto:** `CLAUDE.md §12-A` ganhou a lei **fail-safe não pode ser mudo** (as três pernas — evento no banco de logs, vigia que destrava, recado honesto — mais o carimbo do modo no rastro, e o corolário de que falha devolvida como dado também é falha); `docs/ARQUITETURA.md` (os dois caminhos de falha de instrumento, a porta única de saída HTTP, o parágrafo do fail-safe mudo no lifespan); `docs/MCP-BATUTA.md` (47 ferramentas, nomes que mudaram, reconectar o conector, a consequência prática do least-privilege); `docs/UNIFICACAO-ESTADO.md` (a lição de operação: a cura que o documento defende caiu três dias em silêncio e levou a governança junto).
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
