@@ -209,6 +209,57 @@ def test_resposta_com_falha_avisa_mesmo_em_acao_irreversivel(sessao, dados):
     assert "confira se a ação foi de fato concluída" in a["detalhe"]
 
 
+def test_falha_aponta_o_instrumento_mesmo_sem_passo(sessao, dados):
+    """Caso real (exec `8309da6f`): o agente publicador estourou ANTES de gravar o
+    passo dele, então o «Publicar no WordPress» não aparecia em passo nenhum — a 1ª
+    versão apontava o instrumento errado (o último acionado) e a 2ª não apontava
+    nada. O nome está no texto do erro; procurá-lo no TIME resolve os dois casos."""
+    pauta = _agente(sessao, dados, "Caçador de Pauta")
+    publicador = _agente(sessao, dados, "Publicador")
+    busca = _instr(sessao, dados, "Busca na web Exa", "busca_exa")
+    wp = _instr(sessao, dados, "Publicar no WordPress (rascunho)", "publicar_wordpress")
+    _encaixar(sessao, pauta, busca)
+    _encaixar(sessao, publicador, wp)
+    auto = _auto(sessao, dados)
+    ex = _exec(sessao, auto, "falhou", resultado={
+        "erro": "O instrumento 'Publicar no WordPress (rascunho)' falhou: "
+                "o upload da imagem falhou (HTTP 413): 413 Payload Too Large"
+    })
+    # o único passo é de OUTRO agente, com OUTRO instrumento
+    _passo(sessao, ex, agente=pauta, acionados=[f"Busca_{busca.id.hex[:8]}"])
+
+    d = diag.diagnosticar(sessao, ex.id)
+    a = next(a for a in d["avisos"] if a["codigo"] == "falha_instrumento")
+    assert a["referencias"]["instrumento_id"] == str(wp.id)      # o certo, não o da busca
+    assert a["referencias"]["agente_id"] == str(publicador.id)   # vinha null
+    assert "Publicar no WordPress" in a["titulo"]
+
+
+def test_acao_sugerida_vem_do_tipo_de_erro(sessao, dados):
+    """413 (arquivo grande demais) não se resolve cadastrando token — a ação era fixa."""
+    ag = _agente(sessao, dados, "Publicador")
+    wp = _instr(sessao, dados, "Publicar no WP", "publicar_wordpress")
+    _encaixar(sessao, ag, wp)
+    auto = _auto(sessao, dados)
+    ex413 = _exec(sessao, auto, "falhou", resultado={
+        "erro": "O instrumento 'Publicar no WP' falhou: HTTP 413 Payload Too Large"
+    })
+    a413 = next(a for a in diag.diagnosticar(sessao, ex413.id)["avisos"]
+                if a["codigo"] == "falha_instrumento")
+    assert a413["acao_sugerida"]["tipo"] == "editar_instrumento"
+
+    assert a413["acao_sugerida"]["motivo"] == "arquivo grande demais para o destino"
+
+    # Sem conseguir identificar o instrumento, só erro de AUTENTICAÇÃO manda cadastrar
+    # credencial; um 413 anônimo não vira mais conselho de token.
+    ex_anon = _exec(sessao, auto, "falhou", resultado={
+        "erro": "O instrumento 'Que Não Existe' falhou: HTTP 413 Payload Too Large"
+    })
+    a_anon = next(a for a in diag.diagnosticar(sessao, ex_anon.id)["avisos"]
+                  if a["codigo"] == "falha_instrumento")
+    assert a_anon["acao_sugerida"]["tipo"] == "aguardar"
+
+
 def test_conversa_sem_memoria_avisa(sessao, dados):
     """Turno de conversa carimbado `memoria="legado"` = modo degradado (checkpointer
     caído): o diagnóstico denuncia — foi o que faltou na queda de 2026-08-22."""

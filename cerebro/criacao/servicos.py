@@ -338,7 +338,14 @@ def definir_cadeia(
     except ValueError as e:
         raise ConflitoDominio(f"Cadeia inválida: {e}")
     auto = resolver_automacao(sessao, time, automacao_id)
-    auto.cadeia = grafo.normalizar(cadeia or {})  # grava no formato canônico de grafo
+    # A cadeia que chega normalmente NÃO traz o nó `gatilho` (quem monta descreve só os
+    # nós de agente) — a normalização então cria um com o default "manual". Sem espelhar
+    # o gatilho REAL da automação aqui, remontar a cadeia apagava o gatilho do grafo:
+    # o topo dizia "webhook" e a tela mostrava "manual". Fonte única com `definir_gatilho`.
+    auto.cadeia = grafo.sincronizar_gatilho(
+        grafo.normalizar(cadeia or {}), auto.tipo_gatilho
+    )
+    flag_modified(auto, "cadeia")
     sessao.flush()
     _audit(sessao, usuario, "automacao.definida", "automacao", auto.id, time.organizacao_id)
     return auto

@@ -352,16 +352,16 @@ def _verificar_falha(sessao, d, ex, passos, avisos, nomes) -> None:
         "o instrumento", "acesso negado", "http 401", "http 403",
         "não configurado", "nao configurado", "verifique a autenticação",
     )):
-        # Aponta o instrumento envolvido — pelo NOME citado no erro, quando houver.
-        inst, agente_id = _instrumento_da_falha(sessao, passos, erro)
+        # Aponta o instrumento envolvido — pelo NOME citado no erro, procurado no time.
+        inst, agente_id = _instrumento_da_falha(sessao, passos, erro, _time_da_execucao(sessao, ex))
         ref = {"instrumento_id": inst.id, "agente_id": agente_id} if inst else {}
+        alvo = f"«{inst.nome}»" if inst else "um instrumento"
         avisos.append(_aviso(
             "falha_instrumento", "erro",
-            "Um instrumento falhou",
-            f"A execução parou por causa de um instrumento: «{_trunc(erro, 180)}». Confira a "
+            f"O instrumento {alvo} falhou" if inst else "Um instrumento falhou",
+            f"A execução parou por causa de {alvo}: «{_trunc(erro, 180)}». Confira a "
             "configuração/credencial dele.",
-            acao={"tipo": "editar_instrumento", "instrumento_id": str(inst.id)} if inst else
-                 {"tipo": "cadastrar_token"},
+            acao=_acao_da_falha(erro, inst),
             **ref,
         ))
         return
@@ -435,6 +435,21 @@ def _verificar_memoria_legado(ex, passos, avisos) -> None:
     ))
 
 
+def _time_da_execucao(sessao, ex):
+    """O time da execução — pela automação (fluxo) ou pela conversa (rastro-sombra)."""
+    if ex.automacao_id:
+        return sessao.scalar(
+            select(Automacao.time_id).where(Automacao.id == ex.automacao_id)
+        )
+    if getattr(ex, "conversa_id", None):
+        return sessao.scalar(
+            select(Instrumento.time_id)
+            .join(Conversa, Conversa.instrumento_id == Instrumento.id)
+            .where(Conversa.id == ex.conversa_id)
+        )
+    return None
+
+
 def _nome_no_erro(erro: str) -> str | None:
     """O nome do instrumento que o próprio texto do erro nomeia. A mensagem nasce em
     `agente._ferramenta_unica` como: O instrumento 'X' falhou: …"""
@@ -442,15 +457,32 @@ def _nome_no_erro(erro: str) -> str | None:
     return achado.group(1) if achado else None
 
 
-def _instrumento_da_falha(sessao, passos, erro: str = "") -> tuple[Instrumento | None, object]:
-    """O instrumento que falhou, e o agente do passo. Devolve `(None, None)` se não der.
+def _instrumento_da_falha(
+    sessao, passos, erro: str = "", time_id=None
+) -> tuple[Instrumento | None, object]:
+    """O instrumento que falhou, e o agente ligado a ele. `(None, None)` se não der.
 
-    A fonte mais confiável é o NOME que o próprio erro cita — antes isto era ignorado
-    e devolvíamos o último instrumento acionado no passo, o que mandava o consultor
-    editar a ferramenta errada: numa execução real, o erro era do «Publicar no
-    WordPress» (HTTP 413) e a ação sugerida apontava o «Gerar imagem», acionado no
-    mesmo passo. Sem nome no texto, cai no palpite antigo (best-effort)."""
+    A fonte mais confiável é o NOME que o próprio erro cita, procurado no TIME inteiro
+    — não só no cinto dos agentes que deixaram passo. É o que o caso real exigiu: o
+    agente publicador estourou ANTES de gravar o passo dele, então o «Publicar no
+    WordPress» não aparecia em passo nenhum; procurar só nos passos devolvia o
+    instrumento errado (antes) ou nada (depois). Sem nome no texto, cai no palpite
+    pelos passos (best-effort, o comportamento antigo)."""
     alvo = _nome_no_erro(erro)
+    if alvo and time_id is not None:
+        inst = sessao.scalars(
+            select(Instrumento).where(
+                Instrumento.time_id == time_id, Instrumento.nome == alvo
+            )
+        ).first()
+        if inst is not None:
+            # O agente que carrega esse instrumento no cinto (se um só, é ele).
+            agente_id = sessao.scalar(
+                select(AgenteInstrumento.agente_id)
+                .where(AgenteInstrumento.instrumento_id == inst.id)
+                .limit(1)
+            )
+            return inst, agente_id
     for p in reversed(passos):
         acionados = (p.saida or {}).get("instrumentos_acionados") or []
         if not acionados or p.agente_id is None:
@@ -460,14 +492,32 @@ def _instrumento_da_falha(sessao, passos, erro: str = "") -> tuple[Instrumento |
             .join(AgenteInstrumento, AgenteInstrumento.instrumento_id == Instrumento.id)
             .where(AgenteInstrumento.agente_id == p.agente_id)
         ).all()
-        if alvo:
-            por_nome = [i for i in insts if i.nome == alvo]
-            if por_nome:
-                return por_nome[0], p.agente_id
         acionou = [i for i in insts if _acionou(i, acionados)]
-        if acionou and not alvo:
+        if acionou:
             return acionou[-1], p.agente_id
     return None, None
+
+
+def _acao_da_falha(erro: str, inst: Instrumento | None) -> dict:
+    """A ação sugerida, derivada do QUE deu errado — não de um padrão fixo.
+
+    Antes, toda falha de instrumento sem instrumento identificado sugeria
+    «cadastrar_token»: um HTTP 413 (arquivo grande demais) virava conselho de
+    cadastrar credencial, mandando o consultor mexer onde não era."""
+    low = (erro or "").lower()
+    if inst is not None:
+        # Com o instrumento identificado, a ação é abrir ELE — inclusive num 413, em
+        # que o ajuste é de configuração (formato/tamanho), não de credencial.
+        acao = {"tipo": "editar_instrumento", "instrumento_id": str(inst.id)}
+        if "413" in low or "too large" in low:
+            acao["motivo"] = "arquivo grande demais para o destino"
+        return acao
+    # Sem saber qual instrumento é, só faz sentido mandar cadastrar credencial quando
+    # o erro é mesmo de autenticação. Antes, QUALQUER falha caía em `cadastrar_token`.
+    if any(t in low for t in ("401", "403", "acesso negado", "autenticação", "autenticacao",
+                              "token", "não configurado", "nao configurado")):
+        return {"tipo": "cadastrar_token"}
+    return {"tipo": "aguardar"}
 
 
 def _cintos_dos_passos(sessao, passos) -> dict:

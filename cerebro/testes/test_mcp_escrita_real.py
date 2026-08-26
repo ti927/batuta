@@ -223,6 +223,38 @@ def test_definir_gatilho_espelha_no_grafo(mcp, dados):
     assert no_gatilho["gatilho"] == "agendamento", "o grafo divergiu do campo de topo"
 
 
+def test_montar_cadeia_nao_apaga_o_gatilho(mcp, dados):
+    """2ª bateria do teste de campo: `montar_cadeia` reconstruía o grafo e gravava o
+    nó de gatilho como 'manual', descartando o que `definir_gatilho` tinha posto —
+    remontar a cadeia apagava o gatilho da TELA (o topo continuava certo)."""
+    import json
+
+    import mcp_ferramentas as leitura
+    from modelos import Agente, Automacao
+
+    escrita.criar_agente(
+        _sub(dados), str(dados["timeA"].id), "Ag", "agente", "faz algo", None, None, None, None
+    )
+    escrita.criar_automacao(_sub(dados), str(dados["timeA"].id), "Fluxo")
+    agente_id = str(
+        mcp.scalars(select(Agente).where(Agente.time_id == dados["timeA"].id)).first().id
+    )
+    auto_id = str(
+        mcp.scalars(select(Automacao).where(Automacao.time_id == dados["timeA"].id)).first().id
+    )
+    cadeia = {"inicial": "n1", "nos": [{"id": "n1", "tipo": "agente", "ref": agente_id,
+                                        "saidas": [{"rotulo": "fim", "destino": "fim"}]}]}
+    escrita.montar_cadeia(_sub(dados), auto_id, cadeia)
+    escrita.definir_gatilho(_sub(dados), auto_id, "webhook", {})
+    # a ordem que quebrava: remontar a cadeia DEPOIS de definir o gatilho
+    escrita.montar_cadeia(_sub(dados), auto_id, cadeia)
+
+    visto = json.loads(leitura.ver_automacao(_sub(dados), auto_id))
+    assert visto["tipo_gatilho"] == "webhook"
+    no = next(n for n in visto["cadeia"]["nos"] if n["tipo"] == "gatilho")
+    assert no["gatilho"] == "webhook", "montar_cadeia apagou o gatilho do grafo"
+
+
 def test_excluir_organizacao_so_se_vazia(mcp, dados):
     """Bug 9: `criar_organizacao` não tinha par. O par existe, mas nunca apaga em
     cascata — organização com time é recusada com a explicação."""
