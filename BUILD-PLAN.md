@@ -1908,6 +1908,28 @@ Gatilho: uma automação de produção disparou **em dobro** (07:59:57 + 08:00:0
 
 ---
 
+## FASE — Turno preso: a conversa nunca mais fica travada em silêncio  ✅ NO AR (2026-08-26, commit `2fcc9a2`, sem migração, núcleo intocado)
+
+**Gatilho (incidente real):** uma automação do time EST Post Blog rodou até o portão e pediu aprovação no Telegram (11:02). O maestro respondeu "Aprovado" às 11:13 — e **nada aconteceu**. A execução ficou `aguardando_humano` e a conversa `bot_respondendo` por **~1 hora**, sem o contato receber sinal nenhum. Só foi descoberto porque ele mandou inspecionar o banco à mão. A suspeita inicial (justa, pelo timing) era regressão do conserto do checkpointer do dia anterior.
+
+**Investigação (o que foi provado, com leitura de produção):**
+- A mensagem chegou e foi gravada (11:13:15); a conversa entrou em `bot_respondendo` e **o turno nunca voltou** — sem `turno.falhou`, sem mensagem de sistema, sem evento de erro.
+- O processo **não** reiniciou (boot 01:30, de pé) → a tarefa não morreu por restart do Railway.
+- **O checkpointer foi inocentado por teste direto:** `tem_estado` contra a produção respondeu em **0,33 s** e `executar_agente` COM checkpointer + middleware de resumo (agente de teste, thread de teste) respondeu em **2,26 s** gravando checkpoint e carimbando `memoria: duravel`. O caminho consertado na véspera está saudável.
+- **Sem o log do processo (Railway) não dá para cravar onde o turno pendurou** — e isso é exatamente o ponto: o Batuta não guardava essa evidência.
+
+**A causa estrutural (essa sim, provada):** duas lacunas somadas, ambas §12-A.
+1. **Ninguém varria `bot_respondendo`.** O sweeper de mensageria só olha `aguardando_resposta`. Uma tarefa de fundo morta ou pendurada deixava a conversa presa **para sempre** — confirmado no banco: 1 conversa nesse estado, 130 fechadas, nenhuma outra presa (o buraco existia desde sempre; nunca tinha sido acionado).
+2. **O turno não deixava sinal de vida.** `processar_turno` roda como tarefa de fundo; uma exceção fora do `try` interno ia só para o log do servidor. No Batuta não havia como saber sequer que o turno tinha começado.
+
+**O que entrou:**
+- **`sweeper.varrer_turnos_presos`** (roda no job de 60 s que já existia): passado o teto de **30 min** (acima do pior caso legítimo — uma chamada de IA esgotando 300 s × 6 retentativas), registra **`turno.preso`** (nível error, com há quanto tempo travou), **avisa o contato** com texto honesto ("tive uma falha interna e não consegui concluir… reenvie") e **destrava** a conversa para `aguardando_resposta`, re-armando o relógio normal. **Não reprocessa sozinho** — o turno pendurado pode ter efeito externo (publicar/enviar) e disparar de novo arriscaria repetir a ação. **No portão, a execução segue `aguardando_humano` e retomável** (resposta tardia pelo canal ou pela tela): só a conversa é destravada.
+- **Sinal de vida do turno:** `processar_turno` virou casca fina com `turno.iniciado` / `turno.concluido` (com duração) e **`turno.morreu`** (com o erro) quando a tarefa de fundo morre. Turno com "iniciado" e sem "concluído" agora é uma consulta, não uma escavação.
+
+**Verificação:** 910 testes (5 novos: destrava com aviso; portão preserva a execução; turno recente não é tocado; início/fim registrados; tarefa que morre deixa rastro).
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
