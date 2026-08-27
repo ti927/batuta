@@ -75,6 +75,16 @@ A lei mais importante deste documento.
 6. **Avalie:** corrigiu → re-verifique a tarefa inteira → prossiga. Não corrigiu → reverta sua última mudança (`git checkout`/`git stash`) e volte ao passo 4 com nova hipótese. Nunca deixe o repositório meio-quebrado entre tentativas.
 7. **Limite de 3 tentativas.** Após 3 hipóteses testadas sem sucesso, PARE. Resuma para o maestro o que tentou e o erro exato. Peça orientação. Não fique girando em falso.
 
+### 4-A. Diagnóstico honesto — as três armadilhas que já custaram caro
+
+Um dia inteiro de agosto de 2026 foi gasto em travamentos cuja causa eu errei duas vezes antes de acertar. As regras que sobraram são vinculantes:
+
+1. **Não culpe o modelo de IA.** *"O Batuta tem que funcionar com qualquer modelo"* — palavra do maestro, e ele está certo. Atribuir a falha ao modelo ("é lento", "esse modelo não obedece") é quase sempre **preguiça de diagnóstico**: as causas reais foram configuração, conexão e fiação. Se for mesmo adesão do modelo ao prompt, **prove** com o rastro (a ferramenta não aparece em `instrumentos_acionados` = não foi chamada). Antes disso, meça: uma chamada real cronometrada custa centavos e desfaz o palpite em um minuto.
+2. **Vá até o primeiro ponto de I/O.** Quando os dados dizem *"nada foi escrito"* (zero checkpoints, zero passos, sessão parada logo depois de uma leitura), o travamento é **antes** de tudo o que você está imaginando. Siga a sequência do código até o primeiro acesso externo — banco, HTTP, arquivo — e investigue ali, em vez de parar na explicação mais confortável.
+3. **Não descarte uma hipótese com um teste que não reproduz a condição.** Descartei "conexão morta do pool" testando com uma **conexão nova** (que obviamente responde rápido) — o problema era a conexão **velha**. Se o teste não recria o estado suspeito (tempo decorrido, cache frio, pool ocioso, dado real), ele não refuta nada.
+
+E ao relatar: **não invente causa**. Se você não tem como saber (em que parte da requisição um campo caiu, por exemplo), diga que vai verificar — e verifique. Um palpite apresentado como diagnóstico faz o maestro corrigir a coisa errada.
+
 ## 5. Git como rede de segurança
 
 - **Commit só com tudo verde** — a verificação relevante precisa passar antes de commitar.

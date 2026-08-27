@@ -2040,6 +2040,24 @@ Pedido do maestro ao fim do dia: *"atualize a central de conhecimento com o que 
 
 ---
 
+## FASE — O reembolso ia sem valor: destino de campo errado (silencioso) + guarda no motor  ✅ NO AR (2026-08-26, commit `2e08c8d`, sem migração)
+
+**Gatilho:** *"em vários testes o agente nunca lança o reembolso com valor preenchido, sempre envia em branco"*. O maestro pediu a resposta exata: **é o instrumento ou é o agente?**
+
+**É o instrumento — e o agente estava certo o tempo todo.** Na operação "Cria Reembolso" do conector, o campo `cpo.GastoValor` estava com **`destino: "query"`** enquanto os outros doze iam no **`corpo`**. Num POST, campo de query vai para a URL; o Bubble cria o registro a partir do corpo e ignora o resto. Resultado: registro criado, valor em branco, e a API respondendo **"criado com sucesso"**. Corrigido na configuração (um campo, `query` → `corpo`).
+
+**A explicação que o agente deu ao maestro era chute** (*"enviei o valor como texto"*) — ele não tem como enxergar em que parte da requisição o campo caiu. É o mesmo padrão que o dia inteiro vinha combatendo: o agente narrando o que supõe.
+
+**Auditoria dos conectores** (regra do maestro: cobrir todos os cenários, não só o caso reportado) achou o mesmo erro noutra forma, na operação **"Altera Reembolso"**, que nunca funcionou: a URL termina em `/[id]` e o campo `id` está com destino `query` — o `[id]` nunca era substituído e a chamada saía com o colchete literal no endereço. Ela tem ainda dois problemas que dependem de decisão do maestro e **ficaram como estão**: aponta para `Tbl.Projetos` em vez de `Tbl.Reembolsos`, e não tem nenhum campo no corpo (um PATCH assim não altera nada).
+
+**A parte de motor (`2e08c8d`):** depois de montar a URL, **se sobrou algum `[campo]`, a operação falha na hora**, dizendo qual campo é e que o destino dele precisa ser `url`. Não-retentável — insistir não conserta montagem. Antes, um endereço quebrado virava uma chamada real, um 404 e uma narrativa inventada. 942 testes (2 novos).
+
+**O que NÃO dá para detectar sozinho:** campo no destino errado dentro de um POST é *legítimo* em algumas APIs, então o motor não pode recusar. Fica como **proposta de UI** (aguardando aval): o Construtor avisar quando um campo obrigatório fica sozinho na query enquanto os demais vão no corpo.
+
+**Central atualizada** — é o ponto mais importante desta fase, porque é o que impede a repetição: `instrumentos/construir-conector` ganhou o **sintoma → causa** ("registro criado com um campo vazio = destino errado"), o aviso de que **destino errado é silencioso** (a API responde sucesso), a regra de conferir destino campo a campo antes de salvar um POST/PATCH, e a instrução explícita de **não culpar o agente nem inventar causa** — ler a configuração com `ver_instrumento`. O capítulo `operacao/sinais-e-diagnostico` ganhou a família "o serviço aceitou mas o dado não chegou", que nenhum sinal de erro pega.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.

@@ -3,7 +3,7 @@ titulo: "Construir um Conector (integração com API, sem código)"
 area: "instrumentos"
 slug: "construir-conector"
 tags: ["conector", "api", "http", "integracao", "bubble", "constraints", "rest", "get", "post", "patch", "operacoes", "campos", "montar_conector", "instrumento"]
-revisado_em: "2026-08-12"
+revisado_em: "2026-08-26"
 fontes: ["cerebro/instrumentos/conector.py", "cerebro/criacao/ferramentas.py"]
 ---
 
@@ -96,6 +96,16 @@ teste volta com `ok=false` (autenticação): peça o token ao consultor e teste 
 - Respostas legítimas (2xx e até um 404) voltam ao agente como dado; 401/403 e 5xx viram falha do
   instrumento (a de servidor é retentável).
 - Não coloque segredos nos cabeçalhos fixos — use a autenticação (o token vai ao cofre).
+- **⚠️ Destino errado é o erro mais caro daqui, porque ele é SILENCIOSO.** O agente manda o valor
+  certo, o campo vai para o lugar errado da requisição, o serviço responde "criado com sucesso" — e o
+  dado simplesmente não está lá. Caso real: num POST do Bubble, um campo de valor ficou com destino
+  `query` enquanto os outros doze iam no `corpo`; todo reembolso era criado **sem o valor**, por
+  semanas, e o agente jurava ter lançado (ele não enxerga em que parte da requisição o campo caiu).
+  **Sintoma → causa:** *registro criado, mas um campo veio vazio* = esse campo está no destino errado.
+  Confira se ele está no mesmo destino dos demais campos do registro (`corpo`, num POST/PATCH).
+- **`[colchete]` na URL exige um campo de destino `url`.** Se sobrar um `[campo]` no endereço na hora
+  de chamar, o Batuta **falha na hora e diz qual campo é** — em vez de chamar um endereço quebrado e
+  deixar o agente inventar o motivo do erro. É falha definitiva: insistir não conserta montagem.
 
 ## Para a IA
 - Monte/edite com **`montar_conector(conector, conector_id?)`** — sem `conector_id` cria; com ele edita
@@ -106,6 +116,13 @@ teste volta com `ok=false` (autenticação): peça o token ao consultor e teste 
   operação declarada vira uma ação separada para o agente.
 - O par "um endpoint só, sem operações" é o [[instrumentos/chamar-rest]]; o "só disparar/notificar" é o
   [[instrumentos/webhook-saida]].
+- **Ao montar um POST/PATCH, confira o destino campo a campo antes de salvar:** os dados do registro vão
+  todos no `corpo`; a query é para filtro/paginação; a `url` é só para `[colchete]`. Um campo sozinho na
+  query no meio de um POST é quase sempre engano — e ninguém vai perceber, porque a API responde
+  sucesso do mesmo jeito.
+- **Se o consultor disser que um campo está vindo vazio no sistema dele, NÃO conclua que foi erro do
+  agente** (nem invente que "mandei como texto"): leia a configuração da operação com
+  `ver_instrumento` e confira o destino daquele campo. O agente não tem como saber onde o dado caiu.
 
 ## Relacionado
 - [[instrumentos/chamar-rest]]

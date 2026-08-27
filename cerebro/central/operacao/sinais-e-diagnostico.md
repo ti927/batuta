@@ -50,6 +50,14 @@ degradado silencioso é considerado defeito, não proteção.
 - O tempo de espera do vigia é generoso (~30 min) porque uma chamada de IA lenta com retentativas pode
   demorar de verdade. Ele destrava o que está preso, não interrompe o que ainda está trabalhando.
 
+## Quando o sistema externo aceita, mas o dado não chega
+Uma família de problema que os sinais acima **não** pegam, porque ninguém falhou: a requisição foi
+aceita (o serviço respondeu "criado com sucesso") e mesmo assim um campo chegou vazio do outro lado.
+Aí a causa quase nunca é o agente — é **como o instrumento foi montado**: o campo está sendo enviado
+numa parte da requisição que o serviço ignora (ver [[instrumentos/construir-conector]]). Regra prática:
+*registro criado com um campo vazio* = confira o destino desse campo antes de qualquer outra hipótese.
+**Nada disso aparece no rastro como erro**, e é por isso que a checagem tem de ser deliberada.
+
 ## Para a IA
 Diante de *"não funcionou"*, siga esta ordem, sem adivinhar:
 1. **Leia o rastro** (execução e seus passos) antes de opinar. Ferramenta que não aparece nos instrumentos
@@ -57,9 +65,14 @@ Diante de *"não funcionou"*, siga esta ordem, sem adivinhar:
 2. **Procure falha devolvida como resposta** nos erros de instrumento do passo: é o caso em que o agente diz
    ter feito e não fez.
 3. **Verifique degradação**: turno carimbado como legado, conversa presa, evento de indisponibilidade.
-4. Só então discuta prompt ou modelo.
+4. **Se o serviço aceitou mas o dado não chegou**, leia a configuração do instrumento (destino dos
+   campos) — não conclua que o agente errou.
+5. Só então discuta prompt ou modelo. **Culpar o modelo é quase sempre diagnóstico preguiçoso:** o
+   Batuta precisa funcionar com qualquer um, e problema real costuma estar em configuração, conexão ou
+   fiação. Se for mesmo adesão do modelo ao prompt, prove com o rastro (a ferramenta não foi chamada).
 Ao explicar ao consultor, diga **o que aconteceu e o que fazer** — nunca "ocorreu um erro". Se houver código
-de erro, repasse-o.
+de erro, repasse-o. E **não invente causa**: se você não tem como saber (por exemplo, em que parte da
+requisição um campo caiu), diga que vai verificar e verifique.
 
 ## Relacionado
 - [[automacoes/execucoes-e-inspecao]]

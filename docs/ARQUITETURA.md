@@ -126,6 +126,15 @@ nº 1): colapsar os dois numa **timeline única com memória entre turnos**.
 
 Lifespan do FastAPI (`main.py`) sobe a fila e o agendador no boot e os desliga no shutdown. **Por isso o cérebro roda em 1 réplica** (escalar duplicaria os gatilhos agendados).
 
+**A conexão do checkpointer tem de falhar rápido (2026-08-26).** O `PostgresSaver` usa um
+`ConnectionPool` aberto no boot. O padrão do psycopg **não valida a conexão ao emprestar**, e o pooler
+do Supabase mata conexão ociosa do lado dele: o pool entregava uma conexão morta e a primeira leitura do
+checkpointer esperava resposta **para sempre** — prendendo um atendimento inteiro em "bot respondendo",
+antes mesmo de o agente rodar (sintoma característico: **zero checkpoints** gravados na thread). Três
+defesas, hoje travadas por teste: `check=ConnectionPool.check_connection`, keepalive TCP de 30 s e
+`statement_timeout` de 20 s (+ `max_idle` de 120 s). O princípio: **numa peça à prova de falha, "demorar
+para sempre" é pior que falhar** — falhar cai no modo legado, que atende.
+
 **Fail-safe não pode ser mudo (2026-08-26).** O lifespan também prepara o checkpointer da memória de
 conversa (`orquestracao/memoria_conversa.preparar()`), à prova de falha: se ele não subir, a conversa cai
 no modo legado e o atendimento continua. Em agosto essa proteção escondeu uma regressão por **três dias**
@@ -164,6 +173,14 @@ desvia o fluxo; mas há um segundo caminho, mais traiçoeiro: o instrumento **de
 mudava estado nenhum e **não deixava rastro** — o agente narrava sucesso e a execução parecia limpa. Hoje
 o resultado com `ok: false` também entra em `erros_instrumentos` (com `origem="resposta"`), e o
 diagnóstico o levanta como aviso mesmo numa execução "concluída".
+
+**Endereço do conector não sai com buraco (2026-08-26).** No conector, um campo de `destino="url"`
+substitui um `[colchete]` no endereço. Se, depois da substituição, sobrar algum `[campo]`, a operação
+**falha na hora** nomeando o campo (não-retentável) — antes a chamada saía com o colchete literal, o
+serviço respondia 404 e o agente inventava a explicação. O irmão silencioso desse erro **não** dá para
+o motor detectar: um campo no destino errado (`query` num POST cujo corpo leva os dados) faz o serviço
+responder *sucesso* com o dado ausente — só documentação e revisão de montagem pegam, e é por isso que
+o capítulo `instrumentos/construir-conector` da Central passou a ensinar o par sintoma→causa.
 
 **Saída HTTP para host escolhido pelo usuário: `cerebro/http_saida.py`.** REST, conector, webhook e
 WordPress passam por uma porta única que (a) numa falha de **rota** refaz a chamada uma vez amarrada a
