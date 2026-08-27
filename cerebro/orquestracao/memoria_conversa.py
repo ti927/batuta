@@ -47,6 +47,11 @@ def _conninfo() -> str:
         # dele parece viva aqui, e a próxima consulta espera uma resposta que nunca vem
         # — sem erro, sem fim. O keepalive detecta o socket morto em ~1 min.
         keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=3,
+        # E o irmão do keepalive para o caso OPOSTO (dados enviados sem confirmação):
+        # corta em 30 s a conexão cujo envio ninguém confirma — foi o modo de falha do
+        # congelamento de 2026-08-27 (bytes retransmitidos 15 min para um buraco negro).
+        # Sem efeito no Windows local; ativo no Linux (Railway).
+        tcp_user_timeout=30000,
         # Cinto de segurança final: NENHUMA operação do checkpointer pode pendurar o
         # turno para sempre. As consultas dele são de milissegundos; 20 s é folga
         # enorme e ainda assim finito. Falhar rápido cai no modo legado (a conversa
@@ -159,6 +164,23 @@ def ha_interrupcao(thread_id: str) -> bool:
         return any(len(w) >= 2 and w[1] == "__interrupt__" for w in writes)
     except Exception:
         return False
+
+
+def sondar() -> None:
+    """Sonda do vigia dos elos: um SELECT 1 pelo pool do checkpointer, com o
+    timeout do próprio pool. Levanta em falha (pool fora, conexão morta)."""
+    if _pool is None:
+        raise RuntimeError("pool do checkpointer não está de pé")
+    with _pool.connection() as conn:
+        conn.execute("select 1")
+
+
+def reconectar() -> None:
+    """Cura do elo: derruba o pool e o reconstrói (mesmo caminho do boot). Se a
+    reconstrução falhar, `preparar` registra o evento e o modo legado assume —
+    a sonda seguinte conta a verdade."""
+    desligar()
+    preparar()
 
 
 def desligar() -> None:

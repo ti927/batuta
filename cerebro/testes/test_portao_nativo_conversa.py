@@ -96,7 +96,9 @@ def _cenario(sessao, dados, monkeypatch, saver, *, ligado=True, texto_acao=""):
     sessao.add(AgenteInstrumento(agente_id=ag.id, instrumento_id=pub.id))
     conversa = Conversa(
         instrumento_id=canal.id, canal="telegram", contato_chave="555",
-        contato_nome="Cliente", estado="aberta",
+        # `bot_respondendo` é a pré-condição REAL de um turno (o webhook a põe antes
+        # de agendar) — e a guarda do turno atrasado descarta a entrega fora dela.
+        contato_nome="Cliente", estado="bot_respondendo",
         destino_tipo="agente", destino_id=ag.id,
     )
     sessao.add(conversa)
@@ -123,7 +125,9 @@ _n = {"i": 0}
 
 
 def _contato(sessao, conversa, texto):
-    """Registra uma mensagem do contato com criado_em crescente (p/ 'última' ser estável)."""
+    """Registra uma mensagem do contato com criado_em crescente (p/ 'última' ser estável).
+    Repõe `bot_respondendo` como o webhook real faz a cada mensagem — é a pré-condição
+    do turno, e a guarda do turno atrasado descarta a entrega fora dela."""
     _n["i"] += 1
     sessao.add(MensagemConversa(
         conversa_id=conversa.id, papel="contato", conteudo=texto, entregue=True,
@@ -131,6 +135,8 @@ def _contato(sessao, conversa, texto):
     ))
     sessao.flush()
     conversa.ultima_entrada_em = datetime.now(timezone.utc) + timedelta(seconds=_n["i"])
+    conversa.estado = "bot_respondendo"
+    sessao.flush()
 
 
 def _turno(sessao, conversa, ag):

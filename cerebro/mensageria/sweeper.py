@@ -20,6 +20,7 @@ from mensageria.config import (  # noqa: F401 (compat sweeper.X)
     DESPEDIDA_PORTAO_MSG,
     NUDGE_MSG,
     TETO_TURNO_PRESO_MIN,
+    TETO_TURNO_PRESO_PORTAO_MIN,
     TURNO_PRESO_MSG,
     TURNO_PRESO_PORTAO_MSG,
     com_ajuste_do_no,
@@ -140,14 +141,22 @@ def varrer_turnos_presos(sessao: Session) -> int:
     O portão NÃO é resolvido aqui: a execução segue `aguardando_humano` e retomável
     (por resposta tardia no canal ou pela tela) — só a conversa é destravada."""
     agora = datetime.now(timezone.utc)
+    # Busca pelo teto MENOR (atendimento); o teto maior do portão é aplicado por
+    # conversa logo abaixo (a retomada de fluxo pode legitimamente demorar mais).
     limite = agora - timedelta(minutes=TETO_TURNO_PRESO_MIN)
-    presas = sessao.scalars(
+    limite_portao = agora - timedelta(minutes=TETO_TURNO_PRESO_PORTAO_MIN)
+    candidatas = sessao.scalars(
         select(Conversa).where(
             Conversa.estado == "bot_respondendo",
             Conversa.ultima_entrada_em.is_not(None),
             Conversa.ultima_entrada_em <= limite,
         )
     ).all()
+    presas = [
+        c
+        for c in candidatas
+        if not c.execucao_id or c.ultima_entrada_em <= limite_portao
+    ]
     for conversa in presas:
         parado_min = int((agora - conversa.ultima_entrada_em).total_seconds() // 60)
         instrumento = sessao.get(Instrumento, conversa.instrumento_id)
@@ -187,11 +196,20 @@ def varrer_turnos_presos(sessao: Session) -> int:
     return len(presas)
 
 
+# Heartbeat do vigia (lido pela sonda `vigia_mensageria` do `saude_elos`): quando a
+# última varredura completou. None = ainda não varreu desde o boot. Sem isto, um job
+# morto no agendador deixaria as conversas sem vigia EM SILÊNCIO — exatamente a
+# classe de falha que o vigia existe para matar.
+ULTIMA_VARREDURA_EM: datetime | None = None
+
+
 def varrer_job() -> None:
     """Entrada do agendador: abre a própria sessão e varre (silêncio + turno preso)."""
+    global ULTIMA_VARREDURA_EM
     sessao = CriadorDeSessao()
     try:
         varrer(sessao)
         varrer_turnos_presos(sessao)
+        ULTIMA_VARREDURA_EM = datetime.now(timezone.utc)
     finally:
         sessao.close()

@@ -51,7 +51,33 @@ de testes). Público porque é um componente da conexão como host/porta/usuári
 quem reproduz a conexão do cérebro (ex.: o teste do instrumento SQL) precisa
 dele para não fixar `require` na mão."""
 
-engine = create_engine(_url, connect_args={"sslmode": SSLMODE})
+# Blindagem de rede do engine (incidente de 2026-08-27: a rede até o pooler do Supabase
+# congelou e, sem NENHUM limite aqui, um turno ficou 31 min pendurado numa consulta que
+# não voltava — o app inteiro pareceu morto). Cada parâmetro corta um modo de falha:
+# - pool_pre_ping: testa a conexão ao emprestar; a que morreu ociosa é descartada.
+# - pool_recycle=300: nenhuma conexão do pool fica velha o bastante para o pooler
+#   matá-la em silêncio do outro lado.
+# - connect_timeout: abrir conexão nunca pendura o boot/turno.
+# - keepalives: detecta em ~1 min o par que sumiu com a conexão ociosa.
+# - tcp_user_timeout=30s: corta envio sem confirmação (o modo de falha do incidente —
+#   bytes retransmitidos por 15 min para um buraco negro). Sem efeito no Windows local;
+#   ativo no Linux (Railway).
+# - statement_timeout=60s: nenhuma consulta do app é legitimamente mais longa que isso.
+engine = create_engine(
+    _url,
+    pool_pre_ping=True,
+    pool_recycle=300,
+    connect_args={
+        "sslmode": SSLMODE,
+        "connect_timeout": 10,
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 3,
+        "tcp_user_timeout": 30000,
+        "options": "-c statement_timeout=60000",
+    },
+)
 
 
 def testar_conexao() -> str:

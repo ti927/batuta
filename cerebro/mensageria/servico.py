@@ -361,6 +361,38 @@ def _bot_ja_respondeu(sessao: Session, conversa_id: uuid.UUID) -> bool:
     )
 
 
+def _estado_fresco(sessao: Session, conversa_id: uuid.UUID) -> str | None:
+    """O estado ATUAL da conversa, direto do banco (fora do cache da sessão).
+
+    Um turno demora minutos; nesse meio-tempo o usuário pode FECHAR a conversa, um
+    humano pode ASSUMIR, ou o vigia pode destravá-la. O objeto `conversa` da sessão
+    congela o estado do INÍCIO do turno — quem decide entrega/estado no FIM precisa
+    do valor fresco (incidente de 2026-08-27: turno atrasado entregou resposta em
+    conversa fechada e morreu em `uq_conversa_viva` ao tentar revivê-la)."""
+    with sessao.no_autoflush:
+        return sessao.execute(
+            select(Conversa.estado).where(Conversa.id == conversa_id)
+        ).scalar()
+
+
+def _descartar_turno_atrasado(
+    sessao: Session, conversa: Conversa, *, estado_atual: str | None, gate: bool
+) -> None:
+    """Turno que destravou TARDE demais: a conversa já não é nossa. Preserva o que
+    já aconteceu (commit do que está pendente — transcrição, saudação), NÃO entrega,
+    NÃO mexe no estado, e deixa o rastro do descarte no banco de logs."""
+    sessao.commit()
+    registrar_evento(
+        categoria="mensageria", acao="turno.descartado", nivel="warning",
+        persistir=True, recurso_tipo="conversa", recurso_id=conversa.id,
+        detalhe={
+            "estado_atual": estado_atual, "gate": gate,
+            "motivo": "a conversa mudou de estado enquanto o agente rodava — "
+            "resposta não entregue, estado preservado",
+        },
+    )
+
+
 def _enviar_e_registrar(
     sessao: Session, conversa: Conversa, token: str, texto: str
 ) -> bool:
@@ -614,17 +646,23 @@ def _processar_aprovacao(
             permitir_conversa=False,  # canal conversacional roda pela borda, não aqui
         )
     except Exception as e:  # falha de LLM/cadeia — não morre em silêncio
-        _enviar_e_registrar(
-            sessao, conversa, token, f"Não consegui processar a aprovação agora: {e}"
-        )
-        conversa.estado = "aguardando_resposta"
+        if _estado_fresco(sessao, conversa.id) == "bot_respondendo":
+            _enviar_e_registrar(
+                sessao, conversa, token, f"Não consegui processar a aprovação agora: {e}"
+            )
+            conversa.estado = "aguardando_resposta"
         sessao.commit()
         return
     sessao.refresh(execucao)
+    # Guarda do turno ATRASADO: a retomada do fluxo acima é verdade e fica (inclusive o
+    # desvínculo abaixo); mas falar com o contato e escrever o estado só se a conversa
+    # ainda é nossa (`bot_respondendo`) — ela pode ter sido fechada/varrida no meio.
+    ainda_nossa = _estado_fresco(sessao, conversa.id) == "bot_respondendo"
     if execucao.estado != "aguardando_humano":
         conversa.execucao_id = None
-        _enviar_e_registrar(sessao, conversa, token, _ack_aprovacao(execucao))
-    else:
+        if ainda_nossa:
+            _enviar_e_registrar(sessao, conversa, token, _ack_aprovacao(execucao))
+    elif ainda_nossa:
         # Pausou de novo (outro portão) → rearma o relógio de inatividade (regra
         # geral de mensageria). Só manda o ack genérico se o agente não falou (ex.:
         # um portão a jusante já se apresentou pelo seu canal).
@@ -633,7 +671,8 @@ def _processar_aprovacao(
         )
         if not _agente_falou_por_ultimo(sessao, conversa.id):
             _enviar_e_registrar(sessao, conversa, token, _ack_aprovacao(execucao))
-    conversa.estado = "aguardando_resposta"
+    if ainda_nossa:
+        conversa.estado = "aguardando_resposta"
     sessao.commit()
 
 
@@ -1054,8 +1093,11 @@ def _rodar_turno(
         # …e o CONTATO precisa saber (§12-A). Antes, a falha virava só uma nota interna
         # (`entregue=False`): quem mandou a mensagem ficava no vácuo, sem resposta e sem
         # explicação, e só o vigia de turno preso o socorreria — 30 minutos depois.
-        _enviar_e_registrar(sessao, conversa, token, FALHA_TURNO_MSG)
-        conversa.estado = "aberta"
+        # Guarda do turno ATRASADO: se a conversa já não é nossa (fechada/assumida/
+        # varrida), nada de avisar o contato nem reviver o estado — só a nota interna.
+        if _estado_fresco(sessao, conversa.id) == "bot_respondendo":
+            _enviar_e_registrar(sessao, conversa, token, FALHA_TURNO_MSG)
+            conversa.estado = "aberta"
         sessao.commit()
         registrar_evento(
             categoria="mensageria", acao="turno.falhou", nivel="error", resultado="falha",
@@ -1098,6 +1140,16 @@ def _rodar_turno(
             iniciado=iniciado, finalizado=datetime.now(timezone.utc),
             resultado=resultado, uso_cheio=uso_turno,
         )
+
+    # Guarda do turno ATRASADO (§12-A): o agente rodou (o rastro acima é a verdade),
+    # mas se, nesse meio-tempo, a conversa deixou de ser nossa — o usuário a fechou ou
+    # um humano assumiu ou o vigia a destravou — NÃO se entrega nem se mexe no estado.
+    # Sem isto, o turno tardio mandava resposta em conversa fechada e morria em
+    # `uq_conversa_viva` ao gravar (incidente de 2026-08-27).
+    estado_atual = _estado_fresco(sessao, conversa.id)
+    if estado_atual != "bot_respondendo":
+        _descartar_turno_atrasado(sessao, conversa, estado_atual=estado_atual, gate=gate)
+        return None
 
     # Portão NATIVO pausou (P3b): o agente quer rodar uma ação irreversível → apresenta ao
     # contato e espera o "sim" (não executa). A retomada é o próximo turno (ha_interrupcao).
@@ -1276,7 +1328,11 @@ def _turno_de_portao(
             _enviar_e_registrar(sessao, conversa, token, _ack_aprovacao(execucao))
     # Senão: o agente perguntou (ou não produziu nada) → segue aguardando; o sweeper
     # governa o silêncio — a conversa NUNCA fica aberta para sempre.
-    conversa.estado = "aguardando_resposta"
+    # Guarda do turno ATRASADO: o avanço do FLUXO acima é verdade e fica; mas o estado
+    # da conversa só é nosso de escrever se ela ainda está `bot_respondendo` (o usuário
+    # pode tê-la fechado, ou o vigia destravado, enquanto o fluxo andava).
+    if _estado_fresco(sessao, conversa.id) == "bot_respondendo":
+        conversa.estado = "aguardando_resposta"
     sessao.commit()
 
 

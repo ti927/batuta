@@ -819,7 +819,8 @@ def test_turno_preso_de_portao_preserva_a_execucao(sessao, dados, monkeypatch):
     from mensageria import sweeper
 
     conversa = _conversa_presa(
-        sessao, dados, monkeypatch, minutos=sweeper.TETO_TURNO_PRESO_MIN + 1, portao=True
+        sessao, dados, monkeypatch,
+        minutos=sweeper.TETO_TURNO_PRESO_PORTAO_MIN + 1, portao=True,
     )
     execucao_id = conversa.execucao_id
     enviados = []
@@ -843,6 +844,57 @@ def test_turno_recente_nao_e_tocado(sessao, dados, monkeypatch):
 
     _conversa_presa(sessao, dados, monkeypatch, minutos=2)
     assert sweeper.varrer_turnos_presos(sessao) == 0
+
+
+def test_turno_de_portao_respeita_o_teto_maior(sessao, dados, monkeypatch):
+    """Os tetos são DOIS: a retomada de fluxo do portão pode legitimamente levar
+    mais que o teto curto do atendimento (300 s × 6 retentativas de IA) — um portão
+    dentro da janela dele não é varrido, mas o chat na mesma idade é."""
+    from mensageria import sweeper
+
+    minutos = sweeper.TETO_TURNO_PRESO_MIN + 1  # passou do teto curto…
+    assert minutos < sweeper.TETO_TURNO_PRESO_PORTAO_MIN  # …mas não do longo
+    _conversa_presa(sessao, dados, monkeypatch, minutos=minutos, portao=True)
+    assert sweeper.varrer_turnos_presos(sessao) == 0
+
+
+def test_turno_atrasado_nao_entrega_em_conversa_fechada(sessao, dados, monkeypatch):
+    """Guarda do turno atrasado (incidente de 2026-08-27): a conversa foi FECHADA
+    enquanto o agente rodava → o turno não entrega, não revive o estado e deixa o
+    rastro do descarte — em vez de morrer em `uq_conversa_viva`."""
+    from sqlalchemy import update
+
+    inst = _bot(sessao, dados)
+    si.salvar_segredos(sessao, inst.id, {"token_bot": "TOKEN"})
+    _agente_com(sessao, dados, inst)
+    conversa, _ = servico.registrar_entrada(sessao, inst, _msg("oi"))
+
+    enviados, eventos = [], []
+    monkeypatch.setattr(servico, "DEBOUNCE_S", 0)
+    monkeypatch.setattr(servico, "CriadorDeSessao", lambda: _SessaoFake(sessao))
+    monkeypatch.setattr(
+        servico.telegram, "enviar",
+        lambda t, c, x: enviados.append(x) or {"ok": True},
+    )
+    monkeypatch.setattr(
+        servico, "registrar_evento", lambda **k: eventos.append(k.get("acao"))
+    )
+
+    def fecha_no_meio(ag, cinto, entrada, **k):
+        # o usuário fecha a conversa ENQUANTO o agente roda
+        sessao.execute(
+            update(Conversa).where(Conversa.id == conversa.id).values(estado="fechada")
+        )
+        return {"saida": "Cheguei tarde.", "uso": [{"tokens_entrada": 1, "tokens_saida": 1}]}
+
+    monkeypatch.setattr(servico, "executar_agente", fecha_no_meio)
+
+    servico.processar_turno(conversa.id)
+
+    assert enviados == []  # NADA foi ao contato
+    sessao.refresh(conversa)
+    assert conversa.estado == "fechada"  # estado preservado, não revivido
+    assert "turno.descartado" in eventos  # o descarte deixou rastro
 
 
 def test_turno_registra_inicio_e_fim(sessao, dados, monkeypatch):

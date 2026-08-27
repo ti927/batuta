@@ -72,9 +72,14 @@ DESPEDIDA_PORTAO_CANCELA_MSG = (
 # Se a tarefa morrer ou pendurar (reinício do servidor, chamada externa sem retorno), a
 # conversa ficava nesse estado PARA SEMPRE: nenhum vigia olhava para ela e o contato não
 # recebia nada — foi o que aconteceu em 2026-08-26 (aprovação de portão parada ~1h em
-# silêncio). Teto generoso: o pior caso legítimo é uma chamada de IA esgotando as
-# retentativas (300 s × 6), então 30 min não interrompe turno lento de verdade.
-TETO_TURNO_PRESO_MIN = 30
+# silêncio). DOIS tetos, porque os piores casos legítimos são diferentes:
+# - Atendimento (chat): a IA roda com limites curtos (60 s × 2 tentativas) + instrumentos;
+#   um turno legítimo não passa de ~5 min. Teto de 8 min — no incidente de 2026-08-27 o
+#   contato ficou 16 min no vácuo esperando os 30.
+# - Portão: a resposta religa o FLUXO, que roda com os limites da orquestração
+#   (300 s × 6 retentativas de IA) — 30 min não interrompe retomada lenta de verdade.
+TETO_TURNO_PRESO_MIN = 8
+TETO_TURNO_PRESO_PORTAO_MIN = 30
 # Aviso honesto ao contato quando o turno dele não voltou (o que houve + o que fazer).
 TURNO_PRESO_PORTAO_MSG = (
     "⚠️ Tive uma falha interna e não consegui concluir o processamento da sua resposta. "
