@@ -425,12 +425,15 @@ function VersaoBadge() {
 
   if (!info) return null;
   const degradado = info.degradados.length > 0;
+  // O selo é a PORTA para a página de status: quando algo "não responde", o
+  // usuário sempre tem para onde ir ver qual elo da corrente quebrou.
   return (
-    <div
-      className={`flex flex-col items-end leading-tight text-[10px] ${
+    <Link
+      href="/status"
+      className={`flex flex-col items-end leading-tight text-[10px] transition-opacity hover:opacity-80 ${
         degradado ? "text-[#E89638]" : "text-[#8A86A6]"
       }`}
-      title={info.titulo}
+      title={`${info.titulo} — clique para ver o status de cada elo`}
     >
       <span className="flex items-center gap-1 font-mono">
         {degradado && <AlertTriangle className="size-3" aria-hidden />}
@@ -442,7 +445,7 @@ function VersaoBadge() {
         info.quando && <span>{info.quando}</span>
       )}
       {degradado && <span className="sr-only">{info.titulo}</span>}
-    </div>
+    </Link>
   );
 }
 
