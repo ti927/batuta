@@ -326,6 +326,19 @@ def iniciar() -> None:
         id="mensageria_sweeper",
         replace_existing=True,
     )
+    # Vigia dos ELOS (saude_elos): sonda ativa de cada ligação da corrente. O job
+    # roda a cada 15 s e cada elo tem o próprio período (30 s banco/interno, 60 s
+    # externos). `max_instances=1` (padrão): se uma sonda pendurar, os ticks
+    # seguintes são pulados e a página de status mostra a checagem envelhecendo —
+    # que é, por si, um sinal honesto de problema.
+    import saude_elos
+
+    _scheduler.add_job(
+        saude_elos.sondar_job,
+        trigger=IntervalTrigger(seconds=15),
+        id="saude_elos",
+        replace_existing=True,
+    )
     # Renovação diária dos tokens de longa duração do Instagram (Fase 1), de
     # madrugada (BRT) fora do horário comercial.
     _scheduler.add_job(

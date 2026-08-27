@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 import agendador
 import fila
 import fila_turnos
+import saude_elos
 from arquivos import DIRETORIO_ARQUIVOS
 from orquestracao import memoria_conversa
 from observabilidade.log import configurar_logging
@@ -21,6 +22,7 @@ from rotas import (
     cinto,
     credenciais,
     criacao,
+    elos,
     google,
     instagram,
     instagram_webhook,
@@ -101,6 +103,9 @@ def saude():
         "agendador": agendador.esta_saudavel(),
     }
     degradados = sorted(nome for nome, ok in subsistemas.items() if not ok)
+    # Resumo do vigia dos ELOS (sondas ativas — `saude_elos`): um elo caído entra
+    # nos degradados para o selo da sidebar avisar; o detalhe fica em /saude/elos.
+    elos_resumo = saude_elos.resumo()
     return {
         "mensagem": "Batuta cérebro no ar",
         # `versao` = commit no ar (a Railway injeta RAILWAY_GIT_COMMIT_SHA). Serve para
@@ -108,11 +113,14 @@ def saude():
         "versao": os.environ.get("RAILWAY_GIT_COMMIT_SHA", "dev"),
         "iniciado_em": INICIADO_EM,
         "subsistemas": subsistemas,
-        "degradados": degradados,
-        "saudavel": not degradados,
+        "degradados": sorted(set(degradados) | set(elos_resumo["elos_caidos"])),
+        "elos_caidos": elos_resumo["elos_caidos"],
+        "elos_degradados": elos_resumo["elos_degradados"],
+        "saudavel": not degradados and not elos_resumo["elos_caidos"],
     }
 
 
+app.include_router(elos.rotas)
 app.include_router(organizacoes.rotas)
 app.include_router(membros.rotas)
 app.include_router(times.rotas)

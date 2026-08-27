@@ -43,6 +43,14 @@ def _headers() -> dict:
     return {"Authorization": f"Bearer {_SUPABASE_KEY}", "apikey": _SUPABASE_KEY}
 
 
+def sondar() -> None:
+    """Sonda do vigia dos elos: lista os buckets com timeout curto. Levanta em
+    falha (rede/credencial) — quem traduz o erro é o `saude_elos`."""
+    with httpx.Client(timeout=5.0) as cli:
+        r = cli.get(f"{_SUPABASE_URL}/storage/v1/bucket", headers=_headers())
+        r.raise_for_status()
+
+
 def _garantir_bucket() -> None:
     """Cria o bucket PÚBLICO se ainda não existe (idempotente; roda uma vez)."""
     global _bucket_garantido
