@@ -2,8 +2,8 @@
 titulo: "Conversas (atendimento por mensageria)"
 area: "mensageria"
 slug: "conversas"
-tags: ["conversa", "atendimento", "inbox", "takeover", "humano-assume", "timeout", "audio"]
-revisado_em: "2026-08-26"
+tags: ["conversa", "atendimento", "inbox", "takeover", "humano-assume", "timeout", "audio", "turno-descartado"]
+revisado_em: "2026-08-27"
 fontes: ["cerebro/mensageria/servico.py", "cerebro/mensageria/sweeper.py", "cerebro/orquestracao/memoria_conversa.py", "cerebro/orquestracao/agente.py (portão nativo)", "cerebro/mensageria/config.py (parede governa a trava)", "project_estado-atual-build-plan"]
 ---
 
@@ -41,7 +41,8 @@ conversa e sabe quando chamar uma pessoa. Cada canal tem **um agente atendente**
 - Uma conversa parada é retomada/encerrada pelo mecanismo de tempo — não fica presa em silêncio. Isso vale
   para os **dois** tipos de espera: quando a bola está com o contato (ele não respondeu) e quando a bola está
   com o Batuta (**o agente começou a responder e o turno não voltou**, por queda ou travamento). Neste
-  segundo caso, passados cerca de 30 minutos, o contato **recebe um aviso honesto** ("tive uma falha interna e
+  segundo caso, passados cerca de 8 minutos (30 quando a conversa conduz uma **aprovação de portão**, cuja
+  retomada religa o fluxo inteiro e pode demorar mais), o contato **recebe um aviso honesto** ("tive uma falha interna e
   não consegui concluir — pode reenviar?") e a conversa é destravada. Se a conversa conduzia uma **aprovação
   de portão**, a execução continua pendente e retomável: nada se perde, basta reenviar a resposta ou aprovar
   pela tela.

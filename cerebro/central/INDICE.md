@@ -112,7 +112,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 |---|---|---|---|---|
 | Uso e custos | `operacao/uso-e-custos` | Medição informativa por categoria/chave | ✅ | ✍️ |
 | Falhas e retentativa | `operacao/falhas-e-retentativa` | Retentável × não-retentável; backoff; falha devolvida como resposta; erro de rede | ✅ | ✍️ |
-| Sinais e diagnóstico | `operacao/sinais-e-diagnostico` | Nada falha em silêncio: eventos, trabalho preso, modo degradado, ordem de investigação | ✅ | ✍️ |
+| Sinais e diagnóstico | `operacao/sinais-e-diagnostico` | Nada falha em silêncio: eventos, trabalho preso, modo degradado, **página de status dos elos**, ordem de investigação | ✅ | ✍️ |
 | Parede de ativação | `operacao/parede-de-ativacao` | Bloqueia ativar ação irreversível sem portão | ✅ | ✍️ |
 | Auditoria e LGPD | `operacao/auditoria-e-lgpd` | Registro de ações; dados sensíveis | ✅ | ✍️ |
 

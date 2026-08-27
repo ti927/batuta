@@ -35,7 +35,8 @@ degradado silencioso é considerado defeito, não proteção.
 
 ## Limites e cuidados
 - Os eventos que mais importam, e o que cada um significa:
-  - **turno começou e não terminou** — a tarefa de fundo morreu ou pendurou; o vigia destrava em ~30 min.
+  - **turno começou e não terminou** — a tarefa de fundo morreu ou pendurou; o vigia destrava em ~8 min
+    (~30 min quando a conversa conduz uma aprovação de portão).
   - **turno preso** — o vigia agiu: avisou o contato e devolveu a conversa ao relógio normal. Ele **não**
     reprocessa sozinho, de propósito: o turno pendurado pode estar no meio de uma ação externa (publicar,
     enviar), e repetir arriscaria fazer duas vezes. Quem reenvia é a pessoa.
@@ -47,8 +48,11 @@ degradado silencioso é considerado defeito, não proteção.
   responde "não deu" (por exemplo, arquivo grande demais), o agente recebe isso como dado e decide como
   seguir — e é comum ele narrar sucesso mesmo assim. O registro guarda a falha crua, então **o que o agente
   escreveu não é prova de que a ação aconteceu**: confira o rastro.
-- O tempo de espera do vigia é generoso (~30 min) porque uma chamada de IA lenta com retentativas pode
-  demorar de verdade. Ele destrava o que está preso, não interrompe o que ainda está trabalhando.
+- O tempo de espera do vigia tem **duas medidas**, cada uma pelo pior caso real: **~8 min no atendimento**
+  (ali a IA roda com limites curtos — quem escreveu está esperando do outro lado) e **~30 min no portão**
+  (a resposta religa o fluxo inteiro, que pode demorar de verdade). Ele destrava o que está preso, não
+  interrompe o que ainda está trabalhando. Era 30 para os dois até 2026-08-27, quando um contato ficou
+  16 minutos no vácuo esperando o vigia de um atendimento simples.
 
 ## Quando o sistema externo aceita, mas o dado não chega
 Uma família de problema que os sinais acima **não** pegam, porque ninguém falhou: a requisição foi
@@ -84,8 +88,11 @@ conexão/SSL. Hoje a página de status mostra o elo exato que caiu, e os limites
 
 ## Para a IA
 Diante de *"não funcionou"*, siga esta ordem, sem adivinhar:
-0. **Comece pelo estado dos elos** (`GET /saude/elos`, ou a página `/status`): se um elo está
-   caído, o problema não é do time nem do modelo — é da ligação, e a página diz qual.
+0. **Descarte primeiro a hipótese "ligação quebrada".** A página **`/status`** do Batuta mostra cada
+   elo (banco, IA, canais, borda, motores) em verde/âmbar/vermelho. Elo caído = o problema não é do
+   time nem do modelo, é da ligação — e o conserto está ali (botão Reconectar), não no prompt. Você
+   **não tem ferramenta** para ler os elos: **peça ao consultor para abrir `/status`** — sobretudo
+   quando o sintoma é *tudo* parando ao mesmo tempo, ou uma demora fora do normal em várias frentes.
 1. **Leia o rastro** (execução e seus passos) antes de opinar. Ferramenta que não aparece nos instrumentos
    acionados **não foi chamada** pelo modelo — isso é adesão do modelo ao prompt, não defeito do motor.
 2. **Procure falha devolvida como resposta** nos erros de instrumento do passo: é o caso em que o agente diz
