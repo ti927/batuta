@@ -97,6 +97,8 @@ def _traduzir(e: Exception) -> str:
             return "limite de requisições atingido no serviço (quota)"
         return f"o serviço respondeu com erro (HTTP {st})"
     texto = str(e) or type(e).__name__
+    if "couldn't get a connection" in texto:
+        return "o pool não conseguiu emprestar uma conexão a tempo (banco fora ou congelado)"
     if "timeout" in texto.lower():
         return "sem resposta dentro do tempo limite"
     return texto[:300]

@@ -2058,6 +2058,23 @@ Pedido do maestro ao fim do dia: *"atualize a central de conhecimento com o que 
 
 ---
 
+## FASE — O congelamento de rede + o vigia dos ELOS e a página /status  ✅ NO AR (2026-08-27, commits `d449ed4`/`c7b684f`/`e7b0e5a`, sem migração)
+
+**Gatilho:** *"vc quebrou o código inteiro — absolutamente nenhuma conversa funciona mais, não importa o modelo"*. Diagnóstico completo antes de qualquer mudança (exigência do maestro), 100% em dados de produção.
+
+**O que de fato houve (não era o código, e não era o modelo):** entre ~14:00 e ~14:33 UTC as conexões entre o Railway e o pooler do Supabase **congelaram** — uma consulta ficou **15 min em trânsito** e aterrissou na MESMA transação (pg_stat_activity); três turnos travados destravaram **no mesmo instante** (25 ms de diferença); o turno do portão morreu com *"SSL connection has been closed unexpectedly"* após duas esperas de ~950 s. Destravados, **Luna e Haiku responderam certo em ~10 s** — o mesmo código tinha rodado 5 turnos perfeitos na noite anterior. O serviço MCP congelou na mesma janela (prova de que era a infraestrutura, não um processo).
+
+**O que o incidente expôs de defeito NOSSO, e foi consertado (`d449ed4`):**
+- **`db.py` estava pelado** (nenhum limite de rede) — um soluço de infra virava thread pendurada por 31 min. Agora: `pool_pre_ping`, `pool_recycle=300`, `connect_timeout`, keepalives, **`tcp_user_timeout=30 s`** (corta o envio sem confirmação — o modo de falha exato) e `statement_timeout=60 s`. O checkpointer ganhou o mesmo `tcp_user_timeout`.
+- **Guarda do turno atrasado:** turno que destrava minutos depois reconfere o estado FRESCO da conversa antes de entregar/escrever; mudou (fechada/assumida/varrida) → **descarta com evento `turno.descartado`** — antes, mandava resposta em conversa fechada e morria em `uq_conversa_viva`. Cobre o chat, a falha de turno e as duas pontas do portão.
+- **Tetos do vigia separados:** atendimento 8 min (o contato ficou 16 min no vácuo esperando os 30), portão continua 30 (retomada com 300 s × 6 de IA é legítima).
+
+**O vigia dos ELOS (`c7b684f`) + a página `/status` (`e7b0e5a`)** — pedido explícito do maestro (*"checar todos os elos, tudo que pode ser quebrado, e montar uma página de status onde a cada x segundos um check é feito, e uma maneira de reconectar"*): `saude_elos.py` sonda ativamente **16 tipos de elo** (banco, checkpointer, provedores de IA com chave via GET /models grátis, cada canal Telegram com `getMe`+`getWebhookInfo` — o Telegram conta os erros ao ENTREGAR pra gente —, Meta, Storage, borda pública, MCP, fila, agendador, vigia da mensageria), com erro traduzido, evento em toda transição (`elo.caiu`/`elo.voltou`/`elo.reconectado`), **auto-cura nos elos de banco** (2 falhas seguidas → derruba o pool e reconecta) e reconexão por botão (`POST /saude/elos/{id}/reconectar`, admin da consultoria). A página `/status` (estilo status.claude.com) agrupa os elos com verde/âmbar/vermelho + rótulo, latência, "verificado há Xs" e o botão Reconectar; o selo da sidebar virou link para ela. Instrumentos de cliente ficam de fora das sondas (custo/limites) — teste sob demanda no Construtor.
+
+**Verificação:** 955 testes verdes (13 novos) + tsc/eslint/build da interface + **prova de fogo real**: banco local derrubado com o vigia ativo → elos caem com erro traduzido em ≤30 s, auto-cura tenta e relata que não curou, banco volta → auto-cura reconecta e os elos voltam ao verde, com a sequência completa de eventos.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.

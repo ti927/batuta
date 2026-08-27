@@ -2,9 +2,9 @@
 titulo: "Sinais e diagnóstico (quando algo trava ou degrada)"
 area: "operacao"
 slug: "sinais-e-diagnostico"
-tags: ["diagnostico", "log", "evento", "travou", "preso", "degradado", "silencio", "observabilidade", "turno"]
-revisado_em: "2026-08-26"
-fontes: ["cerebro/observabilidade/escritor.py", "cerebro/mensageria/sweeper.py", "cerebro/orquestracao/memoria_conversa.py", "cerebro/diagnostico_execucao.py", "CLAUDE.md §12-A"]
+tags: ["diagnostico", "log", "evento", "travou", "preso", "degradado", "silencio", "observabilidade", "turno", "status", "elo", "rede", "congelou", "reconectar"]
+revisado_em: "2026-08-27"
+fontes: ["cerebro/observabilidade/escritor.py", "cerebro/mensageria/sweeper.py", "cerebro/orquestracao/memoria_conversa.py", "cerebro/diagnostico_execucao.py", "cerebro/saude_elos.py", "CLAUDE.md §12-A"]
 ---
 
 # Sinais e diagnóstico (quando algo trava ou degrada)
@@ -58,8 +58,34 @@ numa parte da requisição que o serviço ignora (ver [[instrumentos/construir-c
 *registro criado com um campo vazio* = confira o destino desse campo antes de qualquer outra hipótese.
 **Nada disso aparece no rastro como erro**, e é por isso que a checagem tem de ser deliberada.
 
+## A página de status e o vigia dos elos
+Desde 2026-08-27 o Batuta **sonda ativamente cada ligação da própria corrente** — banco de dados,
+memória de conversa, provedores de IA (com a chave, sem gastar token), cada canal Telegram (inclusive
+se o Telegram está conseguindo **entregar** mensagens pra gente), Meta, Storage, a borda pública, o
+serviço MCP e os motores internos (fila, agendador, vigia). O resultado vive na página **`/status`**
+da interface (o selo de versão da barra lateral leva até ela) e na API em `GET /saude/elos`.
+
+- Cada elo aparece **verde (operacional) / âmbar (com limitação) / vermelho (fora do ar)**, com o
+  erro traduzido e há quanto tempo está assim.
+- **Toda queda e volta vira evento** no registro do sistema (`elo.caiu`, `elo.voltou`,
+  `elo.reconectado`) — dá para reconstruir depois QUANDO um problema começou e acabou.
+- Os elos de banco têm **auto-cura**: duas falhas seguidas derrubam o pool e reconectam sozinhos.
+  Os demais têm o botão **Reconectar** (admins da consultoria) quando há cura possível.
+- Instrumentos de cliente **não** são sondados automaticamente (custo/limites) — o teste deles é sob
+  demanda, no Construtor.
+
+**Por que existe:** em 2026-08-27 a rede entre o servidor e o banco **congelou por ~30 minutos** —
+sem erro, sem fechamento, bytes parados em trânsito. O app respondia normalmente e todos os
+atendimentos ficaram mudos; ninguém tinha para onde olhar. A família de problema *"a rede congelou"*
+não dispara NENHUM erro clássico: o sinal é **tudo travar ao mesmo tempo e destravar junto**, turnos
+levando minutos no que sempre levou segundos, e (no banco de logs) `turno.morreu` com erros de
+conexão/SSL. Hoje a página de status mostra o elo exato que caiu, e os limites de rede novos
+(o cérebro corta conexão congelada em ~30 s) transformam o congelamento em erro rápido e honesto.
+
 ## Para a IA
 Diante de *"não funcionou"*, siga esta ordem, sem adivinhar:
+0. **Comece pelo estado dos elos** (`GET /saude/elos`, ou a página `/status`): se um elo está
+   caído, o problema não é do time nem do modelo — é da ligação, e a página diz qual.
 1. **Leia o rastro** (execução e seus passos) antes de opinar. Ferramenta que não aparece nos instrumentos
    acionados **não foi chamada** pelo modelo — isso é adesão do modelo ao prompt, não defeito do motor.
 2. **Procure falha devolvida como resposta** nos erros de instrumento do passo: é o caso em que o agente diz

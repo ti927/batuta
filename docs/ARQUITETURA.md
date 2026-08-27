@@ -147,6 +147,28 @@ mensageria que começou e não voltou — a conversa ficava presa **para sempre*
 inatividade só olhava quem esperava o contato); e os eventos `turno.iniciado`/`turno.concluido`/
 `turno.morreu`. Ver o capítulo `operacao/sinais-e-diagnostico` da Central.
 
+**Nenhum elo sem limite de rede, e todos vigiados (2026-08-27).** A rede entre o Railway e o pooler do
+Supabase **congelou por ~30 min** (bytes parados em trânsito, sem erro, sem fechamento): uma consulta
+aterrissou 15 min atrasada na mesma transação, três turnos destravaram no mesmo instante e o app inteiro
+pareceu morto — com `/saude` verde, porque ele só lê memória. Duas respostas estruturais:
+1. **O engine principal (`db.py`) ganhou a mesma blindagem do checkpointer** — `pool_pre_ping`,
+   `pool_recycle=300`, `connect_timeout`, keepalives, `statement_timeout=60 s` e **`tcp_user_timeout=30 s`**
+   (o único knob que corta envio sem confirmação, o modo de falha exato do congelamento). Um elo congelado
+   agora vira erro honesto em segundos, não meia hora de silêncio.
+2. **O vigia dos ELOS (`saude_elos.py`)**: sonda ativa de cada ligação da corrente — banco, checkpointer,
+   provedores de IA com chave (GET /models, grátis), cada canal Telegram (`getMe` + `getWebhookInfo`, que
+   conta os erros do Telegram ao ENTREGAR pra gente), Meta, Storage, borda pública, serviço MCP e os
+   motores internos (fila, agendador, vigia da mensageria — heartbeat `ULTIMA_VARREDURA_EM`). Estado por
+   elo com erro **traduzido** (rede × credencial × quota), evento em toda transição (`elo.caiu`/`elo.voltou`/
+   `elo.reconectado`), **auto-cura nos elos de banco** (2 falhas seguidas → `engine.dispose()` /
+   reconstrução do pool) e reconexão por botão (`POST /saude/elos/{id}/reconectar`, admin da consultoria).
+   A interface expõe tudo em **`/status`** (poll do cache em `GET /saude/elos`; o selo da sidebar linka).
+   Sondas nunca gastam token de IA nem tocam API de cliente (instrumentos testam sob demanda, no
+   Construtor). Complemento na mensageria: **guarda do turno atrasado** (o estado fresco da conversa é
+   reconferido antes de entregar/escrever — turno que destrava tarde é descartado com evento
+   `turno.descartado`, nunca entregue numa conversa fechada) e tetos do vigia separados (chat 8 min;
+   portão 30, porque a retomada de fluxo pode legitimamente levar 300 s × 6 de IA).
+
 ---
 
 ## 6. Instrumentos (capacidades plugáveis)
