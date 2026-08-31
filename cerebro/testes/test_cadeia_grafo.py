@@ -501,6 +501,31 @@ def test_nada_casa_e_sem_senao_encerra_com_motivo(sessao, dados, ag, monkeypatch
     assert [p["no_id"] for p in r["passos"]] == ["t"]  # NÃO caiu na primeira saída
     assert r["passos"][0]["saidas_escolhidas"] == []
     assert r["avisos"] and "nenhuma das condições" in r["avisos"][0]
+    assert "Triagem" in r["avisos"][0]  # o aviso nomeia o AGENTE, não o id do nó
+
+
+def test_aviso_ensina_a_preencher_quando_falta_condicao(sessao, dados, ag, monkeypatch):
+    """O caso real: o maestro rodou com as condições ainda vazias e o fluxo parou.
+    O aviso precisa dizer QUE FALTA A CONDIÇÃO e onde preenchê-la, senão vira só
+    'não aconteceu nada'."""
+    triagem = ag("Gerador Post 1:1")
+    _mock_roteador(monkeypatch)  # sem condição escrita, nada casa
+    _mock_agentes(monkeypatch, {"Gerador Post 1:1": "capa enviada"})
+    cadeia = {
+        "inicial": "t",
+        "nos": [
+            {"id": "t", "tipo": "agente", "ref": str(triagem.id), "saidas": [
+                {"rotulo": "aprovado1", "destino": "fim"},
+                {"rotulo": "aprovado2", "destino": "fim"},
+            ]},
+            {"id": "fim", "tipo": "fim", "saidas": []},
+        ],
+    }
+    r = motor.executar_cadeia(sessao, cadeia, "vai")
+    aviso = r["avisos"][0]
+    assert "Gerador Post 1:1" in aviso
+    assert "Siga por aqui quando" in aviso
+    assert "aprovado1" in aviso and "aprovado2" in aviso
 
 
 def test_no_sem_saida_avisa_em_vez_de_verde_falso(sessao, dados, ag, monkeypatch):

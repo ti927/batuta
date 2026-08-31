@@ -396,16 +396,29 @@ def executar_cadeia(
                     motivo = motivo or "nenhuma condição foi atendida"
                 if not escolhidas:
                     # NUNCA mais escolha silenciosa: o ramo termina aqui e o motivo
-                    # fica no rastro (antes caía calado na primeira saída).
-                    nome_no = no.get("nome") or no_atual
-                    aviso = (
-                        f"O passo '{nome_no}' terminou sem seguir por nenhum caminho: "
-                        + (
-                            "ele não tem saída ligada."
-                            if not condicionais
-                            else "nenhuma das condições das saídas foi atendida e não "
-                            "há saída 'se nenhuma das outras'."
+                    # fica no rastro (antes caía calado na primeira saída). O aviso diz
+                    # o nome do AGENTE e o que fazer — quem lê isto está tentando
+                    # entender por que "não aconteceu nada".
+                    sem_condicao = [
+                        s["rotulo"] for s in condicionais
+                        if not (s.get("quando") or "").strip()
+                    ]
+                    if not condicionais:
+                        porque = "ele não tem saída ligada — o fluxo acaba aqui."
+                    elif len(sem_condicao) == len(condicionais):
+                        porque = (
+                            "nenhuma das saídas diz QUANDO seguir por ela, então não "
+                            "havia como decidir. Abra a automação e preencha 'Siga por "
+                            f"aqui quando…' em cada saída ({', '.join(sem_condicao)})."
                         )
+                    else:
+                        porque = (
+                            "nenhuma das condições das saídas foi atendida e não há "
+                            "saída 'se nenhuma das outras'."
+                        )
+                    aviso = (
+                        f"O passo '{nome_do_no}' terminou sem seguir por nenhum "
+                        f"caminho: {porque}"
                     )
                     avisos.append(aviso)
 
