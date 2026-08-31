@@ -176,7 +176,10 @@ def retomar_execucao(
     `aguardando_humano`. Levanta ValueError se não há passo de pausa.
     """
     ultimo, no, no_id, cadeia, idx = localizar_no_pausado(sessao, execucao)
-    saidas = no.get("saidas") or []
+    # Só as saídas CONDICIONAIS entram na decisão: as de erro e "senão" são do MOTOR
+    # (uma é acionada pela falha do nó, a outra pela ausência de condição atendida) e
+    # não podem virar opção de escolha para a pessoa nem para o agente do portão.
+    saidas, _, _ = grafo.separar_saidas(no.get("saidas"))
 
     # Teto de idas-e-vindas do portão na TELA: DERIVADO da config (Tipo de fluxo <
     # ajuste do nó). Antes era só o fixo `MAX_RODADAS_GATE`; agora `portao_max_rodadas`

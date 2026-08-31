@@ -316,6 +316,10 @@ def executar_cadeia(
             condicionais, saidas_erro, saidas_senao = grafo.separar_saidas(saidas)
             gate = bool(no.get("gate"))
             iniciado_em = datetime.now(timezone.utc)
+            # Identidade do nó resolvida ANTES de rodar: se ele falhar, o passo falho
+            # precisa dizer QUEM falhou (é o nome que aparece na timeline e no aviso
+            # da falha). Sem isto o passo falho saía anônimo, justo quando importa.
+            id_agente, nome_do_no = _identidade_do_no(sessao, no, tipo)
 
             try:
                 executado = _rodar_no(
@@ -329,8 +333,8 @@ def executar_cadeia(
                 # mensagem — a falha vira um caminho, não o fim da execução.
                 finalizado_em = datetime.now(timezone.utc)
                 passo_falho = _montar_passo(
-                    no_atual, tipo, gate, agente_id=None,
-                    agente_nome=no.get("nome") or "passo",
+                    no_atual, tipo, gate, agente_id=id_agente,
+                    agente_nome=nome_do_no,
                     entrada=entrada_atual, saida=f"Falhou: {e}",
                     instrumentos=[], erros_instrumentos=[], uso=[],
                     escolhidas=[], motivo=None, iniciado_em=iniciado_em,
@@ -463,6 +467,19 @@ def _seguir(idx, proxima: dict, resultados: list[str], saida: dict, textos: list
         resultados.extend(textos)
     else:
         _empilhar(proxima, destino, textos)
+
+
+def _identidade_do_no(sessao: Session, no: dict, tipo: str) -> tuple[str | None, str]:
+    """(id do agente, nome legível) de um nó, resolvidos SEM rodar nada. Um nó de
+    agente cujo `ref` não existe mais devolve o id mesmo assim: o passo falho aponta
+    para o agente que sumiu, que é exatamente a informação útil."""
+    if tipo != "agente":
+        return None, (no.get("nome") or "roteador")
+    ref = no.get("ref")
+    if not ref:
+        return None, (no.get("nome") or "passo sem agente")
+    agente = sessao.get(Agente, uuid.UUID(str(ref)))
+    return str(ref), (agente.nome if agente else "(agente removido)")
 
 
 def _rodar_no(

@@ -46,7 +46,7 @@ from modelos import (
     PassoExecucao,
 )
 from observabilidade.escritor import registrar_evento
-from orquestracao import memoria_conversa
+from orquestracao import grafo, memoria_conversa
 from orquestracao.agente import executar_agente
 from orquestracao.llm import MODELO_PADRAO, usar_chaves
 from orquestracao.modelos_ia import provedor_do_modelo_seguro
@@ -1226,7 +1226,9 @@ def _turno_de_portao(
     except ValueError:
         _processar_aprovacao(sessao, conversa, execucao, token, resolver_config(sessao, conversa))
         return
-    saidas = no.get("saidas") or []
+    # Só as CONDICIONAIS entram na decisão do portão: as saídas de erro e "senão" são
+    # do motor (falha do nó / nenhuma condição atendida), não opções de escolha.
+    saidas, _, _ = grafo.separar_saidas(no.get("saidas"))
     conf = com_ajuste_do_no(resolver_config(sessao, conversa), no)
 
     eh_conversa = (

@@ -431,6 +431,9 @@ def test_saida_de_erro_segue_em_vez_de_matar_a_execucao(sessao, dados, ag, monke
     assert "o WordPress recusou" in r["passos"][0]["saida"]
     assert r["passos"][1]["no_id"] == "aviso"            # seguiu pelo ramo de erro
     assert "o WordPress recusou" in r["passos"][1]["entrada"]
+    # o passo falho diz QUEM falhou (é o nome que a timeline e o aviso mostram)
+    assert r["passos"][0]["agente_nome"] == "Quebra"
+    assert r["passos"][0]["agente_id"] == str(quebra.id)
 
 
 def test_sem_saida_de_erro_a_execucao_falha_mas_grava_o_passo(sessao, dados, ag, monkeypatch):

@@ -124,6 +124,30 @@ def test_pendencias_voltam_na_retomada(sessao, dados, monkeypatch):
     assert execucao.pendencias is None  # consumidas
 
 
+def test_portao_nao_oferece_saida_de_erro_como_opcao(sessao, dados, monkeypatch):
+    """As saídas de erro/"senão" são do MOTOR (falha do nó / nenhuma condição
+    atendida). Nunca podem virar opção de escolha para a pessoa no portão."""
+    auto, execucao, _ = _cenario(sessao, dados)
+    auto.cadeia["nos"][0]["saidas"].append(
+        {"rotulo": "deu erro", "tipo": "erro", "destino": "fim"}
+    )
+    auto.cadeia["nos"][0]["saidas"].append(
+        {"rotulo": "resto", "tipo": "senao", "destino": "fim"}
+    )
+    sessao.flush()
+    visto: dict = {}
+
+    def fake_agente(agente, cinto, entrada, **kwargs):
+        visto["saidas"] = kwargs.get("saidas")
+        return {"saida": "ok", "instrumentos_acionados": [], "uso": [],
+                "mensagens_enviadas": {}, "ramos_escolhidos": []}
+
+    monkeypatch.setattr(retoma, "executar_agente", fake_agente)
+    retoma.retomar_execucao(sessao, execucao, "aprovado", chaves={}, origens={})
+    rotulos = [s["rotulo"] for s in visto["saidas"]]
+    assert rotulos == ["aprovado1", "aprovado2", "reprovado"]
+
+
 # ── O aviso de falha (§12-A: nada morre em silêncio) ───────────────────────────
 
 
