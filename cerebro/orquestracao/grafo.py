@@ -36,7 +36,33 @@ from dataclasses import dataclass, field
 # Tipos de nó (SPEC §2). gatilho/fim são estruturais; o motor só roda agente/roteador.
 TIPOS_VALIDOS = {"gatilho", "agente", "roteador", "fim"}
 # Cor da aresta na UI (cosmético).
-TONES_VALIDOS = {"normal", "ok", "loop"}
+TONES_VALIDOS = {"normal", "ok", "loop", "erro"}
+
+# PAPEL de uma saída (Onda 1 — o grafo vira grafo de verdade). Diferente de `tone`,
+# que é cosmético: isto o MOTOR lê.
+# - `condicional` (padrão): tem um "quando"; o agente avalia e segue TODAS as atendidas.
+# - `erro`: só percorrida se o nó FALHAR (o passo falho fica gravado e o fluxo segue
+#   por aqui levando a mensagem do erro, em vez de matar a execução).
+# - `senao`: rede de segurança — percorrida só quando NENHUMA condicional foi atendida.
+TIPOS_SAIDA = {"condicional", "erro", "senao"}
+TIPO_SAIDA_PADRAO = "condicional"
+
+
+def tipo_da_saida(saida: dict) -> str:
+    """O papel de uma saída, com o padrão `condicional` (saídas antigas não o têm)."""
+    t = (saida or {}).get("tipo")
+    return t if t in TIPOS_SAIDA else TIPO_SAIDA_PADRAO
+
+
+def separar_saidas(saidas: list[dict] | None) -> tuple[list[dict], list[dict], list[dict]]:
+    """Separa as saídas de um nó por papel: (condicionais, de erro, "senão").
+
+    Fonte única desta separação — motor, validação e UI leem o mesmo critério."""
+    condicionais, erro, senao = [], [], []
+    for s in saidas or []:
+        alvo = {"condicional": condicionais, "erro": erro, "senao": senao}[tipo_da_saida(s)]
+        alvo.append(s)
+    return condicionais, erro, senao
 # Tipos de gatilho (espelham `automacoes.tipo_gatilho` e `criacao.ferramentas`).
 TIPOS_GATILHO = {"manual", "agendamento", "webhook", "comentario_instagram"}
 
@@ -104,6 +130,7 @@ def converter_linear_para_grafo(antiga: dict | None) -> dict:
                         "rotulo": s.get("rotulo"),
                         "quando": s.get("quando"),
                         "destino": s.get("destino"),
+                        "tipo": s.get("tipo"),
                     }
                     for s in (no.get("saidas") or [])
                 ],
@@ -182,8 +209,15 @@ def _completar(cadeia: dict) -> dict:
     for n in nos:
         for j, s in enumerate(n["saidas"]):
             s.setdefault("id", f"{n['id']}-{j}")
+            # Papel da saída (o motor lê): condicional (padrão) | erro | senao.
+            if s.get("tipo") not in TIPOS_SAIDA:
+                s["tipo"] = TIPO_SAIDA_PADRAO
             if s.get("tone") not in TONES_VALIDOS:
                 s["tone"] = "normal"
+            # A seta de erro é vermelha por definição (cosmético derivado do papel,
+            # para o desenho não poder mentir sobre o que o motor vai fazer).
+            if s["tipo"] == "erro":
+                s["tone"] = "erro"
             if s.get("destino") in DESTINOS_FIM:
                 s["destino"] = id_fim
         n["inicial"] = n["id"] == inicial

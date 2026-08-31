@@ -100,9 +100,9 @@ def _aviso(
             "agente_id": str(agente_id) if agente_id else None,
             "instrumento_id": str(instrumento_id) if instrumento_id else None,
         },
-        # acao_sugerida.tipo ∈ {encaixar_instrumento, editar_agente, editar_instrumento
-        # (a IA aplica) | conectar_bot, cadastrar_token (exige o maestro) |
-        # aprovar_pela_tela, aguardar (orientação)}.
+        # acao_sugerida.tipo ∈ {encaixar_instrumento, editar_agente, editar_instrumento,
+        # editar_automacao (a IA aplica) | conectar_bot, cadastrar_token (exige o
+        # maestro) | aprovar_pela_tela, aguardar (orientação)}.
         "acao_sugerida": acao,
     }
 
@@ -309,6 +309,17 @@ def diagnosticar(sessao: Session, execucao_id, *, seguir_webhook: bool = True) -
             "cancelada", "info", "Cancelada",
             _trunc(resultado.get("texto")) or "A execução foi cancelada.",
             acao={"tipo": "aguardar"},
+        ))
+
+    # ── Ramo que terminou SEM seguir por caminho nenhum ──
+    # A execução "concluiu", mas parte do fluxo morreu no meio: ou nenhuma condição foi
+    # atendida (e não há saída "se nenhuma"), ou o nó não tem saída ligada. Antes isso
+    # era verde silencioso — o fluxo simplesmente não acontecia e ninguém sabia.
+    for texto in (resultado.get("avisos") or [])[:3]:
+        avisos.append(_aviso(
+            "ramo_sem_caminho", "alerta", "Um ramo do fluxo terminou sem caminho",
+            _trunc(texto),
+            acao={"tipo": "editar_automacao"},
         ))
 
     # ── Instrumento que falhou mas o fluxo SEGUIU (leitura/geração) ──

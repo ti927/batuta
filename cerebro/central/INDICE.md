@@ -47,6 +47,8 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 |---|---|---|---|---|
 | A Automação | `automacoes/automacao` | A definição do fluxo; ativar/desativar | ✅ | ✍️ |
 | Cadeia e grafo | `automacoes/cadeia-e-grafo` | Construtor visual; nós; bifurcação; loops | ✅ | ✍️ |
+| Condições e ramos | `automacoes/condicoes-e-ramos` | A condição de cada seta; o fluxo segue TODAS as atendidas; junção | ✅ | ✍️ |
+| Quando um passo dá erro | `automacoes/erros-no-fluxo` | Saída de erro, saída "se nenhuma", aviso da falha | ✅ | ✍️ |
 | Gatilhos | `automacoes/gatilhos` | Manual, agendamento, webhook, comentário do Instagram; a "entrada" ao 1º agente | ✅ | ✍️ |
 | Portão de aprovação | `automacoes/portao-de-aprovacao` | Pausa/retoma; aprovar/reprovar/cancelar; por tela e por canal | ✅ | ✍️ |
 | Execuções e inspeção | `automacoes/execucoes-e-inspecao` | Ver o fluxo rodar; feedback ao vivo; diagnóstico | ✅ | ✍️ |

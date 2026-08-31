@@ -31,6 +31,7 @@ import type {
   SaidaCadeia,
   Time,
   TipoInstrumento,
+  ToneSaida,
 } from "@/lib/api";
 import { DrawerAgente } from "@/components/drawer-agente";
 import { DrawerInstrumento } from "@/components/drawer-instrumento";
@@ -261,7 +262,10 @@ function BuilderInterno({
       for (const sa of no.saidas ?? []) {
         if (!idx[sa.destino]) continue;
         const ativo = selId === no.id;
-        const stroke = ativo ? "#6D4AFF" : tone(sa.tone).stroke;
+        // A seta de ERRO é vermelha por definição (a cor vem do PAPEL da saída, não
+        // de uma escolha do usuário) — o desenho não pode mentir sobre o motor.
+        const tk: ToneSaida = sa.tipo === "erro" ? "erro" : (sa.tone ?? "normal");
+        const stroke = ativo ? "#6D4AFF" : tone(tk).stroke;
         out.push({
           id: `${no.id}:${sa.id}`,
           source: no.id,
@@ -269,8 +273,8 @@ function BuilderInterno({
           target: sa.destino,
           type: "cond",
           data: {
-            rotulo: sa.rotulo,
-            tone: sa.tone,
+            rotulo: sa.tipo === "senao" ? `${sa.rotulo} (se nenhuma)` : sa.rotulo,
+            tone: tk,
             lane: sa.lane,
             gate: no.gate,
             ativo,
@@ -352,6 +356,7 @@ function BuilderInterno({
                   {
                     id: novoIdSaida(),
                     rotulo: "nova condição",
+                    tipo: "condicional" as const,
                     destino: primeiroDestino(c, id),
                     tone: "normal" as const,
                   },
@@ -480,6 +485,7 @@ function BuilderInterno({
                   {
                     id: novoIdSaida(),
                     rotulo: "nova condição",
+                    tipo: "condicional" as const,
                     destino: conn.target!,
                     tone: "normal" as const,
                   },

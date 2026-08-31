@@ -397,10 +397,23 @@ async def renomear_automacao(automacao_id: str, nome: str) -> str:
 async def montar_cadeia(automacao_id: str, cadeia: dict) -> str:
     """Define a cadeia (o fluxo) de uma automação como um GRAFO de nós: {"inicial": "<id
     do nó inicial>", "nos": [{"id": "<id do nó>", "tipo": "agente", "ref": "<id do
-    agente>", "gate": false, "saidas": [{"rotulo": "...", "quando": "...", "destino": "<id
-    de outro nó, ou \\"fim\\">"}]}]}. Ponha "gate": true no nó do agente que vem ANTES de
-    uma ação irreversível (o fluxo pausa e espera aprovação humana). Não precisa criar os
-    nós 'gatilho'/'fim' — o sistema completa."""
+    agente>", "gate": false, "saidas": [{"rotulo": "...", "quando": "...", "tipo":
+    "condicional", "destino": "<id de outro nó, ou \\"fim\\">"}]}]}.
+
+    BIFURCAÇÃO: o `quando` (a condição que o agente lê para decidir) é OBRIGATÓRIO em
+    cada saída quando o nó tem 2+ saídas condicionais — sem ele a cadeia é recusada. O
+    fluxo segue TODAS as saídas cuja condição for atendida, não só uma: duas saídas com
+    a MESMA condição e destinos diferentes fazem os dois destinos rodarem (é assim que
+    se desenha "aprovou → faz o carrossel E o story"). Se dois ramos reencontram o
+    mesmo nó, ele roda uma vez só, com os dois textos juntos.
+    A saída pode ter "tipo": "condicional" (padrão), "erro" (percorrida SÓ se o passo
+    falhar — o fluxo segue por ela com a mensagem do erro em vez de a automação morrer)
+    ou "senao" (só quando nenhuma condicional foi atendida). "erro" e "senao" não levam
+    "quando". Sem "senao", nada casando = aquele ramo termina, com o motivo no rastro.
+
+    Ponha "gate": true no nó do agente que vem ANTES de uma ação irreversível (o fluxo
+    pausa e espera aprovação humana). Não precisa criar os nós 'gatilho'/'fim' — o
+    sistema completa."""
     return await anyio.to_thread.run_sync(escrita.montar_cadeia, _sub(), automacao_id, cadeia)
 
 

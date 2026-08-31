@@ -90,8 +90,22 @@ def _fazer_registrador(
                         if passo.get("erros_instrumentos")
                         else {}
                     ),
+                    # Fan-out (2026-08-31): TODOS os caminhos seguidos, o porquê que o
+                    # agente declarou e o aviso quando o ramo morreu sem caminho. Aditivos
+                    # — passos antigos não os têm e a tela lê com `.get(...)`.
+                    **(
+                        {"saidas_escolhidas": passo["saidas_escolhidas"]}
+                        if passo.get("saidas_escolhidas")
+                        else {}
+                    ),
+                    **({"motivo_ramo": passo["motivo_ramo"]} if passo.get("motivo_ramo") else {}),
+                    **({"aviso": passo["aviso"]} if passo.get("aviso") else {}),
+                    **({"erro": passo["erro"]} if passo.get("erro") else {}),
                 },
-                estado="concluido",
+                # O passo que FALHOU fica gravado como falho (antes tudo era gravado
+                # "concluido" e a timeline pulava do último passo bom para "falhou",
+                # sem dizer em qual nó).
+                estado=passo.get("estado") or "concluido",
                 iniciado_em=passo["iniciado_em"],
                 finalizado_em=passo["finalizado_em"],
             )
@@ -106,15 +120,26 @@ def _aplicar_resultado(execucao: Execucao, r: dict) -> None:
     conclusão."""
     if r["estado"] == "aguardando_humano":
         execucao.estado = "aguardando_humano"  # sem finalizada_em: ainda viva
+        # Fan-out: os ramos da onda que ainda não rodaram quando o portão pausou. Sem
+        # guardá-los, a retomada seguiria só o caminho do portão e o trabalho dos
+        # outros ramos sumiria em silêncio.
+        execucao.pendencias = r.get("pendentes") or None
     elif r["estado"] == "cancelada":
         execucao.estado = "cancelada"
         if not execucao.resultado:
             execucao.resultado = {"texto": "Cancelada pelo operador."}
         execucao.finalizada_em = datetime.now(timezone.utc)
+        execucao.pendencias = None
     else:
         execucao.estado = "concluida"
-        execucao.resultado = {"texto": r["resultado"]}
+        # `avisos` = ramos que terminaram sem seguir por nenhum caminho. Concluir em
+        # silêncio nesse caso era o "verde falso" que escondia automação mal ligada.
+        avisos = r.get("avisos") or []
+        execucao.resultado = {
+            "texto": r["resultado"], **({"avisos": avisos} if avisos else {})
+        }
         execucao.finalizada_em = datetime.now(timezone.utc)
+        execucao.pendencias = None
     # Saiu de `em_andamento`: apaga o feedback ao vivo (não deixa texto obsoleto).
     execucao.atividade = None
     execucao.atividade_em = None
@@ -233,6 +258,8 @@ def rodar_retomada(sessao: Session, execucao: Execucao) -> Execucao:
                 categoria="execucao", acao="retomada.falhou", nivel="error",
                 resultado="falha", erro=e, recurso_tipo="execucao", recurso_id=execucao.id,
             )
+            from mensageria.aviso import avisar_falha
+            avisar_falha(sessao, execucao, str(e))
         sessao.commit()
         sessao.refresh(execucao)
         return execucao
@@ -301,4 +328,9 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
                 categoria="execucao", acao=f"execucao.{execucao.estado}",
                 recurso_tipo="execucao", recurso_id=execucao.id,
             )
+        if execucao.estado == "falhou":
+            # §12-A / PRODUTO §16: a falha não pode morrer só no banco. Avisa quem
+            # opera, pelo canal do time. Best-effort e com rastro próprio.
+            from mensageria.aviso import avisar_falha
+            avisar_falha(sessao, execucao, str((execucao.resultado or {}).get("erro") or ""))
         return execucao

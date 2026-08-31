@@ -16,6 +16,7 @@ from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.tools import StructuredTool
 from langchain.agents import create_agent
 from langchain.agents.middleware import HumanInTheLoopMiddleware, SummarizationMiddleware
+from langgraph.errors import GraphRecursionError
 from langgraph.types import Command
 from pydantic import BaseModel, Field, create_model
 
@@ -47,6 +48,11 @@ RESUMO_GATILHO = ("tokens", 20000)
 # Quanto do fim do fio fica SEMPRE cru (a janela) depois de resumir. O resto vira resumo.
 RESUMO_JANELA = ("tokens", 8000)
 
+# Teto de idas-e-voltas do laço de ferramentas de UM turno de agente (`recursion_limit`
+# do LangGraph; cada chamada de ferramenta gasta ~2). Corta o agente em laço antes de
+# queimar tokens. O padrão da biblioteca (25) é baixo para um cinto grande.
+MAX_ITERACOES_AGENTE = 60
+
 
 def montar_instrucoes(agente: Agente) -> str:
     """Compõe o prompt de sistema a partir dos quatro markdowns do agente."""
@@ -75,7 +81,7 @@ def _nome_de_ferramenta(inst: Instrumento, tipo_fallback: str) -> str:
 
 def _registrar_resposta_com_falha(
     dados, *, ferramenta: str, tipo: str, instrumento_id: str,
-    irreversivel: bool, erros: list[dict],
+    irreversivel: bool, erros: list[dict], falhas: list[str] | None = None,
 ) -> None:
     """Se o RESULTADO da ferramenta veio com `ok: false` (falha devolvida como DADO
     para a IA decidir — ex.: HTTP 4xx do REST/conector), registra no rastro cru.
@@ -102,11 +108,35 @@ def _registrar_resposta_com_falha(
         "irreversivel": irreversivel,
         "origem": "resposta",
     })
+    # AÇÃO IRREVERSÍVEL que respondeu `ok: false` NÃO aconteceu. Antes isso só ia para
+    # o rastro e a execução seguia "concluída" com o agente narrando sucesso (o
+    # lançamento perdido no Bubble, 2026-08-25). Agora entra em `falhas`: o passo falha
+    # de forma visível, como já falhava quando o instrumento levantava exceção.
+    # Não retentamos: uma ação irreversível pode ter acontecido pela metade.
+    if irreversivel and falhas is not None:
+        falhas.append(f"O instrumento '{ferramenta}' não completou a ação: {erro}")
+
+
+def _turno_interrompido(falhas: list[str]) -> str | None:
+    """Resposta curta que substitui QUALQUER ação depois que uma ação irreversível
+    falhou no mesmo turno. O agente não age mais — o turno já está condenado a falhar
+    (`raise` no fim), e deixá-lo continuar publicando/enviando depois de uma falha é
+    como a execução acaba fazendo meio trabalho e narrando sucesso."""
+    if not falhas:
+        return None
+    return json.dumps(
+        {
+            "ok": False,
+            "erro": "Este passo já falhou numa ação irreversível e foi interrompido. "
+            "Não execute mais nenhuma ação; encerre relatando a falha.",
+        },
+        ensure_ascii=False,
+    )
 
 
 def _com_rastro_de_resposta(
     ferramenta: StructuredTool, inst, tipo_nome: str, irreversivel: bool,
-    erros: list[dict],
+    erros: list[dict], falhas: list[str],
 ) -> StructuredTool:
     """Embrulha uma ferramenta EXPANDIDA (conector/MCP) para que uma resposta com
     `ok: false` também entre no rastro — essas ferramentas tratam a própria falha
@@ -122,6 +152,7 @@ def _com_rastro_de_resposta(
         _registrar_resposta_com_falha(
             dados, ferramenta=ferramenta.name, tipo=tipo_nome,
             instrumento_id=str(inst.id), irreversivel=irreversivel, erros=erros,
+            falhas=falhas,
         )
         return retorno
 
@@ -131,10 +162,12 @@ def _com_rastro_de_resposta(
     coro = None
     if original_func is not None:
         def func(*args, **kwargs):
-            return _observar(original_func(*args, **kwargs))
+            parado = _turno_interrompido(falhas)
+            return parado if parado else _observar(original_func(*args, **kwargs))
     if original_coro is not None:
         async def coro(*args, **kwargs):
-            return _observar(await original_coro(*args, **kwargs))
+            parado = _turno_interrompido(falhas)
+            return parado if parado else _observar(await original_coro(*args, **kwargs))
     return ferramenta.model_copy(update={"func": func, "coroutine": coro})
 
 
@@ -167,6 +200,11 @@ def _ferramenta_unica(
     campo_msg = getattr(tipo, "campo_mensagem", None)
 
     def executar(**kwargs) -> str:
+        # Uma ação irreversível já falhou neste turno: nada mais roda (ver
+        # `_turno_interrompido`). Antes o agente seguia agindo e narrando.
+        parado = _turno_interrompido(falhas)
+        if parado:
+            return parado
         args = tipo.Args.model_validate(kwargs)
         # Feedback ao vivo: publica "o que está acontecendo agora" ANTES da chamada —
         # é o que evita a tela parecer travada enquanto um instrumento lento roda.
@@ -203,6 +241,7 @@ def _ferramenta_unica(
         _registrar_resposta_com_falha(
             resultado, ferramenta=inst.nome, tipo=tipo.tipo,
             instrumento_id=str(inst.id), irreversivel=irreversivel, erros=erros,
+            falhas=falhas,
         )
         # Envio bem-sucedido por um canal: registra o texto apresentado ao humano.
         if campo_msg:
@@ -240,43 +279,72 @@ def _ferramentas_de_instrumento(
     if expandidas is not None:
         irrev = acao_irreversivel(inst.tipo, inst.configuracao or {})
         return [
-            _com_rastro_de_resposta(f, inst, tipo.tipo, irrev, erros)
+            _com_rastro_de_resposta(f, inst, tipo.tipo, irrev, erros, falhas)
             for f in expandidas
         ]
     return [_ferramenta_unica(inst, tipo, config, falhas, mensagens_enviadas, erros)]
 
 
 def _opcoes_das_saidas(saidas: list[dict]) -> str:
-    """As saídas do nó como uma lista legível 'rótulo: quando' (para a IA escolher)."""
-    return "\n".join(
-        f'- "{s["rotulo"]}": {s.get("quando") or "(sem descrição)"}'
-        for s in saidas
-        if s.get("rotulo")
-    )
+    """As saídas do nó como uma lista legível 'rótulo — siga por aqui quando…'.
+
+    A CONDIÇÃO (`quando`) é o que o agente de fato avalia; o rótulo é só o nome da
+    seta. Até 2026-08-31 o editor não tinha caixa para a condição, então isto vinha
+    sempre "(sem descrição)" e o agente escolhia no escuro."""
+    linhas = []
+    for s in saidas:
+        if not s.get("rotulo"):
+            continue
+        quando = (s.get("quando") or "").strip()
+        linhas.append(
+            f'- "{s["rotulo"]}" — siga por aqui quando: {quando}'
+            if quando
+            else f'- "{s["rotulo"]}" — (esta saída não diz quando seguir por ela; '
+            "use o rótulo como pista)"
+        )
+    return "\n".join(linhas)
 
 
 def _ferramenta_seguir_para(saidas: list[dict], escolha: dict) -> StructuredTool:
-    """Ferramenta de DECISÃO DE FLUXO: o PRÓPRIO agente declara por qual saída do nó
-    o fluxo segue — em vez de uma LLM roteadora separada adivinhar pela prosa. O
-    `rotulo` é um enum dos rótulos das saídas (a IA não inventa caminho); a escolha
-    é registrada no dict `escolha` do closure (mesmo padrão de `mensagens_enviadas`)."""
+    """Ferramenta de DECISÃO DE FLUXO: o PRÓPRIO agente declara por quais saídas do
+    nó o fluxo segue — em vez de uma LLM roteadora separada adivinhar pela prosa.
+
+    `rotulos` é uma LISTA (o grafo faz fan-out: se três condições foram atendidas,
+    os três caminhos rodam). Cada item é um enum dos rótulos das saídas — a IA não
+    inventa caminho. A escolha é registrada no dict `escolha` do closure (mesmo
+    padrão de `mensagens_enviadas`)."""
     rotulos = [s["rotulo"] for s in saidas if s.get("rotulo")]
     Args = create_model(
         "SeguirParaArgs",
-        rotulo=(
-            Literal[tuple(rotulos)],  # type: ignore[valid-type]
-            Field(description="O rótulo exato do caminho a seguir."),
+        rotulos=(
+            list[Literal[tuple(rotulos)]],  # type: ignore[valid-type]
+            Field(
+                description="TODOS os caminhos cuja condição foi atendida — não só um. "
+                "Se duas condições se aplicam, liste as duas: os dois caminhos rodam."
+            ),
+        ),
+        motivo=(
+            str,
+            Field(
+                default="",
+                description="Uma frase curta dizendo por que estes caminhos, e não "
+                "os outros. Fica no rastro da execução.",
+            ),
         ),
     )
     descricao = (
-        "Decide por qual caminho o fluxo segue depois deste passo. Chame UMA vez, ao "
-        f"concluir, com o rótulo do caminho escolhido.\nCaminhos:\n{_opcoes_das_saidas(saidas)}"
+        "Decide por quais caminhos o fluxo segue depois deste passo. Chame UMA vez, "
+        "ao concluir, listando TODOS os caminhos cuja condição foi atendida (pode "
+        "ser mais de um — eles rodam todos).\nCaminhos:\n"
+        f"{_opcoes_das_saidas(saidas)}"
     )
 
     def seguir(**kwargs) -> str:
         args = Args.model_validate(kwargs)
-        escolha["rotulo"] = args.rotulo
-        return json.dumps({"ok": True, "rotulo": args.rotulo}, ensure_ascii=False)
+        escolhidos = list(dict.fromkeys(args.rotulos))  # sem repetir, na ordem
+        escolha["rotulos"] = escolhidos
+        escolha["motivo"] = args.motivo or None
+        return json.dumps({"ok": True, "rotulos": escolhidos}, ensure_ascii=False)
 
     return StructuredTool.from_function(
         func=seguir, name="seguir_para", description=descricao, args_schema=Args
@@ -296,31 +364,42 @@ def _instrucao_de_fluxo(
     existentes não mudam). Assim o criador controla o que o agente FAZ/diz na abertura e
     no fechamento do portão, sem poder remover o trilho que faz o grafo andar."""
     opcoes = _opcoes_das_saidas(saidas)
+    # A regra que vale em TODOS os casos: o fluxo é um grafo — vários caminhos podem
+    # ser atendidos ao mesmo tempo, e então todos rodam.
+    regra_fanout = (
+        "Avalie a condição de CADA caminho de forma independente e liste TODOS os "
+        "que foram atendidos — não escolha só o melhor. Dois caminhos com a mesma "
+        "condição significam 'faça os dois'. Se nenhum foi atendido, não chame a "
+        "ferramenta."
+    )
     if gate:
         if (texto_portao or "").strip():
             return (
                 "## Caminhos do fluxo (este passo aguarda uma pessoa)\n"
                 f"{texto_portao.strip()}\n\n"
                 "IMPORTANTE (mecânica do fluxo): para o fluxo AVANÇAR você PRECISA "
-                "declarar o caminho chamando a ferramenta `seguir_para` com um dos "
+                "declarar o caminho chamando a ferramenta `seguir_para` com os "
                 "rótulos abaixo. Enquanto não chamar `seguir_para`, o fluxo continua "
                 "aguardando a pessoa (use isso quando ainda precisar falar com ela).\n"
+                f"{regra_fanout}\n"
                 f"Caminhos:\n{opcoes}"
             )
         return (
             "## Caminhos do fluxo (este passo aguarda uma pessoa)\n"
             "Quando você tiver a decisão da pessoa, chame a ferramenta `seguir_para` "
-            "com o rótulo do caminho escolhido E escreva também uma frase curta para "
-            "ela, confirmando o que vai acontecer — essa frase será enviada a ela. Se "
-            "ainda precisar de algo dela (perguntar, esclarecer), apenas responda "
-            "normalmente, SEM chamar `seguir_para` — o fluxo segue aguardando a "
-            "resposta dela.\n"
+            "com os rótulos dos caminhos escolhidos E escreva também uma frase curta "
+            "para ela, confirmando o que vai acontecer — essa frase será enviada a "
+            "ela. Se ainda precisar de algo dela (perguntar, esclarecer), apenas "
+            "responda normalmente, SEM chamar `seguir_para` — o fluxo segue "
+            "aguardando a resposta dela.\n"
+            f"{regra_fanout}\n"
             f"Caminhos:\n{opcoes}"
         )
     return (
         "## Caminhos do fluxo\n"
-        "Ao terminar este passo, escolha por qual caminho o fluxo segue: chame a "
-        "ferramenta `seguir_para` com o rótulo do caminho.\n"
+        "Ao terminar este passo, declare por quais caminhos o fluxo segue: chame a "
+        "ferramenta `seguir_para`.\n"
+        f"{regra_fanout}\n"
         f"Caminhos:\n{opcoes}"
     )
 
@@ -564,7 +643,8 @@ def executar_agente(
     # Erros CRUS dos instrumentos neste turno (para o diagnóstico, não só a narração
     # da IA) — inclui falhas de leitura/geração que não derrubam a execução.
     erros_instrumentos: list[dict] = []
-    escolha: dict[str, str] = {}  # o ramo que o agente declarar via `seguir_para`
+    # Os ramos que o agente declarar via `seguir_para` ({"rotulos": [...], "motivo": ...}).
+    escolha: dict = {}
     # Constrói as ferramentas do cinto e, em paralelo, o mapa nome→irreversível (a MESMA
     # regra da parede: `acao_irreversivel(tipo, config)`) — é o que o portão nativo (P3)
     # usa para saber QUAIS ferramentas exigem aprovação antes de executar. As ferramentas
@@ -622,7 +702,14 @@ def executar_agente(
             mids = mids + _middleware_portao(irreversivel_por_ferramenta)
         extra["middleware"] = mids
     app = create_agent(modelo, ferramentas, system_prompt=prompt_sistema, **extra)
-    config = {"configurable": {"thread_id": thread_id}} if memoria else None
+    # Teto de iterações do laço de ferramentas: um agente em laço (chama a mesma
+    # ferramenta sem parar) para aqui, com mensagem legível, em vez de queimar tokens
+    # até o timeout. O padrão do LangGraph é 25 — baixo para agentes com muitos
+    # instrumentos —, então subimos e passamos SEMPRE (com ou sem memória), para o
+    # limite ser explícito e o mesmo nos dois caminhos.
+    config: dict = {"recursion_limit": MAX_ITERACOES_AGENTE}
+    if memoria:
+        config["configurable"] = {"thread_id": thread_id}
     # IDs das mensagens que já existiam no fio ANTES deste turno — para medir só o DELTA
     # por IDENTIDADE (não por posição). Com checkpointer o `invoke` devolve o estado
     # ACUMULADO; e o resumo (P2b) pode ENCOLHER o fio (troca antigas por 1 resumo) — então
@@ -639,15 +726,26 @@ def executar_agente(
             ids_antes = set()
     # Feedback ao vivo: o turno de LLM pode demorar; avisa que o agente está pensando.
     atividade.registrar(f"{agente.nome}: pensando…")
-    if retomar is not None:
-        # Retomada do portão NATIVO (P3): a decisão do humano volta como
-        # `Command(resume=…)` no MESMO thread_id — o agente continua de onde parou, sem
-        # re-derivar do texto. Precisa de checkpointer/config (garantido pelo chamador).
-        resultado = app.invoke(Command(resume=retomar), config)
-    elif memoria:
-        resultado = app.invoke({"messages": [{"role": "user", "content": entrada}]}, config)
-    else:
-        resultado = app.invoke({"messages": [{"role": "user", "content": entrada}]})
+    try:
+        if retomar is not None:
+            # Retomada do portão NATIVO (P3): a decisão do humano volta como
+            # `Command(resume=…)` no MESMO thread_id — o agente continua de onde parou,
+            # sem re-derivar do texto. Precisa de checkpointer/config (garantido pelo
+            # chamador).
+            resultado = app.invoke(Command(resume=retomar), config)
+        else:
+            resultado = app.invoke(
+                {"messages": [{"role": "user", "content": entrada}]}, config
+            )
+    except GraphRecursionError as e:
+        # Laço de ferramentas sem fim. Erro honesto (§12-A), com o nome do agente e o
+        # que fazer — em vez do `GraphRecursionError` cru, que não diz nada a ninguém.
+        raise FalhaInstrumento(
+            f"O agente '{agente.nome}' ficou repetindo ações sem concluir "
+            f"({MAX_ITERACOES_AGENTE} idas e voltas) e foi interrompido. Revise a "
+            "documentação dele (o que fazer quando um instrumento falha) ou reduza o "
+            "tamanho da tarefa deste passo."
+        ) from e
 
     # Não confiamos na narração do agente: se uma ação IRREVERSÍVEL falhou,
     # a execução falha de forma determinística e visível (nunca em silêncio).
@@ -717,17 +815,24 @@ def executar_agente(
             "mensagens_enviadas": mensagens_enviadas,
             "erros_instrumentos": erros_instrumentos,
             "ramo_escolhido": None,
+            "ramos_escolhidos": [],
+            "motivo_ramo": None,
             "uso": uso,
             "memoria": "duravel" if memoria else "legado",
         }
 
+    ramos = list(escolha.get("rotulos") or [])
     return {
         "pausado": False,
         "saida": texto_da_resposta(mensagens[-1]),
         "instrumentos_acionados": acionados,
         "mensagens_enviadas": mensagens_enviadas,
         "erros_instrumentos": erros_instrumentos,
-        "ramo_escolhido": escolha.get("rotulo"),
+        # `ramos_escolhidos` é a verdade (o grafo faz fan-out); `ramo_escolhido`
+        # (singular, o primeiro) fica para quem ainda lê um caminho só.
+        "ramos_escolhidos": ramos,
+        "ramo_escolhido": ramos[0] if ramos else None,
+        "motivo_ramo": escolha.get("motivo"),
         "uso": uso,
         # De onde veio o contexto deste turno: "duravel" = fio do checkpointer;
         # "legado" = reconstruído do texto. Na CONVERSA, "legado" é modo degradado

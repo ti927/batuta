@@ -1,6 +1,12 @@
 // Inspector do construtor: edita o nó selecionado (gatilho/agente/roteador/fim).
-// É onde nascem as bifurcações (saídas com rótulo + destino + tom) e o portão de
-// aprovação — incluindo o canal de aprovação por mensageria (decisão do maestro).
+// É onde nascem as bifurcações e o portão de aprovação — incluindo o canal de
+// aprovação por mensageria (decisão do maestro).
+//
+// Cada saída tem três coisas que o motor lê: o NOME (o que aparece na seta), a
+// CONDIÇÃO ("siga por aqui quando…") e o PAPEL (condição | se der erro | se nenhuma).
+// A condição existia no motor desde sempre e NÃO tinha caixa em tela nenhuma até
+// 2026-08-31 — por isso toda automação vinha com a condição vazia e o agente escolhia
+// o caminho no escuro. É a causa-raiz da Onda 1.
 
 import { useEffect, useState } from "react";
 import {
@@ -27,6 +33,7 @@ import type {
   NoCadeia,
   PainelConfigFluxo,
   SaidaCadeia,
+  TipoSaida,
   ToneSaida,
 } from "@/lib/api";
 import { api } from "@/lib/api";
@@ -96,6 +103,31 @@ function nomeNo(no: NoCadeia, agentes: Agente[]): string {
 const inputCls =
   "w-full rounded-md border border-[#E8E6F0] bg-white px-2.5 py-1.5 text-[13px] text-[#1A1730] outline-none focus:border-primary";
 
+// Os três papéis de uma saída, na ordem em que aparecem no seletor.
+const PAPEIS: { chave: TipoSaida; rotulo: string; ajuda: string }[] = [
+  {
+    chave: "condicional",
+    rotulo: "Condição",
+    ajuda: "O agente avalia a condição e segue por aqui se ela for atendida.",
+  },
+  {
+    chave: "erro",
+    rotulo: "Se der erro",
+    ajuda:
+      "Percorrida só quando este passo FALHA. O erro segue por aqui em vez de derrubar a automação.",
+  },
+  {
+    chave: "senao",
+    rotulo: "Se nenhuma",
+    ajuda: "Rede de segurança: só roda quando nenhuma condição acima for atendida.",
+  },
+];
+
+export function papelDaSaida(sa: SaidaCadeia): TipoSaida {
+  const t = sa.tipo;
+  return t === "erro" || t === "senao" ? t : "condicional";
+}
+
 function LinhaSaida({
   no,
   sa,
@@ -103,6 +135,7 @@ function LinhaSaida({
   cadeia,
   agentes,
   podeEditar,
+  exigeCondicao,
   onChange,
   onRemove,
 }: {
@@ -112,11 +145,17 @@ function LinhaSaida({
   cadeia: Cadeia;
   agentes: Agente[];
   podeEditar: boolean;
+  /** O nó bifurca (2+ condicionais): sem condição escrita, o agente escolhe no escuro. */
+  exigeCondicao: boolean;
   onChange: (patch: Partial<SaidaCadeia>) => void;
   onRemove: () => void;
 }) {
-  const tn = tone(sa.tone);
+  const papel = papelDaSaida(sa);
+  // A seta de erro é vermelha por definição — o papel manda na cor, não o contrário.
+  const tn = tone(papel === "erro" ? "erro" : sa.tone);
   const destinos = (cadeia.nos ?? []).filter((n) => n.tipo !== "gatilho");
+  const faltaCondicao =
+    papel === "condicional" && exigeCondicao && !(sa.quando ?? "").trim();
   return (
     <div className="flex flex-col gap-2.5 rounded-[10px] border border-[#E8E6F0] bg-[#FAFAF7] p-2.5">
       <div className="flex items-center gap-2">
@@ -139,21 +178,88 @@ function LinhaSaida({
           </button>
         )}
       </div>
+
+      {/* PAPEL da saída — é o que o motor lê para saber quando percorrê-la. */}
+      <div className="flex gap-1.5">
+        {PAPEIS.map((p) => {
+          const on = papel === p.chave;
+          const cor = p.chave === "erro" ? tone("erro") : tone("normal");
+          return (
+            <button
+              key={p.chave}
+              type="button"
+              disabled={!podeEditar}
+              title={p.ajuda}
+              onClick={() =>
+                onChange(
+                  p.chave === "condicional"
+                    ? { tipo: "condicional" }
+                    : { tipo: p.chave, quando: "" },
+                )
+              }
+              className="flex-1 rounded-md border px-1 py-1.5 text-[11px]"
+              style={{
+                borderColor: on ? cor.dot : "#E8E6F0",
+                background: on ? cor.pillBg : "#fff",
+                color: on ? cor.pillFg : "#A09DB8",
+                fontWeight: on ? 500 : 400,
+              }}
+            >
+              {p.rotulo}
+            </button>
+          );
+        })}
+      </div>
+
       <div>
         <label className="mb-1 block text-[11px]" style={{ color: "#6B6880" }}>
-          {no.gate
-            ? "Decisão (o que você responde)"
-            : no.tipo === "roteador"
-              ? "Quando a tarefa que chega for…"
-              : "Quando o resultado for…"}
+          Nome (aparece na seta)
         </label>
         <input
           className={inputCls}
           value={sa.rotulo}
+          placeholder={papel === "erro" ? "ex.: deu erro" : "ex.: aprovado"}
           disabled={!podeEditar}
           onChange={(e) => onChange({ rotulo: e.target.value })}
         />
       </div>
+
+      {/* A CONDIÇÃO. Até 2026-08-31 este campo existia no motor e NÃO tinha caixa em
+          tela nenhuma: toda automação tinha condição vazia e o agente decidia às
+          cegas. É esta frase que ele lê. */}
+      {papel === "condicional" && (
+        <div>
+          <label className="mb-1 block text-[11px]" style={{ color: "#6B6880" }}>
+            {no.gate
+              ? "Siga por aqui quando a pessoa…"
+              : no.tipo === "roteador"
+                ? "Siga por aqui quando a tarefa que chega…"
+                : "Siga por aqui quando…"}
+          </label>
+          <input
+            className={inputCls}
+            style={faltaCondicao ? { borderColor: "#E5484D" } : undefined}
+            value={sa.quando ?? ""}
+            placeholder={
+              no.gate ? "ex.: aprovar a capa" : "ex.: o texto estiver aprovado"
+            }
+            disabled={!podeEditar}
+            onChange={(e) => onChange({ quando: e.target.value })}
+          />
+          {faltaCondicao && (
+            <p className="mt-1 text-[11px]" style={{ color: "#B42318" }}>
+              Este passo bifurca — sem esta frase o agente não tem como saber quando
+              seguir por aqui. Preencha para poder salvar.
+            </p>
+          )}
+        </div>
+      )}
+      {papel !== "condicional" && (
+        <p className="text-[11px] leading-normal" style={{ color: "#6B6880" }}>
+          {PAPEIS.find((p) => p.chave === papel)?.ajuda}
+        </p>
+      )}
+
       <div>
         <label
           className="mb-1 flex items-center gap-1.5 text-[11px]"
@@ -174,31 +280,38 @@ function LinhaSaida({
           ))}
         </select>
       </div>
-      <div className="flex gap-1.5">
-        {TONE_KEYS.map((tk) => {
-          const t = tone(tk);
-          const on = (sa.tone ?? "normal") === tk;
-          return (
-            <button
-              key={tk}
-              type="button"
-              disabled={!podeEditar}
-              onClick={() => onChange({ tone: tk as ToneSaida })}
-              title={t.rotulo}
-              className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border px-1 py-1.5 text-[11px]"
-              style={{
-                borderColor: on ? t.dot : "#E8E6F0",
-                background: on ? t.pillBg : "#fff",
-                color: on ? t.pillFg : "#A09DB8",
-                fontWeight: on ? 500 : 400,
-              }}
-            >
-              <span className="size-[7px] rounded-full" style={{ background: t.dot }} />
-              {t.rotulo.split(" ")[0]}
-            </button>
-          );
-        })}
-      </div>
+
+      {/* Cor da seta (cosmético). A saída de erro tem cor própria — nada a escolher. */}
+      {papel !== "erro" && (
+        <div className="flex gap-1.5">
+          {TONE_KEYS.map((tk) => {
+            const t = tone(tk);
+            const on = (sa.tone ?? "normal") === tk;
+            return (
+              <button
+                key={tk}
+                type="button"
+                disabled={!podeEditar}
+                onClick={() => onChange({ tone: tk as ToneSaida })}
+                title={t.rotulo}
+                className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border px-1 py-1.5 text-[11px]"
+                style={{
+                  borderColor: on ? t.dot : "#E8E6F0",
+                  background: on ? t.pillBg : "#fff",
+                  color: on ? t.pillFg : "#A09DB8",
+                  fontWeight: on ? 500 : 400,
+                }}
+              >
+                <span
+                  className="size-[7px] rounded-full"
+                  style={{ background: t.dot }}
+                />
+                {t.rotulo.split(" ")[0]}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -264,6 +377,13 @@ export function Inspector({
       </div>
     );
   }
+
+  // Quantas saídas são CONDICIONAIS (as de erro/"senão" não contam como bifurcação:
+  // elas não são escolhidas pelo agente, são acionadas pelo motor).
+  const condicionaisDoNo = (no.saidas ?? []).filter(
+    (s) => papelDaSaida(s) === "condicional",
+  ).length;
+  const temSenao = (no.saidas ?? []).some((s) => papelDaSaida(s) === "senao");
 
   const ag = no.tipo === "agente" ? agentes.find((a) => a.id === no.ref) : undefined;
   const indice = ag ? agentes.findIndex((a) => a.id === ag.id) : 0;
@@ -842,12 +962,17 @@ export function Inspector({
         {/* saídas (todos menos fim) */}
         {no.tipo !== "fim" && no.tipo !== "gatilho" && (
           <div>
-            <div className="mb-2.5 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-[#1A1730]">
+            <div className="mb-1.5 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-[#1A1730]">
               <Zap size={14} color="#6D4AFF" /> Saídas
-              {(no.saidas ?? []).length > 1
-                ? ` · bifurca em ${no.saidas.length}`
-                : ""}
+              {condicionaisDoNo > 1 ? ` · bifurca em ${condicionaisDoNo}` : ""}
             </div>
+            {condicionaisDoNo > 1 && (
+              <p className="mb-2.5 flex gap-1.5 text-[11.5px] leading-normal text-[#6B6880]">
+                <CircleHelp size={13} color="#A09DB8" className="mt-px flex-none" />
+                O agente avalia cada condição e segue por <b>todas</b> as que forem
+                atendidas. Duas saídas com a mesma condição = as duas rodam.
+              </p>
+            )}
             <div className="flex flex-col gap-2.5">
               {(no.saidas ?? []).map((sa, i) => (
                 <LinhaSaida
@@ -858,6 +983,7 @@ export function Inspector({
                   cadeia={cadeia}
                   agentes={agentes}
                   podeEditar={podeEditar}
+                  exigeCondicao={condicionaisDoNo > 1}
                   onChange={(patch) => onPatchSaida(no.id, sa.id ?? "", patch)}
                   onRemove={() => onRemoveSaida(no.id, sa.id ?? "")}
                 />
@@ -872,14 +998,12 @@ export function Inspector({
                 <Plus size={15} /> Adicionar saída (bifurcar)
               </button>
             )}
-            {(no.saidas ?? []).length > 1 && (
+            {condicionaisDoNo > 1 && !temSenao && (
               <p className="mt-2 flex gap-1.5 text-[11.5px] leading-normal text-[#6B6880]">
                 <CircleHelp size={13} color="#A09DB8" className="mt-px flex-none" />
-                {no.gate
-                  ? "Sua resposta no portão escolhe por qual saída o fluxo segue."
-                  : no.tipo === "roteador"
-                    ? "O roteador lê a tarefa que chega e segue pela saída cuja condição casar."
-                    : "O agente classifica o resultado e segue por uma das saídas."}
+                Se nenhuma condição for atendida, o fluxo termina aqui e o motivo fica
+                no rastro da execução. Para tratar esse caso, acrescente uma saída
+                &ldquo;Se nenhuma&rdquo;.
               </p>
             )}
           </div>

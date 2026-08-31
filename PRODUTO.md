@@ -164,7 +164,11 @@ Um fluxo precisa saber **pausar, fazer uma pergunta a um humano, e retomar de on
 
 ### Bifurcação por intenção
 
-Um fluxo pode ter ramos. O agente classifica o tipo da tarefa e segue um caminho ou outro — ex.: se a mensagem é sobre agenda, consulta o sistema de agendamento; se é sobre exame, envia as instruções do exame.
+Um fluxo pode ter ramos. Cada seta que sai de um passo carrega uma **condição escrita** ("siga por aqui quando…"), e o agente avalia todas elas — ex.: se a mensagem é sobre agenda, consulta o sistema de agendamento; se é sobre exame, envia as instruções do exame.
+
+**O fluxo segue TODAS as condições atendidas, não uma só.** Se duas setas têm a mesma condição e destinos diferentes, os dois destinos rodam — é assim que uma capa aprovada alimenta o gerador de carrossel **e** o de story na mesma execução. Se dois ramos voltam a se encontrar no mesmo passo, ele roda **uma vez**, recebendo o trabalho dos dois (nada é publicado em dobro). Se nenhuma condição for atendida, aquele ramo termina ali e o motivo fica no rastro — o fluxo nunca escolhe um caminho no escuro.
+
+Além das setas condicionais, um passo pode ter uma seta **"se der erro"** (percorrida quando ele falha, levando a mensagem do erro adiante em vez de derrubar a automação) e uma seta **"se nenhuma das outras"** (a rede de segurança).
 
 ### Modo intermediação
 

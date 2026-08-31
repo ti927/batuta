@@ -77,6 +77,33 @@ time real, e nada dispara até o time ser ativado.
   roteadores, fim) ligados por saídas rotuladas. Várias saídas num nó = bifurcação;
   uma saída que volta a um nó anterior = loop; um nó com portão pausa para aprovação.
 
+# Como se desenha uma bifurcação (leia antes de montar qualquer cadeia)
+Cada saída de um nó tem TRÊS coisas, e as três importam:
+- `rotulo`: o NOME curto da seta, o que aparece no desenho ("aprovado", "refazer").
+- `quando`: a CONDIÇÃO — a frase que o agente lê para decidir ("siga por aqui quando a
+  pessoa aprovar a capa"). **OBRIGATÓRIA** quando o nó tem 2+ saídas condicionais: sem
+  ela a cadeia é recusada, e com razão — sem condição escrita o agente escolhe no
+  escuro. Escreva a condição em português direto, do ponto de vista do resultado
+  daquele passo.
+- `tipo` (opcional): "condicional" (o padrão), "erro" ou "senao".
+
+O FLUXO SEGUE TODOS OS CAMINHOS ATENDIDOS — não só o "melhor". Se duas saídas têm a
+MESMA condição e destinos diferentes, os dois destinos rodam. É exatamente assim que
+se desenha "a capa aprovada alimenta o Carrossel E o Story": duas saídas, mesma
+condição, destinos diferentes. NÃO invente um agente-multiplicador para isso, e NÃO
+encadeie um destino depois do outro só para os dois rodarem.
+Se dois ramos voltam a se encontrar no mesmo nó, ele roda UMA vez, recebendo os
+textos dos dois — não há risco de publicar em dobro, e você não precisa desenhar nada
+para juntá-los.
+
+SAÍDA DE ERRO (`"tipo": "erro"`, sem `quando`): percorrida SÓ quando aquele passo
+falha. O passo falho fica gravado e o fluxo segue por essa seta levando a mensagem do
+erro — em vez de a automação morrer ali. Desenhe uma sempre que a falha daquele passo
+merecer um tratamento (avisar alguém, tentar por outro caminho, registrar).
+SAÍDA "SENÃO" (`"tipo": "senao"`, sem `quando`): rede de segurança, percorrida só
+quando NENHUMA condicional foi atendida. Sem ela, se nada casar aquele ramo termina
+ali e o motivo fica no rastro — nunca mais o fluxo escolhe um caminho no escuro.
+
 # Como os agentes se comportam (regra dos 4 textos)
 O agente executa no automático, sem ninguém para responder no meio do fluxo. Escreva os
 textos — principalmente skill_md e soul_md — deixando claro que ele:

@@ -92,6 +92,15 @@ function duracao(p: PassoExecucao): string | null {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
+/** Os caminhos que o fluxo seguiu neste passo. O grafo faz fan-out (um passo pode
+ *  alimentar vários nós), então a lista é a verdade; `saida_escolhida` (singular)
+ *  é o que passos antigos gravaram. */
+function caminhosDoPasso(p: PassoExecucao): string[] {
+  const lista = p.saida?.saidas_escolhidas ?? [];
+  if (lista.length) return lista;
+  return p.saida?.saida_escolhida ? [p.saida.saida_escolhida] : [];
+}
+
 function tokensDoPasso(p: PassoExecucao): number {
   return (p.saida?.uso ?? []).reduce(
     (s, u) => s + u.tokens_entrada + u.tokens_saida,
@@ -289,9 +298,13 @@ function LinhaPasso({
             {passo.ordem}. {agente?.nome ?? "(agente removido)"}
           </span>
           <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-            {passo.saida?.saida_escolhida && (
-              <span className="text-[#3D2A99]">→ {passo.saida.saida_escolhida}</span>
-            )}
+            {/* TODOS os caminhos seguidos — o grafo faz fan-out, então um passo pode
+                alimentar dois nós de uma vez. Antes a tela mostrava só um. */}
+            {caminhosDoPasso(passo).map((r) => (
+              <span key={r} className="text-[#3D2A99]">
+                → {r}
+              </span>
+            ))}
             {dur && <span>{dur}</span>}
             {toks > 0 && <span>{toks.toLocaleString("pt-BR")} tok</span>}
           </span>
@@ -414,13 +427,34 @@ function DetalheItem({
           {passo.ordem}. {agente?.nome ?? "(agente removido)"}
         </h3>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-          {passo.saida?.saida_escolhida && (
-            <span className="text-[#3D2A99]">→ {passo.saida.saida_escolhida}</span>
-          )}
+          {caminhosDoPasso(passo).map((r) => (
+            <span key={r} className="text-[#3D2A99]">
+              → {r}
+            </span>
+          ))}
           {dur && <span>{dur}</span>}
           {toks > 0 && <span>{toks.toLocaleString("pt-BR")} tok</span>}
         </p>
       </div>
+      {/* Por que estes caminhos — na voz do agente. Sem isso, "→ aprovado" é um
+          rótulo sem explicação e ninguém sabe se a decisão fez sentido. */}
+      {passo.saida?.motivo_ramo && (
+        <p className="rounded-md bg-[#F4F1FE] px-2.5 py-2 text-xs leading-relaxed text-[#3D2A99]">
+          {passo.saida.motivo_ramo}
+        </p>
+      )}
+      {/* O ramo terminou sem seguir por caminho nenhum: dizer isso é o que impede o
+          "verde falso" de uma automação mal ligada. */}
+      {passo.saida?.aviso && (
+        <p className="rounded-md bg-[#FDF1E3] px-2.5 py-2 text-xs leading-relaxed text-[#A9681A]">
+          {passo.saida.aviso}
+        </p>
+      )}
+      {passo.saida?.erro && (
+        <p className="rounded-md bg-[#FDECEC] px-2.5 py-2 text-xs leading-relaxed text-[#B42318]">
+          {passo.saida.erro}
+        </p>
+      )}
       <Bloco rotulo="Recebeu">{passo.entrada?.texto || "—"}</Bloco>
       {instrumentos.length > 0 && (
         <div>

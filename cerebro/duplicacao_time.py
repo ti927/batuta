@@ -197,7 +197,10 @@ def duplicar_time(
                 grafo.normalizar(auto.cadeia or {}), map_ag_str, map_inst_str
             )
         )
-        validar_cadeia(cadeia or {}, ids_agentes_novos)  # defensivo
+        # Defensivo. Sem exigir a CONDIÇÃO das saídas: isto é uma CÓPIA do que já
+        # existe — automações anteriores a 2026-08-31 têm todas as condições vazias e
+        # recusar a cópia puniria o usuário por um dado legado. Ele preenche ao editar.
+        validar_cadeia(cadeia or {}, ids_agentes_novos, exigir_condicao=False)
         copia = Automacao(
             time_id=novo.id,
             nome=auto.nome,

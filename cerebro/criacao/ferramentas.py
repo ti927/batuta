@@ -644,10 +644,24 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         ]}.
         Regras: cada nó-agente tem `ref` = id do agente (o MESMO agente pode aparecer
         em vários nós, com `id` diferentes). `destino` aponta para o `id` de outro nó
-        (pode ser um nó anterior = LOOP) ou "fim" para encerrar. Mais de uma saída num
-        nó = BIFURCAÇÃO (o roteador escolhe pela melhor correspondência com o "quando"/
-        rótulo). Não precisa informar posições, nem criar os nós "gatilho"/"fim" — o
-        sistema completa. PORTÃO DE APROVAÇÃO: ponha "gate": true NO NÓ do agente que
+        (pode ser um nó anterior = LOOP) ou "fim" para encerrar. Não precisa informar
+        posições, nem criar os nós "gatilho"/"fim" — o sistema completa.
+
+        BIFURCAÇÃO (mais de uma saída no nó) — leia com atenção:
+        - O "quando" é OBRIGATÓRIO em cada saída quando o nó tem 2+ saídas
+          condicionais. É a frase que o agente lê para decidir ("siga por aqui
+          quando a pessoa aprovar a capa"). Sem ela a cadeia é RECUSADA.
+        - O fluxo segue TODAS as saídas cuja condição for atendida, não só uma. Duas
+          saídas com a MESMA condição e destinos diferentes = os dois destinos rodam.
+          É assim que se desenha "aprovou → faz o carrossel E o story".
+        - Cada saída pode declarar um "tipo": "condicional" (padrão),
+          "erro" (percorrida SÓ se o passo falhar — o fluxo segue por ela levando a
+          mensagem do erro, em vez de a automação morrer) ou "senao" (rede de
+          segurança: só roda se nenhuma condicional for atendida). As saídas "erro" e
+          "senao" NÃO levam "quando".
+        - Se nenhuma condição for atendida e não houver saída "senao", aquele ramo
+          termina ali, com o motivo gravado no rastro.
+        PORTÃO DE APROVAÇÃO: ponha "gate": true NO NÓ do agente que
         vem ANTES de uma ação irreversível — o fluxo pausa depois dele e espera um
         humano aprovar antes de seguir para quem publica/envia (a pausa fica no NÓ). Um
         nó de portão pode trazer, opcionalmente, "instrucoes": {"abertura": "...",

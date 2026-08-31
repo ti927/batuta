@@ -93,9 +93,14 @@ def _ler_automacao(auto: Automacao) -> AutomacaoLer:
     return dados
 
 
-def _validar_cadeia_ou_422(sessao: Session, time_id: uuid.UUID, cadeia: dict) -> None:
+def _validar_cadeia_ou_422(
+    sessao: Session, time_id: uuid.UUID, cadeia: dict, *, exigir_condicao: bool = True
+) -> None:
     try:
-        validar_cadeia(cadeia or {}, _ids_dos_agentes(sessao, time_id))
+        validar_cadeia(
+            cadeia or {}, _ids_dos_agentes(sessao, time_id),
+            exigir_condicao=exigir_condicao,
+        )
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
 
@@ -242,8 +247,10 @@ def duplicar(
     config_fluxo = copy.deepcopy(original.configuracao or {})
 
     # Mesma validação do criar (refs de agente do time). Não validamos o portão de
-    # ativação: a cópia nasce inativa, a parede é checada quando o operador ligar.
-    _validar_cadeia_ou_422(sessao, original.time_id, cadeia)
+    # ativação: a cópia nasce inativa, a parede é checada quando o operador ligar. Nem
+    # a CONDIÇÃO das saídas: copiar algo que já existe não pode ser bloqueado por um
+    # dado legado (automações anteriores a 2026-08-31 têm as condições vazias).
+    _validar_cadeia_ou_422(sessao, original.time_id, cadeia, exigir_condicao=False)
 
     copia = Automacao(
         time_id=original.time_id,

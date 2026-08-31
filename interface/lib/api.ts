@@ -432,7 +432,12 @@ export type AlcanceCanal = {
 // ─── Automações: a cadeia é um GRAFO de nós tipados (bifurcação, loop, portão) ───
 // Forma canônica (cérebro: orquestracao/grafo.py). `tone`/`x`/`y` são cosméticos.
 
-export type ToneSaida = "normal" | "ok" | "loop";
+export type ToneSaida = "normal" | "ok" | "loop" | "erro";
+// PAPEL da saída — isto o MOTOR lê (diferente de `tone`, que é só cor).
+// `condicional` (padrão): tem um "quando"; o agente avalia e o fluxo segue TODAS as
+// atendidas. `erro`: só quando o passo falha. `senao`: só quando nenhuma condicional
+// foi atendida.
+export type TipoSaida = "condicional" | "erro" | "senao";
 export type TipoNo = "gatilho" | "agente" | "roteador" | "fim";
 export type TipoGatilho =
   | "manual"
@@ -442,8 +447,9 @@ export type TipoGatilho =
 
 export type SaidaCadeia = {
   id?: string;
-  rotulo: string; // a condição/decisão — é a CHAVE de roteamento
-  quando?: string; // descrição que ajuda o roteador
+  rotulo: string; // o NOME da seta (o que aparece no desenho)
+  quando?: string; // a CONDIÇÃO: "siga por aqui quando…" — é o que o agente avalia
+  tipo?: TipoSaida; // papel da saída (condicional | erro | senao)
   destino: string; // id de outro nó (inclui o nó "fim"; pode ser anterior = loop)
   tone?: ToneSaida; // cor da aresta (UI)
   lane?: "above" | "below"; // dica de curva p/ loops (UI)
@@ -633,7 +639,11 @@ export type PassoExecucao = {
   saida: {
     texto?: string;
     instrumentos_acionados?: string[];
-    saida_escolhida?: string | null;
+    saida_escolhida?: string | null; // retrocompat: o primeiro caminho
+    saidas_escolhidas?: string[]; // TODOS os caminhos seguidos (o grafo faz fan-out)
+    motivo_ramo?: string | null; // por que estes caminhos, na voz do agente
+    aviso?: string | null; // o ramo terminou sem caminho — e por quê
+    erro?: string | null; // quando o passo falhou
     uso?: UsoChamada[];
   } | null;
   estado: string;

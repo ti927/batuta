@@ -18,12 +18,14 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from mensageria.aviso import avisar_falha
 from mensageria.config import com_ajuste_do_no, config_da_automacao
 from modelos import Agente, Automacao, Execucao, PassoExecucao
+from observabilidade.escritor import registrar_evento
 from orquestracao import grafo, memoria_conversa
 from orquestracao.agente import executar_agente
 from orquestracao.cadeia import _carregar_cinto, _escolher_saida, executar_cadeia
-from orquestracao.disparo import _aplicar_resultado, _fazer_registrador
+from orquestracao.disparo import _aplicar_resultado, _esta_cancelada, _fazer_registrador
 from orquestracao.llm import usar_chaves
 
 # Anti-loop do portão NA TELA (a tela não tem teto de conversa). No CANAL, quem
@@ -76,19 +78,32 @@ def avancar_apos_gate(
     *,
     idx,
     cadeia: dict,
-    escolhida: dict | None,
+    escolhidas: list[dict] | None,
     entrada_proxima: str,
     ordem_inicial: int,
     chaves: dict,
     origens: dict,
 ) -> Execucao:
-    """Decisão tomada: o fluxo ANDA pelo ramo `escolhida`. Destino fim (ou nenhum) →
-    conclui com o trabalho + a decisão; senão segue a cadeia do destino. Re-vincula
-    se pausar em outro portão. Compartilhado por TELA e CANAL."""
-    destino = escolhida.get("destino") if escolhida else None
-    proximo = None if (destino is None or idx.eh_fim(destino)) else destino
+    """Decisão tomada: o fluxo ANDA por TODOS os ramos escolhidos (o grafo faz
+    fan-out — aprovar uma capa pode alimentar o Carrossel E o Story). Ramo que aponta
+    para o fim vira resultado; os demais viram a próxima onda, junto com as
+    PENDÊNCIAS guardadas quando a execução pausou. Re-vincula se pausar em outro
+    portão. Compartilhado por TELA e CANAL."""
+    escolhidas = list(escolhidas or [])
+    frente: list[dict] = []
+    for s in escolhidas:
+        destino = s.get("destino")
+        if destino is not None and not idx.eh_fim(destino):
+            frente.append({"no": destino, "entradas": [entrada_proxima]})
+    # Ramos que ficaram esperando quando o portão pausou no meio de uma onda.
+    frente += [
+        {"no": p["no"], "entradas": list(p.get("entradas") or [])}
+        for p in (execucao.pendencias or [])
+        if p.get("no")
+    ]
+    execucao.pendencias = None
 
-    if proximo is None:
+    if not frente:
         execucao.estado = "concluida"
         execucao.resultado = {"texto": entrada_proxima}
         execucao.finalizada_em = datetime.now(timezone.utc)
@@ -112,9 +127,13 @@ def avancar_apos_gate(
                 sessao,
                 cadeia,
                 entrada_proxima,
-                no_inicial=proximo,
+                frente_inicial=frente,
                 ordem_inicial=ordem_inicial,
                 registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
+                # Cancelar voltou a valer DEPOIS do portão: sem este callback, o
+                # trecho pós-aprovação era o único do sistema que ignorava o botão
+                # "cancelar" (e ele é justamente o trecho que publica).
+                cancelado=lambda: _esta_cancelada(sessao, execucao.id),
             )
         _aplicar_resultado(execucao, r)
         if execucao.estado == "aguardando_humano":
@@ -124,8 +143,18 @@ def avancar_apos_gate(
         execucao.estado = "falhou"
         execucao.resultado = {"erro": str(e)}
         execucao.finalizada_em = datetime.now(timezone.utc)
+        # Simetria com `disparo.rodar_execucao`: a falha do trecho PÓS-PORTÃO também
+        # vai ao banco de logs com stack. Antes ela só existia no `resultado` da
+        # execução — invisível para o diagnóstico.
+        registrar_evento(
+            categoria="execucao", acao="execucao.falhou", nivel="error",
+            resultado="falha", erro=e, recurso_tipo="execucao", recurso_id=execucao.id,
+            detalhe={"trecho": "pos_portao"},
+        )
     sessao.commit()
     sessao.refresh(execucao)
+    if execucao.estado == "falhou":
+        avisar_falha(sessao, execucao, str((execucao.resultado or {}).get("erro") or ""))
     return execucao
 
 
@@ -180,7 +209,8 @@ def retomar_execucao(
             escolhida, _ = _escolher_saida(resposta, saidas)
     entrada_proxima = entrada_retomada((ultimo.saida or {}).get("texto", ""), resposta)
     return avancar_apos_gate(
-        sessao, execucao, idx=idx, cadeia=cadeia, escolhida=escolhida,
+        sessao, execucao, idx=idx, cadeia=cadeia,
+        escolhidas=[escolhida] if escolhida else [],
         entrada_proxima=entrada_proxima, ordem_inicial=ultimo.ordem,
         chaves=chaves, origens=origens,
     )
@@ -255,9 +285,14 @@ def _retomar_conversando_tela(
         if apresentadas:
             saida_texto = "\n\n".join(apresentadas)
 
-    ramo = resultado.get("ramo_escolhido")
+    # Fan-out também na retomada: o agente do portão pode liberar VÁRIOS caminhos
+    # (aprovar a capa alimenta o Carrossel E o Story). `ramos_escolhidos` é a lista;
+    # `ramo_escolhido` fica só como retrocompat de quem devolve um caminho só.
+    ramos = list(resultado.get("ramos_escolhidos") or [])
+    if not ramos and resultado.get("ramo_escolhido"):
+        ramos = [resultado["ramo_escolhido"]]
     por_rotulo = {s["rotulo"]: s for s in saidas if s.get("rotulo")}
-    escolhida = por_rotulo.get(ramo) if ramo else None
+    escolhidas = [por_rotulo[r] for r in ramos if r in por_rotulo]
     ordem = ultimo.ordem + 1
 
     passo = {
@@ -268,14 +303,16 @@ def _retomar_conversando_tela(
         "entrada": entrada_rerun,
         "saida": saida_texto,
         "instrumentos_acionados": resultado.get("instrumentos_acionados") or [],
-        "saida_escolhida": escolhida["rotulo"] if escolhida else None,
+        "saida_escolhida": escolhidas[0]["rotulo"] if escolhidas else None,
+        "saidas_escolhidas": [s["rotulo"] for s in escolhidas],
+        "motivo_ramo": resultado.get("motivo_ramo"),
         "uso": list(resultado.get("uso") or []),
         "iniciado_em": iniciado,
         "finalizado_em": finalizado,
     }
     _fazer_registrador(sessao, execucao.id, origens)(passo, ordem)
 
-    if escolhida is None:
+    if not escolhidas:
         execucao.estado = "aguardando_humano"
         sessao.commit()
         from mensageria import aprovacao
@@ -296,7 +333,7 @@ def _retomar_conversando_tela(
     # rodada).
     apresentado_aprovado = (ultimo.saida or {}).get("texto", "")
     return avancar_apos_gate(
-        sessao, execucao, idx=idx, cadeia=cadeia, escolhida=escolhida,
+        sessao, execucao, idx=idx, cadeia=cadeia, escolhidas=escolhidas,
         entrada_proxima=entrada_retomada(apresentado_aprovado, resposta),
         ordem_inicial=ordem, chaves=chaves, origens=origens,
     )

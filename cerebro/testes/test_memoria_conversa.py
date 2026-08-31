@@ -139,7 +139,10 @@ def test_middleware_de_resumo_so_no_chat(monkeypatch):
 
 def test_sem_memoria_conta_o_fio_inteiro(monkeypatch):
     """Sem checkpointer (orquestração/tarefa), nada muda: conta todas as AIMessage do
-    resultado (n_antes=0), como sempre — e NÃO chama get_state nem passa config."""
+    resultado (n_antes=0), como sempre — e NÃO chama get_state nem passa thread.
+
+    O `config` deixou de ser ausente (passa sempre o teto de iterações, o
+    `recursion_limit`), mas segue SEM `configurable`: nada de thread/checkpointer."""
     chamou = {"get_state": False, "config": "ausente"}
 
     def fake_create(modelo, ferramentas, system_prompt):  # sem kwarg checkpointer
@@ -160,7 +163,8 @@ def test_sem_memoria_conta_o_fio_inteiro(monkeypatch):
     r = agente_mod.executar_agente(_agente(), [], "entrada")  # sem memória
     assert r["uso"][0]["tokens_entrada"] == 10
     assert chamou["get_state"] is False        # não mexe em estado
-    assert chamou["config"] == "ausente"       # invoke chamado SEM config (fake de 1 arg)
+    assert "configurable" not in (chamou["config"] or {})  # sem thread/checkpointer
+    assert chamou["config"]["recursion_limit"] == agente_mod.MAX_ITERACOES_AGENTE
 
 
 def test_conexao_do_checkpointer_nao_pode_pendurar():

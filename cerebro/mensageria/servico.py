@@ -1274,8 +1274,12 @@ def _turno_de_portao(
 
     falou = bool((resultado.get("saida") or "").strip())
     por_rotulo = {s["rotulo"]: s for s in saidas if s.get("rotulo")}
-    ramo = resultado.get("ramo_escolhido")
-    escolhida = por_rotulo.get(ramo) if ramo else None
+    # Fan-out: o agente do portão pode liberar VÁRIOS caminhos de uma vez (aprovar a
+    # capa alimenta o Carrossel E o Story). `ramo_escolhido` fica de retrocompat.
+    ramos = list(resultado.get("ramos_escolhidos") or [])
+    if not ramos and resultado.get("ramo_escolhido"):
+        ramos = [resultado["ramo_escolhido"]]
+    escolhidas = [por_rotulo[r] for r in ramos if r in por_rotulo]
 
     # Fatia 4.2 (unificação do rastro): o portão pelo CANAL passa a deixar um passo
     # `espera_humano` na timeline do fluxo — como a tela (`retoma._retomar_conversando_tela`)
@@ -1301,7 +1305,8 @@ def _turno_de_portao(
             saida={
                 "texto": (resultado.get("saida") or "").strip(),
                 "instrumentos_acionados": resultado.get("instrumentos_acionados") or [],
-                "saida_escolhida": ramo if escolhida is not None else None,
+                "saida_escolhida": escolhidas[0]["rotulo"] if escolhidas else None,
+                "saidas_escolhidas": [s["rotulo"] for s in escolhidas],
                 "uso": [],
             },
             estado="concluido",
@@ -1311,11 +1316,11 @@ def _turno_de_portao(
     )
     sessao.flush()
 
-    if escolhida is not None:
+    if escolhidas:
         # O agente DECIDIU → o fluxo anda; leva o histórico da conversa como contexto.
         # A partir do passo de portão recém-gravado (ordem+1), como na tela.
         retoma.avancar_apos_gate(
-            sessao, execucao, idx=idx, cadeia=cadeia, escolhida=escolhida,
+            sessao, execucao, idx=idx, cadeia=cadeia, escolhidas=escolhidas,
             entrada_proxima=_historico_texto(sessao, conversa),
             ordem_inicial=ultimo.ordem + 1, chaves=chaves, origens=origens,
         )

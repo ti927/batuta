@@ -39,6 +39,16 @@ export const TONES: Record<ToneSaida, ToneInfo> = {
     dot: "#A09DB8",
     rotulo: "caminho normal",
   },
+  // Seta de ERRO — cor derivada do papel da saída, não escolhida à mão, para o
+  // desenho não poder mentir sobre o que o motor vai fazer.
+  erro: {
+    stroke: "#E5484D",
+    pillBg: "#FDECEC",
+    pillFg: "#B42318",
+    pillBd: "#F5C2C0",
+    dot: "#E5484D",
+    rotulo: "quando der erro",
+  },
 };
 
 export function tone(t: ToneSaida | undefined): ToneInfo {

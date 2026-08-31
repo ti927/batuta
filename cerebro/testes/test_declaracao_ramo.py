@@ -1,8 +1,10 @@
-"""O agente DECLARA o ramo do fluxo (em vez de uma LLM roteadora adivinhar).
+"""O agente DECLARA os ramos do fluxo (em vez de uma LLM roteadora adivinhar).
 
 Quando um nó tem 2+ saídas, `executar_agente` injeta a ferramenta `seguir_para`
-(enum dos rótulos) e expõe o ramo escolhido em `ramo_escolhido`. Nó de 1 saída não
-oferece a ferramenta (não há o que escolher). Estes testes não falam com a LLM:
+(enum dos rótulos) e expõe os caminhos escolhidos em `ramos_escolhidos` — uma LISTA,
+porque o grafo faz fan-out: se duas condições foram atendidas, os dois caminhos
+rodam. `ramo_escolhido` (singular) fica como retrocompat do primeiro. Nó de 1 saída
+não oferece a ferramenta (não há o que escolher). Estes testes não falam com a LLM:
 trocam `create_agent` por um app falso que aciona (ou não) a ferramenta.
 """
 
@@ -29,19 +31,19 @@ def _saidas_duas():
     ]
 
 
-def _fake_app(monkeypatch, *, chama_rotulo=None, capturar=None):
-    """Troca create_agent por um app falso. Se `chama_rotulo`, aciona a
-    ferramenta `seguir_para` com esse rótulo. `capturar` recebe a lista de tools."""
+def _fake_app(monkeypatch, *, chama_rotulos=None, capturar=None):
+    """Troca create_agent por um app falso. Se `chama_rotulos`, aciona a
+    ferramenta `seguir_para` com esses rótulos. `capturar` recebe a lista de tools."""
 
     def fake_create(modelo, ferramentas, system_prompt):
         if capturar is not None:
             capturar.extend(ferramentas)
-        if chama_rotulo is not None:
+        if chama_rotulos is not None:
             seguir = next(f for f in ferramentas if f.name == "seguir_para")
-            seguir.func(rotulo=chama_rotulo)
+            seguir.func(rotulos=list(chama_rotulos))
 
         class App:
-            def invoke(self, _):
+            def invoke(self, _entrada, _config=None):
                 return {"messages": [AIMessage(content="feito")]}
 
         return App()
@@ -51,9 +53,24 @@ def _fake_app(monkeypatch, *, chama_rotulo=None, capturar=None):
 
 
 def test_agente_declara_o_ramo(monkeypatch):
-    _fake_app(monkeypatch, chama_rotulo="refazer")
+    _fake_app(monkeypatch, chama_rotulos=["refazer"])
     r = agente_mod.executar_agente(_agente(), [], "entrada", saidas=_saidas_duas())
-    assert r["ramo_escolhido"] == "refazer"
+    assert r["ramos_escolhidos"] == ["refazer"]
+    assert r["ramo_escolhido"] == "refazer"  # retrocompat: o primeiro
+
+
+def test_agente_declara_VARIOS_ramos(monkeypatch):
+    """O coração da Onda 1: duas condições atendidas = os dois caminhos rodam.
+    Antes só cabia um rótulo na ferramenta e o segundo ramo era descartado calado."""
+    _fake_app(monkeypatch, chama_rotulos=["ok", "refazer"])
+    r = agente_mod.executar_agente(_agente(), [], "entrada", saidas=_saidas_duas())
+    assert r["ramos_escolhidos"] == ["ok", "refazer"]
+
+
+def test_ramo_repetido_conta_uma_vez(monkeypatch):
+    _fake_app(monkeypatch, chama_rotulos=["ok", "ok"])
+    r = agente_mod.executar_agente(_agente(), [], "entrada", saidas=_saidas_duas())
+    assert r["ramos_escolhidos"] == ["ok"]
 
 
 def test_uma_saida_nao_injeta_seguir_para(monkeypatch):
@@ -63,12 +80,13 @@ def test_uma_saida_nao_injeta_seguir_para(monkeypatch):
         _agente(), [], "entrada", saidas=[{"rotulo": "ok", "destino": "fim"}]
     )
     assert all(f.name != "seguir_para" for f in tools)
-    assert r["ramo_escolhido"] is None
+    assert r["ramos_escolhidos"] == []
 
 
-def test_sem_declarar_ramo_fica_none(monkeypatch):
-    _fake_app(monkeypatch, chama_rotulo=None)  # app não chama seguir_para
+def test_sem_declarar_ramo_fica_vazio(monkeypatch):
+    _fake_app(monkeypatch, chama_rotulos=None)  # app não chama seguir_para
     r = agente_mod.executar_agente(_agente(), [], "entrada", saidas=_saidas_duas())
+    assert r["ramos_escolhidos"] == []
     assert r["ramo_escolhido"] is None
 
 
@@ -77,9 +95,17 @@ def test_rotulo_fora_do_enum_e_rejeitado(monkeypatch):
     _fake_app(monkeypatch, capturar=tools)
     agente_mod.executar_agente(_agente(), [], "entrada", saidas=_saidas_duas())
     seguir = next(f for f in tools if f.name == "seguir_para")
-    seguir.func(rotulo="ok")  # rótulo válido: passa
+    seguir.func(rotulos=["ok"])  # rótulo válido: passa
     with pytest.raises(ValidationError):
-        seguir.func(rotulo="inexistente")  # fora do enum: rejeitado
+        seguir.func(rotulos=["inexistente"])  # fora do enum: rejeitado
+
+
+def test_condicao_da_saida_chega_ao_agente():
+    """O `quando` (a condição) é o que o agente avalia. Até 2026-08-31 ele nunca
+    chegava — o editor não tinha caixa para esse campo."""
+    txt = agente_mod._opcoes_das_saidas(_saidas_duas())
+    assert "deu certo" in txt and "precisa ajuste" in txt
+    assert "siga por aqui quando" in txt
 
 
 # ── portao.md: instruções editáveis do portão (Onda 2) ──────────────────────
@@ -120,7 +146,7 @@ def test_executar_agente_injeta_portao_md_no_prompt(monkeypatch):
         prompts.append(system_prompt)
 
         class App:
-            def invoke(self, _):
+            def invoke(self, _entrada, _config=None):
                 return {"messages": [AIMessage(content="feito")]}
 
         return App()

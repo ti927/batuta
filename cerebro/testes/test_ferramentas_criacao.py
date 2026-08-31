@@ -141,8 +141,10 @@ def test_montar_cadeia_grafo_normaliza(sessao, dados):
              "saidas": [{"rotulo": "tema", "destino": "n_val"}]},
             {"id": "n_val", "tipo": "agente", "ref": validador, "gate": True,
              "saidas": [
-                 {"rotulo": "aprovado", "destino": "fim"},
-                 {"rotulo": "refazer", "destino": "n_cacador"},  # loop
+                 {"rotulo": "aprovado", "quando": "a pessoa aprovar o tema",
+                  "destino": "fim"},
+                 {"rotulo": "refazer", "quando": "a pessoa pedir outro tema",
+                  "destino": "n_cacador"},  # loop
              ]},
         ],
     }

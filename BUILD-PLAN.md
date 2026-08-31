@@ -2079,6 +2079,29 @@ Pedido do maestro ao fim do dia: *"atualize a central de conhecimento com o que 
 
 ---
 
+## FASE — O motor vira um grafo de verdade · **Onda 1: topologia e erro**  ✅ (2026-08-31, migração `fan00pendencia01`)
+
+**Gatilho:** *"o agente GERADOR DE POST 1:1 deveria entregar seu resultado pra 2 agentes, mas só entregou pra um"* — e, depois do diagnóstico: *"É UM GRAFO, TEM QUE TER VÁRIAS OPÇÕES… tem que ser inteligente o suficiente pra saber qual opção tomar"* e *"o grafo é pra se comportar como um grafo: se tem múltiplas ramificações condicionais, tem que seguir TODAS que foram atendidas"*.
+
+**As três causas (todas confirmadas no código, não supostas):**
+1. **Saídas múltiplas eram exclusivas.** `cadeia.py` caminhava com um **ponteiro único**: seguia um destino e descartava os outros, sem avisar.
+2. **Nada casando caía calado na primeira saída** (`por_rotulo.get(escolha.rotulo, saidas[0])`) — o fluxo escolhia um caminho no escuro e ninguém sabia.
+3. **A causa-raiz, que ninguém tinha visto:** cada saída tem `rotulo` **e** `quando` (a condição) no motor, mas o editor (`inspector.tsx`) **só tinha um campo, e ele gravava o `rotulo`**. O campo `quando` **nunca teve caixa em tela nenhuma** — todas as automações tinham condição vazia, e o agente recebia rótulos sem significado ("aprovado1", "aprovado2") para decidir.
+
+**O que mudou no motor.** `executar_cadeia` deixou de andar com um ponteiro e passou a caminhar por **ondas**: cada nó pode liberar **vários** caminhos (a ferramenta `seguir_para` passou a receber uma **lista** de rótulos + o motivo da escolha), os destinos formam a próxima onda, e um nó alcançado por dois ramos na mesma onda roda **uma vez** com os dois textos juntos (**junção implícita** — sem ela um fluxo em Y publicaria em dobro). Cada saída ganhou um **papel** (`grafo.TIPOS_SAIDA`): `condicional`, **`erro`** (percorrida quando o nó falha, levando a mensagem adiante em vez de matar a execução) e **`senao`** (rede de segurança). Nada casando e sem `senao`: o ramo termina **com o motivo no rastro** — a queda silenciosa na primeira saída acabou. Nó **sem saída** deixou de concluir como sucesso mudo e passa a avisar. O teto de passos passou a valer **por execução** (soma as retomadas). Quando um portão pausa no meio de uma onda, os ramos que ainda não rodaram ficam em **`execucoes.pendencias`** e voltam na retomada — nenhum trabalho se perde.
+
+**O que mudou fora do motor.** O **passo que falhou passou a ser gravado** (`estado="falhou"`, com nó, entrada e erro) — antes a timeline pulava do último passo bom direto para "falhou", sem dizer onde. A falha de execução agora **avisa** pelo canal do time (`mensageria/aviso.py`), dizendo o que quebrou, em qual passo e o que fazer; sem canal, vira evento de alerta (§12-A: fail-safe não pode ser mudo). A falha do trecho **pós-portão** passou a ir ao banco de logs (simetria com o disparo) e o trecho pós-portão voltou a ser **cancelável**. No agente: teto explícito de idas-e-voltas do laço de ferramentas (`recursion_limit`, com mensagem legível em vez de `GraphRecursionError` cru); **`ok: false` numa ação irreversível virou falha de verdade** (era o lançamento perdido no Bubble); e, depois de uma falha irreversível, **nenhuma outra ação roda no mesmo turno** — o agente parava de agir só no fim.
+
+**O que mudou na tela.** O editor de saída passou a ter os três campos que o motor lê: **Nome (aparece na seta)**, **"Siga por aqui quando…"** (a condição — **obrigatória** com 2+ saídas, com aviso vermelho e recusa no salvar) e o **papel** (Condição / Se der erro / Se nenhuma). A seta de erro é vermelha por definição — a cor vem do papel, o desenho não pode mentir sobre o motor. A inspeção de execução mostra **todos** os caminhos seguidos (não só um), o **motivo** que o agente declarou, o **aviso** de ramo sem caminho e o **erro** do passo falho. Copiar (duplicar time/automação) **não** exige a condição: seria punir o usuário por dado legado.
+
+**O que as IAs aprenderam (entrega da mesma onda, não rodapé).** Central: capítulos novos `automacoes/condicoes-e-ramos` e `automacoes/erros-no-fluxo`, `automacoes/cadeia-e-grafo` reescrito (ensinava "escolhe **uma** de várias saídas") e o `INDICE.md` atualizado. Prompt da IA criadora: seção nova "Como se desenha uma bifurcação", com a condição obrigatória, o fan-out ("duas saídas com a mesma condição = as duas rodam — não invente um agente-multiplicador") e os papéis de saída. Schemas/docstrings de `montar_cadeia` na criadora e no **MCP** — sem isso o Claude conectado montaria cadeia inválida.
+
+**Verificação:** **983 testes verdes** (26 novos, incluindo os que provam o caso do maestro: três saídas com duas condições atendidas rodam **os dois** ramos; convergência roda o nó uma vez; falha segue pelo ramo de erro com o passo falho gravado; nada casando **não** cai na primeira saída; nó sem saída avisa; teto por execução; pendências voltam na retomada; a falha avisa e, sem canal, vira evento). `alembic upgrade head` limpo; `tsc`, `eslint` e `build` da interface limpos.
+
+**Falta:** teste ao vivo do maestro na automação "Gerar Posts Instagram" — a capa aprovada **uma vez** alimentando Carrossel e Story na mesma execução. As Ondas 2–4 e a remoção de portão/parede seguem no plano.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.

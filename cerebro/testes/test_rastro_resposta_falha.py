@@ -87,14 +87,49 @@ def test_expandida_ganha_rastro_preservando_a_ferramenta():
     tool = ag.StructuredTool.from_function(
         func=acionar, name="Cria_Reembolso", description="op", args_schema=_Args
     )
-    erros = []
-    w = ag._com_rastro_de_resposta(tool, _inst(), "conector", True, erros)
+    erros, falhas = [], []
+    w = ag._com_rastro_de_resposta(tool, _inst(), "conector", True, erros, falhas)
     assert w.name == "Cria_Reembolso"
     retorno = json.loads(w.func())
     assert retorno["ok"] is False
     assert erros[0]["ferramenta"] == "Cria_Reembolso"
     assert erros[0]["origem"] == "resposta"
     assert "HTTP 400" in erros[0]["erro"]
+    # AÇÃO IRREVERSÍVEL que respondeu `ok: false` NÃO aconteceu: vira falha de
+    # verdade (o lançamento perdido no Bubble), não só uma linha no rastro.
+    assert falhas and "não completou a ação" in falhas[0]
+
+
+def test_expandida_de_leitura_com_ok_false_nao_derruba():
+    """Falha de LEITURA continua sendo só rastro — o agente decide o que fazer."""
+    def acionar(**kwargs):
+        return json.dumps({"ok": False, "erro": "busca instável"})
+
+    tool = ag.StructuredTool.from_function(
+        func=acionar, name="Busca", description="op", args_schema=_Args
+    )
+    erros, falhas = [], []
+    w = ag._com_rastro_de_resposta(tool, _inst("Busca"), "conector", False, erros, falhas)
+    json.loads(w.func())
+    assert erros and falhas == []
+
+
+def test_apos_falha_irreversivel_o_turno_para_de_agir():
+    """Uma ação irreversível falhou: nenhuma outra ação roda no mesmo turno (antes o
+    agente seguia publicando e narrando por cima de uma falha)."""
+    chamadas = {"n": 0}
+
+    def acionar(**kwargs):
+        chamadas["n"] += 1
+        return json.dumps({"ok": True})
+
+    tool = ag.StructuredTool.from_function(
+        func=acionar, name="Publica", description="op", args_schema=_Args
+    )
+    falhas = ["já falhou antes neste turno"]
+    w = ag._com_rastro_de_resposta(tool, _inst("Publica"), "conector", True, [], falhas)
+    retorno = json.loads(w.func())
+    assert retorno["ok"] is False and chamadas["n"] == 0
 
 
 def test_expandida_com_sucesso_ou_texto_nao_registra():
@@ -109,13 +144,13 @@ def test_expandida_com_sucesso_ou_texto_nao_registra():
         ag.StructuredTool.from_function(
             func=ok, name="Busca", description="x", args_schema=_Args
         ),
-        _inst("Busca"), "conector", False, erros,
+        _inst("Busca"), "conector", False, erros, [],
     )
     w2 = ag._com_rastro_de_resposta(
         ag.StructuredTool.from_function(
             func=texto, name="Livre", description="x", args_schema=_Args
         ),
-        _inst("Livre"), "mcp", False, erros,
+        _inst("Livre"), "mcp", False, erros, [],
     )
     assert json.loads(w1.func())["ok"] is True
     assert w2.func() == "resposta livre, não-JSON"

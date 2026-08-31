@@ -257,6 +257,11 @@ class Execucao(IdData, Base):
     # request — que senão ficaria minutos aberto e um proxy o cortaria ("conexão falhou").
     # Nulo = disparo normal (o worker roda a cadeia do zero); preenchido = é uma retomada.
     retomada_resposta: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Ramos do grafo que ainda NÃO rodaram quando a execução pausou (fan-out, 2026-08-31):
+    # `[{"no": "<id do nó>", "entradas": ["<texto>", ...]}, ...]`. O motor caminha o grafo
+    # por ondas; se um portão pausa no meio de uma onda, os outros ramos ficam aqui e a
+    # retomada os leva adiante. Nulo = nada pendente (o caso comum).
+    pendencias: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
 
 class PassoExecucao(IdData, Base):
