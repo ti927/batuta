@@ -22,11 +22,11 @@ chegar até ele. Prefira sempre o modo **somente leitura** quando o agente só p
 2. Configure a conexão: **host**, **porta**, **banco**, **usuário**, **senha** (segredo) e o modo de
    **SSL**.
 3. Ligue **Somente leitura** se o agente só consulta — assim ele **recusa qualquer escrita** e **não
-   exige portão**. Deixe desligado (permite escrita) só quando necessário, e aí ponha um **portão antes**.
+   pede aprovação**. Deixe desligado (permite escrita) só quando necessário, e aí peça aprovação antes (**Pedir aprovação e aguardar**).
 
 ## Exemplos
 - Um agente de relatório com **somente leitura** que roda SELECTs num banco de vendas.
-- Um lançamento pontual num banco (escrita → portão antes).
+- Um lançamento pontual num banco (escrita → peça aprovação antes).
 
 ## Limites e cuidados
 - Por ora, só **PostgreSQL**.
@@ -37,9 +37,9 @@ chegar até ele. Prefira sempre o modo **somente leitura** quando o agente só p
 
 ## Para a IA
 Parâmetros no catálogo (`banco_sql`): `sql` e `parametros`. Se o instrumento está em **somente leitura**,
-só proponha consultas. Escrita exige portão antes. Use `:nome` para os valores.
+só proponha consultas. Escrita pede aprovação antes. Use `:nome` para os valores.
 
 ## Relacionado
 - [[instrumentos/chamar-rest]]
-- [[automacoes/portao-de-aprovacao]]
+- [[automacoes/pedir-aprovacao]]
 - [[segredos/segredos-de-instrumento]]

@@ -123,7 +123,7 @@ def test_seam_conector_expande_no_cinto():
             ]
         }
     )
-    tools = _ferramentas_de_instrumento(inst, [], {}, [])
+    tools = _ferramentas_de_instrumento(inst, [], {}, [], {})
     assert [t.name for t in tools] == ["a", "b"]
 
 

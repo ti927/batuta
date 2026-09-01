@@ -163,7 +163,7 @@ export function DashboardCliente({
                         {a.nome}
                       </p>
                     )}
-                    <CadeiaHorizontal cadeia={a.cadeia!} agentes={agentes} />
+                    <CadeiaHorizontal cadeia={a.cadeia!} agentes={agentes} cintos={cintos} />
                   </div>
                 ))}
             </div>
@@ -355,7 +355,15 @@ function ChipCadeia({ children }: { children: React.ReactNode }) {
   );
 }
 
-function CadeiaHorizontal({ cadeia, agentes }: { cadeia: Cadeia; agentes: Agente[] }) {
+function CadeiaHorizontal({
+  cadeia,
+  agentes,
+  cintos,
+}: {
+  cadeia: Cadeia;
+  agentes: Agente[];
+  cintos: Record<string, Instrumento[]>;
+}) {
   // Segue a primeira saída de cada nó, do início ao fim/repetição (visão linear
   // do caminho principal; bifurcações completas vivem na aba Automações).
   const ordem = caminhoPrincipal(cadeia);
@@ -374,7 +382,11 @@ function CadeiaHorizontal({ cadeia, agentes }: { cadeia: Cadeia; agentes: Agente
       {ordem.map((no, i) => {
         const idx = agentes.findIndex((a) => a.id === no.ref);
         const ag = agentes[idx];
-        const pausa = no.gate;
+        // Pode parar para uma pessoa: o agente deste passo tem o instrumento de
+        // pedir aprovação no cinto (não há mais interruptor no desenho).
+        const pausa = (cintos[no.ref ?? ""] ?? []).some(
+          (i) => i.tipo === "pedir_aprovacao",
+        );
         const rotulo = no.tipo === "roteador" ? (no.nome ?? "Roteador") : (ag?.nome ?? "—");
         return (
           <div key={no.id} className="flex items-center gap-2">

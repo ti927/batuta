@@ -30,7 +30,7 @@ comentário. O id do post é o `media_id` que o gatilho de comentário entrega, 
 - Precisa da credencial `instagram` conectada (token + conta).
 - Para FOTO, a URL da mídia é a própria imagem; para VÍDEO/Reels, é o vídeo — use a **miniatura** como
   imagem quando quiser "ver".
-- Só leitura → não exige portão.
+- Só leitura → ninguém precisa aprovar nada.
 
 ## Para a IA
 Parâmetro no catálogo (`instagram_ler_post`): `media_id`. A `imagem` devolvida pode ir direto ao

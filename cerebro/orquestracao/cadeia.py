@@ -6,7 +6,7 @@ e suas transformações vivem em `orquestracao.grafo`:
     {"inicial": "<id do nó-agente inicial>",
      "nos": [
        {"id","tipo":"gatilho|agente|roteador|fim","ref":<agente_id>,
-        "gate":bool, "saidas":[{"rotulo","quando","destino","tipo","tone"}]},
+        "saidas":[{"rotulo","quando","destino","tipo","tone"}]},
        ...
      ]}
 
@@ -33,9 +33,14 @@ as outras eram descartadas em silêncio — quem desenhava "aprovado → Carross
 - O teto de passos (`max_passos`) vale por EXECUÇÃO (soma as retomadas), não por
   trecho.
 
-`gate` (portão de aprovação) pausa para um humano: quem escolhe a saída é a RESPOSTA
-dele, na retomada. Ao pausar, o motor devolve as **pendências** — os ramos da onda que
-ainda não rodaram —, para a retomada continuar de onde parou sem perder trabalho.
+## A espera por uma pessoa é do AGENTE (2026-08-31)
+
+Não há mais "portão" (um interruptor no nó) nem "parede" (uma trava da organização).
+Quem decide que um momento precisa de gente é o AGENTE, chamando o instrumento
+`pedir_aprovacao` porque o markdown dele manda. O motor só reage: se o turno terminou
+num pedido de aprovação, a execução vira `aguardando_humano` e devolve as
+**pendências** — os ramos da onda que ainda não rodaram —, para a retomada continuar
+de onde parou sem perder trabalho.
 """
 
 import uuid
@@ -245,7 +250,8 @@ def executar_cadeia(
     - "concluida": todos os ramos terminaram. `resultado` tem o texto final (os
       textos dos ramos que chegaram ao fim, juntos); `avisos` lista os ramos que
       terminaram sem caminho.
-    - "aguardando_humano": um nó com `gate` pausou. `pergunta` é a saída desse nó;
+    - "aguardando_humano": o agente pediu aprovação. `pergunta` é o que ele
+      apresentou à pessoa;
       `pendentes` são os ramos da onda que ainda não rodaram (a retomada os leva
       adiante para nenhum trabalho se perder).
     - "cancelada": o operador cancelou entre passos.
@@ -314,7 +320,6 @@ def executar_cadeia(
             )
             saidas = no.get("saidas") or []
             condicionais, saidas_erro, saidas_senao = grafo.separar_saidas(saidas)
-            gate = bool(no.get("gate"))
             iniciado_em = datetime.now(timezone.utc)
             # Identidade do nó resolvida ANTES de rodar: se ele falhar, o passo falho
             # precisa dizer QUEM falhou (é o nome que aparece na timeline e no aviso
@@ -324,7 +329,7 @@ def executar_cadeia(
             try:
                 executado = _rodar_no(
                     sessao, no, no_atual, tipo, entrada_atual,
-                    condicionais=condicionais, gate=gate,
+                    condicionais=condicionais,
                 )
             except Exception as e:
                 # O nó falhou. O passo falho é GRAVADO (antes a timeline pulava do
@@ -333,7 +338,7 @@ def executar_cadeia(
                 # mensagem — a falha vira um caminho, não o fim da execução.
                 finalizado_em = datetime.now(timezone.utc)
                 passo_falho = _montar_passo(
-                    no_atual, tipo, gate, agente_id=id_agente,
+                    no_atual, tipo, agente_id=id_agente,
                     agente_nome=nome_do_no,
                     entrada=entrada_atual, saida=f"Falhou: {e}",
                     instrumentos=[], erros_instrumentos=[], uso=[],
@@ -357,27 +362,14 @@ def executar_cadeia(
             saida_texto = executado["saida"]
             uso_passo = executado["uso"]
 
-            # Portão de aprovação: o que segue adiante é o que foi APRESENTADO ao
-            # humano — a(s) mensagem(ns) que o agente enviou pelo canal de aprovação
-            # do nó (ou, na falta, qualquer canal usado no turno) — e NÃO o status
-            # que ele narrou depois ("enviei, aguardando"). Sem isto o conteúdo
-            # aprovado se perde. Portão só de tela (sem envio): mantém o texto.
-            if gate and executado["mensagens_enviadas"]:
-                canal_id = str((no.get("aprovacao") or {}).get("instrumento_id") or "")
-                apresentadas = executado["mensagens_enviadas"].get(canal_id) or [
-                    t
-                    for textos in executado["mensagens_enviadas"].values()
-                    for t in textos
-                ]
-                if apresentadas:
-                    saida_texto = "\n\n".join(apresentadas)
-
             # --- A decisão de caminho -------------------------------------------
-            # Com gate, quem escolhe é a pessoa (na retomada) — aqui não se decide.
+            # Esperando uma pessoa: quem escolhe o caminho é a resposta dela, na
+            # retomada — aqui não se decide nada.
             escolhidas: list[dict] = []
             motivo = executado["motivo"]
             aviso: str | None = None
-            if not gate:
+            pausa = executado["pausa"]
+            if not pausa:
                 if len(condicionais) == 1:
                     escolhidas = list(condicionais)
                 elif len(condicionais) >= 2:
@@ -423,7 +415,7 @@ def executar_cadeia(
                     avisos.append(aviso)
 
             passo = _montar_passo(
-                no_atual, tipo, gate,
+                no_atual, tipo, espera=bool(pausa), aprovacao=pausa or None,
                 agente_id=executado["agente_id"], agente_nome=executado["agente_nome"],
                 entrada=entrada_atual, saida=saida_texto,
                 instrumentos=executado["instrumentos"],
@@ -436,11 +428,11 @@ def executar_cadeia(
             if registrar_passo is not None:
                 registrar_passo(passo, ordem)
 
-            # Pausa para humano: o nó terminou (sua saída é a pergunta/proposta).
-            # Para aqui; o caminho é decidido pela resposta. As PENDÊNCIAS (ramos
-            # desta onda que ainda não rodaram + os já liberados) vão junto, para a
-            # retomada continuar sem perder trabalho.
-            if gate:
+            # O agente PEDIU APROVAÇÃO (instrumento `pedir_aprovacao`): a execução
+            # para aqui, e o que segue é decidido quando a pessoa responder. As
+            # PENDÊNCIAS (ramos desta onda que ainda não rodaram + os já liberados)
+            # vão junto, para a retomada continuar sem perder trabalho.
+            if pausa:
                 pendentes = [
                     {"no": i["no"], "entradas": list(i["entradas"])}
                     for i in onda[pos + 1 :]
@@ -503,7 +495,6 @@ def _rodar_no(
     entrada_atual: str,
     *,
     condicionais: list[dict],
-    gate: bool,
 ) -> dict:
     """Roda UM nó (agente ou roteador) e devolve o que ele produziu, já num formato
     uniforme. Não decide caminho — isso é do chamador."""
@@ -514,7 +505,7 @@ def _rodar_no(
             "saida": entrada_atual, "agente_id": None,
             "agente_nome": no.get("nome") or "roteador",
             "instrumentos": [], "erros_instrumentos": [], "uso": [],
-            "mensagens_enviadas": {}, "ramos": [], "motivo": None,
+            "mensagens_enviadas": {}, "ramos": [], "motivo": None, "pausa": None,
         }
 
     ref = no.get("ref")
@@ -526,14 +517,8 @@ def _rodar_no(
         )
     cinto = _carregar_cinto(sessao, agente.id)
     # O agente enxerga as saídas CONDICIONAIS (não as de erro/"senão", que são do
-    # motor) e DECLARA por quais o fluxo segue — podendo declarar VÁRIAS. Num
-    # portão, as instruções de ABERTURA do nó (o "portao.md") guiam como ele
-    # apresenta o pedido — aditivo, com fallback ao texto padrão.
-    texto_portao = (no.get("instrucoes") or {}).get("abertura") if gate else None
-    resultado = executar_agente(
-        agente, cinto, entrada_atual, saidas=condicionais, gate=gate,
-        texto_portao=texto_portao,
-    )
+    # motor) e DECLARA por quais o fluxo segue — podendo declarar VÁRIAS.
+    resultado = executar_agente(agente, cinto, entrada_atual, saidas=condicionais)
     return {
         "saida": resultado["saida"],
         "agente_id": str(agente.id),
@@ -542,6 +527,8 @@ def _rodar_no(
         "erros_instrumentos": resultado.get("erros_instrumentos") or [],
         "uso": list(resultado.get("uso") or []),
         "mensagens_enviadas": resultado.get("mensagens_enviadas") or {},
+        # Preenchido = o agente chamou `pedir_aprovacao` e está esperando uma pessoa.
+        "pausa": (resultado.get("aprovacao") or None) if resultado.get("pausado") else None,
         # `ramos_escolhidos` é a lista (fan-out); `ramo_escolhido` (singular) segue
         # aceito para quem ainda devolve um caminho só.
         "ramos": list(resultado.get("ramos_escolhidos") or [])
@@ -551,17 +538,21 @@ def _rodar_no(
 
 
 def _montar_passo(
-    no_id: str, tipo: str, gate: bool, *, agente_id, agente_nome, entrada, saida,
+    no_id: str, tipo: str, *, agente_id, agente_nome, entrada, saida,
     instrumentos, erros_instrumentos, uso, escolhidas: list[dict], motivo,
     iniciado_em, finalizado_em, estado: str = "concluido", erro: str | None = None,
-    aviso: str | None = None,
+    aviso: str | None = None, espera: bool = False, aprovacao: dict | None = None,
 ) -> dict:
     """O registro de um passo, no formato que `disparo._fazer_registrador` grava."""
     return {
         "no_id": no_id,
-        # Tipo do passo na timeline (Fatia 4.1): o nó de PORTÃO é uma espera por
-        # humano; os demais, agente ou roteador.
-        "tipo": "espera_humano" if gate else ("roteador" if tipo == "roteador" else "agente"),
+        # Tipo do passo na timeline (Fatia 4.1): o passo em que o agente PEDIU
+        # aprovação é uma espera por humano; os demais, agente ou roteador.
+        "tipo": "espera_humano" if espera else ("roteador" if tipo == "roteador" else "agente"),
+        # Por onde o pedido foi apresentado e de quem se espera a resposta — é o que
+        # a borda usa para amarrar a conversa de quem aprova a esta execução. Antes
+        # isso vinha do NÓ (`no.aprovacao`); agora vem de quem realmente pediu.
+        "aprovacao": aprovacao,
         "agente_id": agente_id,
         "agente_nome": agente_nome,
         "entrada": entrada,

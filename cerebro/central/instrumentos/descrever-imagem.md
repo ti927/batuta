@@ -31,7 +31,7 @@ com este instrumento e então responde bem.
 - É **imagem→texto** (não gera imagem).
 - De 1 a 8 imagens por leitura; para vídeo/Reels, passe a URL da **miniatura**, não a do vídeo.
 - Precisa de chave do provedor do modelo escolhido; sem ela, falha com recado claro.
-- Só leitura → não exige portão.
+- Só leitura → ninguém precisa aprovar nada.
 
 ## Para a IA
 Parâmetros no catálogo (`descrever_imagem`): `imagens_url` (URLs públicas) e `instrucao` (o que extrair).

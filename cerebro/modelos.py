@@ -79,14 +79,6 @@ class Organizacao(IdData, Base):
     # Logo/foto da organização, guardado como data URI (a imagem é encolhida no
     # navegador antes de salvar). Nulo = sem logo (a UI mostra a inicial do nome).
     logo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # Parede de aprovação: quando True (padrão), a ativação de uma automação exige
-    # um nó-portão antes de uma ação irreversível (publicar/enviar/gravar). Quando
-    # o admin desliga (False), as automações ativam sem essa exigência — o portão
-    # do nó continua disponível para pausar manualmente. Primeira config global da
-    # organização.
-    parede_ativacao: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("true")
-    )
 
 
 class Time(IdData, Base):
@@ -149,10 +141,6 @@ class Instrumento(IdData, Base):
     # Ícone escolhido pelo usuário (id no catálogo da UI, ex.: "fab:whatsapp").
     # NULL = sem escolha → a interface mostra o ícone genérico. Só apresentação.
     icone: Mapped[str | None] = mapped_column(String(60), nullable=True)
-    # Interruptor de aprovação humana por instância (sobrepõe a derivação por
-    # tipo/config): NULL = automático; True = sempre exige portão; False = nunca.
-    # A parede de ativação resolve via instrumentos.exige_portao().
-    exige_aprovacao: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     # Caixa-forte de credenciais: aponta para uma credencial nomeada da central
     # (da organização ou da consultoria) em vez de guardar o segredo inline. NULL
     # = sem referência (usa segredo próprio inline / pool, como antes). A borda
@@ -638,8 +626,8 @@ class ConversaCriacao(IdData, Base):
     nas tabelas (Time/Agente/Instrumento/cinto/Automacao), pela porta validada de
     `criacao/servicos.py`. Não há mais rascunho-como-documento nem ritual de
     'aprovar e criar'. A proteção mudou de lugar: tudo é real mas DORME — a
-    automação nasce inativa e nada roda até o consultor ATIVAR, e a parede de
-    ativação exige portão humano antes de ação irreversível (ver portao_ativacao).
+    automação nasce inativa e nada roda até o consultor ATIVAR. Quem segura uma ação
+    que precisa de gente é o próprio agente, pelo instrumento `pedir_aprovacao`.
 
     O 'estado' do time (rascunho | ativo) é DERIVADO da automação (ativa?), não uma
     coluna. A conversa segue viva depois de ativar, para editar e consertar.

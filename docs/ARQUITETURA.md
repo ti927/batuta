@@ -79,7 +79,7 @@ direta ou indiretamente, a uma **Organização** — é o que sustenta o isolame
 - **`organizacoes`** — `nome`, `dono_id`, `modelo_criadora` (modelo de IA da conversa, nulo = padrão Opus), `logo_url` (logo como *data URI*).
 - **`times`** — `organizacao_id`, `nome`, `descricao`.
 - **`agentes`** — `time_id`, `nome`, `papel` (`lider`|`agente`), **4 markdowns** (`agent_md`, `skill_md`, `tools_md`, `soul_md`) que definem 100% do comportamento, `modelo_ia` (qual LLM; nulo = padrão Haiku). Índice parcial garante ≤1 Líder por time.
-- **`instrumentos`** — `time_id`, `nome`, `tipo`, `configuracao` (JSONB, campos não-secretos), `exige_aprovacao` (tri-estado: NULL=automático/True=sempre exige portão humano/False=nunca).
+- **`instrumentos`** — `time_id`, `nome`, `tipo`, `configuracao` (JSONB, campos não-secretos).
 - **`agente_instrumentos`** — N:N, o "cinto": quais instrumentos cada agente pode usar.
 - **`automacoes`** — `time_id`, `nome`, `tipo_gatilho` (manual|cron|webhook), `configuracao_gatilho` (JSONB), **`cadeia`** (JSONB: o grafo de agentes com bifurcação), `ativa` (nasce `false`).
 - **`execucoes`** — `automacao_id`, `estado` (`aguardando`|`em_andamento`|`aguardando_humano`|`concluida`|`falhou`), `entrada`, `resultado`, timestamps. **A própria tabela é a fila** (ver §5).
@@ -116,13 +116,13 @@ nº 1): colapsar os dois numa **timeline única com memória entre turnos**.
 
 - **Agente isolado** (`orquestracao/agente.py`): o comportamento vem **100% dos 4 markdowns** (não há prompt-base escondido). Monta o prompt a partir dos markdowns, dá ao agente o **cinto** (instrumentos) como *tools*, e roda via `create_react_agent` do LangGraph. Mede tokens (`usage_metadata`).
 - **Cadeia por BIFURCAÇÃO** (`orquestracao/cadeia.py`): a `cadeia` (JSONB da automação) é um grafo onde, ao terminar um passo, **o próprio agente escolhe uma de várias saídas** — ele declara o ramo pela ferramenta `seguir_para(rotulo)` (injetada quando o nó tem 2+ saídas; o `rotulo` é um *enum* dos rótulos). A LLM roteadora (`_escolher_saida`) só entra de **fallback** (agente não declarou, rótulo inexistente, automação antiga). Loops são permitidos (com guarda de máximo de passos). Não é uma fila linear, nem um roteador adivinhando na frente do agente.
-- **Espera-por-humano** (a peça mais delicada): um nó pode ter `gate`. A execução **pausa** (estado `aguardando_humano`, salvo no banco — sobrevive a reinício) e **retoma** quando um humano responde — na **tela** (`POST /execucoes/{id}/responder`) ou pelo **canal** (Telegram já no ar). O portão é **conversacional**: ao chegar a resposta, **o próprio agente roda de novo** (com a resposta + suas saídas; desde a **Fatia 4.3**, **retomando do estado salvo** por checkpointer nativo — não re-deriva do zero, cf. `REMODELAGEM-MOTOR.md §5`) e decide — pode **perguntar de volta** (segue pausado) ou **declarar o ramo** via `seguir_para` (o fluxo anda), honrando o que o markdown dele manda; a LLM roteadora só entra de fallback (gate-roteador, 1 saída, execução antiga ou teto anti-loop `MAX_RODADAS_GATE`). O que o agente apresenta ao humano fica registrado na thread de **Conversas** (`mensageria/aprovacao.py::vincular_pausa`). **Portão POR CANAL** é uma conversa de mensageria de primeira classe: a resposta passa pela mesma máquina de turno da borda (entrega, relógio de inatividade, teto, sweeper que cancela/estaciona a execução) — `mensageria/servico.py::_turno_de_portao`.
-- **Comportamento do fluxo CONFIGURÁVEL** (`mensageria/config.py`): as regras de mensageria/portão (espera, teto, saudação, horário, forma do portão, encerramento) não são fixas — `resolver_config` resolve a cascata `global < canal (instrumento) < PERFIL do fluxo < ajustes do fluxo < nó`. Fonte ÚNICA lida pela borda (servico/sweeper/portão), exposta na UI por `GET /config/fluxo` (perfis: interno/atendimento/disparo/personalizado). `Automacao.configuracao` guarda `{perfil, ajustes}`.
+- **Espera-por-humano** (a peça mais delicada): quem pausa é o **AGENTE**, chamando o instrumento `pedir_aprovacao` (`pausa_para_humano` no contrato do encaixe) — desde 2026-08-31 **não há mais `gate` no nó** nem parede de ativação. A execução **pausa** (estado `aguardando_humano`, salvo no banco — sobrevive a reinício) e **retoma** quando um humano responde — na **tela** (`POST /execucoes/{id}/responder`) ou pelo **canal** (Telegram já no ar). Ao chegar a resposta, **o mesmo agente roda de novo** (retomando do estado salvo por checkpointer nativo, thread `execucao:nó` — não re-deriva do zero) e decide: pode **perguntar de volta** (segue pausado), **pedir aprovação outra vez** ou **declarar os ramos** via `seguir_para` (o fluxo anda). O canal por onde o pedido saiu e o destinatário ficam no PASSO (`saida.aprovacao`), e é isso que `mensageria/aprovacao.py::config_aprovacao` lê para amarrar a conversa de quem aprova — antes essa config vinha do nó. **Aprovação POR CANAL** é uma conversa de mensageria de primeira classe: a resposta passa pela mesma máquina de turno da borda (entrega, relógio de inatividade, teto, sweeper que cancela/estaciona a execução) — `mensageria/servico.py::_turno_de_portao`.
+- **Comportamento do fluxo CONFIGURÁVEL** (`mensageria/config.py`): as regras de mensageria/espera (prazo, teto, saudação, horário, forma da aprovação, encerramento) não são fixas — `resolver_config` resolve a cascata `global < canal (instrumento) < PERFIL do fluxo < ajustes do fluxo < nó`. Fonte ÚNICA lida pela borda (servico/sweeper/portão), exposta na UI por `GET /config/fluxo` (perfis: interno/atendimento/disparo/personalizado). `Automacao.configuracao` guarda `{perfil, ajustes}`.
 - **Fila** (`fila.py`): pool de N≈3 trabalhadores em threads; o claim é `SELECT ... FOR UPDATE SKIP LOCKED` na própria tabela `execucoes` (sem broker externo). Todo gatilho **enfileira** (`aguardando` → worker pega). No boot, execuções `em_andamento` órfãs viram `falhou`.
 - **Agendador** (`agendador.py`): APScheduler `BackgroundScheduler`, fuso `America/Sao_Paulo`. Relógio em memória reconstruído do banco no startup e re-sincronizado no CRUD de automações. Só dispara se `ativa=true`.
 - **Gatilhos**: **manual** (botão, sempre roda — testa qualquer fluxo), **agendamento/cron** (formulário guiado, sem jargão cron), **webhook de entrada** (`POST /webhooks/automacoes/{id}`, público; o corpo vira a entrada).
 - **Disparo** (`orquestracao/disparo.py`): `criar_execucao` (enfileira) + `rodar_execucao` (o worker executa). Resolve as **chaves de IA** na fronteira e as fixa num *context var* (`usar_chaves`) — o grafo não sabe de onde a chave vem.
-- **Parede de ativação** (`portao_ativacao.py`): uma automação com agente que tem instrumento de **ação irreversível** só pode ser **ativada** se houver `pausa_humano` no nó anterior (senão 422). É a proteção: tudo nasce real mas **dorme** até o consultor ativar.
+- **Nada dispara antes de ativar:** a automação nasce **inativa** — tudo o que a IA criadora monta é real, mas **dorme** até o consultor ativar. Ativar não tem trava: a proteção contra ação irreversível é o instrumento `pedir_aprovacao` no cinto do agente (ver acima), não uma recusa automática.
 
 Lifespan do FastAPI (`main.py`) sobe a fila e o agendador no boot e os desliga no shutdown. **Por isso o cérebro roda em 1 réplica** (escalar duplicaria os gatilhos agendados).
 
@@ -167,7 +167,7 @@ pareceu morto — com `/saude` verde, porque ele só lê memória. Duas resposta
    Construtor). Complemento na mensageria: **guarda do turno atrasado** (o estado fresco da conversa é
    reconferido antes de entregar/escrever — turno que destrava tarde é descartado com evento
    `turno.descartado`, nunca entregue numa conversa fechada) e tetos do vigia separados (chat 8 min;
-   portão 30, porque a retomada de fluxo pode legitimamente levar 300 s × 6 de IA).
+   aprovação 30, porque a retomada de fluxo pode legitimamente levar 300 s × 6 de IA).
 
 ---
 
@@ -185,9 +185,10 @@ Tipos implementados quando este retrato foi escrito (8): **REST** (`chamar_api_r
 *(A lista cresceu bastante desde então — Instagram, vídeo, visão, mensageria, conector declarativo. A
 fonte da verdade é o registro em `cerebro/instrumentos/`, não esta enumeração.)*
 
-A irreversibilidade é resolvida **por instância** (`exige_portao(tipo, config, override)`): ex.: REST
-GET = leitura (sem portão), POST/PUT/DELETE = escrita (com portão); o interruptor `exige_aprovacao`
-sobrepõe. Falhas de instrumento têm **retentativa com backoff** e nunca "morrem em silêncio".
+A irreversibilidade é resolvida **por instância** (`acao_irreversivel(tipo, config)`): ex.: REST
+GET = leitura, POST/PUT/DELETE = escrita. Ela governa a **política de falha** (uma escrita que falha
+derruba o passo; uma leitura, não) e o selo do catálogo — **não** é mais uma trava de ativação.
+Falhas de instrumento têm **retentativa com backoff** e nunca "morrem em silêncio".
 
 **Duas falhas de instrumento, dois caminhos (2026-08-26).** Uma exceção (`FalhaInstrumento`) derruba ou
 desvia o fluxo; mas há um segundo caminho, mais traiçoeiro: o instrumento **devolve a falha como dado**
@@ -287,14 +288,15 @@ mais páginas soltas de execução nem de automação** — `/execucoes` (lista 
 **webhook** de uma automação aparece no drawer do nó **Gatilho** (aba Automações). `/biblioteca`,
 `/uso` e `/configuracoes-consultoria` são placeholders "em breve" (`components/area-em-breve.tsx`).
 
-**Aprovação humana (portão).** Duas peças distintas: (1) o **portão do nó** na cadeia (`gate` no nó —
-`orquestracao/cadeia.py` lê `no.get("gate")` e pausa em `aguardando_humano`) é o que de fato pausa;
-(2) a **parede de ativação** (`portao_ativacao.validar`, ponto único usado pela rota de ativação e
-pela IA criadora) recusa ativar uma automação cujo agente faz ação irreversível sem um portão antes.
-A parede é uma **config GLOBAL da organização** (`organizacoes.parede_ativacao`, default TRUE; liga/
-desliga em **Configurações da organização**, rota `PUT /organizacoes/{id}/parede-ativacao`). A
-irreversibilidade é derivada do tipo+config do instrumento (`instrumentos.acao_irreversivel`) — **não
-há mais interruptor de aprovação por instrumento**.
+**Aprovação humana — uma peça só, e é do agente (2026-08-31).** O instrumento `pedir_aprovacao`
+(`instrumentos/pedir_aprovacao.py`, `pausa_para_humano = True`) apresenta o pedido pelo canal
+configurado e faz a execução parar; `orquestracao/agente.py` devolve `pausado=True` + `aprovacao`, e
+`orquestracao/cadeia.py` transforma isso em `aguardando_humano`, gravando o passo como
+`espera_humano` com o canal/destinatário. As DUAS peças anteriores — o **portão** (`no.gate`) e a
+**parede** (`organizacoes.parede_ativacao` + `portao_ativacao.validar`) — **foram removidas**: eram
+invisíveis, se sobrepunham (a conversa pedia confirmação em dobro) e tiravam do agente uma decisão
+que é dele. A irreversibilidade (`instrumentos.acao_irreversivel`, derivada de tipo+config) continua
+existindo como política de falha e selo do catálogo.
 
 ---
 

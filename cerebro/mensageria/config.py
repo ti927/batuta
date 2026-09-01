@@ -20,29 +20,12 @@ das mensagens-padrão; a borda passa a importar daqui.
 
 from sqlalchemy.orm import Session
 
-from modelos import Automacao, Execucao, Instrumento, Organizacao, Time
+from modelos import Automacao, Execucao, Instrumento
 
 # Endereço público do app (onde a aprovação de um portão também pode ser resolvida pela
 # tela). Fonte única para as mensagens que orientam o humano.
 URL_APP = "batuta.team"
 
-
-def portao_nativo_ligado(sessao: Session, time_id) -> bool:
-    """Se o PORTÃO NATIVO na conversa está ativo para este time (Fatia 4.3 / P3b+P3d).
-
-    Governança DEFINITIVA: respeita a PAREDE DE APROVAÇÃO da organização
-    (`Organizacao.parede_ativacao`, LIGADA por padrão) — a MESMA regra que barra ativar uma
-    esteira com ação irreversível sem portão. Uma fonte de verdade só, controlada na tela da
-    organização (sem env/Railway). Quando a trava está ligada, uma ação IRREVERSÍVEL do
-    agente de conversa pausa e espera o 'sim' do contato (trava de SISTEMA, não do markdown);
-    org que desligou a parede → sem trava na conversa também (escolha da org)."""
-    if not time_id:
-        return False
-    time = sessao.get(Time, time_id)
-    if time is None:
-        return False
-    org = sessao.get(Organizacao, time.organizacao_id)
-    return bool(org and org.parede_ativacao)
 
 # ── Mensagens-padrão (a borda importa daqui; antes viviam em servico/sweeper) ──
 SAUDACAO_PADRAO = "Olá! Você está falando com um assistente virtual. Como posso ajudar?"
@@ -208,10 +191,10 @@ CAMPOS = [
         {"chave": "dias_uteis_apenas", "rotulo": "Só em dias úteis", "tipo": "bool"},
         {"chave": "mensagem_fora_horario", "rotulo": "Mensagem fora do horário", "tipo": "texto"},
     ]},
-    {"grupo": "Portão de aprovação", "campos": [
-        {"chave": "portao_forma", "rotulo": "Como o agente conduz o portão", "tipo": "escolha"},
+    {"grupo": "Aprovação humana", "campos": [
+        {"chave": "portao_forma", "rotulo": "Como o agente conduz a aprovação", "tipo": "escolha"},
         {"chave": "portao_acao_abandono", "rotulo": "Se o aprovador abandona a conversa", "tipo": "escolha"},
-        {"chave": "portao_max_rodadas", "rotulo": "Máx. de idas-e-vindas no portão (tela)", "tipo": "int"},
+        {"chave": "portao_max_rodadas", "rotulo": "Máx. de idas-e-vindas na aprovação (tela)", "tipo": "int"},
     ]},
 ]
 

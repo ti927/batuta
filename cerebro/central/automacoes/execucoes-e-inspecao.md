@@ -15,7 +15,7 @@ ao vivo.
 
 ## Para que serve / quando usar
 Para acompanhar e diagnosticar: ver qual agente está trabalhando agora, o que cada passo produziu, onde
-parou (num portão) ou por que falhou. Toda operação longa mostra **progresso ao vivo** (cronômetro + "o que
+parou (esperando uma pessoa) ou por que falhou. Toda operação longa mostra **progresso ao vivo** (cronômetro + "o que
 está acontecendo agora") — você nunca fica no escuro achando que travou.
 
 ## Como usar (na tela)
@@ -28,7 +28,7 @@ está acontecendo agora") — você nunca fica no escuro achando que travou.
 - Investigar por que um fluxo parou: a inspeção mostra o passo e o motivo (em português).
 
 ## Limites e cuidados
-- Um fluxo pode ficar **parado num portão** esperando o humano — isso é normal, não é falha.
+- Um fluxo pode ficar **parado esperando uma pessoa** (o agente pediu aprovação) — isso é normal, não é falha.
 - Uma execução pode **falhar** e, dependendo do erro, ser **retentada** automaticamente — veja
   [[operacao/falhas-e-retentativa]].
 - **Execução "concluída" não garante que tudo deu certo.** Uma ferramenta pode ter respondido "não deu" sem
@@ -40,7 +40,7 @@ está acontecendo agora") — você nunca fica no escuro achando que travou.
 
 ## Para a IA
 Ao diagnosticar com o consultor, baseie-se no **estado real** da execução (o que a inspeção mostra), não em
-suposição. Um fluxo "parado" costuma ser um portão aguardando resposta, não um erro.
+suposição. Um fluxo "parado" costuma ser um agente aguardando uma aprovação, não um erro.
 O diagnóstico já entrega, quando dá para saber: **qual instrumento** falhou (pelo nome que o próprio erro
 cita), **qual agente** o carrega e uma **ação sugerida derivada do tipo de erro** — arquivo grande demais
 pede ajuste de configuração, não cadastro de credencial. Use essas referências em vez de deduzir pelo
@@ -49,6 +49,6 @@ agente estourou antes.
 
 ## Relacionado
 - [[automacoes/automacao]]
-- [[automacoes/portao-de-aprovacao]]
+- [[automacoes/pedir-aprovacao]]
 - [[operacao/falhas-e-retentativa]]
 - [[operacao/uso-e-custos]]

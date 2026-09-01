@@ -220,12 +220,15 @@ export function AgenteNode({ data, selected }: NodeProps) {
               <Sparkles size={11} color="#6D4AFF" /> {modelo}
             </span>
           )}
-          {no.gate && (
+          {/* Pode esperar uma pessoa: derivado do CINTO (o agente tem o instrumento
+              de pedir aprovação), não de um interruptor no desenho — quem decide
+              esperar é ele, quando o markdown dele mandar. */}
+          {cinto.some((i) => i.tipo === "pedir_aprovacao") && (
             <span
               className="inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10.5px] font-medium"
               style={{ color: "#A9681A", background: "#FDF1E3", borderColor: "#F0D9B4" }}
             >
-              <Shield size={10} /> espera você
+              <Shield size={10} /> pode esperar você
             </span>
           )}
         </div>

@@ -148,24 +148,6 @@ def tem_estado(thread_id: str) -> bool:
         return False
 
 
-def ha_interrupcao(thread_id: str) -> bool:
-    """Se a conversa está PAUSADA num portão NATIVO (Fatia 4.3 / P3): o checkpoint tem um
-    write pendente no canal `__interrupt__` (o HITL interrompeu antes de uma ação
-    irreversível). É o que distingue, no próximo turno, uma RESPOSTA de aprovação
-    (`retomar` com Command resume) de uma mensagem nova (turno normal). Lê o checkpointer
-    cru (`pending_writes` = tuplas `(task_id, canal, valor)`), sem montar o agente. À prova
-    de falha: qualquer erro → False (trata como turno normal — nunca trava o atendimento)."""
-    s = obter()
-    if s is None:
-        return False
-    try:
-        tup = s.get_tuple({"configurable": {"thread_id": thread_id}})
-        writes = getattr(tup, "pending_writes", None) or []
-        return any(len(w) >= 2 and w[1] == "__interrupt__" for w in writes)
-    except Exception:
-        return False
-
-
 def sondar() -> None:
     """Sonda do vigia dos elos: um SELECT 1 pelo pool do checkpointer, com o
     timeout do próprio pool. Levanta em falha (pool fora, conexão morta)."""

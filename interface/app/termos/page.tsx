@@ -109,8 +109,9 @@ export default function TermosPage() {
           conter imprecisões e <strong>não constitui aconselhamento</strong>{" "}
           profissional. Você é responsável por revisar o conteúdo antes de publicá-lo
           ou utilizá-lo, especialmente em ações irreversíveis (como publicar numa
-          rede social). A plataforma oferece um <strong>portão de aprovação</strong>{" "}
-          humano para que ações sensíveis exijam sua autorização explícita.
+          rede social). A plataforma oferece um recurso de{" "}
+          <strong>aprovação humana</strong> — o agente apresenta o que fará e aguarda
+          sua autorização explícita — para que ações sensíveis dependam de você.
         </p>
       </Secao>
 

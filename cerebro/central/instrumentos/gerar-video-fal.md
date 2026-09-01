@@ -35,7 +35,7 @@ imagem; o agente descreve o movimento/cena. O MP4 gerado serve direto ao [[instr
 - Os freios de movimento evitam que a IA "aluciná" e desmonte uma arte com texto — mantenha **Travar
   composição** ligado para arte que não pode deformar.
 - **Proporção** só vale no Luma; Kling e Hailuo seguem a proporção da própria foto.
-- Não é irreversível (só gera o arquivo) — quem publica é que exige portão.
+- Não é irreversível (só gera o arquivo) — quem publica é que pede aprovação.
 
 ## Para a IA
 Parâmetros no catálogo (`gerar_video_fal`): `imagem_url` (a foto a animar) e `prompt` (o movimento/cena).

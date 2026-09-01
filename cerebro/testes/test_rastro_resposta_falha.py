@@ -68,7 +68,7 @@ def test_ferramenta_unica_registra_resposta_com_falha(monkeypatch):
         SimpleNamespace(registrar=lambda m: None, mensagem_para=lambda *a: ""),
     )
     erros = []
-    f = ag._ferramenta_unica(inst, tipo, None, [], {}, erros)
+    f = ag._ferramenta_unica(inst, tipo, None, [], {}, erros, {})
     retorno = json.loads(f.func())
     assert retorno["ok"] is False           # a resposta para a IA segue intacta
     assert erros and erros[0]["origem"] == "resposta"
@@ -88,7 +88,7 @@ def test_expandida_ganha_rastro_preservando_a_ferramenta():
         func=acionar, name="Cria_Reembolso", description="op", args_schema=_Args
     )
     erros, falhas = [], []
-    w = ag._com_rastro_de_resposta(tool, _inst(), "conector", True, erros, falhas)
+    w = ag._com_rastro_de_resposta(tool, _inst(), "conector", True, erros, falhas, {})
     assert w.name == "Cria_Reembolso"
     retorno = json.loads(w.func())
     assert retorno["ok"] is False
@@ -109,7 +109,7 @@ def test_expandida_de_leitura_com_ok_false_nao_derruba():
         func=acionar, name="Busca", description="op", args_schema=_Args
     )
     erros, falhas = [], []
-    w = ag._com_rastro_de_resposta(tool, _inst("Busca"), "conector", False, erros, falhas)
+    w = ag._com_rastro_de_resposta(tool, _inst("Busca"), "conector", False, erros, falhas, {})
     json.loads(w.func())
     assert erros and falhas == []
 
@@ -127,7 +127,7 @@ def test_apos_falha_irreversivel_o_turno_para_de_agir():
         func=acionar, name="Publica", description="op", args_schema=_Args
     )
     falhas = ["já falhou antes neste turno"]
-    w = ag._com_rastro_de_resposta(tool, _inst("Publica"), "conector", True, [], falhas)
+    w = ag._com_rastro_de_resposta(tool, _inst("Publica"), "conector", True, [], falhas, {})
     retorno = json.loads(w.func())
     assert retorno["ok"] is False and chamadas["n"] == 0
 
@@ -144,13 +144,13 @@ def test_expandida_com_sucesso_ou_texto_nao_registra():
         ag.StructuredTool.from_function(
             func=ok, name="Busca", description="x", args_schema=_Args
         ),
-        _inst("Busca"), "conector", False, erros, [],
+        _inst("Busca"), "conector", False, erros, [], {},
     )
     w2 = ag._com_rastro_de_resposta(
         ag.StructuredTool.from_function(
             func=texto, name="Livre", description="x", args_schema=_Args
         ),
-        _inst("Livre"), "mcp", False, erros, [],
+        _inst("Livre"), "mcp", False, erros, [], {},
     )
     assert json.loads(w1.func())["ok"] is True
     assert w2.func() == "resposta livre, não-JSON"

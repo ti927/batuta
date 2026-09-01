@@ -36,7 +36,7 @@ degradado silencioso é considerado defeito, não proteção.
 ## Limites e cuidados
 - Os eventos que mais importam, e o que cada um significa:
   - **turno começou e não terminou** — a tarefa de fundo morreu ou pendurou; o vigia destrava em ~8 min
-    (~30 min quando a conversa conduz uma aprovação de portão).
+    (~30 min quando a conversa conduz uma aprovação de execução).
   - **turno preso** — o vigia agiu: avisou o contato e devolveu a conversa ao relógio normal. Ele **não**
     reprocessa sozinho, de propósito: o turno pendurado pode estar no meio de uma ação externa (publicar,
     enviar), e repetir arriscaria fazer duas vezes. Quem reenvia é a pessoa.
@@ -49,7 +49,7 @@ degradado silencioso é considerado defeito, não proteção.
   seguir — e é comum ele narrar sucesso mesmo assim. O registro guarda a falha crua, então **o que o agente
   escreveu não é prova de que a ação aconteceu**: confira o rastro.
 - O tempo de espera do vigia tem **duas medidas**, cada uma pelo pior caso real: **~8 min no atendimento**
-  (ali a IA roda com limites curtos — quem escreveu está esperando do outro lado) e **~30 min no portão**
+  (ali a IA roda com limites curtos — quem escreveu está esperando do outro lado) e **~30 min numa aprovação**
   (a resposta religa o fluxo inteiro, que pode demorar de verdade). Ele destrava o que está preso, não
   interrompe o que ainda está trabalhando. Era 30 para os dois até 2026-08-27, quando um contato ficou
   16 minutos no vácuo esperando o vigia de um atendimento simples.

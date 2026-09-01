@@ -59,7 +59,6 @@ type BuilderProps = {
   cadeia: Cadeia;
   setCadeia: (atualiza: (c: Cadeia) => Cadeia) => void;
   agentes: Agente[];
-  canais: Instrumento[];
   podeEditar: boolean;
   gatilho: ConfigGatilho;
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
@@ -89,7 +88,6 @@ function BuilderInterno({
   cadeia,
   setCadeia,
   agentes,
-  canais,
   podeEditar,
   gatilho,
   setGatilho,
@@ -164,7 +162,7 @@ function BuilderInterno({
   );
 
   // Assinatura do que afeta a PROJEÇÃO dos nós. Dispara a reconciliação
-  // cadeia→RF. Inclui TUDO que muda o visual do nó (ids, tipo, ref, gate, nome,
+  // cadeia→RF. Inclui TUDO que muda o visual do nó (ids, tipo, ref, nome,
   // inicial e o CONTEÚDO das saídas — rótulo/destino/tone/lane afetam handles e
   // rótulos), o tipo do gatilho, o modo de edição e a seleção. NÃO inclui x/y de
   // propósito: a posição é mão única (RF→cadeia via onNodesChange); reprojetar a
@@ -178,7 +176,6 @@ function BuilderInterno({
           i: n.id,
           t: n.tipo,
           r: n.ref,
-          g: n.gate,
           nm: n.nome,
           ini: n.inicial,
           s: (n.saidas ?? []).map((s) => [
@@ -276,7 +273,6 @@ function BuilderInterno({
             rotulo: sa.tipo === "senao" ? `${sa.rotulo} (se nenhuma)` : sa.rotulo,
             tone: tk,
             lane: sa.lane,
-            gate: no.gate,
             ativo,
             onPick: setSelId,
           },
@@ -589,7 +585,6 @@ function BuilderInterno({
           no={sel}
           cadeia={cadeia}
           agentes={agentes}
-          canais={canais}
           podeEditar={podeEditar}
           gatilho={gatilho}
           setGatilho={setGatilho}

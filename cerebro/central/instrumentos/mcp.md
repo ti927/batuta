@@ -31,7 +31,7 @@ para o cinto do agente.
 ## Limites e cuidados
 - Diferente dos outros instrumentos: **um** MCP vira **várias** ferramentas no cinto.
 - Por segurança, é tratado como **ação irreversível** (o Batuta não sabe o que cada ferramenta do servidor
-  faz) → considere um **portão antes** conforme o uso.
+  faz) → considere uma **aprovação antes** conforme o uso.
 - Cada acionamento abre a própria conexão (sem estado entre chamadas).
 
 ## Para a IA

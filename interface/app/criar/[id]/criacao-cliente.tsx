@@ -24,6 +24,7 @@ import {
   caminhoPrincipal,
   inicialDaCadeia,
   type AgenteTime,
+  type InstrumentoTime,
   type Cadeia,
   type ConversaCriacao,
   type Execucao,
@@ -281,7 +282,11 @@ function Canvas({
       {automacao?.cadeia && inicialDaCadeia(automacao.cadeia) && (
         <>
           <RotuloSecao Icone={GitBranch}>Cadeia</RotuloSecao>
-          <CadeiaVertical cadeia={automacao.cadeia} agentes={agentes} />
+          <CadeiaVertical
+            cadeia={automacao.cadeia}
+            agentes={agentes}
+            instrumentos={instrumentos}
+          />
         </>
       )}
     </div>
@@ -291,9 +296,11 @@ function Canvas({
 function CadeiaVertical({
   cadeia,
   agentes,
+  instrumentos,
 }: {
   cadeia: Cadeia;
   agentes: AgenteTime[];
+  instrumentos: InstrumentoTime[];
 }) {
   const nome = (id: string | null | undefined) =>
     agentes.find((a) => a.id === id)?.nome ?? "—";
@@ -302,7 +309,11 @@ function CadeiaVertical({
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       {ordem.map((no, i) => {
-        const pausa = no.gate;
+        // Pode parar para uma pessoa: derivado do CINTO do agente (o instrumento de
+        // pedir aprovação), não de um interruptor no desenho.
+        const pausa = (agentes.find((a) => a.id === no.ref)?.cinto ?? []).some(
+          (id) => instrumentos.find((i) => i.id === id)?.tipo === "pedir_aprovacao",
+        );
         const rotulo =
           no.tipo === "roteador" ? (no.nome ?? "Roteador") : nome(no.ref);
         return (
@@ -316,7 +327,7 @@ function CadeiaVertical({
               <span className="text-sm text-foreground">{rotulo}</span>
               {pausa && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-[#FDF1E3] px-2 py-0.5 text-xs text-[#A05E16]">
-                  <MessageSquare className="size-3" /> portão de aprovação
+                  <MessageSquare className="size-3" /> pode esperar você
                 </span>
               )}
             </div>

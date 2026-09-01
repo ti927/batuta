@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import {
   URL_CEREBRO,
   api,
-  ErroDaApi,
   mensagemDeErro,
   type Agente,
   type Automacao,
@@ -35,8 +34,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 
-// Tipos de instrumento que são canais de mensageria (podem ser canal de aprovação).
-const CANAIS_TIPOS = ["enviar_telegram", "enviar_whatsapp"];
 const NOVA = "__nova__";
 
 function hhmm(h: unknown, m: unknown): string {
@@ -86,7 +83,6 @@ function EditorAutomacao({
   automacao,
   automacoes,
   agentes,
-  canais,
   cintos,
   instrumentos,
   credenciaisInstagram,
@@ -104,7 +100,6 @@ function EditorAutomacao({
   automacao: Automacao | null;
   automacoes: Automacao[];
   agentes: Agente[];
-  canais: Instrumento[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
   credenciaisInstagram: Credencial[];
@@ -203,19 +198,6 @@ function EditorAutomacao({
   }
 
   function tratar(e: unknown, padrao: string) {
-    // Parede de ativação: ligar uma automação com ação irreversível sem portão devolve
-    // 422 {problemas:[...]} — traduz para texto humano, nunca o JSON cru.
-    if (e instanceof ErroDaApi) {
-      try {
-        const corpo = JSON.parse(e.message);
-        if (Array.isArray(corpo?.problemas)) {
-          setErro("Não dá para ativar ainda: " + corpo.problemas.join(" "));
-          return;
-        }
-      } catch {
-        /* não era JSON de parede */
-      }
-    }
     setErro(mensagemDeErro(e, padrao));
   }
 
@@ -398,7 +380,7 @@ function EditorAutomacao({
             variant="outline"
             size="sm"
             onClick={() => setMostrarConfig(true)}
-            title="Como o motor conduz este fluxo (espera, teto, portão, atendimento)"
+            title="Como o motor conduz este fluxo (espera, teto, atendimento)"
           >
             <Sliders /> Fluxo
           </Button>
@@ -431,7 +413,6 @@ function EditorAutomacao({
           cadeia={cadeia}
           setCadeia={setCadeiaNorm}
           agentes={agentes}
-          canais={canais}
           podeEditar={souOperador}
           gatilho={gatilho}
           setGatilho={setGatilho}
@@ -556,7 +537,6 @@ export function AutomacoesCliente({
 }) {
   const souOperador = podeOperar(meuPapel);
   const souAdmin = podeAdmin(meuPapel);
-  const canais = instrumentos.filter((i) => CANAIS_TIPOS.includes(i.tipo));
 
   // A lista vive em estado local após montar (criar/editar/remover atualizam aqui;
   // o router.refresh sincroniza os contadores do servidor).
@@ -599,7 +579,6 @@ export function AutomacoesCliente({
       automacao={automacao}
       automacoes={automacoes}
       agentes={agentes}
-      canais={canais}
       cintos={cintos}
       instrumentos={instrumentos}
       credenciaisInstagram={credenciaisInstagram}

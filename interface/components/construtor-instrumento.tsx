@@ -803,14 +803,14 @@ function SecaoOperacoes({
             </div>
             {opEscreve ? (
               <Aviso variant="atencao">
-                Esta operação <strong>escreve</strong> ({op.metodo}) — não dá para desfazer. Se
-                o conector tiver qualquer operação de escrita, o Batuta pede sua aprovação antes
-                de agir (a parede de ativação). Detectado do método.
+                Esta operação <strong>escreve</strong> ({op.metodo}) — não dá para
+                desfazer. Se quiser que alguém confirme antes, dê ao agente o instrumento
+                &ldquo;Pedir aprovação e aguardar&rdquo;. Detectado do método.
               </Aviso>
             ) : (
               <Aviso variant="sucesso">
-                Esta operação <strong>só lê</strong> ({op.metodo}) — não muda nada no sistema
-                externo e corre livre, sem portão.
+                Esta operação <strong>só lê</strong> ({op.metodo}) — não muda nada no
+                sistema externo e corre livre.
               </Aviso>
             )}
           </div>

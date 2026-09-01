@@ -15,9 +15,8 @@ from typing import Literal
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.tools import StructuredTool
 from langchain.agents import create_agent
-from langchain.agents.middleware import HumanInTheLoopMiddleware, SummarizationMiddleware
+from langchain.agents.middleware import SummarizationMiddleware
 from langgraph.errors import GraphRecursionError
-from langgraph.types import Command
 from pydantic import BaseModel, Field, create_model
 
 import instrumentos as encaixe
@@ -117,26 +116,40 @@ def _registrar_resposta_com_falha(
         falhas.append(f"O instrumento '{ferramenta}' não completou a ação: {erro}")
 
 
-def _turno_interrompido(falhas: list[str]) -> str | None:
-    """Resposta curta que substitui QUALQUER ação depois que uma ação irreversível
-    falhou no mesmo turno. O agente não age mais — o turno já está condenado a falhar
-    (`raise` no fim), e deixá-lo continuar publicando/enviando depois de uma falha é
-    como a execução acaba fazendo meio trabalho e narrando sucesso."""
-    if not falhas:
-        return None
-    return json.dumps(
-        {
-            "ok": False,
-            "erro": "Este passo já falhou numa ação irreversível e foi interrompido. "
-            "Não execute mais nenhuma ação; encerre relatando a falha.",
-        },
-        ensure_ascii=False,
-    )
+def _turno_interrompido(falhas: list[str], pedido: dict | None = None) -> str | None:
+    """Resposta curta que substitui QUALQUER ação depois que o turno já acabou — por
+    falha ou por espera. Nos dois casos, deixar o agente continuar agindo é como a
+    execução faz meio trabalho e narra sucesso.
+
+    - Falhou uma ação IRREVERSÍVEL: o turno já está condenado (`raise` no fim).
+    - Pediu APROVAÇÃO: o agente está esperando uma pessoa; agir agora seria fazer
+      justamente o que ele foi mandado confirmar antes."""
+    if falhas:
+        return json.dumps(
+            {
+                "ok": False,
+                "erro": "Este passo já falhou numa ação irreversível e foi "
+                "interrompido. Não execute mais nenhuma ação; encerre relatando a "
+                "falha.",
+            },
+            ensure_ascii=False,
+        )
+    if pedido:
+        return json.dumps(
+            {
+                "ok": False,
+                "erro": "Você já pediu aprovação e está aguardando a resposta da "
+                "pessoa. Não execute mais nenhuma ação agora — encerre este turno; "
+                "você continua quando ela responder.",
+            },
+            ensure_ascii=False,
+        )
+    return None
 
 
 def _com_rastro_de_resposta(
     ferramenta: StructuredTool, inst, tipo_nome: str, irreversivel: bool,
-    erros: list[dict], falhas: list[str],
+    erros: list[dict], falhas: list[str], pedido: dict,
 ) -> StructuredTool:
     """Embrulha uma ferramenta EXPANDIDA (conector/MCP) para que uma resposta com
     `ok: false` também entre no rastro — essas ferramentas tratam a própria falha
@@ -162,18 +175,18 @@ def _com_rastro_de_resposta(
     coro = None
     if original_func is not None:
         def func(*args, **kwargs):
-            parado = _turno_interrompido(falhas)
+            parado = _turno_interrompido(falhas, pedido)
             return parado if parado else _observar(original_func(*args, **kwargs))
     if original_coro is not None:
         async def coro(*args, **kwargs):
-            parado = _turno_interrompido(falhas)
+            parado = _turno_interrompido(falhas, pedido)
             return parado if parado else _observar(await original_coro(*args, **kwargs))
     return ferramenta.model_copy(update={"func": func, "coroutine": coro})
 
 
 def _ferramenta_unica(
     inst, tipo, config, falhas: list[str], mensagens_enviadas: dict[str, list[str]],
-    erros: list[dict],
+    erros: list[dict], pedido: dict,
 ) -> StructuredTool:
     """A ferramenta única derivada do `executar` de um instrumento (o caso comum).
 
@@ -190,9 +203,12 @@ def _ferramenta_unica(
 
     Quando o instrumento APRESENTA uma mensagem a um humano (`tipo.campo_mensagem`,
     ex.: um canal de mensageria), o texto enviado COM SUCESSO é acumulado em
-    `mensagens_enviadas` (por id de instrumento). É o que o portão de aprovação usa
-    para carregar adiante exatamente o que a pessoa viu (e não o status que o agente
-    narra depois)."""
+    `mensagens_enviadas` (por id de instrumento). É o que carrega adiante exatamente
+    o que a pessoa viu (e não o status que o agente narra depois).
+
+    Quando o instrumento PARA para uma pessoa (`tipo.pausa_para_humano`, hoje só o
+    `pedir_aprovacao`), o pedido é registrado em `pedido` e, daí em diante, nenhuma
+    outra ação roda no turno: o agente está esperando, não trabalhando."""
 
     # Derivado por instância (REST pelo método, SQL pelo somente_leitura). É o
     # mesmo critério da parede de ativação — uma fonte de verdade só.
@@ -200,9 +216,9 @@ def _ferramenta_unica(
     campo_msg = getattr(tipo, "campo_mensagem", None)
 
     def executar(**kwargs) -> str:
-        # Uma ação irreversível já falhou neste turno: nada mais roda (ver
-        # `_turno_interrompido`). Antes o agente seguia agindo e narrando.
-        parado = _turno_interrompido(falhas)
+        # Uma ação irreversível já falhou neste turno, ou o agente já pediu aprovação
+        # e está esperando: nada mais roda (ver `_turno_interrompido`).
+        parado = _turno_interrompido(falhas, pedido)
         if parado:
             return parado
         args = tipo.Args.model_validate(kwargs)
@@ -243,6 +259,17 @@ def _ferramenta_unica(
             instrumento_id=str(inst.id), irreversivel=irreversivel, erros=erros,
             falhas=falhas,
         )
+        # O instrumento PAROU para uma pessoa: guarda o pedido (a borda o transforma
+        # em `aguardando_humano`) e o turno acaba aqui — nada mais é acionado.
+        if getattr(tipo, "pausa_para_humano", False) and resultado.get("ok"):
+            pedido.update(
+                {
+                    "mensagem": (getattr(args, campo_msg, None) or "") if campo_msg else "",
+                    "instrumento_id": str(inst.id),
+                    "canal_instrumento_id": resultado.get("canal_instrumento_id"),
+                    "destinatario": resultado.get("destinatario"),
+                }
+            )
         # Envio bem-sucedido por um canal: registra o texto apresentado ao humano.
         if campo_msg:
             texto = getattr(args, campo_msg, None)
@@ -260,7 +287,7 @@ def _ferramenta_unica(
 
 def _ferramentas_de_instrumento(
     inst: Instrumento, falhas: list[str], mensagens_enviadas: dict[str, list[str]],
-    erros: list[dict],
+    erros: list[dict], pedido: dict,
 ) -> list:
     """As ferramentas que um instrumento do cinto oferece à IA pelo encaixe.
 
@@ -279,10 +306,14 @@ def _ferramentas_de_instrumento(
     if expandidas is not None:
         irrev = acao_irreversivel(inst.tipo, inst.configuracao or {})
         return [
-            _com_rastro_de_resposta(f, inst, tipo.tipo, irrev, erros, falhas)
+            _com_rastro_de_resposta(f, inst, tipo.tipo, irrev, erros, falhas, pedido)
             for f in expandidas
         ]
-    return [_ferramenta_unica(inst, tipo, config, falhas, mensagens_enviadas, erros)]
+    return [
+        _ferramenta_unica(
+            inst, tipo, config, falhas, mensagens_enviadas, erros, pedido
+        )
+    ]
 
 
 def _opcoes_das_saidas(saidas: list[dict]) -> str:
@@ -580,31 +611,6 @@ def _middlewares_de_memoria() -> list:
         return []
 
 
-def _middleware_portao(irreversivel_por_ferramenta: dict[str, bool]) -> list:
-    """O middleware do PORTÃO NATIVO (Fatia 4.3 / P3): o HITL SELETIVO que interrompe
-    ANTES de executar uma ferramenta IRREVERSÍVEL (publicar/enviar/gravar), deixando as
-    de leitura correrem livres. O `interrupt_on` é derivado da MESMA regra da parede de
-    ativação (`instrumentos/base.py::acao_irreversivel`) — uma fonte de verdade só, não
-    uma segunda lista. Ao pausar, o estado é salvo no checkpoint (por isso o portão
-    nativo EXIGE checkpointer) e a decisão do humano volta como `Command(resume=…)`.
-
-    Achado do protótipo P3 (custo zero): o middleware pausa numa FRONTEIRA limpa (depois
-    que o agente decide chamar a ferramenta, ANTES de executá-la) — então o que já rodou
-    no turno NÃO re-executa ao retomar (contém o caveat do re-run do `interrupt()` cru) e
-    a garantia congelada de nunca disparar irreversível 2× fica protegida.
-
-    À prova de falha: sem ferramenta irreversível no cinto, devolve `[]` (nada a gatear);
-    se o middleware não puder ser montado, `[]` também — o turno segue sem portão nativo
-    (a lei §12-A: a borda nunca quebra por causa disto)."""
-    gatear = {nome: True for nome, irr in irreversivel_por_ferramenta.items() if irr}
-    if not gatear:
-        return []
-    try:
-        return [HumanInTheLoopMiddleware(interrupt_on=gatear)]
-    except Exception:
-        return []
-
-
 def executar_agente(
     agente: Agente,
     cinto: list[Instrumento],
@@ -616,8 +622,6 @@ def executar_agente(
     checkpointer=None,
     thread_id: str | None = None,
     preambulo_sistema: str | None = None,
-    portao_nativo: bool = False,
-    retomar: dict | None = None,
     interativo: bool = False,
 ) -> dict:
     """Roda um agente sozinho sobre uma entrada. Devolve a saída em texto e a
@@ -645,6 +649,9 @@ def executar_agente(
     erros_instrumentos: list[dict] = []
     # Os ramos que o agente declarar via `seguir_para` ({"rotulos": [...], "motivo": ...}).
     escolha: dict = {}
+    # O pedido de aprovação, quando o agente aciona um instrumento que PARA para uma
+    # pessoa (`pausa_para_humano`). Preenchido = o turno terminou numa espera.
+    pedido_aprovacao: dict = {}
     # Constrói as ferramentas do cinto e, em paralelo, o mapa nome→irreversível (a MESMA
     # regra da parede: `acao_irreversivel(tipo, config)`) — é o que o portão nativo (P3)
     # usa para saber QUAIS ferramentas exigem aprovação antes de executar. As ferramentas
@@ -654,7 +661,7 @@ def executar_agente(
     irreversivel_por_ferramenta: dict[str, bool] = {}
     for i in cinto:
         fs = _ferramentas_de_instrumento(
-            i, falhas, mensagens_enviadas, erros_instrumentos
+            i, falhas, mensagens_enviadas, erros_instrumentos, pedido_aprovacao
         )
         irrev = acao_irreversivel(i.tipo, i.configuracao or {})
         for f in fs:
@@ -694,13 +701,7 @@ def executar_agente(
         extra["checkpointer"] = checkpointer
         # P2b: só o chat (com memória) ganha o resumo/janela; a orquestração/tarefa e o
         # portão seguem sem middleware — grafo efêmero, byte-idêntico à P1.
-        mids = _middlewares_de_memoria()
-        # Portão NATIVO (P3): HITL seletivo que interrompe ANTES de executar uma
-        # ferramenta IRREVERSÍVEL. Opt-in (`portao_nativo`) — hoje ligado por NINGUÉM em
-        # produção (P3a "no escuro"); precisa de checkpointer (o interrupt salva o estado).
-        if portao_nativo:
-            mids = mids + _middleware_portao(irreversivel_por_ferramenta)
-        extra["middleware"] = mids
+        extra["middleware"] = _middlewares_de_memoria()
     app = create_agent(modelo, ferramentas, system_prompt=prompt_sistema, **extra)
     # Teto de iterações do laço de ferramentas: um agente em laço (chama a mesma
     # ferramenta sem parar) para aqui, com mensagem legível, em vez de queimar tokens
@@ -727,16 +728,9 @@ def executar_agente(
     # Feedback ao vivo: o turno de LLM pode demorar; avisa que o agente está pensando.
     atividade.registrar(f"{agente.nome}: pensando…")
     try:
-        if retomar is not None:
-            # Retomada do portão NATIVO (P3): a decisão do humano volta como
-            # `Command(resume=…)` no MESMO thread_id — o agente continua de onde parou,
-            # sem re-derivar do texto. Precisa de checkpointer/config (garantido pelo
-            # chamador).
-            resultado = app.invoke(Command(resume=retomar), config)
-        else:
-            resultado = app.invoke(
-                {"messages": [{"role": "user", "content": entrada}]}, config
-            )
+        resultado = app.invoke(
+            {"messages": [{"role": "user", "content": entrada}]}, config
+        )
     except GraphRecursionError as e:
         # Laço de ferramentas sem fim. Erro honesto (§12-A), com o nome do agente e o
         # que fazer — em vez do `GraphRecursionError` cru, que não diz nada a ninguém.
@@ -792,25 +786,18 @@ def executar_agente(
         }
     ]
 
-    # Portão NATIVO pausou? (P3) O HITL interrompe ANTES de executar a ferramenta
-    # irreversível → o estado volta com `__interrupt__` (o pedido de aprovação: nome +
-    # args da ação), em vez de concluir. A ação irreversível NÃO rodou. Devolvemos o
-    # pedido para a borda apresentar ao humano e, depois, retomar com `retomar=`
-    # (Command resume). `pausado=False` no caminho normal — chave aditiva, chamadores
-    # atuais leem por chave e não quebram.
-    interrupcoes = resultado.get("__interrupt__") if isinstance(resultado, dict) else None
-    if interrupcoes:
-        pend = interrupcoes[0]
+    # O agente PEDIU APROVAÇÃO e está esperando uma pessoa (instrumento
+    # `pedir_aprovacao`, `tipo.pausa_para_humano`). Quem decide que este momento
+    # precisa de gente é o AGENTE — não um interruptor no desenho, como era o portão.
+    # A borda transforma isto em `aguardando_humano`; `pausado=False` no caminho
+    # normal, chave aditiva.
+    if pedido_aprovacao:
         return {
             "pausado": True,
-            "acao_pendente": getattr(pend, "value", pend),
-            "saida": None,
-            # O que o agente ESCREVEU no passo em que decidiu agir (ex.: "vou lançar o
-            # reembolso de R$320…"). A borda apresenta ISSO como o pedido de confirmação —
-            # na VOZ do agente — em vez de um texto genérico (evita a confirmação em dobro
-            # quando o agente já explica a ação; P3d). Pode vir vazio → a borda usa o
-            # genérico.
-            "texto_pendente": texto_da_resposta(mensagens[-1]),
+            "aprovacao": dict(pedido_aprovacao),
+            # O que a pessoa vai ler e aprovar é a MENSAGEM que o agente escreveu ao
+            # pedir — não o que ele narrou depois ("enviei, aguardando").
+            "saida": pedido_aprovacao.get("mensagem") or texto_da_resposta(mensagens[-1]),
             "instrumentos_acionados": acionados,
             "mensagens_enviadas": mensagens_enviadas,
             "erros_instrumentos": erros_instrumentos,

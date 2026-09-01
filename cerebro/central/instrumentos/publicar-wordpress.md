@@ -21,14 +21,14 @@ no ar). A imagem destacada pode vir de um passo de [[instrumentos/gerar-imagem]]
 1. Crie o instrumento **WordPress: publicar** e configure o **site**, o **usuário** e a **senha de
    aplicativo** (segredo) — ou aponte para uma credencial WordPress.
 2. Escolha o **status** (`draft` = rascunho; `publish` = no ar) e as **categorias** onde publicar.
-3. Como é **ação irreversível**, coloque um **portão de aprovação no passo anterior**.
+3. Como é **ação irreversível**, dê ao agente que apresenta o instrumento **Pedir aprovação e aguardar**.
 
 ## Exemplos
-- [idealizador → redator → revisor → **portão**] → [publicar no WordPress como `publish`].
+- [idealizador → redator → revisor → **pede aprovação**] → [publicar no WordPress como `publish`].
 - Publicar como rascunho para revisão humana no próprio WordPress.
 
 ## Limites e cuidados
-- É `acao_irreversivel = true` → exige portão antes.
+- É `acao_irreversivel = true` → pede aprovação antes.
 - A **senha de aplicativo** é a do WordPress (não a senha de login); o usuário precisa de permissão para
   publicar e enviar mídia (papel Autor ou superior).
 - **Plugin Wordfence instalado?** Ele costuma **desligar as senhas de aplicativo** por padrão, e aí a
@@ -46,7 +46,7 @@ no ar). A imagem destacada pode vir de um passo de [[instrumentos/gerar-imagem]]
 ## Para a IA
 Parâmetros no catálogo (`publicar_wordpress`): `titulo`, `conteudo` (texto/HTML), `tags`, `resumo`,
 `imagem_url` (link da imagem gerada antes). A **categoria** e o **status** são da configuração do humano,
-não seus. Monte com portão antes; o nó que publica recebe o artigo **pronto**.
+não seus. Monte com aprovação antes; o nó que publica recebe o artigo **pronto**.
 
 Se a publicação falhar com **autenticação recusada (401/403)** e a senha estiver correta, oriente o
 consultor a checar o **Wordfence**: em Firewall → Proteção contra força bruta, precisa **desmarcar**
@@ -54,5 +54,5 @@ consultor a checar o **Wordfence**: em Firewall → Proteção contra força bru
 
 ## Relacionado
 - [[instrumentos/gerar-imagem]]
-- [[automacoes/portao-de-aprovacao]]
+- [[automacoes/pedir-aprovacao]]
 - [[segredos/credenciais-nomeadas]]

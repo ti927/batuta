@@ -24,13 +24,13 @@ uma vez pelo humano (credencial `instagram`); o agente só passa a mídia e a le
    *Chaves e credenciais* — botão "Conectar Instagram" ou colando o token). O instrumento em si não
    pede a conta; ela vem da credencial.
 3. Pendure o instrumento no cinto do **agente publicador**.
-4. Como é uma **ação irreversível**, coloque um **portão de aprovação no passo anterior** (o publicador
-   fica no nó seguinte, sem portão).
+4. Como é uma **ação irreversível**, dê ao agente que apresenta o instrumento **Pedir aprovação e aguardar** (o publicador
+   fica no nó seguinte, sem aprovação).
 
 ## Exemplos
-- **Post de foto:** [gerar imagem + escrever legenda → **portão**] → [publicar: `imagem`].
-- **Reels:** [gerar vídeo → **portão**] → [publicar: `reels`].
-- **Story de vídeo:** [animar foto (fal.ai) → **portão**] → [publicar: `stories`, marcando o item como vídeo].
+- **Post de foto:** [gerar imagem + escrever legenda → **pede aprovação**] → [publicar: `imagem`].
+- **Reels:** [gerar vídeo → **pede aprovação**] → [publicar: `reels`].
+- **Story de vídeo:** [animar foto (fal.ai) → **pede aprovação**] → [publicar: `stories`, marcando o item como vídeo].
 - **Carrossel misto:** 3 a 10 mídias (fotos e vídeos) num post só.
 
 ## Limites e cuidados
@@ -42,7 +42,8 @@ uma vez pelo humano (credencial `instagram`); o agente só passa a mídia e a le
 - **Legenda:** até 2200 caracteres.
 - **Não faz DM** nem adesivos interativos de Story (caixinha de perguntas, enquete) — isso é limitação
   da API oficial da Meta, não do Batuta.
-- É `acao_irreversivel = true` → exige portão de aprovação antes na cadeia.
+- É `acao_irreversivel = true` → se alguém precisa confirmar antes, use
+  [[automacoes/pedir-aprovacao]] no agente que apresenta.
 
 ## Para a IA
 Os **parâmetros exatos** (Args/Config) estão no catálogo do código
@@ -69,12 +70,12 @@ Você recebe PRONTO: a URL pública e se é imagem ou vídeo. Story NÃO tem leg
 Se faltar a URL, PARE e peça.
 ```
 
-Regras que a IA deve garantir ao montar: **portão antes** do publicador; o passo que PREPARA entrega
+Regras que a IA deve garantir ao montar: **aprovação antes** do publicador; o passo que PREPARA entrega
 URL pública + legenda prontas; para Story/Reels vertical, a arte deve ser gerada em **9:16** (ex.:
 tamanho `864x1536` no `gerar_imagem`).
 
 ## Relacionado
 - [[instrumentos/gerar-imagem]]
 - [[instrumentos/gerar-video-fal]]
-- [[automacoes/portao-de-aprovacao]]
+- [[automacoes/pedir-aprovacao]]
 - [[segredos/credenciais-nomeadas]]

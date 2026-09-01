@@ -28,7 +28,7 @@ Produzir contratos, laudos, relatórios ou comunicados a partir do texto que o a
 ## Limites e cuidados
 - O documento usa fontes nativas do PDF (cobrem os acentos do português). **Emojis** e caracteres muito
   fora do padrão viram "?" — é para conteúdo textual, não para arte gráfica.
-- Não é irreversível (só gera o arquivo) — não exige portão.
+- Não é irreversível (só gera o arquivo) — não precisa de aprovação.
 
 ## Para a IA
 Parâmetros no catálogo (`gerar_pdf`): `titulo` (opcional) e `conteudo` (o corpo, em texto). O agente

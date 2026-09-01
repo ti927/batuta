@@ -1,8 +1,9 @@
 """O prompt único da IA criadora (conversa eterna sobre o time real).
 
 Sem modos: um só prompt que investiga, monta, ativa e mantém. Garante que as peças
-essenciais estão lá (investigação do ofício, vocabulário, a PAREDE do portão no nó,
-regra dos markdowns) e que o catálogo e o time atual são injetados."""
+essenciais estão lá (investigação do ofício, vocabulário, a condição de cada saída, a
+aprovação como INSTRUMENTO do agente, regra dos markdowns) e que o catálogo e o time
+atual são injetados."""
 
 from criacao.prompt import montar_prompt_criadora
 
@@ -20,9 +21,12 @@ def test_prompt_tem_as_pecas_essenciais():
     # vocabulário e regra dos 4 textos
     assert "agent_md" in p and "soul_md" in p
     assert "AGE, não pergunta" in p and "REPASSE LIMPO" in p
-    # a PAREDE: portão no NÓ anterior (não na saída)
-    assert "gate" in p
-    assert "NÓ" in p
+    # a bifurcação de verdade: condição obrigatória e fan-out
+    assert "quando" in p and "OBRIGATÓRIA" in p
+    assert "TODOS OS CAMINHOS ATENDIDOS" in p
+    # aprovação é INSTRUMENTO do agente (não portão no nó, não parede da org)
+    assert "pedir_aprovacao" in p
+    assert "não existe portão nem parede" in p
     # sinaliza ativação (não decide sozinha) e modelos válidos por papel
     assert "SINALIZE" in p and "nunca ativa sozinho" in p.lower()
     assert "claude-haiku-4-5" in p
@@ -31,14 +35,14 @@ def test_prompt_tem_as_pecas_essenciais():
     assert "acao_irreversivel" in p
 
 
-def test_prompt_ensina_trava_da_conversa():
-    """P3d: a criadora sabe que a ação irreversível na CONVERSA é travada pelo SISTEMA
-    (parede de aprovação) → não deve escrever ritual manual de confirmação (evita dobro)."""
+def test_prompt_ensina_a_confirmacao_na_conversa():
+    """Na CONVERSA não há trava de sistema (a parede morreu em 2026-08-31): se o agente
+    deve confirmar antes de agir, isso tem que estar ESCRITO no markdown dele — e só de
+    UM jeito, para não pedir confirmação em dobro."""
     p = montar_prompt_criadora()
+    assert "NÃO há trava de sistema" in p
     assert "confirmação em dobro" in p
-    assert "trava do SISTEMA" in p
-    # orienta o agente a DIZER a ação e acionar (não "pergunte e espere")
-    assert "NÃO escreva um ritual manual de confirmação" in p
+    assert "escolha uma" in p
 
 
 def test_prompt_injeta_o_time_atual():

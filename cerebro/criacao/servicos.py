@@ -23,7 +23,6 @@ from sqlalchemy.orm.attributes import flag_modified
 
 import auditoria
 import instrumentos as encaixe
-import portao_ativacao
 import segredos_instrumento as segredos
 from mensageria.config import PERFIL_PADRAO
 from modelos import Agente, AgenteInstrumento, Automacao, Instrumento, Time, Usuario
@@ -406,11 +405,12 @@ def definir_automacao(
 
 
 def ativar(sessao: Session, auto: Automacao, *, usuario: Usuario | None = None) -> Automacao:
-    """Liga a automação — A PAREDE: se algum agente com instrumento de ação
-    irreversível não tiver portão humano antes na cadeia, recusa com `ConflitoDominio`."""
-    problemas = portao_ativacao.validar(sessao, auto.time_id, auto.cadeia or {})
-    if problemas:
-        raise ConflitoDominio(" ".join(problemas))
+    """Liga a automação (passa a poder disparar).
+
+    Não há mais parede: até 2026-08-31 esta função recusava ativar quando um agente
+    de ação irreversível não tinha portão humano antes na cadeia. Quem segura uma
+    ação que precisa de gente é o próprio agente, chamando o instrumento
+    `pedir_aprovacao` — decisão do maestro, ver `PRODUTO §19`."""
     auto.ativa = True
     sessao.flush()
     _audit(sessao, usuario, "automacao.ativada", "automacao", auto.id,

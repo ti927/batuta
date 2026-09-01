@@ -29,7 +29,7 @@ JavaScript. Se a página é simples, o [[instrumentos/ler-site]] (Tavily) costum
 ## Limites e cuidados
 - Renderizar JS é mais lento — o instrumento dá folga de tempo.
 - Precisa da chave Firecrawl cadastrada na organização (sem fallback de ambiente).
-- Só leitura → não exige portão.
+- Só leitura → ninguém precisa aprovar nada.
 
 ## Para a IA
 Parâmetro no catálogo (`ler_site_firecrawl`): `url`. Prefira o Tavily por padrão; recorra ao Firecrawl

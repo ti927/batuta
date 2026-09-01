@@ -29,7 +29,7 @@ traz só um trecho) e do "Chamar API REST" (que traz o HTML cru). Para sites fei
 ## Limites e cuidados
 - **Não renderiza páginas feitas em JavaScript** — para essas, o Firecrawl.
 - Precisa da chave Tavily cadastrada na organização.
-- Só leitura → não exige portão.
+- Só leitura → ninguém precisa aprovar nada.
 
 ## Para a IA
 Parâmetro no catálogo (`ler_site`): `url`. A profundidade/formato/tamanho são da configuração do humano.

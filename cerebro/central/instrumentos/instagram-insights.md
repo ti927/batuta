@@ -29,7 +29,7 @@ próxima pauta olhando o que teve mais retorno.
 - **Hashtags e métricas avançadas** (alcance, impressões, visualizações) **ainda não** estão disponíveis
   por este caminho — exigem o setup "API com login do Facebook" (fase futura). Aqui vem o engajamento
   básico: curtidas e comentários.
-- Traz de 1 a 25 posts recentes. Só leitura → não exige portão.
+- Traz de 1 a 25 posts recentes. Só leitura → ninguém precisa aprovar nada.
 
 ## Para a IA
 Parâmetro no catálogo (`instagram_insights`): `limite`. Não prometa alcance/impressões — este instrumento

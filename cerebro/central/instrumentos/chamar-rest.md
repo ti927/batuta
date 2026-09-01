@@ -22,16 +22,16 @@ registro. O endereço, o método e os cabeçalhos são fixos (config); a IA pass
 2. Configure a **URL**, o **método** (GET/POST/PUT/PATCH/DELETE) e os **cabeçalhos** fixos (sem segredos).
 3. Para autenticar, use o **token bearer** (segredo) — vira o cabeçalho `Authorization: Bearer`, em vez de
    deixar o segredo em claro nos cabeçalhos.
-4. Se o método **escreve** (POST/PUT/PATCH/DELETE), coloque um **portão de aprovação antes**.
+4. Se o método **escreve** (POST/PUT/PATCH/DELETE), dê ao agente que apresenta o instrumento **Pedir aprovação e aguardar**.
 5. Se a consulta devolve uma **lista** de registros, use **Campos da resposta** para trazer só os campos que
    o agente vai usar — enxuga a resposta e corta o custo de tokens (veja abaixo).
 
 ## Exemplos
-- GET num endpoint de consulta (leitura, sem portão).
-- POST que cria um registro num sistema (escrita → portão antes).
+- GET num endpoint de consulta (leitura, sem aprovação).
+- POST que cria um registro num sistema (escrita → peça aprovação antes).
 
 ## Limites e cuidados
-- A irreversibilidade depende do **método**: leitura (GET/HEAD/OPTIONS) **não** exige portão; escrita sim.
+- A irreversibilidade depende do **método**: leitura (GET/HEAD/OPTIONS) **não** precisa de aprovação; escrita, sim.
 - Respostas legítimas (2xx e mesmo um 404) voltam ao agente como dado; 401/403 e 5xx viram falha do
   instrumento (a de servidor é retentável).
 - Não coloque segredos nos cabeçalhos fixos — use o campo de token.
@@ -47,7 +47,7 @@ registro. O endereço, o método e os cabeçalhos são fixos (config); a IA pass
 ## Para a IA
 Parâmetros no catálogo (`chamar_api_rest`): `parametros_query` e `corpo` (JSON, para POST/PUT/PATCH). A URL,
 o método, a autenticação e o filtro **`campos_resposta`** são da **config** do humano. Se o método escreve,
-garanta portão antes. O par de "só notificar/disparar" é o [[instrumentos/webhook-saida]].
+garanta uma aprovação antes. O par de "só notificar/disparar" é o [[instrumentos/webhook-saida]].
 
 **Corte de custo (importante ao montar um GET que lê listas):** preencha `campos_resposta` com apenas os
 campos que o agente usa (nome exato da API, ex.: `["_id","cpo.NomeCliente"]`). A resposta é reenviada ao
@@ -58,5 +58,5 @@ e o formato `results` do Bubble; formato não reconhecido volta intacto (nunca d
 ## Relacionado
 - [[instrumentos/webhook-saida]]
 - [[instrumentos/mcp]]
-- [[automacoes/portao-de-aprovacao]]
+- [[automacoes/pedir-aprovacao]]
 - [[segredos/certificado-digital-mtls]]

@@ -351,7 +351,6 @@ def ativar_automacao(sessao, usuario, automacao_id) -> str:
     if aid is None:
         return f"Id de automação inválido: {automacao_id}."
     auto = mcp_escopo.automacao_acessivel(sessao, usuario, aid, "operador")
-    # servicos.ativar levanta ConflitoDominio (com os problemas da parede) → decorator.
     servicos.ativar(sessao, auto, usuario=usuario)
     return f"Automação '{auto.nome}' ativada (passa a poder disparar)."
 

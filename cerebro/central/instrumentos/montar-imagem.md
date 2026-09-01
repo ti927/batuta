@@ -34,7 +34,7 @@ agente também passa a **URL da(s) foto(s)-base**.
 - As fotos-base precisam estar em **URLs públicas** (o cérebro as baixa). De 1 a 16 fotos.
 - Montagem em qualidade alta é **pesada** — leva minutos e tem um custo por imagem maior.
 - Só a família **gpt-image-1 / gpt-image-1.5** reforça a fidelidade ao rosto da entrada.
-- Não é ação irreversível (só gera um arquivo) — não exige portão.
+- Não é ação irreversível (só gera um arquivo) — não precisa de aprovação.
 
 ## Para a IA
 Parâmetros no catálogo (`montar_imagem`): `prompt` (descreva o PAPEL de cada imagem — qual PRESERVAR e

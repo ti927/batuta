@@ -50,13 +50,13 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Condições e ramos | `automacoes/condicoes-e-ramos` | A condição de cada seta; o fluxo segue TODAS as atendidas; junção | ✅ | ✍️ |
 | Quando um passo dá erro | `automacoes/erros-no-fluxo` | Saída de erro, saída "se nenhuma", aviso da falha | ✅ | ✍️ |
 | Gatilhos | `automacoes/gatilhos` | Manual, agendamento, webhook, comentário do Instagram; a "entrada" ao 1º agente | ✅ | ✍️ |
-| Portão de aprovação | `automacoes/portao-de-aprovacao` | Pausa/retoma; aprovar/reprovar/cancelar; por tela e por canal | ✅ | ✍️ |
+| Pedir aprovação e aguardar | `automacoes/pedir-aprovacao` | O instrumento que para o fluxo até uma pessoa responder; por tela e por canal | ✅ | ✍️ |
 | Execuções e inspeção | `automacoes/execucoes-e-inspecao` | Ver o fluxo rodar; feedback ao vivo; diagnóstico | ✅ | ✍️ |
 
 ## 4. Instrumentos
 | Capítulo | slug | O que cobre | Recurso | Escrita |
 |---|---|---|---|---|
-| O cinto e os instrumentos | `instrumentos/cinto` | Conceito: encaixe, config × args, ação irreversível/portão, segredos | ✅ | ✍️ |
+| O cinto e os instrumentos | `instrumentos/cinto` | Conceito: encaixe, config × args, ação irreversível, segredos | ✅ | ✍️ |
 | **Conteúdo & mídia** | | | | |
 | Gerar imagem | `instrumentos/gerar-imagem` | Texto→imagem; modelo/tamanho/qualidade; proporção | ✅ | ✍️ |
 | Montar imagem | `instrumentos/montar-imagem` | Composição a partir de fotos | ✅ | ✍️ |
@@ -89,7 +89,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | **Google (OAuth)** | | | | |
 | Search Console | `instrumentos/search-console` | Desempenho no Google (cliques/impressões/posição) | ✅ | ✍️ |
 | Gmail: ler | `instrumentos/gmail-ler` | Ler e-mails | 📋 | ⬜ |
-| Gmail: enviar | `instrumentos/gmail-enviar` | Enviar e-mail (portão) | 📋 | ⬜ |
+| Gmail: enviar | `instrumentos/gmail-enviar` | Enviar e-mail | 📋 | ⬜ |
 | Agenda: listar/criar | `instrumentos/agenda` | Eventos do Google Agenda | 📋 | ⬜ |
 | Drive: listar/subir | `instrumentos/drive` | Arquivos do Google Drive | 📋 | ⬜ |
 
@@ -115,7 +115,6 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Uso e custos | `operacao/uso-e-custos` | Medição informativa por categoria/chave | ✅ | ✍️ |
 | Falhas e retentativa | `operacao/falhas-e-retentativa` | Retentável × não-retentável; backoff; falha devolvida como resposta; erro de rede | ✅ | ✍️ |
 | Sinais e diagnóstico | `operacao/sinais-e-diagnostico` | Nada falha em silêncio: eventos, trabalho preso, modo degradado, **página de status dos elos**, ordem de investigação | ✅ | ✍️ |
-| Parede de ativação | `operacao/parede-de-ativacao` | Bloqueia ativar ação irreversível sem portão | ✅ | ✍️ |
 | Auditoria e LGPD | `operacao/auditoria-e-lgpd` | Registro de ações; dados sensíveis | ✅ | ✍️ |
 
 ## 8. Administração
@@ -128,6 +127,6 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 ---
 
 **Total:** ~40 capítulos (8 áreas). **Onda A** (fundamentos + chave/credencial + agente + instrumentos-chave
-+ automação/gatilho/portão) e **Onda B** (demais instrumentos + times/agentes + operação + administração +
++ automação/gatilho/aprovação) e **Onda B** (demais instrumentos + times/agentes + operação + administração +
 conversas) **escritas**. Falta só `mensageria/canal-whatsapp` (recurso não construído). A **Fase 5**
 (governança/manutenção) mantém os capítulos em dia quando o código muda.

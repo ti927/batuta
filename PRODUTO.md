@@ -151,16 +151,16 @@ Um fluxo é o caminho de uma tarefa, do gatilho até a entrega. Comportamentos q
 
 O caminho da cadeia é **definido por quem monta o time** — não improvisado pela IA na hora. O usuário desenha: "a tarefa entra no Líder, vai pro Agente A, depois pro B, depois volta pro Líder". A documentação de cada agente diz para onde vai o resultado dele: para outro agente ou para o usuário. Isso torna o fluxo previsível e confiável — o que uma empresa exige de um processo.
 
-> **Como se desenha (UI):** a automação é montada num **construtor visual de grafo** — nós (gatilho, agentes, roteador, fim) ligados por arestas rotuladas, com bifurcações, loops (voltar a um agente anterior) e portão de aprovação. É a forma visual de desenhar o que o motor já executa. Vale para a criação **manual** e para a **IA criadora** (ambas produzem o mesmo fluxo). Especificação em `docs/design_handoff_automacoes_grafo/`; fase no `BUILD-PLAN.md` ("FASE — Automações como GRAFO").
+> **Como se desenha (UI):** a automação é montada num **construtor visual de grafo** — nós (gatilho, agentes, roteador, fim) ligados por arestas rotuladas, com bifurcações, loops (voltar a um agente anterior), saídas de erro e saídas "se nenhuma". É a forma visual de desenhar o que o motor já executa. Vale para a criação **manual** e para a **IA criadora** (ambas produzem o mesmo fluxo). Especificação em `docs/design_handoff_automacoes_grafo/`; fase no `BUILD-PLAN.md` ("FASE — Automações como GRAFO").
 
 ### Espera por humano
 
 Um fluxo precisa saber **pausar, fazer uma pergunta a um humano, e retomar de onde parou** quando a resposta chega — que pode ser minutos ou um dia depois. Esta é a capacidade mais delicada do produto. Ela aparece em três formas:
 - **Pergunta pontual** — o agente precisa de uma informação para continuar ("qual cliente/projeto devo lançar?").
-- **Portão de aprovação** — um humano precisa autorizar antes de um passo importante ("posso publicar este artigo?").
+- **Pedido de aprovação** — um humano precisa autorizar antes de um passo importante ("posso publicar este artigo?").
 - **Confirmação de baixa confiança** — o agente não tem certeza do que entendeu e confirma antes de agir ("li 'R$ 1.500' no recibo — está correto?"), em vez de errar silenciosamente.
 
-> **Estado de implementação:** o motor de pausar/perguntar/retomar está pronto e validado, respondido **na tela do Batuta** e também **pelo canal** (Telegram já no ar; o WhatsApp do Líder, §10, segue na fila da Mensageria). Quem conduz o portão é o **próprio agente**, não o motor: ao receber a resposta, ele roda de novo e decide conforme seus markdowns — pode **perguntar de volta antes de seguir** (ex.: pedir o porquê de uma reprovação) e só então escolher o caminho. O motor executa; o agente decide (sinergia, não um roteador decidindo na frente do agente).
+> **Estado de implementação:** o motor de pausar/perguntar/retomar está pronto e validado, respondido **na tela do Batuta** e também **pelo canal** (Telegram já no ar; o WhatsApp do Líder, §10, segue na fila da Mensageria). **Quem decide esperar é o próprio agente**, chamando o instrumento *Pedir aprovação e aguardar* porque a documentação dele manda — não há interruptor de aprovação no desenho do fluxo (ver §19). Ao receber a resposta, ele **continua de onde parou**: pode perguntar de volta antes de seguir (ex.: pedir o porquê de uma reprovação) e só então escolher os caminhos. O motor executa; o agente decide.
 
 ### Bifurcação por intenção
 
@@ -218,12 +218,11 @@ Picos são previsíveis: dia 15 todos os consultores enviam nota ao mesmo tempo;
 ## 19. Ações irreversíveis
 
 Alguns passos mexem no mundo real de forma que não dá para desfazer: lançar um valor financeiro num ERP, publicar um artigo, enviar um email, fazer um pagamento. O produto precisa de proteção contra erro e contra repetição:
-- Há **duas peças** de aprovação, que não se confundem:
-  1. **O portão no fluxo** (no nó da automação) — é o que de fato **pausa** a execução e espera um humano aprovar antes de seguir. É o controle de verdade, definido por quem monta a automação, onde fizer sentido.
-  2. **A parede de ativação** — uma proteção que, ao **ativar** uma automação, exige que exista um portão antes de uma ação irreversível. O que conta como irreversível é se o passo **muda o mundo** (escrever/enviar/publicar/apagar) — uma **consulta** (ler dados) não exige aprovação. Essa classificação é derivada do **instrumento + configuração** (ex.: numa chamada de API, GET é leitura e dispensa; POST/PUT/DELETE escreve e exige; banco pode ser "somente leitura"); webhook de saída é gatilho de automação e não exige.
-- **A parede é uma configuração GLOBAL da organização (liga/desliga).** Quando ligada (padrão), protege; quando o admin a desliga, automações ativam sem essa exigência (com aviso de risco) — útil para automação em massa. Não há mais interruptor de aprovação por instrumento.
+- **A aprovação é do AGENTE, e é uma peça só.** Quem segura uma ação até uma pessoa confirmar é o próprio agente, chamando o instrumento **"Pedir aprovação e aguardar"** porque a documentação dele manda. Ele apresenta o que será feito, a execução **para**, e ele continua quando a resposta chega — pela tela ou pelo canal (Telegram).
+- **Não há trava automática nem interruptor no desenho.** Até 2026-08-31 havia **duas** peças que se confundiam: um "portão" (interruptor num nó da automação) e uma "parede" (chave da organização que recusava ativar). As duas foram removidas por decisão do maestro: eram invisíveis para quem usava, se sobrepunham (o mesmo atendimento pedia confirmação duas vezes) e tiravam do agente uma decisão que é dele.
+- **O que merece aprovação** é o passo que **muda o mundo** (escrever/enviar/publicar/apagar); uma **consulta** (ler dados) não. Essa classificação continua derivada do **instrumento + configuração** (numa chamada de API, GET é leitura e dispensa; POST/PUT/DELETE escreve; banco pode ser "somente leitura") e aparece como selo no catálogo — hoje ela governa a **política de falha** (§16) e orienta quem monta o time, em vez de barrar a ativação.
 - O sistema não pode executar a mesma ação duas vezes por engano (ex.: lançar o mesmo reembolso em duplicidade).
-- Toda ação irreversível fica registrada, para poder ser auditada depois — inclusive ligar/desligar a parede da organização.
+- Toda ação irreversível fica registrada, para poder ser auditada depois.
 
 ## 20. Memória e contexto
 
@@ -236,7 +235,7 @@ Cada passo de um fluxo é uma chamada de IA paga. Uma cadeia de 15 passos custa 
 ## 22. Supervisão e erro do agente
 
 O agente pode responder errado ao cliente final — informar algo incorreto a um pai, a um paciente. O produto precisa permitir que isso seja percebido e corrigido:
-- A possibilidade de um humano revisar antes de uma resposta sair (ligada ao portão de aprovação).
+- A possibilidade de um humano revisar antes de uma resposta sair (o agente pede aprovação — §19).
 - Um histórico de tudo que o agente respondeu, para revisão.
 
 ## 23. Dados sensíveis e LGPD

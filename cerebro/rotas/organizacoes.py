@@ -20,7 +20,6 @@ from esquemas import (
     OrganizacaoCriar,
     OrganizacaoEditar,
     OrganizacaoLer,
-    ParedeAtivacaoEditar,
 )
 from modelos import Membro, Organizacao, Usuario
 from orquestracao.modelos_ia import provedor_do_modelo
@@ -121,28 +120,6 @@ def definir_modelo_criadora(
         sessao, usuario=usuario, acao="organizacao.modelo_criadora",
         recurso_tipo="organizacao", recurso_id=org.id, organizacao_id=org.id,
         detalhe={"modelo": org.modelo_criadora},
-    )
-    sessao.commit()
-    sessao.refresh(org)
-    return org
-
-
-@rotas.put("/{organizacao_id}/parede-ativacao", response_model=OrganizacaoLer)
-def definir_parede_ativacao(
-    organizacao_id: uuid.UUID,
-    dados: ParedeAtivacaoEditar,
-    sessao: Session = Depends(obter_sessao),
-    usuario: Usuario = Depends(usuario_atual),
-):
-    """Liga/desliga a parede de aprovação da organização (config global da org).
-    Desligar permite ativar automações com ação irreversível SEM exigir um nó-portão
-    antes (o portão do nó continua disponível para pausar manualmente). Só admin."""
-    org = organizacao_acessivel(sessao, usuario, organizacao_id, minimo="admin")
-    org.parede_ativacao = dados.ativada
-    auditoria.registrar(
-        sessao, usuario=usuario, acao="organizacao.parede_ativacao",
-        recurso_tipo="organizacao", recurso_id=org.id, organizacao_id=org.id,
-        detalhe={"ativada": org.parede_ativacao},
     )
     sessao.commit()
     sessao.refresh(org)

@@ -30,7 +30,7 @@ Você **padroniza** a busca daquele instrumento na configuração — é o que e
 ## Limites e cuidados
 - Os parâmetros (tipo, recência, domínios) são do **humano**, na config; o agente só passa a consulta.
 - Aprofundada custa mais créditos na Tavily.
-- Só leitura → não exige portão.
+- Só leitura → ninguém precisa aprovar nada.
 
 ## Para a IA
 Parâmetro no catálogo (`busca_web`): `consulta` (só isso — o resto é config do humano). Se a busca traz

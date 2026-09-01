@@ -160,7 +160,7 @@ def _acionou(inst: Instrumento, acionados: list) -> bool:
 
 def _no_pausado(auto: Automacao | None, passos: list[PassoExecucao]) -> tuple[str | None, dict]:
     """(no_id, nó do grafo) onde a execução pausou — pelo último passo, igual a
-    `aprovacao._config_aprovacao_do_no`."""
+    `aprovacao.config_aprovacao`."""
     if auto is None or not passos:
         return (None, {})
     ultimo = passos[-1]

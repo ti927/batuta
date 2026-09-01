@@ -194,6 +194,7 @@ function CampoConfigInput({
   jaGuardado,
   disponiveis,
   automacoes,
+  canais,
   onChange,
 }: {
   campo: CampoConfig;
@@ -201,6 +202,7 @@ function CampoConfigInput({
   jaGuardado: string | undefined; // 4 últimos dígitos, se já há segredo guardado
   disponiveis: ProvedoresDisponiveis | undefined; // p/ o seletor de modelo de IA
   automacoes: AutomacaoOrg[]; // p/ o seletor de automação-alvo (agendar_automacao)
+  canais: Instrumento[]; // p/ o seletor de canal (ui:canal_mensageria)
   onChange: (v: string) => void;
 }) {
   let entrada;
@@ -253,6 +255,39 @@ function CampoConfigInput({
           </optgroup>
         ))}
       </Select>
+    );
+  } else if (campo.ui === "canal_mensageria" && !campo.secreto) {
+    // Seletor do canal por onde o pedido de aprovação é apresentado: os canais de
+    // mensageria DESTE time. Vazio = a pessoa aprova pela tela da execução.
+    entrada = (
+      <div className="flex flex-col gap-1.5">
+        <Select value={valor} onChange={(e) => onChange(e.target.value)}>
+          <option value="">Só pela tela da execução</option>
+          {canais.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.nome}
+            </option>
+          ))}
+        </Select>
+        {valor &&
+          !(
+            (canais.find((c) => c.id === valor)?.configuracao
+              ?.destinatario_padrao as string | undefined) ?? ""
+          ).trim() && (
+            <span className="text-xs text-warning">
+              ⚠ Este canal não tem destinatário configurado — sem ele não há para quem
+              mandar o pedido nem de quem esperar a resposta. Preencha o destinatário
+              na configuração do canal.
+            </span>
+          )}
+        {canais.length === 0 && (
+          <span className="text-xs text-muted-foreground">
+            Este time ainda não tem canal de mensageria. Crie um instrumento de canal
+            (Telegram) para pedir aprovação por mensagem — ou deixe em branco e aprove
+            pela tela.
+          </span>
+        )}
+      </div>
     );
   } else if (ehEnumResolucao(campo.opcoes) && !campo.secreto) {
     // Enum de resolução: dropdown normal + ilustração da proporção do valor atual.
@@ -384,6 +419,9 @@ export function FormularioInstrumento({
   const [disponiveis, setDisponiveis] = useState<ProvedoresDisponiveis>();
   // Automações da organização — para o campo `ui:automacao_alvo` (agendar_automacao).
   const [automacoesOrg, setAutomacoesOrg] = useState<AutomacaoOrg[]>([]);
+  // Canais de mensageria DESTE time — para o campo `ui:canal_mensageria` (o canal
+  // por onde `pedir_aprovacao` apresenta o pedido).
+  const [canaisDoTime, setCanaisDoTime] = useState<Instrumento[]>([]);
 
   useEffect(() => {
     let vivo = true;
@@ -416,6 +454,21 @@ export function FormularioInstrumento({
       vivo = false;
     };
   }, [time.organizacao_id]);
+
+  useEffect(() => {
+    let vivo = true;
+    api
+      .get<Instrumento[]>(`/times/${time.id}/instrumentos`)
+      .then((d) => {
+        if (vivo) setCanaisDoTime(d.filter((i) => i.tipo === "enviar_telegram"));
+      })
+      .catch(() => {
+        /* sem instrumentos: o seletor de canal fica vazio (aprova pela tela) */
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [time.id]);
 
   useEffect(() => {
     let ativo = true;
@@ -625,6 +678,7 @@ export function FormularioInstrumento({
             jaGuardado={instrumento?.segredos?.[campo.nome]}
             disponiveis={disponiveis}
             automacoes={automacoesOrg}
+            canais={canaisDoTime}
             onChange={(v) =>
               setValores((atual) => {
                 const proximo = { ...atual, [campo.nome]: v };

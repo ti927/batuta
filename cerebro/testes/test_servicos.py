@@ -64,7 +64,10 @@ def test_definir_automacao_upsert_e_cadeia_invalida(sessao, dados):
         )
 
 
-def test_ativar_passa_pela_parede(sessao, dados):
+def test_ativar_nao_exige_mais_portao(sessao, dados):
+    """A PAREDE morreu (2026-08-31). Ativar uma automação com agente de ação
+    irreversível NÃO exige mais um nó-portão antes: quem segura uma ação que precisa
+    de gente é o próprio agente, chamando `pedir_aprovacao`."""
     time = servicos.criar_time(sessao, dados["orgA"].id, "Blog")
     guardiao = servicos.adicionar_agente(sessao, time, nome="Guardião", papel="lider")
     pub = servicos.adicionar_agente(sessao, time, nome="Publicador")
@@ -72,7 +75,7 @@ def test_ativar_passa_pela_parede(sessao, dados):
         sessao, time, nome="WP", tipo="publicar_wordpress"
     )
     servicos.encaixar(sessao, pub, inst)
-    sem_portao = {
+    cadeia = {
         "inicio": str(guardiao.id),
         "nos": {
             str(guardiao.id): {"saidas": [{"rotulo": "1", "destino": str(pub.id)}]},
@@ -80,21 +83,9 @@ def test_ativar_passa_pela_parede(sessao, dados):
         },
     }
     auto = servicos.definir_automacao(
-        sessao, time, nome="Pub", tipo_gatilho="manual", cadeia=sem_portao
+        sessao, time, nome="Pub", tipo_gatilho="manual", cadeia=cadeia
     )
-    # sem portão antes do publicador → ativar recusa
-    with pytest.raises(ConflitoDominio):
-        servicos.ativar(sessao, auto)
-    # com portão no nó do guardião → ativa
-    com_portao = dict(sem_portao)
-    com_portao["nos"] = dict(sem_portao["nos"])
-    com_portao["nos"][str(guardiao.id)] = {
-        "pausa_humano": True,
-        "saidas": [{"rotulo": "1", "destino": str(pub.id)}],
-    }
-    servicos.definir_automacao(sessao, time, nome="Pub", tipo_gatilho="manual", cadeia=com_portao)
-    auto = servicos.ativar(sessao, auto)
-    assert auto.ativa is True
+    assert servicos.ativar(sessao, auto).ativa is True
 
 
 def test_remover_agente_limpa_cadeia(sessao, dados):

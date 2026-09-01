@@ -32,7 +32,7 @@ agente **não** chama — quem decide isso é o markdown do agente, caso a caso.
   sistema financeiro com a URL anexada.
 
 ## Limites e cuidados
-- Grava só no **nosso** storage (bucket público) → **não** é ação irreversível, **sem portão**.
+- Grava só no **nosso** storage (bucket público) → **não** é ação irreversível.
 - Funciona mesmo **num turno posterior** ao envio da foto: se o agente decidir guardar depois, o Batuta
   rebusca a imagem mais recente da conversa pelo id salvo — o contato **não** precisa reenviar.
 - Se não houver foto disponível (o contato nunca enviou, ou o canal não é de imagem), o instrumento avisa
@@ -43,7 +43,7 @@ agente **não** chama — quem decide isso é o markdown do agente, caso a caso.
 Sem parâmetros nem config (veja `arquivar_imagem` no catálogo): ele guarda a(s) imagem(ns) da conversa em
 curso e devolve `urls`. Ponha-o no cinto do agente atendente e **descreva no markdown** a política: quando
 guardar (ex.: comprovantes) e o destino da URL (ex.: repassar via [[instrumentos/chamar-rest]]). Não peça
-portão — é gravação no nosso storage. A leitura da foto já é automática na borda; não crie instrumento para
+aprovação — é gravação no nosso storage. A leitura da foto já é automática na borda; não crie instrumento para
 "ver" a imagem recebida.
 
 ## Relacionado

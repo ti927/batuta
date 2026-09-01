@@ -34,7 +34,7 @@ caiu. É só leitura — bom para relatórios e para decidir a próxima pauta.
   negada" — 403).
 - Os dados têm **~2 a 3 dias de atraso**; os dias mais recentes podem vir incompletos.
 - Métricas: cliques, impressões, CTR e posição média (não são visitas do Analytics).
-- Só leitura → não exige portão.
+- Só leitura → ninguém precisa aprovar nada.
 
 ## Para a IA
 Parâmetros no catálogo (`search_console`): `dias` (últimos N dias, padrão 28), `dimensoes`

@@ -89,10 +89,10 @@ instrumento como `Authorization`. Não invente uma operação separada "para peg
 funciona (o token não viaja de uma chamada para outra) e já é resolvido pela plataforma.
 
 Ação em banco é **irreversível** por natureza: fluxo que paga, transfere ou emite cobrança precisa de
-**portão de aprovação humano** antes — a parede de ativação vai exigir isso de qualquer forma.
+**pedido de aprovação** antes (instrumento [[automacoes/pedir-aprovacao]]) — dinheiro que sai não se desfaz.
 
 ## Relacionado
 - [[segredos/credenciais-nomeadas]]
 - [[segredos/segredos-de-instrumento]]
 - [[instrumentos/chamar-rest]]
-- [[automacoes/portao-de-aprovacao]]
+- [[automacoes/pedir-aprovacao]]

@@ -267,7 +267,9 @@ def test_estimar_custo_calcula_sem_gravar(sessao, dados):
     assert r["ok"] and r["por_mes_usd"] > 0
 
 
-def test_ativar_recusa_acao_irreversivel_sem_portao(sessao, dados):
+def test_ativar_nao_exige_mais_portao(sessao, dados):
+    """A PAREDE morreu: a IA criadora ativa um time com agente de ação irreversível
+    sem precisar desenhar portão nenhum antes."""
     _ctx, f = _setup(sessao, dados)
     _chamar(f, "definir_time", nome="Blog")
     lider = _chamar(f, "adicionar_agente", nome="Guardião", papel="lider")["id"]
@@ -275,23 +277,14 @@ def test_ativar_recusa_acao_irreversivel_sem_portao(sessao, dados):
     inst = _chamar(f, "configurar_instrumento", nome="WP", tipo="publicar_wordpress")["id"]
     _chamar(f, "encaixar_instrumento", agente_id=pub, instrumento_id=inst)
     _chamar(f, "definir_gatilho", tipo_gatilho="manual")
-    sem_portao = {
+    cadeia = {
         "inicio": lider,
         "nos": {
             lider: {"saidas": [{"rotulo": "1", "destino": pub}]},
             pub: {"saidas": [{"rotulo": "1", "destino": None}]},
         },
     }
-    _chamar(f, "montar_cadeia", cadeia=sem_portao)
-    assert _chamar(f, "ativar_time")["ok"] is False  # parede
-    com_portao = {
-        "inicio": lider,
-        "nos": {
-            lider: {"pausa_humano": True, "saidas": [{"rotulo": "1", "destino": pub}]},
-            pub: {"saidas": [{"rotulo": "1", "destino": None}]},
-        },
-    }
-    _chamar(f, "montar_cadeia", cadeia=com_portao)
+    _chamar(f, "montar_cadeia", cadeia=cadeia)
     assert _chamar(f, "ativar_time")["ok"]
 
 

@@ -45,8 +45,9 @@ de forma permitida pela Anthropic (o app do usuário é que aciona a ferramenta)
 - **A IA nunca pluga segredo:** ao criar credenciais ou conectores, o segredo (senha,
   chave de API) fica **pendente** — você o cola no **cofre do Batuta pela tela**, nunca
   no chat. Segredo não passa pelo claude.ai.
-- **A parede de aprovação continua valendo:** ativar uma automação com ação irreversível
-  sem portão humano é recusado.
+- **Ativar não tem mais trava:** o Batuta não recusa mais uma automação com ação
+  irreversível. Quem segura uma ação que precisa de gente é o agente, pelo instrumento
+  [[automacoes/pedir-aprovacao]].
 - **Exclusões são irreversíveis.** O Claude confirma com você antes. Excluir uma **organização** só é
   possível quando ela está **vazia** (sem nenhum time): o Batuta recusa e explica o que precisa sair antes,
   em vez de apagar times, execuções e credenciais em cascata.
@@ -59,11 +60,12 @@ de forma permitida pela Anthropic (o app do usuário é que aciona a ferramenta)
 ## Para a IA
 
 - Este capítulo descreve o **canal** (conector MCP), não uma ferramenta de instrumento.
-- As regras de negócio (papéis, parede, "a IA nunca pluga o token", portão de aprovação)
+- As regras de negócio (papéis, "a IA nunca pluga o token", aprovação pelo agente)
   são as MESMAS da criação dentro do app — não há exceção pelo fato de vir do MCP.
 - Ordem de trabalho pelo MCP: **ler antes de escrever** (retrato do time, agentes,
   execuções); consultar a Central quando não souber COMO um recurso funciona; deixar
-  segredos pendentes para o humano; pôr portão antes de ação irreversível.
+  segredos pendentes para o humano; dar ao agente o instrumento de pedir aprovação
+quando a ação for irreversível e alguém precisar confirmar.
 - **Instrumento se lê, não se adivinha.** O cinto de um agente vem como uma lista de ids;
   para saber o que cada um é (nome, tipo, configuração, segredos que faltam), use as
   ferramentas de listar/ver instrumento — inclusive para conferir o que foi criado pela

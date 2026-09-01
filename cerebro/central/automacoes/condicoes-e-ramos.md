@@ -68,4 +68,4 @@ preenchidas: automações criadas antes de 2026-08-31 têm todas vazias.
 - [[automacoes/cadeia-e-grafo]]
 - [[automacoes/erros-no-fluxo]]
 - [[automacoes/execucoes-e-inspecao]]
-- [[automacoes/portao-de-aprovacao]]
+- [[automacoes/pedir-aprovacao]]

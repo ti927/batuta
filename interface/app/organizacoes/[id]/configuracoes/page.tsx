@@ -11,7 +11,6 @@ import { buscarCerebro, buscarMeuAcesso } from "@/lib/cerebro-servidor";
 import { SeletorModeloConversa } from "@/components/seletor-modelo-conversa";
 import { Aviso } from "@/components/ui/aviso";
 
-import { ParedeSwitch } from "./parede-switch";
 
 async function carregar(organizacaoId: string): Promise<{
   organizacao: Organizacao;
@@ -71,10 +70,6 @@ export default async function ConfiguracoesOrgPage({
         </Aviso>
       ) : (
         <div className="flex flex-col gap-10">
-          <ParedeSwitch
-            organizacaoId={id}
-            ativada={dados.organizacao.parede_ativacao}
-          />
           <SeletorModeloConversa
             organizacaoId={id}
             modeloAtual={dados.organizacao.modelo_criadora}

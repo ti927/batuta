@@ -26,11 +26,11 @@ peças reais. É uma **conversa única e contínua** sobre aquele time — não 
 3. Peça ajustes a qualquer momento. Com **várias automações** no time, ela pergunta **em qual** mexer.
 
 ## Exemplos
-- "Cria um redator e um publicador, com portão antes de publicar no Instagram."
-- "Renomeia essa automação para 'Blog diário' e adiciona um revisor antes do portão."
+- "Cria um redator e um publicador, com aprovação antes de publicar no Instagram."
+- "Renomeia essa automação para 'Blog diário' e adiciona um revisor antes de publicar."
 
 ## Limites e cuidados
-- Ela **não toca em segredos**: monta o agente de Instagram/WordPress e põe o portão certo, mas quem
+- Ela **não toca em segredos**: monta o agente de Instagram/WordPress e dá a ele o instrumento de pedir aprovação, mas quem
   **liga a credencial/token é você**, na tela. Ela avisa o que ficou pendente — não diz "pronto/no ar" sem
   isso.
 - Ela **não ativa** ações irreversíveis por conta própria, e **não remove** peças — remover é na tela.

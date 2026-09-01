@@ -117,10 +117,10 @@ def _passos(sessao, execucao_id):
 
 # ─────────────────────────── TELA (retoma direto) ───────────────────────────
 
-def _mock_rerun_tela(monkeypatch, *, ramo=None, mensagens=None):
+def _mock_rerun_tela(monkeypatch, *, ramo=None, mensagens=None, saida="(narração)"):
     def fake(agente, cinto, entrada, **kwargs):
         return {
-            "saida": "(narração)", "instrumentos_acionados": [], "uso": [],
+            "saida": saida, "instrumentos_acionados": [], "uso": [],
             "mensagens_enviadas": mensagens or {}, "ramo_escolhido": ramo,
         }
     monkeypatch.setattr(retoma, "executar_agente", fake)
@@ -132,7 +132,7 @@ def test_tela_agente_pergunta_vira_passo_e_segue_aguardando(sessao, dados, monke
     auto = _automacao(sessao, dados, ag, canal)
     execucao = _exec_pausada(sessao, auto, ag)
 
-    _mock_rerun_tela(monkeypatch, ramo=None, mensagens={str(canal.id): ["Por que reprovou?"]})
+    _mock_rerun_tela(monkeypatch, ramo=None, saida="Por que reprovou?")
     retoma.retomar_execucao(sessao, execucao, "reprovado", chaves={}, origens={})
 
     sessao.refresh(execucao)
@@ -301,12 +301,12 @@ def test_tela_conversa_repassa_conteudo_aprovado_ao_proximo_no(sessao, dados, mo
     capturado: dict = {}
 
     def fake(agente, cinto, entrada, **kwargs):
-        if kwargs.get("gate"):  # re-rodada do nó-portão: só roteia, texto curto
+        if agente.id == n1.id:  # re-rodada do nó que esperava: só decide, texto curto
             return {"saida": "(aprovado!)", "instrumentos_acionados": [], "uso": [],
-                    "mensagens_enviadas": {}, "ramo_escolhido": "aprovado"}
+                    "mensagens_enviadas": {}, "ramos_escolhidos": ["aprovado"]}
         capturado["entrada_pub"] = entrada  # o nó publicador, a jusante
         return {"saida": "publiquei", "instrumentos_acionados": ["publicar_instagram"],
-                "uso": [], "mensagens_enviadas": {}, "ramo_escolhido": None}
+                "uso": [], "mensagens_enviadas": {}, "ramos_escolhidos": []}
 
     import orquestracao.cadeia as motor
     monkeypatch.setattr(retoma, "executar_agente", fake)
@@ -359,18 +359,18 @@ def test_tela_aprova_e_agente_confirma_no_canal_nao_perde_o_conteudo(
     capturado: dict = {}
 
     def fake(agente, cinto, entrada, **kwargs):
-        if kwargs.get("gate"):  # rodada do nó-portão: decide E confirma pelo canal
+        if agente.id == n1.id:  # rodada do nó que esperava: decide E confirma pelo canal
             return {
                 "saida": "✅ Artigo aprovado! Seguindo para publicação agora.",
                 "instrumentos_acionados": ["enviar_telegram", "seguir_para"], "uso": [],
                 "mensagens_enviadas": {
                     str(canal.id): ["✅ Artigo aprovado! Seguindo para publicação agora."]
                 },
-                "ramo_escolhido": "aprovado",
+                "ramos_escolhidos": ["aprovado"],
             }
         capturado["entrada_pub"] = entrada  # o nó publicador, a jusante
         return {"saida": "publiquei", "instrumentos_acionados": ["publicar_wordpress"],
-                "uso": [], "mensagens_enviadas": {}, "ramo_escolhido": None}
+                "uso": [], "mensagens_enviadas": {}, "ramos_escolhidos": []}
 
     import orquestracao.cadeia as motor
     monkeypatch.setattr(retoma, "executar_agente", fake)
@@ -722,58 +722,6 @@ def test_vincular_pausa_respeita_no_config_timeout(sessao, dados, monkeypatch):
 
     delta_min = (conv.aguardando_ate - antes).total_seconds() / 60
     assert 4 <= delta_min <= 6  # ~5 min do nó, não os 60 do default do fluxo
-
-
-# ── portao.md: instruções de FECHAMENTO chegam ao agente (Onda 2) ────────────
-
-def test_tela_fechamento_injeta_portao_md(sessao, dados, monkeypatch):
-    """Fechamento pela TELA: as instruções de FECHAMENTO do nó chegam ao agente
-    (`texto_portao`). É o que faz o agente agendar E encaminhar ao aprovar."""
-    from sqlalchemy.orm.attributes import flag_modified
-
-    canal = _canal(sessao, dados)
-    ag = _agente(sessao, dados)
-    auto = _automacao(sessao, dados, ag, canal)
-    auto.cadeia["nos"][0]["instrucoes"] = {"fechamento": "AO APROVAR, AGENDE E SIGA"}
-    flag_modified(auto, "cadeia")
-    sessao.flush()
-    execucao = _exec_pausada(sessao, auto, ag)
-
-    capturado: dict = {}
-
-    def fake(agente, cinto, entrada, **kwargs):
-        capturado.update(kwargs)
-        return {
-            "saida": "ok", "instrumentos_acionados": [], "uso": [],
-            "mensagens_enviadas": {}, "ramo_escolhido": "aprovado",
-        }
-
-    monkeypatch.setattr(retoma, "executar_agente", fake)
-    retoma.retomar_execucao(sessao, execucao, "ok", chaves={}, origens={})
-    assert capturado.get("texto_portao") == "AO APROVAR, AGENDE E SIGA"
-
-
-def test_canal_fechamento_injeta_portao_md(sessao, dados, monkeypatch):
-    """Fechamento por CANAL: idem, pela borda (`_turno_de_portao` → `_rodar_turno`)."""
-    from sqlalchemy.orm.attributes import flag_modified
-
-    enviados: list = []
-    capturado: dict = {}
-
-    def fake(agente, cinto, entrada, **k):
-        capturado.update(k)
-        return {
-            "saida": "", "instrumentos_acionados": [], "uso": [],
-            "mensagens_enviadas": {}, "ramo_escolhido": "aprovado",
-        }
-
-    canal, ag, auto, execucao = _setup_canal(sessao, dados, monkeypatch, enviados)
-    auto.cadeia["nos"][0]["instrucoes"] = {"fechamento": "AO APROVAR, AGENDE PELO CANAL"}
-    flag_modified(auto, "cadeia")
-    sessao.flush()
-    monkeypatch.setattr(servico, "executar_agente", fake)
-    _responder(sessao, canal, "pode aprovar")
-    assert capturado.get("texto_portao") == "AO APROVAR, AGENDE PELO CANAL"
 
 
 # ─────── Aviso de expectativa do portão (derivado do Tipo de fluxo) ───────

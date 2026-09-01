@@ -29,7 +29,7 @@ no mesmo topo. A busca semântica tende a trazer material mais variado.
 ## Limites e cuidados
 - Os parâmetros são do **humano**, na config; o agente só passa a consulta.
 - Profunda é mais cara e lenta.
-- Só leitura → não exige portão.
+- Só leitura → ninguém precisa aprovar nada.
 
 ## Para a IA
 Parâmetro no catálogo (`busca_exa`): `consulta`. Use quando o objetivo é **diversidade** de fontes/ângulos;

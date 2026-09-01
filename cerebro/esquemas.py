@@ -60,12 +60,6 @@ class ModeloCriadoraEditar(BaseModel):
     modelo: str | None = Field(default=None, max_length=100)
 
 
-class ParedeAtivacaoEditar(BaseModel):
-    """Liga/desliga a parede de aprovação da organização (config global da org)."""
-
-    ativada: bool
-
-
 class OrganizacaoLer(BaseModel):
     """Organização como a API a devolve."""
 
@@ -76,7 +70,6 @@ class OrganizacaoLer(BaseModel):
     dono_id: uuid.UUID
     modelo_criadora: str | None = None
     logo_url: str | None = None
-    parede_ativacao: bool = True
     criado_em: datetime
     atualizado_em: datetime
 
@@ -253,8 +246,8 @@ class InstrumentoLer(BaseModel):
     """Instrumento como a API o devolve. `segredos` (Fase 7-B) traz, por campo
     secreto já guardado, só os 4 últimos dígitos — o valor nunca é reexibido.
     `acao_irreversivel` é o valor JÁ RESOLVIDO (tipo+config), que a UI usa para o
-    badge 'ação irreversível'. (`exige_aprovacao` é legado: não há mais interruptor
-    por instrumento — a parede liga/desliga por organização.)"""
+    selo 'ação irreversível' — hoje um AVISO ao leitor e a base da política de
+    falha (`PRODUTO §16`), não mais uma trava de ativação."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -265,7 +258,6 @@ class InstrumentoLer(BaseModel):
     configuracao: dict | None
     icone: str | None = None
     segredos: dict[str, str] = Field(default_factory=dict)
-    exige_aprovacao: bool | None = None
     acao_irreversivel: bool = False
     credencial_id: uuid.UUID | None = None
     criado_em: datetime

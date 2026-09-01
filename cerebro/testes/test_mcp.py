@@ -75,14 +75,14 @@ def test_seam_mcp_expande_no_cinto(monkeypatch):
         lambda c: [_ferramenta_fake("a"), _ferramenta_fake("b"), _ferramenta_fake("c")],
     )
     inst = _instrumento("conectar_mcp", {"url": "https://mcp.x.com"})
-    tools = _ferramentas_de_instrumento(inst, [], {}, [])
+    tools = _ferramentas_de_instrumento(inst, [], {}, [], {})
     assert [t.name for t in tools] == ["a", "b", "c"]
 
 
 def test_seam_instrumento_normal_uma_ferramenta():
     """Instrumento comum continua com exatamente uma ferramenta."""
     inst = _instrumento("busca_web", {})
-    tools = _ferramentas_de_instrumento(inst, [], {}, [])
+    tools = _ferramentas_de_instrumento(inst, [], {}, [], {})
     assert len(tools) == 1
 
 

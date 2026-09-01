@@ -91,8 +91,9 @@ resposta real + os campos detectados — é assim que você confere que funciona
 teste volta com `ok=false` (autenticação): peça o token ao consultor e teste de novo.
 
 ## Limites e cuidados
-- **Escrita exige portão.** Se QUALQUER operação escreve (POST/PUT/PATCH/DELETE), o conector inteiro
-  passa a exigir a parede de aprovação — ponha `gate` no nó do agente que vem ANTES, na cadeia.
+- **Escrita pede aprovação.** Se QUALQUER operação escreve (POST/PUT/PATCH/DELETE), o conector inteiro
+  conta como ação irreversível. Para alguém confirmar antes, dê ao agente o instrumento
+  **Pedir aprovação e aguardar** e escreva a regra no markdown dele.
 - Respostas legítimas (2xx e até um 404) voltam ao agente como dado; 401/403 e 5xx viram falha do
   instrumento (a de servidor é retentável).
 - Não coloque segredos nos cabeçalhos fixos — use a autenticação (o token vai ao cofre).
@@ -128,4 +129,4 @@ teste volta com `ok=false` (autenticação): peça o token ao consultor e teste 
 - [[instrumentos/chamar-rest]]
 - [[instrumentos/webhook-saida]]
 - [[segredos/segredos-de-instrumento]]
-- [[automacoes/portao-de-aprovacao]]
+- [[automacoes/pedir-aprovacao]]

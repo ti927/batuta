@@ -1,14 +1,15 @@
 """Miolo de retoma de uma execução pausada (espera-por-humano), reutilizável.
 
-Duas superfícies retomam um portão:
-- TELA (`rotas/automacoes.py::responder`): `retomar_execucao` (conversacional: re-roda
-  o agente, que pode perguntar de volta; a pergunta vira um passo na tela).
-- CANAL (`mensageria/servico.py`): o turno de portão roda pela BORDA (entrega +
-  ciclo de vida de mensageria) e usa `avancar_apos_gate` direto; quando o nó é
-  MECÂNICO (forma "direto", 1 saída, gate-roteador), chama `retomar_execucao` com
-  `permitir_conversa=False`.
+Uma execução para quando o AGENTE pede aprovação (instrumento `pedir_aprovacao`).
+Retomar é religar esse mesmo agente com a resposta da pessoa: ele continua de onde
+parou — não recomeça —, faz o que tinha para fazer e declara por quais caminhos o
+fluxo segue. Duas superfícies retomam:
 
-NÃO toca o núcleo (`cadeia.py`); só o usa. `avancar_apos_gate` e `_localizar_no_pausado`
+- TELA (`rotas/automacoes.py::responder`): `retomar_execucao`.
+- CANAL (`mensageria/servico.py`): o turno roda pela BORDA (entrega + ciclo de vida de
+  mensageria) e usa `avancar_apos_gate` direto.
+
+NÃO toca o núcleo (`cadeia.py`); só o usa. `avancar_apos_gate` e `localizar_no_pausado`
 são o que tela e canal compartilham.
 """
 
@@ -167,13 +168,16 @@ def retomar_execucao(
     origens: dict,
     permitir_conversa: bool = True,
 ) -> Execucao:
-    """Retoma uma execução em `aguardando_humano` (TELA, e CANAL mecânico).
+    """Retoma uma execução em `aguardando_humano`.
 
-    `permitir_conversa=True` (tela): se o nó é gate-agente com 2+ saídas e dentro do
-    teto de rodadas, RE-RODA o agente (ele pode perguntar de volta). Senão (ou
-    `permitir_conversa=False`, usado pelo canal mecânico), a RESPOSTA escolhe a saída
-    (roteamento mecânico). Pré-condição: o chamador garantiu o estado
-    `aguardando_humano`. Levanta ValueError se não há passo de pausa.
+    O normal é RELIGAR O AGENTE do nó com a resposta da pessoa: ele pediu a aprovação,
+    ele continua o trabalho. Se ele pedir de novo (ainda precisa de algo), a execução
+    segue esperando; quando concluir, declara os caminhos e o fluxo anda.
+
+    `permitir_conversa=False` (ou nó sem agente, ou teto de idas-e-vindas estourado)
+    cai no caminho MECÂNICO: a resposta escolhe a saída sem re-rodar o agente — é o que
+    resolve execuções paradas de antes desta virada. Pré-condição: o chamador garantiu
+    o estado `aguardando_humano`. Levanta ValueError se não há passo de pausa.
     """
     ultimo, no, no_id, cadeia, idx = localizar_no_pausado(sessao, execucao)
     # Só as saídas CONDICIONAIS entram na decisão: as de erro e "senão" são do MOTOR
@@ -181,19 +185,17 @@ def retomar_execucao(
     # não podem virar opção de escolha para a pessoa nem para o agente do portão.
     saidas, _, _ = grafo.separar_saidas(no.get("saidas"))
 
-    # Teto de idas-e-vindas do portão na TELA: DERIVADO da config (Tipo de fluxo <
-    # ajuste do nó). Antes era só o fixo `MAX_RODADAS_GATE`; agora `portao_max_rodadas`
-    # passa a valer (a tela não tem conversa/canal → `config_da_automacao`). O fixo é o
-    # default. Cura a chave morta apontada na varredura.
+    # Teto de idas-e-vindas com a pessoa neste passo: DERIVADO da config (Tipo de
+    # fluxo < ajuste do nó), com o fixo `MAX_RODADAS_GATE` como default. Sem teto, um
+    # agente que pede aprovação a cada rodada conversaria para sempre.
     auto = sessao.get(Automacao, execucao.automacao_id)
     max_rodadas = com_ajuste_do_no(config_da_automacao(auto), no).get(
         "portao_max_rodadas", MAX_RODADAS_GATE
     )
 
-    eh_gate_agente = bool(no.get("gate") and no.get("ref") and len(saidas) >= 2)
     if (
         permitir_conversa
-        and eh_gate_agente
+        and no.get("ref")
         and rodadas_no_gate(sessao, execucao.id, no_id) < max_rodadas
     ):
         return _retomar_conversando_tela(
@@ -232,10 +234,10 @@ def _retomar_conversando_tela(
     chaves: dict,
     origens: dict,
 ) -> Execucao:
-    """Portão conversacional NA TELA: re-roda o agente do nó com a resposta da pessoa
-    (encadeando o histórico do passo). Declarou um ramo (`seguir_para`) → o fluxo
-    anda; não declarou (perguntou) → a pergunta vira um novo passo (visível na tela)
-    e a execução segue `aguardando_humano`."""
+    """Religa o agente do nó com a resposta da pessoa (encadeando o histórico do
+    passo). Três desfechos: ele PEDE APROVAÇÃO de novo (segue esperando, com o novo
+    pedido no rastro), ele declara um ou mais ramos (o fluxo anda), ou ele não declara
+    nada (segue esperando — está conversando)."""
     agente = sessao.get(Agente, uuid.UUID(str(no.get("ref"))))
     no_id = ultimo.no_id or (str(ultimo.agente_id) if ultimo.agente_id else None)
     entrada_rerun = (
@@ -244,14 +246,12 @@ def _retomar_conversando_tela(
         f"---\n[Resposta do humano]\n{resposta}"
     ).strip()
 
-    # Memória do portão de ESTEIRA (Fatia 4.3 / P3c-B): o agente do portão deixa de
-    # "renascer" a cada rodada. Um checkpointer + thread próprio da execução
-    # (`execucao:nó`) guarda o fio das rodadas deste portão. Na 1ª retomada (sem estado)
-    # SEMEIA com o `entrada_rerun` (o apresentado + a resposta) — idêntico a hoje; nas
-    # rodadas seguintes a entrada é SÓ a resposta do humano (o agente lembra o resto).
-    # Sem checkpointer disponível → modo LEGADO (sempre `entrada_rerun`), byte-idêntico ao
-    # de antes. NÃO usa portão nativo/interrupt (isso é a Opção A, recusada): o agente roda
-    # até o fim (apresenta/decide) com memória — o mesmo padrão da conversa (P2a).
+    # MEMÓRIA da espera: o agente não "renasce" a cada rodada. Um checkpointer +
+    # thread próprio da execução (`execucao:nó`) guarda o fio. Na 1ª retomada (sem
+    # estado) SEMEIA com o `entrada_rerun` (o apresentado + a resposta); nas rodadas
+    # seguintes a entrada é SÓ a resposta da pessoa — o agente lembra o resto, então
+    # NÃO refaz o que já fez antes de pedir a aprovação. Sem checkpointer → modo
+    # LEGADO (sempre `entrada_rerun`), com o risco de repetição que o carimbo denuncia.
     ckpt = memoria_conversa.obter()
     memoria = ckpt is not None and no_id is not None
     tid = f"{execucao.id}:{no_id}" if memoria else None
@@ -262,32 +262,17 @@ def _retomar_conversando_tela(
     kwargs_mem = {"checkpointer": ckpt, "thread_id": tid} if memoria else {}
 
     iniciado = datetime.now(timezone.utc)
-    # Instruções de FECHAMENTO do portão (o "portao.md"): o que o agente deve FAZER
-    # depois que a pessoa respondeu (ex.: agendar E encaminhar). Fallback ao texto padrão.
-    texto_portao = (no.get("instrucoes") or {}).get("fechamento")
     with usar_chaves(chaves):
         cinto = _carregar_cinto(sessao, agente.id)
         resultado = executar_agente(
-            agente, cinto, entrada, saidas=saidas, gate=True,
-            texto_portao=texto_portao, **kwargs_mem,
+            agente, cinto, entrada, saidas=saidas, **kwargs_mem
         )
     finalizado = datetime.now(timezone.utc)
+    # Ele pediu aprovação DE NOVO: a execução continua esperando, agora por este novo
+    # pedido (é o canal/destinatário dele que a borda vai amarrar).
+    pausa = (resultado.get("aprovacao") or None) if resultado.get("pausado") else None
 
     saida_texto = resultado["saida"]
-    mensagens_enviadas = resultado.get("mensagens_enviadas") or {}
-    if mensagens_enviadas:
-        # No PASSO registrado mostramos o que a pessoa de fato viu nesta rodada (a
-        # mensagem enviada pelo canal), não o status que o agente narrou. Mesmo
-        # critério da pausa inicial (`cadeia.py`). Vale SÓ para o registro do passo
-        # (e, em rodadas conversacionais, para a `ultimo.saida` da próxima rodada) —
-        # NÃO para o que segue ao próximo nó depois de aprovado (ver abaixo).
-        canal_id = str((no.get("aprovacao") or {}).get("instrumento_id") or "")
-        apresentadas = mensagens_enviadas.get(canal_id) or [
-            t for textos in mensagens_enviadas.values() for t in textos
-        ]
-        if apresentadas:
-            saida_texto = "\n\n".join(apresentadas)
-
     # Fan-out também na retomada: o agente do portão pode liberar VÁRIOS caminhos
     # (aprovar a capa alimenta o Carrossel E o Story). `ramos_escolhidos` é a lista;
     # `ramo_escolhido` fica só como retrocompat de quem devolve um caminho só.
@@ -300,7 +285,10 @@ def _retomar_conversando_tela(
 
     passo = {
         "no_id": ultimo.no_id or (str(ultimo.agente_id) if ultimo.agente_id else None),
-        "tipo": "espera_humano",  # Fatia 4.1: re-run do nó de PORTÃO = espera por humano
+        # Espera por humano enquanto ele não decide o caminho (pediu de novo, ou
+        # conversou); no turno que decide, é um passo de agente como qualquer outro.
+        "tipo": "espera_humano" if (pausa or not escolhidas) else "agente",
+        "aprovacao": pausa,
         "agente_id": str(agente.id),
         "agente_nome": agente.nome,
         "entrada": entrada_rerun,
@@ -315,7 +303,7 @@ def _retomar_conversando_tela(
     }
     _fazer_registrador(sessao, execucao.id, origens)(passo, ordem)
 
-    if not escolhidas:
+    if pausa or not escolhidas:
         execucao.estado = "aguardando_humano"
         sessao.commit()
         from mensageria import aprovacao

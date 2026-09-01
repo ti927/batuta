@@ -4,7 +4,7 @@ area: "mensageria"
 slug: "conversas"
 tags: ["conversa", "atendimento", "inbox", "takeover", "humano-assume", "timeout", "audio", "turno-descartado"]
 revisado_em: "2026-08-27"
-fontes: ["cerebro/mensageria/servico.py", "cerebro/mensageria/sweeper.py", "cerebro/orquestracao/memoria_conversa.py", "cerebro/orquestracao/agente.py (portão nativo)", "cerebro/mensageria/config.py (parede governa a trava)", "project_estado-atual-build-plan"]
+fontes: ["cerebro/mensageria/servico.py", "cerebro/mensageria/sweeper.py", "cerebro/orquestracao/memoria_conversa.py", "cerebro/orquestracao/agente.py", "project_estado-atual-build-plan"]
 ---
 
 # Conversas (atendimento por mensageria)
@@ -41,10 +41,10 @@ conversa e sabe quando chamar uma pessoa. Cada canal tem **um agente atendente**
 - Uma conversa parada é retomada/encerrada pelo mecanismo de tempo — não fica presa em silêncio. Isso vale
   para os **dois** tipos de espera: quando a bola está com o contato (ele não respondeu) e quando a bola está
   com o Batuta (**o agente começou a responder e o turno não voltou**, por queda ou travamento). Neste
-  segundo caso, passados cerca de 8 minutos (30 quando a conversa conduz uma **aprovação de portão**, cuja
+  segundo caso, passados cerca de 8 minutos (30 quando a conversa conduz uma **aprovação de execução**, cuja
   retomada religa o fluxo inteiro e pode demorar mais), o contato **recebe um aviso honesto** ("tive uma falha interna e
   não consegui concluir — pode reenviar?") e a conversa é destravada. Se a conversa conduzia uma **aprovação
-  de portão**, a execução continua pendente e retomável: nada se perde, basta reenviar a resposta ou aprovar
+  de aprovação**, a execução continua pendente e retomável: nada se perde, basta reenviar a resposta ou aprovar
   pela tela.
 - A conversa tem **memória entre turnos**: o agente lembra o que já consultou e decidiu nos turnos
   anteriores da MESMA conversa, então não refaz do zero a cada mensagem. Para não crescer sem limite, os
@@ -52,9 +52,9 @@ conversa e sabe quando chamar uma pessoa. Cada canal tem **um agente atendente**
   controle.
 - **Ação irreversível na conversa é segurada pelo próprio sistema.** Se o agente atendente vai fazer algo
   irreversível (lançar, publicar, enviar, gravar num sistema externo), o Batuta **pausa e pede a confirmação
-  do contato automaticamente** antes de a ação acontecer — é a mesma [[operacao/parede-de-ativacao]] que
+  do contato automaticamente** antes de a ação acontecer — é a mesma [[automacoes/pedir-aprovacao]] que
   protege as automações, agindo agora **ao vivo**, dentro da conversa. A pessoa vê **uma** confirmação, na
-  voz do próprio agente; se a organização desligar a parede, a ação segue direto.
+  voz do próprio agente, quando o markdown dele mandar confirmar — não há mais trava de sistema.
 
 ## Para a IA
 Para atendimento, o canal precisa estar **conectado** (webhook) e no cinto do **único** agente atendente.
@@ -66,7 +66,7 @@ cada turno começa do zero, e não instrua o agente a "não re-buscar": ele já 
 Como o sistema já **segura o irreversível e pede o OK** sozinho, **não** instrua o agente atendente a fazer
 um ritual manual de "pergunte 'confirma?' e espere o sim" — isso viraria confirmação **em dobro** (a do
 agente e a do sistema). Deixe-o **afirmar** o que vai fazer e agir; a trava aparece por conta própria quando
-for preciso. Na conversa **não** existe o modelo de dois nós (prepara+gate → executa) da esteira: o portão é
+for preciso. Na conversa **não** existe o modelo de dois nós (prepara → executa) da esteira: a confirmação é
 nativo, no meio do próprio turno.
 Se o consultor relatar *"respondi e não aconteceu nada"*, **não conclua que o agente ignorou a mensagem**:
 verifique primeiro se o turno ficou preso (a conversa parada em "bot respondendo") e se cada turno está

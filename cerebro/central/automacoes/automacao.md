@@ -28,8 +28,8 @@ no Instagram" e "Responder comentários"), cada uma com seu próprio gatilho e s
 - Automação de atendimento (gatilho: mensagem) com um agente atendente que bifurca conforme o caso.
 
 ## Limites e cuidados
-- **Inativa não roda.** Ao ativar, o Batuta confere a **parede**: se há ação irreversível sem portão
-  antes, a ativação é recusada (com explicação).
+- **Inativa não roda.** Ativar não impõe nenhuma trava. Quem segura uma ação que precisa
+  de gente é o próprio agente, pelo instrumento [[automacoes/pedir-aprovacao]].
 - Ao **duplicar**, a cópia nasce **inativa** (evita disparo em dobro de agendadas/webhook).
 
 ## Para a IA
@@ -40,5 +40,5 @@ Trabalhe sempre sobre a automação certa: com várias no time, pergunte **qual*
 ## Relacionado
 - [[automacoes/gatilhos]]
 - [[automacoes/cadeia-e-grafo]]
-- [[automacoes/portao-de-aprovacao]]
-- [[operacao/parede-de-ativacao]]
+- [[automacoes/pedir-aprovacao]]
+- [[automacoes/pedir-aprovacao]]

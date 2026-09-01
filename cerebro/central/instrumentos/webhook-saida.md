@@ -27,14 +27,14 @@ outra automação por webhook. É o par "de saída" do [[instrumentos/chamar-res
 - Disparar a automação de outro time por webhook.
 
 ## Limites e cuidados
-- **Não exige portão por padrão** (decisão do maestro): webhook é gatilho de automação em massa — gatear
+- **Não pede aprovação por padrão** (decisão do maestro): webhook é gatilho de automação em massa — travar
   cada disparo inviabilizaria a automação. Se quiser barrar um disparo específico, ligue o interruptor
   "exige aprovação" **naquele nó** (escape para o caso raro).
 - 401/403 e 5xx viram falha (a de servidor é retentável).
 
 ## Para a IA
 Parâmetro no catálogo (`disparar_webhook`): `payload` (JSON). A URL e a autenticação são da **config** do
-humano. Por padrão não pede portão; só sugira gate no nó se o disparo tiver efeito sensível e único.
+humano. Por padrão não pede aprovação; só sugira `pedir_aprovacao` se o disparo tiver efeito sensível e único.
 
 ## Relacionado
 - [[instrumentos/chamar-rest]]

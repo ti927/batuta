@@ -65,13 +65,34 @@ def no_pausado(sessao: Session, execucao: Execucao) -> dict | None:
     return grafo.indexar(grafo.normalizar(auto.cadeia or {})).no(no_id)
 
 
-def _config_aprovacao_do_no(sessao: Session, execucao: Execucao) -> dict | None:
-    """A config de aprovação do nó pausado desta execução (`{instrumento_id,
-    destinatario}`), ou None se o nó não tem portão por canal. O nó é localizado pelo
-    último passo (`no_id`, com fallback ao agente, p/ execuções antigas)."""
+def passo_pausado(sessao: Session, execucao: Execucao) -> PassoExecucao | None:
+    """O último passo desta execução — aquele em que ela parou."""
+    return sessao.scalars(
+        select(PassoExecucao)
+        .where(PassoExecucao.execucao_id == execucao.id)
+        .order_by(PassoExecucao.ordem.desc())
+    ).first()
+
+
+def config_aprovacao(sessao: Session, execucao: Execucao) -> dict | None:
+    """Por onde o pedido de aprovação foi apresentado (`{instrumento_id,
+    destinatario}`), ou None se não foi por canal (só pela tela).
+
+    A verdade mora no PASSO: quem pediu foi o agente, chamando `pedir_aprovacao`, e o
+    passo guarda o canal que ele de fato usou. Antes isso era configuração do NÓ
+    (`no.aprovacao`, do extinto portão) — um campo à parte que podia divergir do envio
+    e deixava a execução órfã. Execuções pausadas ANTES desta virada ainda têm a config
+    no nó, então ele fica como fallback."""
+    passo = passo_pausado(sessao, execucao)
+    do_passo = ((passo.saida or {}).get("aprovacao") or {}) if passo else {}
+    if do_passo.get("canal_instrumento_id"):
+        return {
+            "instrumento_id": do_passo["canal_instrumento_id"],
+            "destinatario": do_passo.get("destinatario") or "",
+        }
     no = no_pausado(sessao, execucao) or {}
-    aprovacao = no.get("aprovacao") or {}
-    return aprovacao if aprovacao.get("instrumento_id") else None
+    legado = no.get("aprovacao") or {}
+    return legado if legado.get("instrumento_id") else None
 
 
 def _conversa_viva(
@@ -121,7 +142,7 @@ def execucao_parada_do_contato(
         .order_by(Execucao.iniciada_em.desc())
     ).all()
     for ex in execs:
-        cfg = _config_aprovacao_do_no(sessao, ex)
+        cfg = config_aprovacao(sessao, ex)
         if cfg is None:
             continue
         inst = sessao.get(Instrumento, uuid.UUID(str(cfg["instrumento_id"])))
@@ -151,10 +172,10 @@ def vincular_pausa(sessao: Session, execucao: Execucao) -> None:
     conversa viva. O PEDIDO em si é do agente (já enviado); aqui a borda só acrescenta UM
     aviso de expectativa derivado do Tipo de fluxo (`_avisar_expectativa`, à prova de falha
     e idempotente) — o que acontece se o humano não responder."""
-    no = no_pausado(sessao, execucao) or {}
-    cfg = no.get("aprovacao") or {}
+    cfg = config_aprovacao(sessao, execucao) or {}
     if not cfg.get("instrumento_id"):
         return
+    no = no_pausado(sessao, execucao) or {}
     inst = sessao.get(Instrumento, uuid.UUID(str(cfg["instrumento_id"])))
     auto = sessao.get(Automacao, execucao.automacao_id)
     if inst is None or inst.tipo not in CANAIS_TIPOS:

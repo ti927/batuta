@@ -101,6 +101,10 @@ def _fazer_registrador(
                     **({"motivo_ramo": passo["motivo_ramo"]} if passo.get("motivo_ramo") else {}),
                     **({"aviso": passo["aviso"]} if passo.get("aviso") else {}),
                     **({"erro": passo["erro"]} if passo.get("erro") else {}),
+                    # Por onde o agente pediu aprovação neste passo (canal + de quem
+                    # se espera a resposta). É o que amarra a conversa de quem aprova
+                    # a esta execução — antes essa config vivia no NÓ do desenho.
+                    **({"aprovacao": passo["aprovacao"]} if passo.get("aprovacao") else {}),
                 },
                 # O passo que FALHOU fica gravado como falho (antes tudo era gravado
                 # "concluido" e a timeline pulava do último passo bom para "falhou",

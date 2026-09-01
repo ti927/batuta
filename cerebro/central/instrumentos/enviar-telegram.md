@@ -25,7 +25,7 @@ instrumento (com seu token de bot) é **um canal/bot** do time.
 
 ## Exemplos
 - Avisar um grupo interno quando um fluxo termina.
-- Enviar o pedido de aprovação de um portão para o chat de um gestor.
+- Enviar o pedido de aprovação para o chat de um gestor.
 
 ## Limites e cuidados
 - O **Destinatário configurado prevalece**: se preenchido, o agente **não** o troca pelo texto dele.
@@ -40,4 +40,4 @@ veja [[mensageria/canal-telegram]] (um atendente por canal; portões concorrente
 
 ## Relacionado
 - [[mensageria/canal-telegram]]
-- [[automacoes/portao-de-aprovacao]]
+- [[automacoes/pedir-aprovacao]]

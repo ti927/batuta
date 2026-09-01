@@ -116,6 +116,12 @@ class TipoInstrumento(ABC):
     # EXATAMENTE o que foi apresentado ao humano (e não o status que o agente
     # narra depois). None = o instrumento não apresenta mensagem a humano.
     campo_mensagem: str | None = None
+    # PAUSA PARA HUMANO: acionar este instrumento SUSPENDE a execução até uma pessoa
+    # responder. É o que substituiu o "portão" (um interruptor no nó do desenho):
+    # quem decide que aquele momento precisa de gente é o AGENTE, chamando o
+    # instrumento porque o markdown dele manda — decisão do maestro, 2026-08-31.
+    # A borda lê isto para saber que o turno terminou numa espera, não numa entrega.
+    pausa_para_humano: bool = False
     # OCULTO NO CATÁLOGO: o tipo é REAL (o motor o executa, `obter_tipo` o acha),
     # mas NÃO aparece no dropdown de "criar instrumento" da tela atual — para tipos
     # cujo formulário cru (gerado do JSON Schema) seria inutilizável e que ganharão

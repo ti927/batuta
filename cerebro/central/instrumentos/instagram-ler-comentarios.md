@@ -27,7 +27,7 @@ pessoas estão dizendo. É o par de leitura do [[instrumentos/instagram-responde
 ## Limites e cuidados
 - Precisa da credencial `instagram` conectada.
 - Traz de 1 a 50 comentários por chamada.
-- Só leitura → não exige portão.
+- Só leitura → ninguém precisa aprovar nada.
 
 ## Para a IA
 Parâmetros no catálogo (`instagram_ler_comentarios`): `media_id` e `limite`. Para responder em tempo real

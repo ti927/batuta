@@ -34,7 +34,6 @@ import agendador
 import auditoria
 import duplicacao_comum
 import fila
-import portao_ativacao
 import precos
 from auth import usuario_atual
 from modelos import (
@@ -105,17 +104,6 @@ def _validar_cadeia_ou_422(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
 
 
-def _validar_portao_ou_422(sessao: Session, time_id: uuid.UUID, cadeia: dict) -> None:
-    """Parede de ativação: bloqueia ligar uma automação em que um agente de ação
-    irreversível não tem portão de aprovação humana antes na cadeia. Só chamada
-    quando a automação vai ficar ATIVA — inativa não roda, não há o que blindar."""
-    problemas = portao_ativacao.validar(sessao, time_id, cadeia or {})
-    if problemas:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, {"problemas": problemas}
-        )
-
-
 # ───────────────────────── CRUD de automações ────────────────────
 
 
@@ -147,8 +135,6 @@ def criar(
 ):
     time_acessivel(sessao, usuario, time_id, minimo="operador")
     _validar_cadeia_ou_422(sessao, time_id, dados.cadeia)
-    if dados.ativa:
-        _validar_portao_ou_422(sessao, time_id, dados.cadeia)
     auto = Automacao(time_id=time_id, **dados.model_dump())
     auto.cadeia = grafo.normalizar(auto.cadeia or {})  # grava no formato canônico
     if not (auto.configuracao or {}).get("perfil"):  # nasce com um tipo de fluxo sensato
@@ -186,8 +172,6 @@ def editar(
 ):
     auto = automacao_acessivel(sessao, usuario, automacao_id, minimo="operador")
     _validar_cadeia_ou_422(sessao, auto.time_id, dados.cadeia)
-    if dados.ativa:
-        _validar_portao_ou_422(sessao, auto.time_id, dados.cadeia)
     for campo, valor in dados.model_dump().items():
         setattr(auto, campo, valor)
     auto.cadeia = grafo.normalizar(auto.cadeia or {})  # grava no formato canônico

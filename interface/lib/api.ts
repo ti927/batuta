@@ -226,7 +226,6 @@ export type Instrumento = {
   // Segredos já guardados (cifrados): campo → 4 últimos dígitos (Fase 7-B).
   segredos: Record<string, string>;
   // Interruptor de aprovação humana: null = automático, true = sempre, false = nunca.
-  exige_aprovacao: boolean | null;
   // Resolvido (tipo+config+interruptor): se este instrumento exige portão.
   acao_irreversivel: boolean;
   // Caixa-forte: credencial nomeada da central que este instrumento usa (ou null).
@@ -455,27 +454,16 @@ export type SaidaCadeia = {
   lane?: "above" | "below"; // dica de curva p/ loops (UI)
 };
 
-// Aprovação por canal configurada no nó com portão (Fase 6).
-export type AprovacaoNo = {
-  instrumento_id?: string | null;
-  destinatario?: string | null;
-};
-
 export type NoCadeia = {
   id: string;
   tipo: TipoNo;
   ref?: string; // id do agente (tipo 'agente'); o mesmo agente pode estar em vários nós
   nome?: string; // rótulo do roteador
   inicial?: boolean; // marca visual do nó inicial
-  gate?: boolean; // portão de aprovação (pausa após este nó)
-  aprovacao?: AprovacaoNo | null;
-  // Ajustes de config DESTE portão (sobrepõem o Tipo de fluxo — cascata do backend
-  // `no.config`). Só as chaves ajustadas ficam aqui; o resto herda do fluxo.
+  // Ajustes de config DESTE passo (sobrepõem o Tipo de fluxo — cascata do backend
+  // `no.config`): quanto esperar e o que fazer no silêncio quando o agente pede
+  // aprovação aqui. Só as chaves ajustadas ficam aqui; o resto herda do fluxo.
   config?: Record<string, unknown>;
-  // Roteiro editável do portão (o "portao.md"): o que o agente faz na abertura (como
-  // apresentar o pedido) e no fechamento (o que fazer após a resposta). Ambos opcionais
-  // — sem eles, vale o comportamento padrão.
-  instrucoes?: { abertura?: string; fechamento?: string };
   gatilho?: TipoGatilho; // tipo 'gatilho'
   x?: number;
   y?: number;
@@ -505,14 +493,13 @@ export function nosDaCadeia(cadeia: Cadeia | null | undefined): NoCadeia[] {
   const nos = cadeia?.nos as unknown;
   if (Array.isArray(nos)) return nos as NoCadeia[];
   if (nos && typeof nos === "object") {
-    // formato antigo: { "<agente_id>": { saidas, pausa_humano } }
+    // formato antigo: { "<agente_id>": { saidas } }
     const inicio = inicialDaCadeia(cadeia);
     return Object.entries(nos as Record<string, Record<string, unknown>>).map(
       ([id, no]) => ({
         id,
         tipo: "agente" as const,
         ref: id,
-        gate: !!(no?.pausa_humano ?? no?.gate),
         inicial: id === inicio,
         saidas: ((no?.saidas as SaidaCadeia[]) ?? []).map((s) => ({
           ...s,

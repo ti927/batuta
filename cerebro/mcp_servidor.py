@@ -53,9 +53,10 @@ mcp = FastMCP(
         "use `consultar_conhecimento` em vez de adivinhar; para montar conector, consulte antes.\n"
         "SEGURANÇA (respeite sempre): (1) você NUNCA pluga segredo — ao criar credenciais/"
         "conectores, deixa o segredo pendente e orienta o consultor a colá-lo no cofre do "
-        "Batuta pela tela. (2) A PAREDE de aprovação recusa `ativar_automacao` se um agente com "
-        "ação irreversível não tiver portão humano antes na cadeia (ponha \"gate\": true no "
-        "nó anterior). (3) Ações IRREVERSÍVEIS (`excluir_*`) apagam de verdade — confirme "
+        "Batuta pela tela. (2) APROVAÇÃO é do AGENTE: não há trava de ativação nem portão no "
+        "desenho — quem segura uma ação até uma pessoa confirmar é o agente, com o instrumento "
+        "`pedir_aprovacao` no cinto e a regra escrita no markdown dele. Ao montar um time com "
+        "ação irreversível, confira isso ANTES de sugerir ativar. (3) Ações IRREVERSÍVEIS (`excluir_*`) apagam de verdade — confirme "
         "com o consultor antes de chamar; `ativar_automacao`/`desativar_automacao` mexem "
         "numa AUTOMAÇÃO (nunca no time), então diga o nome dela ao confirmar.\n"
         "ERRO: se uma ferramenta devolver falha com um CÓDIGO, repasse o código ao consultor "
@@ -193,7 +194,7 @@ async def ver_uso(time_id: str) -> str:
 async def listar_tipos_instrumento() -> str:
     """Lista os tipos de instrumento disponíveis, com o que cada um faz, os campos de
     configuração (obrigatório/secreto) e se a ação é irreversível. Use para saber o que é
-    possível montar e o que precisa de portão de aprovação."""
+    possível montar e o que merece uma aprovação humana antes."""
     return await anyio.to_thread.run_sync(mcp_ferramentas.listar_tipos_instrumento, _sub())
 
 
@@ -219,7 +220,7 @@ async def ver_instrumento(instrumento_id: str) -> str:
 @mcp.tool()
 async def consultar_conhecimento(topico: str) -> str:
     """Consulta a Central de Conhecimento do Batuta — o manual dos recursos (instrumentos,
-    automações, gatilhos, portão de aprovação, chaves, credenciais, mensageria, memória do
+    automações, gatilhos, condições e ramos, aprovação, chaves, credenciais, mensageria, memória do
     agente, etc.). Use quando não souber COMO um recurso funciona, em vez de adivinhar."""
     return await anyio.to_thread.run_sync(mcp_ferramentas.consultar_conhecimento, _sub(), topico)
 
@@ -411,9 +412,9 @@ async def montar_cadeia(automacao_id: str, cadeia: dict) -> str:
     ou "senao" (só quando nenhuma condicional foi atendida). "erro" e "senao" não levam
     "quando". Sem "senao", nada casando = aquele ramo termina, com o motivo no rastro.
 
-    Ponha "gate": true no nó do agente que vem ANTES de uma ação irreversível (o fluxo
-    pausa e espera aprovação humana). Não precisa criar os nós 'gatilho'/'fim' — o
-    sistema completa."""
+    APROVAÇÃO: não existe `gate` no nó (foi removido em 2026-08-31). Para um passo esperar
+    uma pessoa, dê ao AGENTE dele o instrumento `pedir_aprovacao` e escreva no markdown
+    quando usá-lo. Não precisa criar os nós 'gatilho'/'fim' — o sistema completa."""
     return await anyio.to_thread.run_sync(escrita.montar_cadeia, _sub(), automacao_id, cadeia)
 
 
@@ -432,10 +433,12 @@ async def definir_gatilho(
 
 @mcp.tool()
 async def ativar_automacao(automacao_id: str) -> str:
-    """LIGA uma AUTOMAÇÃO (passa a poder disparar) — não mexe no time. A PAREDE de
-    aprovação: se algum agente com ação irreversível (publicar/enviar/gravar) não tiver
-    portão humano antes na cadeia, a ativação é recusada com a explicação — ajuste a
-    cadeia e tente de novo."""
+    """LIGA uma AUTOMAÇÃO (passa a poder disparar) — não mexe no time.
+
+    Não há mais trava: o Batuta NÃO recusa mais ativar uma automação com ação
+    irreversível sem aprovação humana. A responsabilidade é sua: antes de ativar um time
+    que publica/envia/lança, confira se o agente que faz isso tem o instrumento
+    `pedir_aprovacao` no cinto e a regra escrita no markdown — e diga isso ao consultor."""
     return await anyio.to_thread.run_sync(escrita.ativar_automacao, _sub(), automacao_id)
 
 

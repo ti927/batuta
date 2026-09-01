@@ -35,7 +35,7 @@ serve direto ao [[instrumentos/publicar-instagram]].
 - **Sem pessoas reais / figuras públicas** (no roteiro e na imagem de referência) — a Sora recusa. Para
   animar o rosto de uma pessoa real, use [[instrumentos/gerar-video-fal]].
 - Se usar imagem de referência, ela precisa ter **exatamente o tamanho** do vídeo.
-- Não é irreversível (só gera o arquivo) — quem PUBLICA é que exige portão, num passo seguinte.
+- Não é irreversível (só gera o arquivo) — quem PUBLICA é que pede aprovação, num passo seguinte.
 
 ## Para a IA
 Parâmetros no catálogo (`gerar_video`): `prompt` (roteiro) e `imagem_referencia_url` (opcional, quadro

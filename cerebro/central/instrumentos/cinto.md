@@ -32,17 +32,17 @@ Um instrumento é uma peça plugável, sempre com o mesmo encaixe. Duas coisas i
 - Um mesmo instrumento de envio pode estar em vários agentes (para só **enviar**).
 
 ## Limites e cuidados
-- **Ação irreversível** (publicar/enviar/gravar) exige **portão de aprovação antes** — o Batuta cobra
+- **Ação irreversível** (publicar/enviar/gravar) pede **aprovação antes** — o Batuta cobra
   isso na ativação.
 - O instrumento é **genérico**; quem dá o contexto ("a foto da pessoa vai primeiro") é o **markdown do
   agente**, não o instrumento.
 
 ## Para a IA
 Os parâmetros exatos de cada tipo estão no **catálogo** (`catalogo_de_instrumentos`) — a fonte da
-verdade; não os repita de memória. `acao_irreversivel` resolve se precisa de portão. Config = fixo do
+verdade; não os repita de memória. `acao_irreversivel` resolve se a ação é irreversível. Config = fixo do
 humano (prevalece); Args = conteúdo do agente. Só proponha instrumentos que existem no catálogo.
 
 ## Relacionado
 - [[times-agentes/agente]]
-- [[automacoes/portao-de-aprovacao]]
+- [[automacoes/pedir-aprovacao]]
 - [[segredos/segredos-de-instrumento]]

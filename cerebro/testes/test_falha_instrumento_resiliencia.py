@@ -34,7 +34,7 @@ def _ferramenta(tipo_str: str, configuracao: dict, monkeypatch):
     monkeypatch.setattr(agente_mod, "acionar_com_retentativa", explode)
     falhas: list[str] = []
     erros: list[dict] = []
-    tool = agente_mod._ferramenta_unica(inst, tipo, config, falhas, {}, erros)
+    tool = agente_mod._ferramenta_unica(inst, tipo, config, falhas, {}, erros, {})
     return tool, falhas, erros
 
 
@@ -76,7 +76,7 @@ def test_turno_misto_so_a_escrita_conta(monkeypatch):
         time_id=uuid.uuid4(), nome="Busca", tipo="busca_web", configuracao={}
     )
     inst_b.id = uuid.uuid4()
-    tool_b = agente_mod._ferramenta_unica(inst_b, busca, busca.Config(), falhas, {}, erros)
+    tool_b = agente_mod._ferramenta_unica(inst_b, busca, busca.Config(), falhas, {}, erros, {})
 
     tg = encaixe.obter_tipo("enviar_telegram")
     inst_t = Instrumento(
@@ -85,7 +85,7 @@ def test_turno_misto_so_a_escrita_conta(monkeypatch):
     )
     inst_t.id = uuid.uuid4()
     tool_t = agente_mod._ferramenta_unica(
-        inst_t, tg, tg.Config.model_validate({"token_bot": "x"}), falhas, {}, erros
+        inst_t, tg, tg.Config.model_validate({"token_bot": "x"}), falhas, {}, erros, {}
     )
 
     json.loads(tool_b.func(consulta="x"))  # leitura falha → não conta

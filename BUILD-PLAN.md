@@ -2102,6 +2102,38 @@ Pedido do maestro ao fim do dia: *"atualize a central de conhecimento com o que 
 
 ---
 
+## FASE — Portão e parede MORREM; a aprovação vira instrumento do agente  ✅ (2026-08-31, migração `apr00instrumento01`)
+
+**Gatilho:** *"NÃO QUERO MAIS SABER DE PORTÃO OU PAREDE DOS INFERNOS. Essas duas desgraças só trouxeram dor de cabeça, e tem meses que eu nem sabia que eram dois bloqueios. ACABA COM ESSA MERDA, TODA APROVAÇÃO É FEITA PELO AGENTE E PONTO FINAL."*
+
+**O que existia — e por que estava errado.** O Batuta tinha **duas** travas de aprovação coexistindo, e o maestro passou meses sem saber que eram duas:
+1. **O portão** — um interruptor (`gate`) num nó do desenho. Pôr `gate: true` significava "depois deste nó, espere um humano". Trazia junto um canal de aprovação por nó, um "portao.md" (instruções de abertura/fechamento) e um bloco de regras próprias.
+2. **A parede** — uma chave da organização (`organizacoes.parede_ativacao`, ligada por padrão) que **recusava ativar** uma automação cujo agente irreversível não tivesse portão antes. E que, desde a Fatia 4.3/P3b, também ligava a **trava nativa da conversa** — por isso, ao ligá-la, o mesmo atendimento passou a pedir confirmação **duas vezes** (a do agente e a do sistema).
+
+O resultado foi o oposto do pretendido: o desenho do fluxo mentia sobre o que o motor faria, a trava mais importante era invisível, e uma decisão que é do **agente** (quando este momento precisa de gente?) vivia num interruptor escondido — contra a doutrina do próprio produto, de que **todo comportamento do agente vem dos quatro markdowns** (`CLAUDE.md §14`).
+
+**O que ficou no lugar: um instrumento.** `pedir_aprovacao` ("Pedir aprovação e aguardar") entra no cinto como qualquer outro. O agente o chama porque o **markdown dele** manda; o instrumento apresenta o pedido pelo canal configurado (ou só pela tela), e a execução **para**. A máquina de pausa/retoma é **a mesma de sempre** — `aguardando_humano`, `retomada_resposta`, passo `espera_humano`, vínculo da conversa do aprovador, vigia, `POST /execucoes/{id}/responder`. Só mudou **quem puxa o gatilho**. Ao responder, o **mesmo agente** continua de onde parou (memória por `execucao:nó`) e declara os caminhos.
+
+Duas garantias novas do contrato do encaixe: `pausa_para_humano` (a marca que faz o motor parar) e, depois de pedir, **nenhuma outra ação roda no turno** — agir enquanto se espera seria fazer justamente o que se mandou confirmar antes.
+
+**O que foi removido:** `cerebro/portao_ativacao.py` e seus testes; a coluna `organizacoes.parede_ativacao` e o endpoint `PUT /organizacoes/{id}/parede-ativacao`; a coluna morta `instrumentos.exige_aprovacao`; a validação de ativação na rota e na IA criadora; o campo `gate` do nó e seus satélites (`no.aprovacao`, `no.instrucoes`); o portão nativo da conversa (`HumanInTheLoopMiddleware`, `memoria_conversa.ha_interrupcao`, `_apresentar_pausa`, `_classificar_aprovacao`); e, na interface, o interruptor do portão, o canal de aprovação do nó, o editor do "portao.md" e o switch da parede.
+
+**O que NÃO saiu:** `instrumentos/base.py::acao_irreversivel`. Ele governa também a **política de falha** (`PRODUTO §16` — uma escrita que falha derruba o passo; uma leitura, não) e o selo do catálogo. Deixou de ser trava e virou **aviso** a quem monta o time. Também não saiu a **cascata de config** do Tipo de fluxo (prazo, teto de idas-e-vindas, o que fazer no silêncio): ela agora vale para o passo onde o agente esperar, ajustável por nó no construtor.
+
+**Onde a config de aprovação passou a morar.** Antes vinha do NÓ (`no.aprovacao`), um campo à parte que podia divergir do envio e deixava a execução órfã. Agora vem do **PASSO**: quem pediu foi o agente, e o passo guarda o canal e o destinatário que ele de fato usou (`mensageria/aprovacao.config_aprovacao`, com o nó como fallback para execuções pausadas antes da virada).
+
+**Na tela:** o selo "pode esperar você" no nó, no dashboard e no canvas da criadora passou a ser **derivado do cinto** (o agente tem o instrumento?) em vez de um interruptor — o desenho não pode mentir sobre o motor. O formulário de instrumento ganhou o seletor de canal (`ui: canal_mensageria`), que avisa quando o canal escolhido não tem destinatário.
+
+**O que as IAs aprenderam (mesma entrega):** capítulo novo `automacoes/pedir-aprovacao`, capítulo `automacoes/portao-de-aprovacao` e `operacao/parede-de-ativacao` **apagados**, e **34 capítulos** varridos das frases "exige portão"/"parede" — com 0 wikilinks órfãos ao fim. O prompt da IA criadora trocou a seção da parede por "Aprovação é do AGENTE" e passou a ensinar a confirmação na conversa pelo markdown (uma forma só, para não confirmar em dobro). As instructions e as docstrings do **MCP** (`montar_cadeia`, `ativar_automacao`) idem — sem isso o Claude conectado continuaria recusando ativação "por causa da parede".
+
+**Documentos:** `PRODUTO §14/§19/§22` reescritos; `MIGRACAO §6.1` registra o **Descongelamento nº 4** (a garantia HITL sai do motor e vira instrumento — o que permanece congelado está listado lá); `docs/ARQUITETURA.md` atualizado; os **Termos de Uso** passaram a descrever "aprovação humana" em vez de "portão", mantendo verdadeira a promessa feita lá e no texto enviado à **Meta**.
+
+**Verificação:** **966 testes verdes** (novos: o instrumento ponta a ponta — envio pelo canal, canal sem destinatário, envio recusado, canal que sumiu, só-tela; a pausa registrada no passo; o turno que para de agir depois de pedir; a execução que pausa e a que **não** pausa sem pedido; ativar sem portão pela rota e pela IA criadora). `alembic upgrade head` limpo; `tsc`, `eslint` e `build` da interface limpos.
+
+**Falta:** teste ao vivo do maestro — montar o `pedir_aprovacao` no cinto do agente que apresenta a capa e ver o fluxo parar, ele aprovar pelo Telegram e Carrossel + Story rodarem juntos (fecha também a Onda 1).
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.

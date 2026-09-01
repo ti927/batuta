@@ -1,6 +1,5 @@
 // Inspector do construtor: edita o nó selecionado (gatilho/agente/roteador/fim).
-// É onde nascem as bifurcações e o portão de aprovação — incluindo o canal de
-// aprovação por mensageria (decisão do maestro).
+// É onde nascem as bifurcações do fluxo.
 //
 // Cada saída tem três coisas que o motor lê: o NOME (o que aparece na seta), a
 // CONDIÇÃO ("siga por aqui quando…") e o PAPEL (condição | se der erro | se nenhuma).
@@ -29,7 +28,6 @@ import type {
   CampoConfigFluxo,
   ConfiguracaoFluxo,
   Credencial,
-  Instrumento,
   NoCadeia,
   PainelConfigFluxo,
   SaidaCadeia,
@@ -43,7 +41,7 @@ import { UrlCopiavel } from "@/components/url-copiavel";
 import { CampoConfig, efetivoDoFluxo } from "./config-fluxo";
 import { TONE_KEYS, tone } from "./nucleo";
 
-// As chaves de config que fazem sentido AJUSTAR por-portão (e que o backend honra
+// As chaves de config que fazem sentido AJUSTAR por-passo (e que o backend honra
 // por-nó via `com_ajuste_do_no`). Fora daqui: atendimento (saudação/horário) e chaves
 // internas — essas ficam só no Tipo de fluxo.
 const CHAVES_PORTAO = [
@@ -230,19 +228,15 @@ function LinhaSaida({
       {papel === "condicional" && (
         <div>
           <label className="mb-1 block text-[11px]" style={{ color: "#6B6880" }}>
-            {no.gate
-              ? "Siga por aqui quando a pessoa…"
-              : no.tipo === "roteador"
-                ? "Siga por aqui quando a tarefa que chega…"
-                : "Siga por aqui quando…"}
+            {no.tipo === "roteador"
+              ? "Siga por aqui quando a tarefa que chega…"
+              : "Siga por aqui quando…"}
           </label>
           <input
             className={inputCls}
             style={faltaCondicao ? { borderColor: "#E5484D" } : undefined}
             value={sa.quando ?? ""}
-            placeholder={
-              no.gate ? "ex.: aprovar a capa" : "ex.: o texto estiver aprovado"
-            }
+            placeholder="ex.: o texto estiver aprovado"
             disabled={!podeEditar}
             onChange={(e) => onChange({ quando: e.target.value })}
           />
@@ -320,7 +314,6 @@ export function Inspector({
   no,
   cadeia,
   agentes,
-  canais,
   podeEditar,
   gatilho,
   setGatilho,
@@ -337,7 +330,6 @@ export function Inspector({
   no: NoCadeia | null;
   cadeia: Cadeia;
   agentes: Agente[];
-  canais: Instrumento[];
   podeEditar: boolean;
   gatilho: ConfigGatilho;
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
@@ -351,8 +343,8 @@ export function Inspector({
   onRemoveSaida: (id: string, sid: string) => void;
   onDeleteNode: (id: string) => void;
 }) {
-  // Metadados de config (perfis/campos/defaults) — fonte única do backend, p/ o drawer
-  // do portão herdar do Tipo de fluxo e sobrepor por-nó. Buscado uma vez.
+  // Metadados de config (perfis/campos/defaults) — fonte única do backend, p/ o
+  // passo herdar do Tipo de fluxo e sobrepor por-nó. Buscado uma vez.
   const [painel, setPainel] = useState<PainelConfigFluxo | null>(null);
   useEffect(() => {
     api.get<PainelConfigFluxo>("/config/fluxo").then(setPainel).catch(() => {});
@@ -391,21 +383,6 @@ export function Inspector({
   const inicios = (cadeia.nos ?? []).filter(
     (n) => n.tipo === "agente" || n.tipo === "roteador",
   );
-
-  // Aprovação por canal (portão): o aprovador é DERIVADO do destinatário configurado no
-  // canal escolhido — a MESMA pessoa para quem o agente envia. Fonte única: o valor não é
-  // mais editável à parte no nó, para nunca divergir do envio (era a causa do fluxo órfão).
-  const canalAprovacao = canais.find((c) => c.id === no.aprovacao?.instrumento_id);
-  const destinoAprovacao = (
-    (canalAprovacao?.configuracao?.destinatario_padrao as string | undefined) ?? ""
-  ).trim();
-
-  // Forma efetiva DESTE portão (ajuste do nó vence o fluxo): em "decisão direta" o
-  // agente não re-roda ao aprovar, então as instruções de FECHAMENTO não valem.
-  const formaPortao =
-    (no.config?.portao_forma as string | undefined) ??
-    (painel ? String(efetivoDoFluxo(painel, configFluxo, "portao_forma") ?? "") : "");
-  const formaDireto = formaPortao === "direto";
 
   return (
     <div className="flex h-full flex-col">
@@ -743,162 +720,45 @@ export function Inspector({
                     color="#6D4AFF"
                     className="mt-px flex-none"
                   />
-                  A resposta é pública. Se quiser revisar antes de responder, ligue o
-                  portão de aprovação no passo que responde.
+                  A resposta é pública. Se quiser revisar antes de responder, dê ao
+                  agente que responde o instrumento &ldquo;Pedir aprovação e
+                  aguardar&rdquo;.
                 </p>
               </div>
             )}
           </div>
         )}
 
-        {/* agente: portão (+ aprovação por canal) */}
+        {/* agente: o que fazer quando este passo precisar de uma pessoa */}
         {no.tipo === "agente" && (
           <div className="mb-4 flex flex-col gap-2.5">
             <div className="flex items-start gap-3 rounded-[10px] border border-[#E8E6F0] bg-[#FAFAF7] p-3">
-              <Shield
-                size={17}
-                color={no.gate ? "#E89638" : "#A09DB8"}
-                className="mt-0.5"
-              />
+              <Shield size={17} color="#A09DB8" className="mt-0.5" />
               <div className="flex-1">
                 <div className="text-[13.5px] font-medium text-[#1A1730]">
-                  Portão de aprovação
+                  Aprovação é do agente
                 </div>
                 <div className="mt-0.5 text-[11.5px] leading-snug text-[#6B6880]">
-                  O fluxo pausa aqui e espera você decidir. Sua resposta escolhe a
-                  saída.
+                  Não há mais interruptor de portão aqui. Para este passo esperar
+                  alguém, dê ao agente o instrumento{" "}
+                  <strong>Pedir aprovação e aguardar</strong> e escreva na
+                  documentação dele quando usá-lo. Ele apresenta, o fluxo para, e
+                  continua quando a pessoa responde.
                 </div>
               </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={!!no.gate}
-                disabled={!podeEditar}
-                onClick={() => onPatchNode(no.id, { gate: !no.gate })}
-                className="relative h-[23px] w-10 flex-none rounded-full transition-colors"
-                style={{ background: no.gate ? "#6D4AFF" : "#D6D3E8" }}
-              >
-                <span
-                  className="absolute top-[3px] size-[17px] rounded-full bg-white transition-all"
-                  style={{ left: no.gate ? 20 : 3 }}
-                />
-              </button>
             </div>
 
-            {/* Aprovação por canal (só faz sentido com o portão ligado) */}
-            {no.gate && (
-              <div className="flex flex-col gap-2 rounded-[10px] border border-[#E8E6F0] p-3">
-                <label className="text-[11px]" style={{ color: "#6B6880" }}>
-                  Pedir aprovação por
-                  <select
-                    className={`${inputCls} mt-1 cursor-pointer`}
-                    value={no.aprovacao?.instrumento_id ?? ""}
-                    disabled={!podeEditar || canais.length === 0}
-                    onChange={(e) =>
-                      onPatchNode(no.id, {
-                        aprovacao: e.target.value
-                          ? { instrumento_id: e.target.value }
-                          : null,
-                      })
-                    }
-                  >
-                    <option value="">Só pela tela</option>
-                    {canais.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nome}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {no.aprovacao?.instrumento_id &&
-                  (destinoAprovacao ? (
-                    <span className="text-[11px]" style={{ color: "#6B6880" }}>
-                      A aprovação será pedida a <strong>{destinoAprovacao}</strong> — o
-                      mesmo destinatário deste canal (para onde o agente envia). Para
-                      mudar quem aprova, edite o destinatário no instrumento do canal.
-                    </span>
-                  ) : (
-                    <span className="text-[11px] text-warning">
-                      ⚠ Este canal não tem destinatário configurado — a aprovação por
-                      canal não vai funcionar. Defina o destinatário no instrumento do
-                      canal (ou aprove pela tela).
-                    </span>
-                  ))}
-                {canais.length === 0 && (
-                  <span className="text-[11px]" style={{ color: "#A09DB8" }}>
-                    Sem canais no time. Crie um instrumento de canal (Telegram) para
-                    aprovar por mensagem.
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Instruções DESTE portão (o "portao.md" editável) */}
-            {no.gate && (
-              <div className="flex flex-col gap-2 rounded-[10px] border border-[#E8E6F0] p-3">
-                <div>
-                  <div className="text-[12.5px] font-medium text-[#1A1730]">
-                    Instruções do portão
-                  </div>
-                  <p className="mt-0.5 text-[11px] leading-snug text-[#6B6880]">
-                    O roteiro do agente neste portão. Deixe em branco para o
-                    comportamento padrão.
-                  </p>
-                </div>
-                <label className="text-[11px]" style={{ color: "#6B6880" }}>
-                  Ao PEDIR aprovação (abertura)
-                  <textarea
-                    className={`${inputCls} mt-1 min-h-16`}
-                    placeholder="Ex.: Apresente a arte e a legenda e pergunte se pode publicar."
-                    value={no.instrucoes?.abertura ?? ""}
-                    disabled={!podeEditar}
-                    onChange={(e) =>
-                      onPatchNode(no.id, {
-                        instrucoes: {
-                          ...(no.instrucoes ?? {}),
-                          abertura: e.target.value,
-                        },
-                      })
-                    }
-                  />
-                </label>
-                <label className="text-[11px]" style={{ color: "#6B6880" }}>
-                  Depois da RESPOSTA (fechamento)
-                  <textarea
-                    className={`${inputCls} mt-1 min-h-16`}
-                    placeholder="Ex.: Ao aprovar, agende a próxima automação e siga pela saída 'aprovado'; ao reprovar, volte com o motivo."
-                    value={no.instrucoes?.fechamento ?? ""}
-                    disabled={!podeEditar}
-                    onChange={(e) =>
-                      onPatchNode(no.id, {
-                        instrucoes: {
-                          ...(no.instrucoes ?? {}),
-                          fechamento: e.target.value,
-                        },
-                      })
-                    }
-                  />
-                </label>
-                {formaDireto && (no.instrucoes?.fechamento ?? "").trim() !== "" && (
-                  <span className="text-[11px] text-warning">
-                    ⚠ Este portão está em “decisão direta” — as instruções de fechamento
-                    não valem aqui (o agente não conduz a conversa ao aprovar). Elas
-                    valem quando “o agente conversa”.
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Regras DESTE portão (sobrepõem o Tipo de fluxo — cascata `no.config`) */}
-            {no.gate && painel && (
+            {/* Regras da espera (sobrepõem o Tipo de fluxo — cascata `no.config`) */}
+            {painel && (
               <div className="flex flex-col gap-3 rounded-[10px] border border-[#E8E6F0] p-3">
                 <div>
                   <div className="text-[12.5px] font-medium text-[#1A1730]">
-                    Regras deste portão
+                    Se este passo esperar uma pessoa
                   </div>
                   <p className="mt-0.5 text-[11px] leading-snug text-[#6B6880]">
-                    Este portão segue o <strong>Tipo de fluxo</strong>. Ajuste abaixo só
-                    o que quiser valer <strong>só neste portão</strong>.
+                    Quanto tempo esperar e o que fazer no silêncio. Segue o{" "}
+                    <strong>Tipo de fluxo</strong>; ajuste abaixo só o que quiser
+                    valer <strong>só neste passo</strong>.
                   </p>
                 </div>
                 {CHAVES_PORTAO.map((chave) => {

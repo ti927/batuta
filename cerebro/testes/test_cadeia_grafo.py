@@ -1,8 +1,8 @@
 """Motor de cadeia no formato de GRAFO (lista de nós tipados).
 
-Cobre o `executar_cadeia`: linear, bifurcação, loop com guarda de passos, portão
-(gate) que pausa, nó roteador (classifica sem rodar agente), nó fim como destino e o
-mesmo agente em dois nós (no_id distingue).
+Cobre o `executar_cadeia`: linear, bifurcação, loop com guarda de passos, o pedido
+de aprovação do agente (que pausa), nó roteador (classifica sem rodar agente), nó fim
+como destino e o mesmo agente em dois nós (no_id distingue).
 
 E o que a Onda 1 (2026-08-31) trouxe — o motor caminhando por ONDAS:
 fan-out (segue TODOS os ramos atendidos), junção implícita (nó de convergência roda
@@ -206,16 +206,27 @@ def test_loop_com_guarda_de_passos(sessao, dados, ag, monkeypatch):
         motor.executar_cadeia(sessao, cadeia, "vai", max_passos=3)
 
 
-def test_gate_pausa(sessao, dados, ag, monkeypatch):
+def test_agente_pede_aprovacao_e_a_execucao_para(sessao, dados, ag, monkeypatch):
+    """Não há mais interruptor no desenho: quem para o fluxo é o AGENTE, chamando o
+    instrumento `pedir_aprovacao`."""
     revisor = ag("Revisor")
-    _mock_agentes(monkeypatch, {"Revisor": "Artigo pronto para aprovação"})
+    def fake(agente, cinto, entrada, **kwargs):
+        return {
+            "pausado": True,
+            "aprovacao": {"mensagem": "Artigo pronto para aprovação",
+                          "canal_instrumento_id": None},
+            "saida": "Artigo pronto para aprovação",
+            "instrumentos_acionados": ["pedir_aprovacao"], "uso": [],
+            "mensagens_enviadas": {}, "ramos_escolhidos": [],
+        }
+    monkeypatch.setattr(motor, "executar_agente", fake)
     cadeia = {
         "inicial": "rev",
         "nos": [
-            {"id": "rev", "tipo": "agente", "ref": str(revisor.id), "gate": True,
+            {"id": "rev", "tipo": "agente", "ref": str(revisor.id),
              "saidas": [
-                 {"rotulo": "aprovado", "destino": "fim"},
-                 {"rotulo": "reprovado", "destino": "rev"},
+                 {"rotulo": "aprovado", "quando": "aprovou", "destino": "fim"},
+                 {"rotulo": "reprovado", "quando": "pediu ajuste", "destino": "rev"},
              ]},
             {"id": "fim", "tipo": "fim", "saidas": []},
         ],
@@ -223,10 +234,9 @@ def test_gate_pausa(sessao, dados, ag, monkeypatch):
     r = motor.executar_cadeia(sessao, cadeia, "vai")
     assert r["estado"] == "aguardando_humano"
     assert r["pergunta"] == "Artigo pronto para aprovação"
-    # o nó com gate NÃO roteia sozinho (a resposta do humano decide depois)
+    # esperando: NÃO decide caminho (quem decide é a resposta da pessoa)
     assert r["passos"][-1]["saida_escolhida"] is None
     assert r["passos"][-1]["no_id"] == "rev"
-    # Fatia 4.1: o passo de PORTÃO é carimbado como espera-por-humano na timeline.
     assert r["passos"][-1]["tipo"] == "espera_humano"
 
 
@@ -633,15 +643,26 @@ def test_teto_de_passos_vale_por_execucao(sessao, dados, ag, monkeypatch):
 
 
 def test_pausa_guarda_os_ramos_pendentes(sessao, dados, ag, monkeypatch):
-    """Portão no meio de uma onda: os outros ramos não somem — voltam em
-    `pendentes` para a retomada levá-los adiante."""
-    inicio, portao, outro = ag("Inicio"), ag("Portao"), ag("Outro")
+    """Um agente pede aprovação no meio de uma onda: os outros ramos não somem —
+    voltam em `pendentes` para a retomada levá-los adiante."""
+    inicio, pede, outro = ag("Inicio"), ag("Pedinte"), ag("Outro")
     _mock_roteador_explode(monkeypatch)
-    _mock_agentes(
-        monkeypatch,
-        {"Inicio": "base", "Portao": "aprova?", "Outro": "fiz"},
-        ramos_por_nome={"Inicio": ["a", "b"]},
-    )
+
+    def fake(agente, cinto, entrada, **kwargs):
+        if agente.nome == "Pedinte":
+            return {
+                "pausado": True,
+                "aprovacao": {"mensagem": "aprova?", "canal_instrumento_id": None},
+                "saida": "aprova?", "instrumentos_acionados": ["pedir_aprovacao"],
+                "uso": [], "mensagens_enviadas": {}, "ramos_escolhidos": [],
+            }
+        return {
+            "saida": "base" if agente.nome == "Inicio" else "fiz",
+            "instrumentos_acionados": [], "uso": [], "mensagens_enviadas": {},
+            "ramos_escolhidos": ["a", "b"] if agente.nome == "Inicio" else [],
+        }
+
+    monkeypatch.setattr(motor, "executar_agente", fake)
     cadeia = {
         "inicial": "ini",
         "nos": [
@@ -649,7 +670,7 @@ def test_pausa_guarda_os_ramos_pendentes(sessao, dados, ag, monkeypatch):
                 {"rotulo": "a", "quando": "sempre", "destino": "port"},
                 {"rotulo": "b", "quando": "sempre", "destino": "outro"},
             ]},
-            {"id": "port", "tipo": "agente", "ref": str(portao.id), "gate": True,
+            {"id": "port", "tipo": "agente", "ref": str(pede.id),
              "saidas": [{"rotulo": "ok", "quando": "aprovou", "destino": "fim"}]},
             {"id": "outro", "tipo": "agente", "ref": str(outro.id),
              "saidas": [{"rotulo": "ok", "destino": "fim"}]},

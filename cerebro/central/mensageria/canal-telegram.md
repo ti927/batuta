@@ -14,7 +14,7 @@ Um canal de Telegram é um instrumento **Enviar no Telegram** conectado (webhook
 ouro: **um bot = um webhook = um canal**.
 
 ## Para que serve / quando usar
-Para o time **conversar** por Telegram (mão dupla): atender contatos e/ou receber aprovações de portão.
+Para o time **conversar** por Telegram (mão dupla): atender contatos e/ou receber pedidos de aprovação.
 Enviar mensagem sem conectar já funciona; **conectar** é o que faz o bot **receber** de volta.
 
 ## Como usar (na tela)
@@ -25,7 +25,7 @@ Enviar mensagem sem conectar já funciona; **conectar** é o que faz o bot **rec
 
 ## Exemplos
 - Um bot de atendimento cujo agente responde as mensagens que chegam.
-- Um bot que recebe o "aprovado/reprovado" de um portão.
+- Um bot que recebe o "aprovado/reprovado" de um pedido de aprovação.
 
 ## Limites e cuidados
 - **Enviar** pode ser compartilhado entre agentes; **receber** (atender ou aprovar) é **exclusivo**.
@@ -43,5 +43,5 @@ atendimento em dois agentes esperando que os dois atendam.
 
 ## Relacionado
 - [[instrumentos/enviar-telegram]]
-- [[automacoes/portao-de-aprovacao]]
+- [[automacoes/pedir-aprovacao]]
 - [[mensageria/conversas]]
