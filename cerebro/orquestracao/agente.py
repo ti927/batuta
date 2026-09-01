@@ -28,6 +28,7 @@ from instrumentos.base import (
 )
 from modelos import Agente, Instrumento
 from orquestracao import atividade
+from orquestracao import ficha as ficha_mod
 from orquestracao.llm import MODELO_PADRAO, construir_modelo, texto_da_resposta
 from orquestracao.modelos_ia import PROVEDOR_ANTHROPIC, provedor_do_modelo_seguro
 from sessao import CriadorDeSessao
@@ -333,7 +334,63 @@ def _opcoes_das_saidas(saidas: list[dict]) -> str:
             else f'- "{s["rotulo"]}" — (esta saída não diz quando seguir por ela; '
             "use o rótulo como pista)"
         )
+        # Regra exata (Onda 2): quem compara é o MOTOR, contra a ficha. O agente
+        # precisa saber disso — senão ele "decide" um caminho que não é dele decidir e
+        # narra uma escolha que o código já tinha tomado.
+        regra = ficha_mod.descrever_regra(s.get("regra"))
+        if regra:
+            linhas.append(
+                f"    (esta saída tem regra exata: {regra} — quem confere é o sistema, "
+                "não você; garanta só que o campo esteja anotado na ficha)"
+            )
     return "\n".join(linhas)
+
+
+class _AnotarArgs(BaseModel):
+    campo: str = Field(
+        description="Nome curto e claro do valor, como você o chamaria numa planilha "
+        "(ex.: 'url_da_capa', 'total', 'cliente'). Reuse o MESMO nome para corrigir um "
+        "valor já guardado."
+    )
+    valor: str = Field(
+        description="O valor a guardar, já pronto para o próximo passo usar. Guarde o "
+        "dado em si (a URL, o número, o nome) — não uma frase sobre ele."
+    )
+
+
+def _ferramenta_anotar(anotacoes: dict) -> StructuredTool:
+    """Ferramenta de VARIÁVEL DE FLUXO: o agente guarda um valor na ficha da execução,
+    e ele chega a todos os passos seguintes.
+
+    Existe porque entre nós só trafega texto: sem isto, um dado só sobrevive se o
+    agente lembrar de repeti-lo no texto final — e ele esquece (2026-09-01, o Carrossel
+    que recebeu "Aprovado. Seguindo para publicação" em vez do título e da URL). Com
+    `anotar`, o dado viaja pela ficha, não pela prosa.
+
+    As anotações do turno ficam no dict do closure e o motor as funde na ficha depois
+    (mesmo padrão de `mensagens_enviadas` e `escolha`)."""
+
+    def guardar(campo: str, valor: str) -> str:
+        nome = ficha_mod.normalizar_nome(campo)
+        if not nome:
+            return json.dumps(
+                {"ok": False, "erro": "nome de campo vazio"}, ensure_ascii=False
+            )
+        anotacoes[nome] = valor
+        return json.dumps({"ok": True, "campo": nome}, ensure_ascii=False)
+
+    return StructuredTool.from_function(
+        func=guardar,
+        name="anotar",
+        description=(
+            "Guarda um valor na ficha desta execução, com um nome. O que você guardar "
+            "fica disponível para TODOS os passos seguintes da automação, sem você "
+            "precisar repeti-lo no texto. Use para tudo que o próximo passo vai "
+            "precisar: uma URL que você gerou, um total que apurou, uma decisão que "
+            "tomou. Chamar de novo com o mesmo nome substitui o valor."
+        ),
+        args_schema=_AnotarArgs,
+    )
 
 
 def _ferramenta_seguir_para(saidas: list[dict], escolha: dict) -> StructuredTool:
@@ -617,6 +674,7 @@ def executar_agente(
     entrada: str,
     *,
     saidas: list[dict] | None = None,
+    ficha: dict | None = None,
     gate: bool = False,
     texto_portao: str | None = None,
     checkpointer=None,
@@ -652,6 +710,9 @@ def executar_agente(
     # O pedido de aprovação, quando o agente aciona um instrumento que PARA para uma
     # pessoa (`pausa_para_humano`). Preenchido = o turno terminou numa espera.
     pedido_aprovacao: dict = {}
+    # O que o agente guardou na FICHA da execução neste turno (ferramenta `anotar`).
+    # O motor funde isto na ficha e leva adiante — é a variável de fluxo (Onda 2).
+    anotacoes: dict = {}
     # Constrói as ferramentas do cinto e, em paralelo, o mapa nome→irreversível (a MESMA
     # regra da parede: `acao_irreversivel(tipo, config)`) — é o que o portão nativo (P3)
     # usa para saber QUAIS ferramentas exigem aprovação antes de executar. As ferramentas
@@ -681,6 +742,14 @@ def executar_agente(
         escritas = {"n": 0}
         ferramentas += _ferramentas_de_memoria(agente.id, escritas)
         instrucoes += _instrucao_de_memoria(agente)
+    # A FICHA da execução (Onda 2): só a ORQUESTRAÇÃO a passa (a conversa da mensageria
+    # não — lá a memória entre turnos já faz esse papel). Presente = o agente ganha a
+    # ferramenta `anotar` e o bloco da ficha na entrada do turno (não no prompt de
+    # sistema: a ficha muda a cada passo e ali ela invalidaria o cache do Anthropic,
+    # que é o que segura o custo — ver Frente B).
+    tem_ficha = ficha is not None
+    if tem_ficha:
+        ferramentas.append(_ferramenta_anotar(anotacoes))
     if len(saidas) >= 2:
         ferramentas.append(_ferramenta_seguir_para(saidas, escolha))
         instrucoes += "\n\n" + _instrucao_de_fluxo(saidas, gate, texto_portao)
@@ -727,9 +796,15 @@ def executar_agente(
             ids_antes = set()
     # Feedback ao vivo: o turno de LLM pode demorar; avisa que o agente está pensando.
     atividade.registrar(f"{agente.nome}: pensando…")
+    # A ficha vai na MENSAGEM do turno, à frente da entrada: ela muda a cada passo, e no
+    # prompt de sistema invalidaria o cache. Fica antes do texto porque é a fonte — o
+    # texto que vem do nó anterior é o que o agente anterior *narrou*, e a lição de
+    # 2026-09-01 é que a narração perde dado; a ficha, não.
+    bloco_ficha = ficha_mod.para_o_prompt(ficha) if tem_ficha else ""
+    conteudo = f"{bloco_ficha}\n\n---\n\n{entrada}" if bloco_ficha else entrada
     try:
         resultado = app.invoke(
-            {"messages": [{"role": "user", "content": entrada}]}, config
+            {"messages": [{"role": "user", "content": conteudo}]}, config
         )
     except GraphRecursionError as e:
         # Laço de ferramentas sem fim. Erro honesto (§12-A), com o nome do agente e o
@@ -804,6 +879,9 @@ def executar_agente(
             "ramo_escolhido": None,
             "ramos_escolhidos": [],
             "motivo_ramo": None,
+            # O que ele anotou ANTES de pedir aprovação não pode se perder na pausa:
+            # a espera pode durar horas, e ao voltar o dado precisa estar na ficha.
+            "anotacoes": dict(anotacoes),
             "uso": uso,
             "memoria": "duravel" if memoria else "legado",
         }
@@ -820,6 +898,9 @@ def executar_agente(
         "ramos_escolhidos": ramos,
         "ramo_escolhido": ramos[0] if ramos else None,
         "motivo_ramo": escolha.get("motivo"),
+        # O que ele guardou na ficha neste turno (ferramenta `anotar`). O motor funde
+        # na ficha da execução e leva a todos os passos seguintes.
+        "anotacoes": dict(anotacoes),
         "uso": uso,
         # De onde veio o contexto deste turno: "duravel" = fio do checkpointer;
         # "legado" = reconstruído do texto. Na CONVERSA, "legado" é modo degradado

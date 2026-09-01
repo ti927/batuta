@@ -19,6 +19,7 @@ from modelos import Automacao, Execucao, PassoExecucao, Time
 from observabilidade import contexto
 from observabilidade.escritor import registrar_evento
 from orquestracao import atividade
+from orquestracao import ficha as ficha_mod
 from orquestracao.cadeia import executar_cadeia
 from orquestracao.llm import usar_chaves
 from orquestracao.modelos_ia import provedor_do_modelo_seguro
@@ -105,6 +106,11 @@ def _fazer_registrador(
                     # se espera a resposta). É o que amarra a conversa de quem aprova
                     # a esta execução — antes essa config vivia no NÓ do desenho.
                     **({"aprovacao": passo["aprovacao"]} if passo.get("aprovacao") else {}),
+                    # Ficha (Onda 2): as regras exatas que o MOTOR conferiu neste passo
+                    # e os campos que o agente anotou. Aditivos — passos antigos não os
+                    # têm e a tela lê com `.get(...)`.
+                    **({"regras": passo["regras"]} if passo.get("regras") else {}),
+                    **({"anotou": passo["anotou"]} if passo.get("anotou") else {}),
                 },
                 # O passo que FALHOU fica gravado como falho (antes tudo era gravado
                 # "concluido" e a timeline pulava do último passo bom para "falhou",
@@ -114,6 +120,15 @@ def _fazer_registrador(
                 finalizado_em=passo["finalizado_em"],
             )
         )
+        # A FICHA a cada passo, e não só no fim: se o processo cair no meio (deploy,
+        # queda), o que já foi anotado sobrevive — e a tela mostra a ficha ao vivo
+        # enquanto a execução anda. `dados` é o mesmo dicionário que o motor mutou.
+        if passo.get("ficha"):
+            sessao.execute(
+                update(Execucao)
+                .where(Execucao.id == execucao_id)
+                .values(dados=passo["ficha"])
+            )
         sessao.commit()
 
     return registrar
@@ -122,6 +137,11 @@ def _fazer_registrador(
 def _aplicar_resultado(execucao: Execucao, r: dict) -> None:
     """Aplica à execução o que a cadeia devolveu: pausa, cancelamento ou
     conclusão."""
+    # A ficha como ficou (Onda 2). Vale para os TRÊS desfechos: numa pausa ela precisa
+    # sobreviver à espera (que pode durar horas), e num cancelamento ela é o registro
+    # do que já tinha sido apurado.
+    if r.get("ficha") is not None:
+        execucao.dados = dict(r["ficha"])
     if r["estado"] == "aguardando_humano":
         execucao.estado = "aguardando_humano"  # sem finalizada_em: ainda viva
         # Fan-out: os ramos da onda que ainda não rodaram quando o portão pausou. Sem
@@ -304,6 +324,10 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
                     sessao,
                     (automacao.cadeia if automacao else None) or {},
                     entrada,
+                    # A FICHA nasce aqui, com o que o gatilho trouxe — e é o que faz a
+                    # entrada deixar de morrer no primeiro nó (Onda 2, lacuna 15).
+                    # Execução re-rodada do zero reaproveita a ficha que já tinha.
+                    ficha=dict(execucao.dados or {}) or ficha_mod.nova(entrada),
                     registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
                     cancelado=lambda: _esta_cancelada(sessao, execucao.id),
                 )

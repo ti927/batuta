@@ -428,6 +428,10 @@ class ExecucaoComPassos(ExecucaoLer):
     passos: list[PassoExecucaoLer] = Field(default_factory=list)
     # Resumo de uso (tokens e custo aproximado) somado dos passos — Tarefa 5.4.
     uso: dict | None = None
+    # A FICHA da execução (Onda 2): os valores nomeados que atravessaram o grafo — o
+    # que o gatilho trouxe mais o que os agentes anotaram. É o que responde, na tela,
+    # "com que dados este passo trabalhou?". Nula em execuções anteriores à Onda 2.
+    dados: dict | None = None
 
 
 # ───────────────── Identidade e acesso (Etapa 2, Fase 6) ─────────────────

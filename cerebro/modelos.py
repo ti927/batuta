@@ -250,6 +250,12 @@ class Execucao(IdData, Base):
     # por ondas; se um portão pausa no meio de uma onda, os outros ramos ficam aqui e a
     # retomada os leva adiante. Nulo = nada pendente (o caso comum).
     pendencias: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # A FICHA da execução (Onda 2, 2026-09-01): os valores nomeados que atravessam o
+    # grafo inteiro — `{"entrada": "<o que o gatilho trouxe>", "total": "1240", ...}`.
+    # Nasce com a entrada do gatilho (que antes morria no primeiro nó) e cresce quando
+    # um agente chama `anotar`. Chega ao prompt de TODOS os nós, então um dado deixa de
+    # depender de o agente lembrar de repeti-lo no texto. Ver `orquestracao/ficha.py`.
+    dados: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
 class PassoExecucao(IdData, Base):

@@ -33,8 +33,13 @@ deles. O que o motor lê: `inicial`, `nos[].id/tipo/ref/gate`, `saidas[].rotulo/
 
 from dataclasses import dataclass, field
 
-# Tipos de nó (SPEC §2). gatilho/fim são estruturais; o motor só roda agente/roteador.
-TIPOS_VALIDOS = {"gatilho", "agente", "roteador", "fim"}
+# Tipos de nó (SPEC §2). gatilho/fim/cada são ESTRUTURAIS (não rodam IA e não contam
+# como passo); o motor só roda agente/roteador.
+# `cada` é o "Para cada item" (Onda 2): lê uma lista da ficha da execução e repete o
+# trecho seguinte uma vez por item, cada repetição como um ramo próprio do grafo.
+TIPOS_VALIDOS = {"gatilho", "agente", "roteador", "fim", "cada"}
+# Tipos que não executam nada por si (nem agente, nem IA).
+TIPOS_ESTRUTURAIS = {"gatilho", "fim", "cada"}
 # Cor da aresta na UI (cosmético).
 TONES_VALIDOS = {"normal", "ok", "loop", "erro"}
 

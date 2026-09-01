@@ -33,6 +33,21 @@ as outras eram descartadas em silêncio — quem desenhava "aprovado → Carross
 - O teto de passos (`max_passos`) vale por EXECUÇÃO (soma as retomadas), não por
   trecho.
 
+## A ficha da execução (2026-09-01)
+
+Entre os nós trafegava **só texto**, e por isso a entrada do gatilho morria no primeiro
+nó: se o agente não repetisse o dado no texto final dele, o dado sumia. Agora cada
+execução carrega uma **ficha** (`orquestracao.ficha`) — valores nomeados que:
+
+- nascem com o que o gatilho trouxe e chegam ao prompt de **todos** os nós;
+- crescem quando um agente chama `anotar` (a variável de fluxo);
+- podem ser comparados pelo MOTOR, via **regra exata** na seta — a IA lê a frase, mas
+  quem confere `total entre 1 e 10` é o código, que não erra a borda 10×11.
+
+A ficha é um dicionário único da execução, mutado no lugar conforme os nós rodam. O
+motor é serial, então a ordem é determinística: um nó enxerga tudo o que os nós
+anteriores (inclusive os da mesma onda, rodados antes dele) anotaram.
+
 ## A espera por uma pessoa é do AGENTE (2026-08-31)
 
 Não há mais "portão" (um interruptor no nó) nem "parede" (uma trava da organização).
@@ -53,6 +68,7 @@ from sqlalchemy.orm import Session
 
 import segredos_instrumento
 from modelos import Agente, AgenteInstrumento, Instrumento
+from orquestracao import ficha as ficha_mod
 from orquestracao import grafo
 from orquestracao.agente import executar_agente
 from orquestracao.llm import MODELO_PADRAO, construir_modelo
@@ -63,6 +79,14 @@ MAX_PASSOS = 25
 
 # Como os textos de vários ramos que reencontram o mesmo nó são juntados na entrada.
 SEPARADOR_JUNCAO = "\n\n---\n\n"
+
+# "Para cada item" (Onda 2): teto de itens de UMA lista. Acima disso, os excedentes
+# NÃO rodam e o rastro diz quantos ficaram de fora — corte silencioso é proibido.
+MAX_ITENS_CADA = 20
+# Quanto o teto de passos cresce por item repetido. Repetir é trabalho PLANEJADO, não
+# laço: sem esta folga, um for-each de 8 itens morreria no teto de 25 como se fosse um
+# bug. O teto de laço segue valendo dentro de cada repetição.
+PASSOS_POR_ITEM = 5
 
 # Destinos que encerram a cadeia (mantido para retrocompatibilidade de imports).
 _DESTINOS_FIM = grafo.DESTINOS_FIM
@@ -125,6 +149,15 @@ def validar_cadeia(
             if not ref or str(ref) not in ids_agentes_validos:
                 raise ValueError(
                     f"O nó {no['id']} aponta para um agente que não é deste time."
+                )
+        if tipo == "cada":
+            # "Para cada item" sem lista não repetiria nada — e falharia só ao rodar.
+            if not ficha_mod.normalizar_nome(no.get("lista") or ""):
+                nome = no.get("nome") or no["id"]
+                raise ValueError(
+                    f"O passo '{nome}' repete uma lista, mas não diz QUAL. Abra-o e "
+                    "escreva o nome do campo da ficha que contém a lista (o mesmo nome "
+                    "que o passo anterior guarda com 'anotar')."
                 )
         rotulos: set[str] = set()
         for saida in no.get("saidas") or []:
@@ -220,16 +253,147 @@ def _escolher_saida(saida_texto: str, saidas: list[dict]) -> tuple[dict, dict]:
     return (escolhidas[0] if escolhidas else saidas[0]), uso
 
 
-def _empilhar(proxima: dict[str, list[str]], destino: str, textos: list[str]) -> None:
-    """Enfileira textos para um destino na PRÓXIMA onda. Se dois ramos apontam para
-    o mesmo nó, os textos se acumulam e o nó roda UMA vez (junção implícita)."""
-    proxima.setdefault(destino, []).extend(textos)
+def _decidir_por_regra(
+    condicionais: list[dict], ficha: dict
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """Separa as saídas condicionais entre as que o MOTOR decide (regra exata sobre a
+    ficha) e as que ficam com o AGENTE.
+
+    Devolve `(escolhidas_pela_regra, para_o_agente, rastro)`. O `rastro` guarda cada
+    regra avaliada e o resultado — sem ele, um ramo descartado por comparação numérica
+    seria invisível para quem depois pergunta "por que não seguiu por ali?".
+
+    Uma regra que **não pode ser decidida** (campo ausente do tipo errado, valor que não
+    é número) não vira "não": volta para o agente, com o motivo no rastro. Silenciar um
+    "não sei" como "não" é o tipo de escolha muda que esta frente existe para acabar."""
+    pela_regra: list[dict] = []
+    para_o_agente: list[dict] = []
+    rastro: list[dict] = []
+    for s in condicionais:
+        regra = s.get("regra")
+        if not ficha_mod.regra_valida(regra):
+            para_o_agente.append(s)
+            continue
+        resultado = ficha_mod.avaliar_regra(regra, ficha)
+        rastro.append({
+            "rotulo": s.get("rotulo"),
+            "regra": ficha_mod.descrever_regra(regra),
+            "resultado": resultado,
+        })
+        if resultado is True:
+            pela_regra.append(s)
+        elif resultado is None:
+            para_o_agente.append(s)
+    return pela_regra, para_o_agente, rastro
 
 
-def _como_itens(mapa: dict[str, list[str]]) -> list[dict]:
+def _abrir_repeticoes(
+    no: dict, no_id: str, idx, proxima: dict, ficha_do_ramo: dict, ramo: str,
+    extra: dict, *, entrada: str, avisos: list[str], acumuladores: dict[str, str],
+    ao_terminar,
+) -> int:
+    """O nó "Para cada item": lê uma lista da ficha e abre UM RAMO POR ITEM.
+
+    Cada repetição percorre o mesmo trecho do grafo, mas como ramo próprio (chave
+    distinta na onda), então elas não se fundem na junção implícita. Cada uma enxerga o
+    seu item na ficha (`item`, `item_numero`, `item_total`), e o que produzir volta,
+    opcionalmente, para um campo acumulador — a agregação.
+
+    Devolve quanto o teto de passos da execução deve CRESCER. Repetir 8 itens é
+    trabalho planejado, não laço: contar cada repetição contra o mesmo teto de 25
+    faria o for-each morrer como se fosse um bug. O teto de laço continua valendo
+    DENTRO de cada repetição.
+
+    Nada aqui é silencioso: lista vazia, campo ausente ou itens acima do teto viram
+    aviso no rastro (§12-A)."""
+    nome = no.get("nome") or "Para cada item"
+    campo_lista = ficha_mod.normalizar_nome(no.get("lista") or "")
+    saidas = no.get("saidas") or []
+    destino = saidas[0].get("destino") if saidas else None
+
+    if not campo_lista:
+        avisos.append(
+            f"O passo '{nome}' não diz QUAL lista percorrer. Abra a automação e "
+            "escolha, nesse passo, o campo da ficha que contém a lista."
+        )
+        return 0
+    if campo_lista not in ficha_do_ramo:
+        avisos.append(
+            f"O passo '{nome}' ia percorrer a lista '{campo_lista}', mas esse campo "
+            "não está na ficha desta execução. Garanta que um passo anterior o guarde "
+            "com a ferramenta `anotar`."
+        )
+        return 0
+
+    itens = ficha_mod.como_lista(ficha_do_ramo.get(campo_lista))
+    if not itens:
+        avisos.append(
+            f"O passo '{nome}' percorreria a lista '{campo_lista}', que veio vazia — "
+            "nada a repetir."
+        )
+        return 0
+    if len(itens) > MAX_ITENS_CADA:
+        # NUNCA cortar em silêncio: quem lê o rastro precisa saber que sobrou fila.
+        avisos.append(
+            f"O passo '{nome}' recebeu {len(itens)} itens em '{campo_lista}' e o "
+            f"limite é {MAX_ITENS_CADA}. Os {len(itens) - MAX_ITENS_CADA} últimos NÃO "
+            "foram processados."
+        )
+        itens = itens[:MAX_ITENS_CADA]
+
+    if destino is None or idx.eh_fim(destino):
+        # Não há trecho a repetir: cada item vira, ele mesmo, um resultado.
+        for item_texto in itens:
+            ao_terminar([item_texto], ramo)
+        return 0
+
+    campo_item = ficha_mod.normalizar_nome(no.get("item_em") or "") or "item"
+    campo_acumulo = ficha_mod.normalizar_nome(no.get("acumular_em") or "")
+    for i, item_texto in enumerate(itens, start=1):
+        ramo_item = f"{ramo}/{no_id}#{i}" if ramo else f"{no_id}#{i}"
+        if campo_acumulo:
+            acumuladores[ramo_item] = campo_acumulo
+        _empilhar(
+            proxima, destino, [entrada], ramo=ramo_item,
+            extra={
+                **extra,
+                campo_item: item_texto,
+                "item_numero": str(i),
+                "item_total": str(len(itens)),
+            },
+        )
+    return (len(itens) - 1) * PASSOS_POR_ITEM
+
+
+def _empilhar(
+    proxima: dict, destino: str, textos: list[str], *, ramo: str = "", extra: dict | None = None
+) -> None:
+    """Enfileira textos para um destino na PRÓXIMA onda.
+
+    A chave é o par **(ramo, destino)**, não só o destino. Dois caminhos do MESMO ramo
+    que reencontram o mesmo nó fazem a junção implícita (o nó roda uma vez, com os
+    textos juntos — sem isso, um Y publicaria em dobro). Já dois ramos DIFERENTES no
+    mesmo nó são trabalhos distintos e rodam separados: é assim que o "Para cada item"
+    repete o trecho por item sem que as repetições se fundam numa só."""
+    chave = (ramo, destino)
+    slot = proxima.setdefault(chave, {"entradas": [], "extra": dict(extra or {})})
+    slot["entradas"].extend(textos)
+    slot["extra"].update(extra or {})
+
+
+def _como_itens(mapa: dict) -> list[dict]:
     """A onda como lista de itens serializáveis (é também o formato das pendências
-    guardadas quando a execução pausa)."""
-    return [{"no": nid, "entradas": list(textos)} for nid, textos in mapa.items()]
+    guardadas quando a execução pausa). `ramo`/`extra` só aparecem quando existem, para
+    as pendências de um fluxo comum ficarem byte-idênticas às de antes da Onda 2."""
+    itens = []
+    for (ramo, nid), slot in mapa.items():
+        item = {"no": nid, "entradas": list(slot["entradas"])}
+        if ramo:
+            item["ramo"] = ramo
+        if slot["extra"]:
+            item["extra"] = dict(slot["extra"])
+        itens.append(item)
+    return itens
 
 
 def executar_cadeia(
@@ -239,6 +403,7 @@ def executar_cadeia(
     *,
     no_inicial: str | None = None,
     frente_inicial: list[dict] | None = None,
+    ficha: dict | None = None,
     ordem_inicial: int = 0,
     max_passos: int = MAX_PASSOS,
     registrar_passo: Callable[[dict, int], None] | None = None,
@@ -259,17 +424,26 @@ def executar_cadeia(
 
     `no_inicial` começa de um nó só (retomada simples); `frente_inicial` começa de
     vários ramos ao mesmo tempo (retomada com pendências), no formato
-    `[{"no": <id>, "entradas": [<texto>, ...]}, ...]`."""
+    `[{"no": <id>, "entradas": [<texto>, ...]}, ...]`.
+
+    `ficha` é a ficha da execução (`orquestracao.ficha`), MUTADA no lugar: quem chama
+    passa a ficha persistida (retomada) e a lê de volta ao fim. Omitida, nasce da
+    própria entrada — assim todo caminho tem ficha, inclusive os testes."""
     idx = grafo.indexar(grafo.normalizar(cadeia or {}))
+    ficha_exec = ficha if ficha is not None else ficha_mod.nova(entrada)
 
     if frente_inicial:
         onda = [
-            {"no": i["no"], "entradas": list(i.get("entradas") or [])}
+            {
+                "no": i["no"], "entradas": list(i.get("entradas") or []),
+                "ramo": i.get("ramo") or "", "extra": dict(i.get("extra") or {}),
+            }
             for i in frente_inicial
             if i.get("no")
         ]
     else:
-        onda = [{"no": no_inicial or idx.inicial, "entradas": [entrada]}]
+        onda = [{"no": no_inicial or idx.inicial, "entradas": [entrada],
+                 "ramo": "", "extra": {}}]
     if not onda or idx.no(onda[0]["no"]) is None:
         raise ValueError("Cadeia inválida: nó inicial ausente ou fora do grafo.")
 
@@ -277,34 +451,70 @@ def executar_cadeia(
     avisos: list[str] = []
     resultados: list[str] = []
     ordem = ordem_inicial
+    # Campo da ficha onde cada ramo de "Para cada item" deposita o que produziu
+    # (`{ramo: campo}`). É a AGREGAÇÃO: as repetições terminam em momentos diferentes e
+    # cada uma soma o seu resultado no mesmo campo, na ordem em que terminam.
+    acumuladores: dict[str, str] = {}
+
+    def _terminou(textos: list[str], ramo: str) -> None:
+        """Um ramo chegou ao fim: o texto vira resultado e, se este ramo pertence a um
+        "Para cada item" com acúmulo, também entra no campo acumulador da ficha."""
+        resultados.extend(textos)
+        campo = acumuladores.get(ramo)
+        if campo:
+            anterior = (ficha_exec.get(campo) or "").strip()
+            juntos = [t for t in ([anterior] if anterior else []) + list(textos) if t]
+            ficha_mod.anotar(ficha_exec, campo, SEPARADOR_JUNCAO.join(juntos))
 
     while onda:
-        proxima: dict[str, list[str]] = {}
+        proxima: dict = {}
         for pos, item in enumerate(onda):
             # Cancelamento cooperativo (Tarefa 5.5): entre passos, se o operador
             # cancelou, paramos aqui — os passos já feitos ficam registrados.
             if cancelado is not None and cancelado():
-                return {"estado": "cancelada", "ordem": ordem, "passos": passos}
+                return {
+                    "estado": "cancelada", "ordem": ordem, "passos": passos,
+                    "ficha": ficha_exec,
+                }
 
             no_atual = item["no"]
             entradas = item["entradas"] or [""]
+            ramo = item.get("ramo") or ""
+            extra = dict(item.get("extra") or {})
             no = idx.no(no_atual)
             if no is None:
                 raise ValueError(f"Nó da cadeia não encontrado: {no_atual}")
             tipo = no.get("tipo", "agente")
 
+            # A ficha que ESTE ramo enxerga: a da execução, coberta pelos valores
+            # próprios da repetição ("Para cada item"). Fora de um for-each, `extra` é
+            # vazio e isto é exatamente a ficha da execução.
+            ficha_do_ramo = {**ficha_exec, **extra} if extra else ficha_exec
+
             # Nós estruturais: o `fim` encerra aquele ramo; o `gatilho` apenas
-            # repassa para a sua saída. Nenhum dos dois conta como passo.
+            # repassa para a sua saída; o `cada` abre um ramo por item. Nenhum dos três
+            # conta como passo (não roda IA).
             if tipo == "fim":
-                resultados.extend(entradas)
+                _terminou(entradas, ramo)
                 continue
             if tipo == "gatilho":
                 saidas_g = no.get("saidas") or []
                 destino = saidas_g[0].get("destino") if saidas_g else None
                 if not destino or idx.eh_fim(destino):
-                    resultados.extend(entradas)
+                    _terminou(entradas, ramo)
                 else:
-                    _empilhar(proxima, destino, entradas)
+                    _empilhar(proxima, destino, entradas, ramo=ramo, extra=extra)
+                continue
+            if tipo == "cada":
+                entrada_cada = (
+                    entradas[0] if len(entradas) == 1
+                    else SEPARADOR_JUNCAO.join(entradas)
+                )
+                max_passos += _abrir_repeticoes(
+                    no, no_atual, idx, proxima, ficha_do_ramo, ramo, extra,
+                    entrada=entrada_cada, avisos=avisos, acumuladores=acumuladores,
+                    ao_terminar=_terminou,
+                )
                 continue
 
             ordem += 1
@@ -329,7 +539,7 @@ def executar_cadeia(
             try:
                 executado = _rodar_no(
                     sessao, no, no_atual, tipo, entrada_atual,
-                    condicionais=condicionais,
+                    condicionais=condicionais, ficha=ficha_do_ramo,
                 )
             except Exception as e:
                 # O nó falhou. O passo falho é GRAVADO (antes a timeline pulava do
@@ -344,6 +554,7 @@ def executar_cadeia(
                     instrumentos=[], erros_instrumentos=[], uso=[],
                     escolhidas=[], motivo=None, iniciado_em=iniciado_em,
                     finalizado_em=finalizado_em, estado="falhou", erro=str(e),
+                    ficha=dict(ficha_do_ramo),
                 )
                 passos.append(passo_falho)
                 if registrar_passo is not None:
@@ -355,12 +566,30 @@ def executar_cadeia(
                     f"Erro: {e}\n\nEntrada que ele recebeu:\n{entrada_atual}"
                 )
                 for s in saidas_erro:
-                    _seguir(idx, proxima, resultados, s, [texto_erro])
+                    _seguir(
+                        idx, proxima, s, [texto_erro],
+                        ramo=ramo, extra=extra, ao_terminar=_terminou,
+                    )
                 continue
 
             finalizado_em = datetime.now(timezone.utc)
             saida_texto = executado["saida"]
             uso_passo = executado["uso"]
+
+            # O que este nó guardou na FICHA entra ANTES de decidir o caminho: é assim
+            # que "anote o total" e a seta "total entre 1 e 10" funcionam no mesmo passo.
+            # Guardamos o nome CANÔNICO devolvido por `anotar` (não o que o agente
+            # digitou): é esse que a regra da seta compara, e é ele que precisa aparecer
+            # no rastro — senão quem depurar procura por um campo que não existe.
+            anotou: list[str] = []
+            for campo, valor in (executado.get("anotacoes") or {}).items():
+                nome, _ = ficha_mod.anotar(ficha_exec, campo, valor)
+                if nome:
+                    anotou.append(nome)
+            if anotou and extra:
+                # Dentro de um "Para cada item", o que o nó anotou entra na visão DESTE
+                # ramo também — senão a regra da seta logo abaixo leria a ficha antiga.
+                ficha_do_ramo = {**ficha_exec, **extra}
 
             # --- A decisão de caminho -------------------------------------------
             # Esperando uma pessoa: quem escolhe o caminho é a resposta dela, na
@@ -368,20 +597,32 @@ def executar_cadeia(
             escolhidas: list[dict] = []
             motivo = executado["motivo"]
             aviso: str | None = None
+            regras_avaliadas: list[dict] = []
             pausa = executado["pausa"]
             if not pausa:
-                if len(condicionais) == 1:
-                    escolhidas = list(condicionais)
-                elif len(condicionais) >= 2:
-                    por_rotulo = {s["rotulo"]: s for s in condicionais if s.get("rotulo")}
+                # Regra exata (Onda 2): a saída que tem regra é decidida pelo CÓDIGO,
+                # contra a ficha. As demais seguem com o agente. Enquanto nenhuma saída
+                # tiver regra, tudo se comporta exatamente como antes — é o caso de
+                # todas as automações existentes.
+                pela_regra, do_agente, regras_avaliadas = _decidir_por_regra(
+                    condicionais, ficha_do_ramo
+                )
+                escolhidas = list(pela_regra)
+                tem_regra = bool(regras_avaliadas)
+                if do_agente and len(do_agente) == 1 and not tem_regra:
+                    # Saída única e sem regra: segue, como sempre seguiu.
+                    escolhidas += do_agente
+                elif do_agente:
+                    por_rotulo = {s["rotulo"]: s for s in do_agente if s.get("rotulo")}
                     declarados = [r for r in executado["ramos"] if r in por_rotulo]
                     if declarados:
-                        escolhidas = [por_rotulo[r] for r in declarados]
-                    else:
+                        escolhidas += [por_rotulo[r] for r in declarados]
+                    elif len(do_agente) >= 2 or tem_regra:
                         # O agente não declarou (ou declarou rótulo inexistente):
                         # a LLM roteadora lê as condições. Pode devolver várias — e
                         # pode devolver nenhuma, que agora é resposta legítima.
-                        escolhidas, uso_rot = _rotear_por_llm(saida_texto, condicionais)
+                        escolhidas_llm, uso_rot = _rotear_por_llm(saida_texto, do_agente)
+                        escolhidas += escolhidas_llm
                         uso_passo.append(uso_rot)
                 if not escolhidas and saidas_senao:
                     escolhidas = list(saidas_senao)
@@ -394,9 +635,34 @@ def executar_cadeia(
                     sem_condicao = [
                         s["rotulo"] for s in condicionais
                         if not (s.get("quando") or "").strip()
+                        and not ficha_mod.regra_valida(s.get("regra"))
+                    ]
+                    nao_bateram = [
+                        f"{r['rotulo']} ({r['regra']})"
+                        for r in regras_avaliadas if r["resultado"] is False
+                    ]
+                    indecisas = [
+                        f"{r['rotulo']} ({r['regra']})"
+                        for r in regras_avaliadas if r["resultado"] is None
                     ]
                     if not condicionais:
                         porque = "ele não tem saída ligada — o fluxo acaba aqui."
+                    elif indecisas:
+                        # §12-A: um "não sei" que vira "não" em silêncio é o pior caso.
+                        # Diz qual regra não deu para conferir e por quê.
+                        porque = (
+                            "não foi possível conferir a regra exata de "
+                            + ", ".join(indecisas)
+                            + " — o campo não está na ficha desta execução ou o valor "
+                            "não é um número. Confira se algum passo anterior anota "
+                            "esse campo (ferramenta `anotar`)."
+                        )
+                    elif nao_bateram and len(nao_bateram) == len(condicionais):
+                        porque = (
+                            "a regra exata de cada saída não bateu com a ficha: "
+                            + ", ".join(nao_bateram)
+                            + ". Não há saída 'se nenhuma das outras' para pegar o resto."
+                        )
                     elif len(sem_condicao) == len(condicionais):
                         porque = (
                             "nenhuma das saídas diz QUANDO seguir por ela, então não "
@@ -422,7 +688,8 @@ def executar_cadeia(
                 erros_instrumentos=executado["erros_instrumentos"],
                 uso=uso_passo, escolhidas=escolhidas, motivo=motivo,
                 iniciado_em=iniciado_em, finalizado_em=finalizado_em,
-                aviso=aviso,
+                aviso=aviso, regras=regras_avaliadas, anotou=sorted(anotou),
+                ficha=dict(ficha_do_ramo),
             )
             passos.append(passo)
             if registrar_passo is not None:
@@ -434,7 +701,11 @@ def executar_cadeia(
             # vão junto, para a retomada continuar sem perder trabalho.
             if pausa:
                 pendentes = [
-                    {"no": i["no"], "entradas": list(i["entradas"])}
+                    {
+                        "no": i["no"], "entradas": list(i["entradas"]),
+                        **({"ramo": i["ramo"]} if i.get("ramo") else {}),
+                        **({"extra": dict(i["extra"])} if i.get("extra") else {}),
+                    }
                     for i in onda[pos + 1 :]
                 ] + _como_itens(proxima)
                 return {
@@ -445,13 +716,17 @@ def executar_cadeia(
                     "ordem": ordem,
                     "passos": passos,
                     "avisos": avisos,
+                    "ficha": ficha_exec,
                 }
 
             if not escolhidas:
-                resultados.append(saida_texto)
+                _terminou([saida_texto], ramo)
                 continue
             for s in escolhidas:
-                _seguir(idx, proxima, resultados, s, [saida_texto])
+                _seguir(
+                    idx, proxima, s, [saida_texto],
+                    ramo=ramo, extra=extra, ao_terminar=_terminou,
+                )
 
         onda = _como_itens(proxima)
 
@@ -461,17 +736,22 @@ def executar_cadeia(
         "avisos": avisos,
         "ordem": ordem,
         "passos": passos,
+        "ficha": ficha_exec,
     }
 
 
-def _seguir(idx, proxima: dict, resultados: list[str], saida: dict, textos: list[str]) -> None:
-    """Encaminha os textos pela saída: destino que encerra vira resultado; senão,
-    entra na próxima onda."""
+def _seguir(
+    idx, proxima: dict, saida: dict, textos: list[str], *,
+    ramo: str = "", extra: dict | None = None, ao_terminar,
+) -> None:
+    """Encaminha os textos pela saída: destino que encerra fecha o ramo (`ao_terminar`,
+    que também alimenta o acumulador do "Para cada item"); senão, entra na próxima
+    onda, preservando o ramo e os valores próprios dele."""
     destino = saida.get("destino")
     if destino is None or idx.eh_fim(destino):
-        resultados.extend(textos)
+        ao_terminar(textos, ramo)
     else:
-        _empilhar(proxima, destino, textos)
+        _empilhar(proxima, destino, textos, ramo=ramo, extra=extra)
 
 
 def _identidade_do_no(sessao: Session, no: dict, tipo: str) -> tuple[str | None, str]:
@@ -495,17 +775,20 @@ def _rodar_no(
     entrada_atual: str,
     *,
     condicionais: list[dict],
+    ficha: dict | None = None,
 ) -> dict:
     """Roda UM nó (agente ou roteador) e devolve o que ele produziu, já num formato
     uniforme. Não decide caminho — isso é do chamador."""
     if tipo == "roteador":
         # Roteador: não roda agente nem produz conteúdo — só classifica a entrada
-        # sobre as suas saídas e segue. A entrada passa adiante intacta.
+        # sobre as suas saídas e segue. A entrada passa adiante intacta. Com regra
+        # exata nas saídas ele vira uma chave puramente determinística (nenhuma IA).
         return {
             "saida": entrada_atual, "agente_id": None,
             "agente_nome": no.get("nome") or "roteador",
             "instrumentos": [], "erros_instrumentos": [], "uso": [],
             "mensagens_enviadas": {}, "ramos": [], "motivo": None, "pausa": None,
+            "anotacoes": {},
         }
 
     ref = no.get("ref")
@@ -518,7 +801,9 @@ def _rodar_no(
     cinto = _carregar_cinto(sessao, agente.id)
     # O agente enxerga as saídas CONDICIONAIS (não as de erro/"senão", que são do
     # motor) e DECLARA por quais o fluxo segue — podendo declarar VÁRIAS.
-    resultado = executar_agente(agente, cinto, entrada_atual, saidas=condicionais)
+    resultado = executar_agente(
+        agente, cinto, entrada_atual, saidas=condicionais, ficha=ficha
+    )
     return {
         "saida": resultado["saida"],
         "agente_id": str(agente.id),
@@ -534,6 +819,8 @@ def _rodar_no(
         "ramos": list(resultado.get("ramos_escolhidos") or [])
         or ([resultado["ramo_escolhido"]] if resultado.get("ramo_escolhido") else []),
         "motivo": resultado.get("motivo_ramo"),
+        # O que ele guardou na ficha neste turno (ferramenta `anotar`).
+        "anotacoes": dict(resultado.get("anotacoes") or {}),
     }
 
 
@@ -542,6 +829,8 @@ def _montar_passo(
     instrumentos, erros_instrumentos, uso, escolhidas: list[dict], motivo,
     iniciado_em, finalizado_em, estado: str = "concluido", erro: str | None = None,
     aviso: str | None = None, espera: bool = False, aprovacao: dict | None = None,
+    regras: list[dict] | None = None, anotou: list[str] | None = None,
+    ficha: dict | None = None,
 ) -> dict:
     """O registro de um passo, no formato que `disparo._fazer_registrador` grava."""
     return {
@@ -564,6 +853,12 @@ def _montar_passo(
         "saida_escolhida": escolhidas[0]["rotulo"] if escolhidas else None,
         "saidas_escolhidas": [s["rotulo"] for s in escolhidas],
         "motivo_ramo": motivo,
+        # Onda 2: as regras exatas conferidas pelo MOTOR neste passo (com o resultado
+        # de cada uma), os campos que o agente anotou, e a ficha como ficou depois
+        # dele. É o que responde "por que não seguiu por ali?" sem adivinhação.
+        "regras": regras or [],
+        "anotou": anotou or [],
+        "ficha": ficha or {},
         "aviso": aviso,
         "estado": estado,
         "erro": erro,

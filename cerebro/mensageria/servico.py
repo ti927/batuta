@@ -44,6 +44,7 @@ from modelos import (
     PassoExecucao,
 )
 from observabilidade.escritor import registrar_evento
+from orquestracao import ficha as ficha_mod
 from orquestracao import grafo, memoria_conversa
 from orquestracao.agente import executar_agente
 from orquestracao.llm import MODELO_PADRAO, usar_chaves
@@ -883,12 +884,16 @@ def _rodar_turno(
     chaves: dict,
     origens: dict,
     thread_portao: str | None = None,
+    ficha: dict | None = None,
 ):
     """Roda UM turno do agente e ENTREGA pela borda (canal filtrado do cinto), grava
     na thread com uso, conta turno/custo e rearma o relógio de inatividade. Reusado
     pelo chat normal (`gate=False`) e pelo turno de portão (`gate=True` → o agente
     recebe as saídas + `seguir_para`). Devolve o `resultado` do `executar_agente`, ou
-    None se falhou/sem saída (nesses casos já tratou estado + commit)."""
+    None se falhou/sem saída (nesses casos já tratou estado + commit).
+
+    `ficha` só vem do turno de PORTÃO (há uma execução por trás, com ficha). No chat
+    puro não há execução nem ficha — lá quem guarda contexto é a memória entre turnos."""
     uso_transcricao = _transcrever_pendentes(
         sessao, conversa, token, chaves.get("openai"), origens.get("openai")
     )
@@ -939,7 +944,7 @@ def _rodar_turno(
             resgatar=lambda: _resgatar_imagens_recentes(sessao, conversa, token),
         ):
             resultado = executar_agente(
-                agente, cinto, entrada, saidas=saidas,
+                agente, cinto, entrada, saidas=saidas, ficha=ficha,
                 # Atendimento = alguém esperando do outro lado: limites curtos de IA.
                 interativo=True,
                 **kwargs_mem,
@@ -1118,15 +1123,26 @@ def _turno_de_portao(
         return
 
     iniciado = datetime.now(timezone.utc)
+    # A ficha da execução acompanha o portão por CANAL, igual à tela: o agente a lê e
+    # pode anotar antes de liberar o fluxo.
+    ficha_exec = dict(execucao.dados or {})
     resultado = _rodar_turno(
         sessao, conversa, token, agente, conf,
         saidas=saidas, gate=True, chaves=chaves, origens=origens,
         # P3c-B passo 2: memória do portão por CANAL, thread própria da execução:nó (como
         # a tela). O agente do portão lembra entre as rodadas em vez de re-derivar do texto.
         thread_portao=f"{execucao.id}:{no_id}",
+        ficha=ficha_exec,
     )
     if resultado is None:
         return  # falha dura (já tratada: conversa "aberta") — a bola é nossa, retoma depois
+    anotou = [
+        nome for nome, _ in (
+            ficha_mod.anotar(ficha_exec, campo, valor)
+            for campo, valor in (resultado.get("anotacoes") or {}).items()
+        ) if nome
+    ]
+    execucao.dados = dict(ficha_exec)
 
     falou = bool((resultado.get("saida") or "").strip())
     por_rotulo = {s["rotulo"]: s for s in saidas if s.get("rotulo")}
@@ -1163,6 +1179,7 @@ def _turno_de_portao(
                 "instrumentos_acionados": resultado.get("instrumentos_acionados") or [],
                 "saida_escolhida": escolhidas[0]["rotulo"] if escolhidas else None,
                 "saidas_escolhidas": [s["rotulo"] for s in escolhidas],
+                **({"anotou": sorted(anotou)} if anotou else {}),
                 "uso": [],
             },
             estado="concluido",

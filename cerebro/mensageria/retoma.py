@@ -23,6 +23,7 @@ from mensageria.aviso import avisar_falha
 from mensageria.config import com_ajuste_do_no, config_da_automacao
 from modelos import Agente, Automacao, Execucao, PassoExecucao
 from observabilidade.escritor import registrar_evento
+from orquestracao import ficha as ficha_mod
 from orquestracao import grafo, memoria_conversa
 from orquestracao.agente import executar_agente
 from orquestracao.cadeia import _carregar_cinto, _escolher_saida, executar_cadeia
@@ -129,6 +130,11 @@ def avancar_apos_gate(
                 cadeia,
                 entrada_proxima,
                 frente_inicial=frente,
+                # A FICHA atravessa a espera (Onda 2): o que o gatilho trouxe e o que os
+                # agentes anotaram ANTES da aprovação continuam valendo depois dela. Era
+                # justamente aqui que o dado se perdia — o nó seguinte recebia só o
+                # transcript da conversa de aprovação.
+                ficha=dict(execucao.dados or {}),
                 ordem_inicial=ordem_inicial,
                 registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
                 # Cancelar voltou a valer DEPOIS do portão: sem este callback, o
@@ -262,12 +268,22 @@ def _retomar_conversando_tela(
     kwargs_mem = {"checkpointer": ckpt, "thread_id": tid} if memoria else {}
 
     iniciado = datetime.now(timezone.utc)
+    # A ficha da execução acompanha a retomada: o agente a lê (é a fonte que sobreviveu
+    # à espera) e pode anotar nela antes de liberar o fluxo.
+    ficha_exec = dict(execucao.dados or {})
     with usar_chaves(chaves):
         cinto = _carregar_cinto(sessao, agente.id)
         resultado = executar_agente(
-            agente, cinto, entrada, saidas=saidas, **kwargs_mem
+            agente, cinto, entrada, saidas=saidas, ficha=ficha_exec, **kwargs_mem
         )
     finalizado = datetime.now(timezone.utc)
+    anotou = [
+        nome for nome, _ in (
+            ficha_mod.anotar(ficha_exec, campo, valor)
+            for campo, valor in (resultado.get("anotacoes") or {}).items()
+        ) if nome
+    ]
+    execucao.dados = dict(ficha_exec)
     # Ele pediu aprovação DE NOVO: a execução continua esperando, agora por este novo
     # pedido (é o canal/destinatário dele que a borda vai amarrar).
     pausa = (resultado.get("aprovacao") or None) if resultado.get("pausado") else None
@@ -297,6 +313,8 @@ def _retomar_conversando_tela(
         "saida_escolhida": escolhidas[0]["rotulo"] if escolhidas else None,
         "saidas_escolhidas": [s["rotulo"] for s in escolhidas],
         "motivo_ramo": resultado.get("motivo_ramo"),
+        "anotou": sorted(anotou),
+        "ficha": dict(ficha_exec),
         "uso": list(resultado.get("uso") or []),
         "iniciado_em": iniciado,
         "finalizado_em": finalizado,
