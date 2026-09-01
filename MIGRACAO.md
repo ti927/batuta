@@ -316,6 +316,16 @@ Esta seção é dirigida ao Claude Code. Lê com atenção; ela governa o **como
 
      **O que permanece congelado:** a semântica de `seguir_para` (agora com lista de rótulos — ver a Onda 1 do motor), o contrato de instrumentos, a fila `FOR UPDATE SKIP LOCKED`, e o heartbeat/sweeper/recuperação de órfãos-presos (`CLAUDE.md §12-A`). E permanece verdadeira a promessa feita nos **Termos de Uso** e no texto enviado à **Meta**: o Batuta oferece aprovação humana antes de uma ação irreversível — só que agora ela é um instrumento que se põe no cinto, não uma trava automática.
 
+   - **Ampliação nº 5 — o que trafega entre nós deixa de ser só texto (2026-09-01, autorizada pelo maestro):** o plano "O motor vira um grafo de verdade" foi aprovado inteiro (4 ondas) e o maestro mandou seguir para a **Onda 2** depois de ver a lacuna falhar ao vivo. Fica autorizada, de forma **aditiva**, a mudança no que atravessa o grafo: nasce a **ficha da execução** (`execucoes.dados`, JSONB nulável — migração puramente aditiva; módulo puro novo `orquestracao/ficha.py`).
+
+     **Por quê.** Entre um nó e outro trafegava **só texto**, então a entrada do gatilho **morria no primeiro nó**: o dado só sobrevivia se o agente lembrasse de repeti-lo no texto final. Na execução `f1e23565` (2026-09-01) ele não lembrou — voltou da aprovação dizendo *"Aprovado. Seguindo para publicação"*, e o passo seguinte travou pedindo o título e a URL que o gatilho tinha trazido. **Nenhum markdown conserta isso**, porque o markdown é justamente o que falhou.
+
+     **O que a suspensão cobre:** `orquestracao/cadeia.py` (a onda ganha `ramo`/`extra`; a junção implícita passa a ser chaveada por `(ramo, nó)`), `orquestracao/agente.py` (parâmetro `ficha` + a ferramenta `anotar`, injetada **só** na orquestração), `orquestracao/grafo.py` (tipo de nó `cada`), `modelos.py` + migração `fch00ficha001`, e as bordas que atravessam a pausa (`mensageria/retoma.py`, `mensageria/servico.py`).
+
+     **O que permanece congelado:** a mesma lista de sempre — `seguir_para` (a semântica não mudou: continua sendo o agente declarando rótulos), o contrato de instrumentos, a fila `FOR UPDATE SKIP LOCKED`, o laço `create_react_agent` (só ganhou uma ferramenta e um bloco na mensagem do turno) e o heartbeat/sweeper/recuperação de órfãos-presos (§12-A).
+
+     **O que se decidiu NÃO fazer, e não se revisita:** dado estruturado **tipado** com mapeamento de campos (estilo n8n). Mudaria a natureza do produto — aqui quem conduz são agentes que leem e escrevem em linguagem natural. A ficha é um punhado de valores nomeados (teto de 40), não um pipeline com esquema.
+
 2. **Migrations no banco são aditivas, nunca destrutivas.** Você adiciona tabelas e colunas; não apaga nem renomeia o que já tem dados em produção interna. Onde for inevitável uma transformação (como o caso de `organizacoes.dono` migrando para a tabela `membros`), faz-se em duas etapas: adiciona o novo, popula com base no existente, e só então — depois de validação — descontinua o antigo.
 
 3. **Protocolo de execução do `CLAUDE.md` continua valendo integralmente.** Cada tarefa segue investigar / planejar / implementar / verificar / decidir / relatar. Pare no primeiro erro. Commit + push ao final de cada fase. Nada do método muda.

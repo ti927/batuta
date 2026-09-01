@@ -167,6 +167,24 @@ decisão adiada (§ abaixo) tomada com número na mão, e a sequência das fatia
 - **Fatia 5** — Conversa vira `modo=conversa` de primeira classe (dorme/acorda); sweepers convergem.
 - **Fatia 6** (opcional) — Projeção única na UI (aba Conversa lê a timeline).
 
+> **A frente "O motor vira um grafo de verdade" (2026-08-31 →) roda em cima desta.** Plano
+> aprovado em 4 ondas; detalhe de cada uma no `BUILD-PLAN.md`.
+> **✅ Onda 1 + Parte III (`662df3b`, `f8d4e91`, `316daa6`)** — o motor caminha por ONDAS
+> (segue TODOS os ramos atendidos, junção implícita, saída de erro e "senão", teto por
+> execução), a condição da seta ganhou caixa na tela (ela existia no motor e **nunca** teve
+> campo — a causa-raiz), e **portão e parede morreram**: a espera por uma pessoa virou o
+> instrumento `pedir_aprovacao` no cinto (descongelamento nº 4, `MIGRACAO §6.1`).
+> **✅ Onda 2 (`633326f`, `73b804c`, migração `fch00ficha001`)** — a **ficha da execução**
+> (`execucoes.dados` + `orquestracao/ficha.py`): o que o gatilho trouxe deixa de morrer no
+> primeiro nó, a ferramenta `anotar` é a variável de fluxo, a seta ganha **regra exata**
+> conferida pelo MOTOR, e existe o nó **"Para cada item"** (ampliação nº 5, `MIGRACAO §6.1`).
+> **Nota de custo — importa para esta Frente:** a ficha vai na **mensagem do turno**, não no
+> prompt de sistema; ali ela mudaria a cada passo e invalidaria o **cache de prompt** que a
+> Frente B/Parte D ligou. O ganho de −88%/turno segue de pé.
+> **Faltam:** Onda 3 (tempo e composição: nó "Esperar", sub-fluxo síncrono, timeouts) e
+> Onda 4 (operação: rodar de novo a partir daqui, testar um nó, circuit breaker, versão do
+> desenho guardada na execução).
+
 ### Frente B — as partes da economia (do `ECONOMIA-TOKENS-IA-CRIADORA.md`)
 - **A ✅ NO AR (2026-07-26)** — Resumo rolante + janela de turnos recentes (−62% do histórico provado; commit `3621138`).  **B ✅ NO AR (2026-07-27)** — Painel "Sobre este time" (resumo visível/editável, drawer à direita; edição humana vence a da IA; commit `4815f14`).
 - **C ✅ NO AR (2026-07-26)** — Iceberg + `buscar_no_historico` (tool; commit `1a8712f`; fecha a ressalva do resumo com perda).  **D ✅ NO AR (2026-07-26)** — Cache de prompt Anthropic (~88%/turno provado; commit `b28d091`; ver [`ESTUDO-TOKENS-MARCO-0.md`](ESTUDO-TOKENS-MARCO-0.md)).
