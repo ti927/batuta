@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Pencil,
   Plus,
+  Repeat2,
 } from "lucide-react";
 
 import { CardAgente } from "@/components/card-agente";
@@ -387,11 +388,22 @@ function CadeiaHorizontal({
         const pausa = (cintos[no.ref ?? ""] ?? []).some(
           (i) => i.tipo === "pedir_aprovacao",
         );
-        const rotulo = no.tipo === "roteador" ? (no.nome ?? "Roteador") : (ag?.nome ?? "—");
+        const ehCada = no.tipo === "cada";
+        const rotulo = ehCada
+          ? `Para cada ${no.item_em || "item"}${no.lista ? ` de ${no.lista}` : ""}`
+          : no.tipo === "roteador"
+            ? (no.nome ?? "Roteador")
+            : (ag?.nome ?? "—");
         return (
           <div key={no.id} className="flex items-center gap-2">
             <Chip>
-              <RobotFace size={24} indice={idx} lider={ag?.papel === "lider"} />
+              {ehCada ? (
+                <span className="flex size-6 items-center justify-center rounded-md bg-[#EFEAFF]">
+                  <Repeat2 className="size-3.5 text-[#6D4AFF]" />
+                </span>
+              ) : (
+                <RobotFace size={24} indice={idx} lider={ag?.papel === "lider"} />
+              )}
               <span className="text-[13px] font-medium text-foreground">
                 {rotulo}
               </span>

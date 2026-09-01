@@ -398,7 +398,7 @@ async def renomear_automacao(automacao_id: str, nome: str) -> str:
 async def montar_cadeia(automacao_id: str, cadeia: dict) -> str:
     """Define a cadeia (o fluxo) de uma automação como um GRAFO de nós: {"inicial": "<id
     do nó inicial>", "nos": [{"id": "<id do nó>", "tipo": "agente", "ref": "<id do
-    agente>", "gate": false, "saidas": [{"rotulo": "...", "quando": "...", "tipo":
+    agente>", "saidas": [{"rotulo": "...", "quando": "...", "tipo":
     "condicional", "destino": "<id de outro nó, ou \\"fim\\">"}]}]}.
 
     BIFURCAÇÃO: o `quando` (a condição que o agente lê para decidir) é OBRIGATÓRIO em
@@ -411,6 +411,16 @@ async def montar_cadeia(automacao_id: str, cadeia: dict) -> str:
     falhar — o fluxo segue por ela com a mensagem do erro em vez de a automação morrer)
     ou "senao" (só quando nenhuma condicional foi atendida). "erro" e "senao" não levam
     "quando". Sem "senao", nada casando = aquele ramo termina, com o motivo no rastro.
+
+    FICHA DA EXECUÇÃO: os dados NÃO trafegam só no texto. O que o gatilho trouxe
+    (`entrada`) e o que os agentes guardarem com a ferramenta `anotar` ficam na ficha e
+    chegam a TODOS os passos — não instrua um agente a "repassar os inputs adiante".
+    Uma saída condicional pode ter "regra": {"campo","operador","valor","valor2"}, e aí
+    quem confere é o MOTOR contra a ficha (operadores: igual, diferente, contem,
+    nao_contem, maior, maior_ou_igual, menor, menor_ou_igual, entre, preenchido, vazio).
+    Use para decisão numérica/exata; deixe com o agente o que for julgamento.
+    Há também o nó {"tipo": "cada", "lista": "<campo>", "item_em": "item",
+    "acumular_em": "<campo>"}: repete o trecho seguinte uma vez por item da lista.
 
     APROVAÇÃO: não existe `gate` no nó (foi removido em 2026-08-31). Para um passo esperar
     uma pessoa, dê ao AGENTE dele o instrumento `pedir_aprovacao` e escreva no markdown

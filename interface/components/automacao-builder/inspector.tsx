@@ -17,6 +17,7 @@ import {
   MessageCircle,
   Play,
   Plus,
+  Repeat2,
   Shield,
   X,
   Zap,
@@ -29,12 +30,14 @@ import type {
   ConfiguracaoFluxo,
   Credencial,
   NoCadeia,
+  OperadorRegra,
   PainelConfigFluxo,
+  RegraSaida,
   SaidaCadeia,
   TipoSaida,
   ToneSaida,
 } from "@/lib/api";
-import { api } from "@/lib/api";
+import { OPERADORES_REGRA, OPERADORES_SEM_VALOR, api } from "@/lib/api";
 import { RobotFace } from "@/components/robot-face";
 import { UrlCopiavel } from "@/components/url-copiavel";
 
@@ -101,6 +104,11 @@ function nomeNo(no: NoCadeia, agentes: Agente[]): string {
 const inputCls =
   "w-full rounded-md border border-[#E8E6F0] bg-white px-2.5 py-1.5 text-[13px] text-[#1A1730] outline-none focus:border-primary";
 
+// Teto de itens de UMA lista no nó "Para cada item" — espelho de
+// `orquestracao/cadeia.py::MAX_ITENS_CADA`. Só informativo aqui (quem corta é o
+// motor), mas o usuário precisa saber antes de montar o fluxo.
+const MAX_ITENS_CADA = 20;
+
 // Os três papéis de uma saída, na ordem em que aparecem no seletor.
 const PAPEIS: { chave: TipoSaida; rotulo: string; ajuda: string }[] = [
   {
@@ -124,6 +132,115 @@ const PAPEIS: { chave: TipoSaida; rotulo: string; ajuda: string }[] = [
 export function papelDaSaida(sa: SaidaCadeia): TipoSaida {
   const t = sa.tipo;
   return t === "erro" || t === "senao" ? t : "condicional";
+}
+
+/**
+ * REGRA EXATA de uma saída (Onda 2) — opcional, e quando existe quem decide é o
+ * MOTOR, não a IA.
+ *
+ * Serve para a comparação que um modelo erra: `total entre 1 e 10` é inclusivo, e 11
+ * cai do outro lado — sempre, sem depender de o agente interpretar a frase. O campo é
+ * lido da ficha da execução (o que o gatilho trouxe + o que os agentes guardaram com
+ * `anotar`), então o nome escrito aqui precisa ser o MESMO que alguém guarda lá.
+ */
+function RegraExata({
+  regra,
+  podeEditar,
+  onChange,
+}: {
+  regra: RegraSaida | null | undefined;
+  podeEditar: boolean;
+  onChange: (r: RegraSaida | null) => void;
+}) {
+  const [aberta, setAberta] = useState(!!regra?.campo);
+  const r = regra ?? null;
+  const precisaValor = r && !OPERADORES_SEM_VALOR.includes(r.operador);
+  const patch = (p: Partial<RegraSaida>) =>
+    onChange({ campo: "", operador: "igual", ...(r ?? {}), ...p });
+
+  if (!aberta) {
+    return (
+      <button
+        type="button"
+        disabled={!podeEditar}
+        onClick={() => {
+          setAberta(true);
+          patch({});
+        }}
+        className="self-start text-[11px] text-[#6D4AFF] hover:underline disabled:opacity-50"
+      >
+        + Regra exata (opcional)
+      </button>
+    );
+  }
+  return (
+    <div className="rounded-md border border-[#E8E6F0] bg-white p-2">
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <span className="text-[11px] font-medium" style={{ color: "#3D2A99" }}>
+          Regra exata
+        </span>
+        <div className="flex-1" />
+        {podeEditar && (
+          <button
+            type="button"
+            onClick={() => {
+              setAberta(false);
+              onChange(null);
+            }}
+            aria-label="Remover a regra exata"
+            className="p-0.5 text-[#A09DB8] hover:text-foreground"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        <input
+          className={`${inputCls} min-w-24 flex-1`}
+          value={r?.campo ?? ""}
+          placeholder="campo (ex.: total)"
+          disabled={!podeEditar}
+          onChange={(e) => patch({ campo: e.target.value })}
+        />
+        <select
+          className={`${inputCls} w-auto flex-1 cursor-pointer`}
+          value={r?.operador ?? "igual"}
+          disabled={!podeEditar}
+          onChange={(e) => patch({ operador: e.target.value as OperadorRegra })}
+        >
+          {OPERADORES_REGRA.map((o) => (
+            <option key={o.valor} value={o.valor}>
+              {o.rotulo}
+            </option>
+          ))}
+        </select>
+        {precisaValor && (
+          <input
+            className={`${inputCls} min-w-16 flex-1`}
+            value={r?.valor ?? ""}
+            placeholder="valor"
+            disabled={!podeEditar}
+            onChange={(e) => patch({ valor: e.target.value })}
+          />
+        )}
+        {r?.operador === "entre" && (
+          <input
+            className={`${inputCls} min-w-16 flex-1`}
+            value={r?.valor2 ?? ""}
+            placeholder="e"
+            disabled={!podeEditar}
+            onChange={(e) => patch({ valor2: e.target.value })}
+          />
+        )}
+      </div>
+      <p className="mt-1.5 text-[11px] leading-normal" style={{ color: "#6B6880" }}>
+        Com regra, quem confere é o sistema — não a IA. O campo vem da ficha da
+        execução: use o mesmo nome que um passo anterior guarda com{" "}
+        <span className="font-mono">anotar</span> (ou{" "}
+        <span className="font-mono">entrada</span>, que é o que o gatilho trouxe).
+      </p>
+    </div>
+  );
 }
 
 function LinhaSaida({
@@ -192,7 +309,10 @@ function LinhaSaida({
                 onChange(
                   p.chave === "condicional"
                     ? { tipo: "condicional" }
-                    : { tipo: p.chave, quando: "" },
+                    : // Erro e "senão" são do MOTOR: nem condição nem regra fazem
+                      // sentido neles (uma é acionada pela falha, a outra pela
+                      // ausência de condição atendida).
+                      { tipo: p.chave, quando: "", regra: null },
                 )
               }
               className="flex-1 rounded-md border px-1 py-1.5 text-[11px]"
@@ -246,6 +366,13 @@ function LinhaSaida({
               seguir por aqui. Preencha para poder salvar.
             </p>
           )}
+          <div className="mt-2 flex flex-col">
+            <RegraExata
+              regra={sa.regra}
+              podeEditar={podeEditar}
+              onChange={(regra) => onChange({ regra })}
+            />
+          </div>
         </div>
       )}
       {papel !== "condicional" && (
@@ -819,6 +946,76 @@ export function Inspector({
           </div>
         )}
 
+        {/* "Para cada item": qual lista percorrer, como o item se chama e onde o
+            resultado de cada repetição é somado. */}
+        {no.tipo === "cada" && (
+          <div className="mb-4 flex flex-col gap-3">
+            <p className="flex gap-2 rounded-[10px] border border-[#E8E6F0] bg-[#FAFAF7] p-3 text-[11.5px] leading-relaxed text-[#6B6880]">
+              <Repeat2 size={14} color="#6D4AFF" className="mt-px flex-none" />
+              <span>
+                Este passo não roda agente: ele lê uma <b>lista da ficha da execução</b>{" "}
+                e repete o trecho seguinte <b>uma vez por item</b>. Cada repetição é um
+                caminho próprio — elas não se misturam. Até {MAX_ITENS_CADA} itens por
+                vez; acima disso o excedente não roda e o rastro diz quantos ficaram de
+                fora.
+              </span>
+            </p>
+            <label
+              className="block text-[12px] font-medium"
+              style={{ color: "#6B6880" }}
+            >
+              Percorrer a lista guardada em
+              <input
+                className={`${inputCls} mt-1.5`}
+                style={
+                  !(no.lista ?? "").trim() ? { borderColor: "#E5484D" } : undefined
+                }
+                value={no.lista ?? ""}
+                placeholder="ex.: pedidos"
+                disabled={!podeEditar}
+                onChange={(e) => onPatchNode(no.id, { lista: e.target.value })}
+              />
+              {!(no.lista ?? "").trim() && (
+                <span className="mt-1 block text-[11px]" style={{ color: "#B42318" }}>
+                  Sem isto o passo não sabe o que repetir. Use o mesmo nome que um passo
+                  anterior guarda com <span className="font-mono">anotar</span>.
+                </span>
+              )}
+            </label>
+            <label
+              className="block text-[12px] font-medium"
+              style={{ color: "#6B6880" }}
+            >
+              Cada item se chama
+              <input
+                className={`${inputCls} mt-1.5`}
+                value={no.item_em ?? ""}
+                placeholder="item"
+                disabled={!podeEditar}
+                onChange={(e) => onPatchNode(no.id, { item_em: e.target.value })}
+              />
+              <span className="mt-1 block text-[11px] leading-normal text-[#6B6880]">
+                É por este nome que os agentes da repetição leem o item na ficha, junto
+                com <span className="font-mono">item_numero</span> e{" "}
+                <span className="font-mono">item_total</span>.
+              </span>
+            </label>
+            <label
+              className="block text-[12px] font-medium"
+              style={{ color: "#6B6880" }}
+            >
+              Somar o resultado de cada repetição em (opcional)
+              <input
+                className={`${inputCls} mt-1.5`}
+                value={no.acumular_em ?? ""}
+                placeholder="ex.: relatorio"
+                disabled={!podeEditar}
+                onChange={(e) => onPatchNode(no.id, { acumular_em: e.target.value })}
+              />
+            </label>
+          </div>
+        )}
+
         {/* saídas (todos menos fim) */}
         {no.tipo !== "fim" && no.tipo !== "gatilho" && (
           <div>
@@ -877,18 +1074,19 @@ export function Inspector({
         )}
       </div>
 
-      {/* rodapé: remover (só agente/roteador) */}
-      {podeEditar && (no.tipo === "agente" || no.tipo === "roteador") && (
-        <div className="border-t border-[#E8E6F0] p-3.5">
-          <button
-            type="button"
-            onClick={() => onDeleteNode(no.id)}
-            className="inline-flex items-center gap-1.5 text-[13px] text-destructive"
-          >
-            <X size={15} /> Remover nó do fluxo
-          </button>
-        </div>
-      )}
+      {/* rodapé: remover (os nós que o usuário acrescentou; gatilho e fim são fixos) */}
+      {podeEditar &&
+        (no.tipo === "agente" || no.tipo === "roteador" || no.tipo === "cada") && (
+          <div className="border-t border-[#E8E6F0] p-3.5">
+            <button
+              type="button"
+              onClick={() => onDeleteNode(no.id)}
+              className="inline-flex items-center gap-1.5 text-[13px] text-destructive"
+            >
+              <X size={15} /> Remover nó do fluxo
+            </button>
+          </div>
+        )}
     </div>
   );
 }

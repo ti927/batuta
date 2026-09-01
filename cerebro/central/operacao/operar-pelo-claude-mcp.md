@@ -78,5 +78,5 @@ quando a ação for irreversível e alguém precisar confirmar.
 
 ## Relacionado
 
-- [[uso-e-custos]]
-- [[cinto]]
+- [[operacao/uso-e-custos]]
+- [[instrumentos/cinto]]

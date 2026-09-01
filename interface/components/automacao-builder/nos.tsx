@@ -1,8 +1,17 @@
 // Nós custom do React Flow para o construtor de automações.
-// Gatilho · Agente · Roteador · Fim — visual do handoff (SPEC §6), flat e marca Batuta.
+// Gatilho · Agente · Roteador · Para cada item · Fim — visual do handoff (SPEC §6),
+// flat e marca Batuta.
 
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { CheckCircle2, Layers, Pencil, Shield, Sparkles, Zap } from "lucide-react";
+import {
+  CheckCircle2,
+  Layers,
+  Pencil,
+  Repeat2,
+  Shield,
+  Sparkles,
+  Zap,
+} from "lucide-react";
 
 import type { Agente, Instrumento, NoCadeia } from "@/lib/api";
 import { IconeInstrumento } from "@/components/icone-instrumento";
@@ -161,6 +170,47 @@ export function RoteadorNode({ data, selected }: NodeProps) {
   );
 }
 
+/**
+ * "Para cada item" — nó estrutural (não roda IA, não conta como passo). Lê uma lista
+ * da ficha da execução e repete o trecho seguinte uma vez por item, cada repetição
+ * como um ramo próprio do grafo.
+ *
+ * Visualmente é primo do roteador (mesmo cartão lilás, ícone de repetição), porque a
+ * família é a mesma: peças que dirigem o fluxo sem produzir conteúdo.
+ */
+export function CadaNode({ data, selected }: NodeProps) {
+  const no = (data as DadosNo).no;
+  const lista = (no.lista ?? "").trim();
+  return (
+    <div style={{ ...cartao(!!selected, "#FBFAFF", "#6D4AFF", "#E0DAF6"), height: 74 }}>
+      <div className="flex h-full items-center gap-2.5 px-3.5">
+        <span
+          className="grid size-8 flex-none place-items-center rounded-[9px]"
+          style={{ background: "#EFEAFF" }}
+        >
+          <Repeat2 size={17} color="#6D4AFF" />
+        </span>
+        <div className="min-w-0">
+          <div
+            className="text-[11px] font-medium uppercase tracking-wide"
+            style={{ color: "#9A8CCB" }}
+          >
+            Para cada item
+          </div>
+          <div
+            className="truncate text-[14px] font-medium"
+            style={{ color: lista ? "#1A1730" : "#B42318" }}
+          >
+            {lista ? `de ${lista}` : "escolha a lista"}
+          </div>
+        </div>
+      </div>
+      <HandleEntrada />
+      <HandlesSaida no={no} />
+    </div>
+  );
+}
+
 export function AgenteNode({ data, selected }: NodeProps) {
   const d = data as DadosNo;
   const no = d.no;
@@ -282,5 +332,6 @@ export const tiposDeNo = {
   gatilho: GatilhoNode,
   agente: AgenteNode,
   roteador: RoteadorNode,
+  cada: CadaNode,
   fim: FimNode,
 };

@@ -170,6 +170,17 @@ Um fluxo pode ter ramos. Cada seta que sai de um passo carrega uma **condição 
 
 Além das setas condicionais, um passo pode ter uma seta **"se der erro"** (percorrida quando ele falha, levando a mensagem do erro adiante em vez de derrubar a automação) e uma seta **"se nenhuma das outras"** (a rede de segurança).
 
+### Os dados atravessam o fluxo (a ficha da execução)
+
+Entre um passo e outro trafega o **texto** que o agente produziu. Só isso não basta: se ele resume ("aprovado, seguindo"), tudo o que não repetiu se perde, e o passo seguinte trava pedindo dados que já existiam. Por isso cada execução carrega uma **ficha** — valores com nome que chegam a **todos** os passos:
+
+- **o que o gatilho trouxe**, que entra sozinho e nunca se perde;
+- **o que os agentes guardarem** durante o trabalho (uma URL gerada, um total apurado, uma decisão), porque a documentação deles manda guardar.
+
+A ficha destrava duas coisas que a prosa sozinha não dá: uma seta pode ter uma **regra exata** sobre um valor da ficha (`total` está entre `1` e `10`), e aí **quem confere é o sistema, não a IA** — a borda fica certa, sempre; e existe o passo **"Para cada item"**, que percorre uma lista da ficha e repete o trecho seguinte uma vez por item, somando os resultados de volta.
+
+A ficha é deliberadamente um punhado de valores nomeados, **não** um pipeline de dados tipado com mapeamento de campos. Quem conduz o trabalho continua sendo o agente, lendo e escrevendo em linguagem natural — a ficha só impede que o dado se perca no caminho.
+
 ### Modo intermediação
 
 Em vez de resolver a tarefa, o agente atua como **ponte de uma conversa contínua entre duas pessoas** — uma falando pelo WhatsApp (um pai, um paciente), outra do lado de dentro do Batuta (uma coordenadora, um atendente). O agente leva a mensagem de um lado a outro, podendo enriquecer ou filtrar, mas a conversa é humano-a-humano intermediada.

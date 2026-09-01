@@ -35,6 +35,9 @@ O gatilho diz **como** a automação começa; há quatro tipos, e cada automaç�
 - Um **gatilho recém-criado ou duplicado** pode nascer "a conectar" (webhook/conta pendente) — avise.
 - **Passar parâmetros ao 1º agente:** é um **texto livre** (a "entrada"), não campos nomeados. Para
   vários "parâmetros", escreva-os no texto e instrua o agente a lê-los.
+- **A entrada não morre no primeiro passo.** Ela entra na **ficha da execução** (no campo
+  `entrada`) e chega a **todos** os passos, do primeiro ao último — nenhum agente precisa
+  repeti-la no texto para que o próximo a receba. Ver [[automacoes/ficha-da-execucao]].
 
 ## Para a IA
 Nunca afirme o tipo de gatilho de memória — confira no retrato do time (`tipo_gatilho` por automação).
@@ -44,5 +47,6 @@ o humano escolher a conta. Para agendamento por um AGENTE (disparo futuro), veja
 
 ## Relacionado
 - [[automacoes/automacao]]
+- [[automacoes/ficha-da-execucao]]
 - [[instrumentos/agendar-automacao]]
 - [[instrumentos/webhook-saida]]

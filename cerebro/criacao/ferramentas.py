@@ -539,8 +539,10 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
           ou "url" (substitui [colchete] na URL).
         - `campos_resposta`: liste só os campos que o agente usa (nome EXATO da API) —
           corta MUITO custo em buscas que voltam listas. Vazio = resposta inteira.
-        - Se QUALQUER operação escreve (POST/PUT/PATCH/DELETE), o conector inteiro passa
-          a exigir portão: ponha "gate" no nó do agente que vem ANTES, na cadeia.
+        - Se QUALQUER operação escreve (POST/PUT/PATCH/DELETE), o conector inteiro conta
+          como AÇÃO IRREVERSÍVEL. Não há portão no desenho: dê ao agente que o usa o
+          instrumento `pedir_aprovacao` e escreva no skill_md dele que ele confirma com
+          uma pessoa antes de escrever no sistema externo.
         Depois de montar, TESTE cada operação com testar_operacao_conector — confere se
         funciona e revela os campos da resposta (para escolher `campos_resposta`)."""
         time = _exigir_time()
@@ -637,7 +639,7 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         """Define a cadeia (o fluxo) de UMA automação como um GRAFO de nós:
         {"inicial": "<id do nó inicial>", "nos": [
           {"id": "<id do nó>", "tipo": "agente", "ref": "<id do agente>",
-           "gate": false, "saidas": [
+           "saidas": [
              {"rotulo": "rótulo curto da decisão", "quando": "quando seguir por aqui",
               "destino": "<id de outro nó, ou \\"fim\\" para encerrar>"}]},
           ...
@@ -661,14 +663,28 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
           "senao" NÃO levam "quando".
         - Se nenhuma condição for atendida e não houver saída "senao", aquele ramo
           termina ali, com o motivo gravado no rastro.
-        PORTÃO DE APROVAÇÃO: ponha "gate": true NO NÓ do agente que
-        vem ANTES de uma ação irreversível — o fluxo pausa depois dele e espera um
-        humano aprovar antes de seguir para quem publica/envia (a pausa fica no NÓ). Um
-        nó de portão pode trazer, opcionalmente, "instrucoes": {"abertura": "...",
-        "fechamento": "..."} — o roteiro do agente ao apresentar o pedido e ao AGIR
-        após a resposta (ex.: "ao aprovar, agende com agendar_automacao E encaminhe"). E
-        "config": {...} para ajustar SÓ neste portão regras do Tipo de fluxo (ex.:
-        {"timeout_min": 30}). Ambos são opcionais; sem eles, valem os padrões.
+
+        REGRA EXATA (opcional, numa saída condicional):
+        "regra": {"campo": "total", "operador": "entre", "valor": "1", "valor2": "10"}.
+        Quando existe, quem confere é o MOTOR contra a ficha da execução — não a IA.
+        Operadores: igual, diferente, contem, nao_contem, maior, maior_ou_igual, menor,
+        menor_ou_igual, entre (inclusivo), preenchido, vazio. Use para decisão numérica
+        ou de correspondência exata, onde um modelo erra a borda; deixe com o agente o
+        que for julgamento. O `campo` precisa ser algo que algum passo ANTERIOR guarde
+        na ficha com `anotar` (ou "entrada", o que o gatilho trouxe).
+
+        NÓ "PARA CADA ITEM":
+        {"id": "...", "tipo": "cada", "lista": "<campo da ficha>",
+         "item_em": "item", "acumular_em": "<campo, opcional>", "saidas": [...]}.
+        Lê uma lista da ficha e repete o trecho seguinte UMA VEZ POR ITEM, cada
+        repetição como caminho próprio. Não roda IA. Teto de 20 itens.
+
+        APROVAÇÃO HUMANA: não existe portão no desenho. Quem para o fluxo é o AGENTE,
+        chamando o instrumento `pedir_aprovacao` porque o markdown dele manda — então
+        dê o instrumento ao agente e escreva a regra no skill_md dele. Um nó pode
+        trazer "config": {...} para ajustar SÓ nele regras do Tipo de fluxo (ex.:
+        {"timeout_min": 30}); opcional, sem isso valem os padrões.
+
         Se o time tem MAIS DE UMA automação, informe `automacao_id` (pegue no retrato,
         em `automacoes`); com uma só, pode omitir. NÃO adivinhe qual — se estiver na
         dúvida, pergunte ao consultor."""

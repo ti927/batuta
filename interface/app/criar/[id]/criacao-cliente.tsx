@@ -315,7 +315,11 @@ function CadeiaVertical({
           (id) => instrumentos.find((i) => i.id === id)?.tipo === "pedir_aprovacao",
         );
         const rotulo =
-          no.tipo === "roteador" ? (no.nome ?? "Roteador") : nome(no.ref);
+          no.tipo === "cada"
+            ? `Para cada ${no.item_em || "item"}${no.lista ? ` de ${no.lista}` : ""}`
+            : no.tipo === "roteador"
+              ? (no.nome ?? "Roteador")
+              : nome(no.ref);
         return (
           <div key={no.id}>
             <div className="flex items-center gap-3">

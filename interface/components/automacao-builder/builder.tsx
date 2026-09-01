@@ -18,7 +18,7 @@ import {
   type Node,
   type NodeChange,
 } from "@xyflow/react";
-import { ChevronDown, Layers, Plus } from "lucide-react";
+import { ChevronDown, Layers, Plus, Repeat2 } from "lucide-react";
 
 import type {
   Agente,
@@ -407,7 +407,7 @@ function BuilderInterno({
   );
 
   const addNode = useCallback(
-    (kind: "agente" | "roteador", ref?: string) => {
+    (kind: "agente" | "roteador" | "cada", ref?: string) => {
       const id = novoIdNo(kind);
       setCadeia((c) => {
         const fim = (c.nos ?? []).find((n) => n.tipo === "fim");
@@ -419,7 +419,26 @@ function BuilderInterno({
           !(c.nos ?? []).some((n) => n.tipo === "agente") &&
           !c.inicial;
         const novo: NoCadeia =
-          kind === "roteador"
+          kind === "cada"
+            ? {
+                id,
+                tipo: "cada",
+                // `lista` nasce VAZIA de propósito: sem ela o nó não sabe o que
+                // repetir, e a validação recusa salvar dizendo isso. Melhor recusar
+                // na hora do que repetir nada em silêncio na hora de rodar.
+                lista: "",
+                x: baseX,
+                y: 360,
+                saidas: [
+                  {
+                    id: novoIdSaida(),
+                    rotulo: "cada item",
+                    destino: fim?.id ?? "fim",
+                    tone: "normal",
+                  },
+                ],
+              }
+            : kind === "roteador"
             ? {
                 id,
                 tipo: "roteador",
@@ -568,6 +587,23 @@ function BuilderInterno({
                         </span>
                         <span className="block text-[11px] leading-snug text-muted-foreground">
                           Encaminha a tarefa sem rodar agente
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addNode("cada")}
+                      className="flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-[#F4F1FE]"
+                    >
+                      <span className="mt-0.5 grid size-[22px] flex-none place-items-center rounded-md bg-[#EFEAFF]">
+                        <Repeat2 size={13} color="#6D4AFF" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[13px] text-foreground">
+                          Para cada item
+                        </span>
+                        <span className="block text-[11px] leading-snug text-muted-foreground">
+                          Repete o trecho seguinte por item de uma lista
                         </span>
                       </span>
                     </button>

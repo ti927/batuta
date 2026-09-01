@@ -104,13 +104,42 @@ SAÍDA "SENÃO" (`"tipo": "senao"`, sem `quando`): rede de segurança, percorrid
 quando NENHUMA condicional foi atendida. Sem ela, se nada casar aquele ramo termina
 ali e o motivo fica no rastro — nunca mais o fluxo escolhe um caminho no escuro.
 
+# A FICHA DA EXECUÇÃO (o dado não morre no primeiro passo)
+Entre um nó e outro trafega texto — mas os DADOS trafegam pela FICHA: valores com nome
+que atravessam a automação inteira e chegam a TODOS os passos.
+- `entrada` — o que o gatilho trouxe. Entra sozinha e nunca se perde. NÃO instrua um
+  agente a "repassar os inputs para os próximos agentes": eles já os recebem.
+- o que os agentes guardarem com a ferramenta `anotar` (uma URL gerada, um total
+  apurado, uma decisão). Quem vier depois lê da ficha.
+Quando um passo produz algo que outro vai precisar, escreva no skill_md dele: "guarde a
+URL da imagem em `url_da_capa` com `anotar`". É assim que o dado viaja — não pedindo que
+ele repita tudo no texto final (ele esquece, e aí o passo seguinte trava pedindo o que
+já existia).
+
+REGRA EXATA NA SETA (`"regra": {"campo","operador","valor","valor2"}`) — opcional. Quando
+existe, quem confere é o MOTOR, contra a ficha, e não a IA. Operadores: igual, diferente,
+contem, nao_contem, maior, maior_ou_igual, menor, menor_ou_igual, entre (inclusivo nas
+duas pontas), preenchido, vazio. Use para decisão NUMÉRICA ou de correspondência exata
+(faixa de valor, categoria, campo preenchido), onde um modelo erra a borda — 10 entra em
+"entre 1 e 10", 11 não. Deixe com o agente o que for julgamento ("o texto ficou bom?").
+A regra precisa de um campo que ALGUÉM anote antes; se o campo não existir, o sistema não
+decide sozinho — devolve a escolha ao agente e registra o porquê.
+
+NÓ "PARA CADA ITEM" (`{"tipo": "cada", "lista", "item_em", "acumular_em"}`): lê uma lista
+da ficha e repete o trecho seguinte UMA VEZ POR ITEM, cada repetição como caminho próprio
+(elas não se misturam). Dentro dela os agentes leem `item` (ou o nome de `item_em`),
+`item_numero` e `item_total`; com `acumular_em`, o que cada repetição produz é somado
+naquele campo. Teto de 20 itens. É a forma certa de "trate cada cliente da lista" — NÃO
+peça a um agente para processar a lista inteira num turno só.
+
 # Como os agentes se comportam (regra dos 4 textos)
 O agente executa no automático, sem ninguém para responder no meio do fluxo. Escreva os
 textos — principalmente skill_md e soul_md — deixando claro que ele:
 - AGE, não pergunta: se algo não foi especificado, assume um padrão sensato e segue.
 - ENTREGA o artefato pronto, sem preâmbulo nem narração ("vou montar…" — proibido).
 - faz REPASSE LIMPO: diga qual é a SAÍDA exata do agente, porque ela é a ENTRADA do
-  próximo.
+  próximo. Mas o DADO que o próximo precisa vai pela FICHA (`anotar`), não pelo texto:
+  no texto fica o resultado do trabalho, não uma cópia dos parâmetros que ele recebeu.
 - MATERIALIZA o conhecimento ali mesmo; nunca cita uma "biblioteca" que não existe.
 
 # A memória do agente (o agente aprende com o próprio trabalho)

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   Check,
+  ChevronDown,
   CircleHelp,
   Clock,
   Gauge,
@@ -12,6 +13,8 @@ import {
   MessageSquare,
   Pencil,
   ShieldCheck,
+  SquareCheckBig,
+  Tag,
   Wrench,
   XCircle,
 } from "lucide-react";
@@ -150,6 +153,110 @@ function Cronometro({ desde }: { desde: string | null | undefined }) {
   const txt =
     s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
   return <span className="tabular-nums">há {txt}</span>;
+}
+
+/**
+ * A FICHA da execução (Onda 2): os valores nomeados que atravessaram o grafo — o que o
+ * gatilho trouxe e o que cada agente guardou com `anotar`.
+ *
+ * Existe porque, antes dela, o dado só sobrevivia se o agente lembrasse de repeti-lo
+ * no texto. Quando alguém pergunta "por que o passo 3 não tinha a URL?", é aqui que a
+ * resposta aparece — sem abrir o banco.
+ *
+ * Fechada por padrão: é material de auditoria, não a leitura principal da tela.
+ */
+function FichaExecucao({ dados }: { dados: Record<string, string> }) {
+  const [aberta, setAberta] = useState(false);
+  const campos = Object.entries(dados);
+  if (campos.length === 0) return null;
+  return (
+    <div className="mt-2 overflow-hidden rounded-lg border border-border bg-background">
+      <button
+        type="button"
+        onClick={() => setAberta((v) => !v)}
+        aria-expanded={aberta}
+        className="flex w-full items-center gap-2 px-2.5 py-2 text-left transition-colors hover:bg-accent/30"
+      >
+        <Tag className="size-3.5 shrink-0 text-primary" />
+        <span className="text-xs font-medium text-foreground">
+          A ficha desta execução
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {campos.length} {campos.length === 1 ? "valor" : "valores"}
+        </span>
+        <ChevronDown
+          className={`ml-auto size-3.5 shrink-0 text-muted-foreground transition-transform ${
+            aberta ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+      {aberta && (
+        <div className="border-t border-border">
+          <p className="px-2.5 pt-2 text-xs text-muted-foreground">
+            Estes valores chegaram a todos os passos, mesmo aos que rodaram depois de
+            quem os guardou.
+          </p>
+          <dl className="flex flex-col gap-2 p-2.5">
+            {campos.map(([nome, valor]) => (
+              <div key={nome}>
+                <dt className="font-mono text-[11px] text-[#3D2A99]">
+                  {nome}
+                  {nome === "entrada" && (
+                    <span className="ml-1.5 font-sans text-muted-foreground">
+                      o que o gatilho trouxe
+                    </span>
+                  )}
+                </dt>
+                <dd className="whitespace-pre-wrap break-words rounded-md bg-card p-2 text-xs text-foreground">
+                  {valor}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** As regras exatas que o MOTOR conferiu neste passo. `resultado` null = não deu para
+ *  conferir — e isso PRECISA aparecer: um "não sei" silenciado como "não" é como um
+ *  ramo some sem ninguém entender por quê. */
+function RegrasDoPasso({
+  regras,
+}: {
+  regras: NonNullable<PassoExecucao["saida"]>["regras"];
+}) {
+  if (!regras || regras.length === 0) return null;
+  const cor = (r: boolean | null) =>
+    r === true
+      ? { bg: "#E6F4EA", fg: "#256B3B", txt: "seguiu por aqui" }
+      : r === false
+        ? { bg: "#EEEDF3", fg: "#5A5773", txt: "não seguiu" }
+        : { bg: "#FDF1E3", fg: "#A9681A", txt: "não deu para conferir" };
+  return (
+    <div>
+      <p className="mb-1 text-xs font-medium text-muted-foreground">
+        Regras conferidas pelo sistema
+      </p>
+      <ul className="flex flex-col gap-1">
+        {regras.map((r, i) => {
+          const c = cor(r.resultado);
+          return (
+            <li
+              key={`${r.rotulo}-${i}`}
+              className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1.5 text-xs"
+              style={{ background: c.bg, color: c.fg }}
+            >
+              <span className="font-medium">{r.rotulo}</span>
+              <span className="font-mono">{r.regra}</span>
+              <span className="ml-auto">{c.txt}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }
 
 function Bloco({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
@@ -455,7 +562,28 @@ function DetalheItem({
           {passo.saida.erro}
         </p>
       )}
+      <RegrasDoPasso regras={passo.saida?.regras} />
       <Bloco rotulo="Recebeu">{passo.entrada?.texto || "—"}</Bloco>
+      {/* O que este passo guardou na ficha. É o que faz um dado chegar aos passos
+          seguintes sem depender de o agente repeti-lo no texto. */}
+      {(passo.saida?.anotou ?? []).length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">
+            Guardou na ficha
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {(passo.saida?.anotou ?? []).map((campo) => (
+              <span
+                key={campo}
+                className="inline-flex items-center gap-1 rounded-full bg-[#F4F1FE] px-2 py-0.5 font-mono text-xs text-[#3D2A99]"
+              >
+                <SquareCheckBig className="size-3" />
+                {campo}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {instrumentos.length > 0 && (
         <div>
           <p className="mb-1 text-xs font-medium text-muted-foreground">
@@ -748,6 +876,8 @@ export function PainelExecucao({
           onEditarInstrumento={onEditarInstrumento}
         />
       </div>
+
+      {execucao.dados && <FichaExecucao dados={execucao.dados} />}
 
       {execucao.uso && execucao.uso.tokens_entrada + execucao.uso.tokens_saida > 0 && (
         <div className="mt-2 rounded-lg border border-border bg-background p-2.5 text-xs text-muted-foreground">

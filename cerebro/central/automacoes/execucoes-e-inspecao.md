@@ -37,6 +37,10 @@ está acontecendo agora") — você nunca fica no escuro achando que travou.
 - **As conversas também deixam rastro.** O atendimento por mensageria gera sua própria linha do tempo, com
   os mesmos passos, instrumentos acionados e custo — dá para inspecionar um agente conversacional como se
   inspeciona uma automação.
+- **"O passo N não recebeu os dados" tem um lugar próprio de olhar:** o painel
+  **"A ficha desta execução"**, na inspeção, mostra tudo o que atravessou o fluxo. Cada passo
+  ainda diz o que **guardou na ficha** e quais **regras exatas** o sistema conferiu (com o
+  resultado de cada uma). Ver [[automacoes/ficha-da-execucao]].
 
 ## Para a IA
 Ao diagnosticar com o consultor, baseie-se no **estado real** da execução (o que a inspeção mostra), não em
@@ -49,6 +53,7 @@ agente estourou antes.
 
 ## Relacionado
 - [[automacoes/automacao]]
+- [[automacoes/ficha-da-execucao]]
 - [[automacoes/pedir-aprovacao]]
 - [[operacao/falhas-e-retentativa]]
 - [[operacao/uso-e-custos]]

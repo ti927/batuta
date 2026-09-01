@@ -437,7 +437,50 @@ export type ToneSaida = "normal" | "ok" | "loop" | "erro";
 // atendidas. `erro`: só quando o passo falha. `senao`: só quando nenhuma condicional
 // foi atendida.
 export type TipoSaida = "condicional" | "erro" | "senao";
-export type TipoNo = "gatilho" | "agente" | "roteador" | "fim";
+// `cada` = "Para cada item": nó estrutural (não roda IA) que lê uma lista da ficha da
+// execução e repete o trecho seguinte uma vez por item.
+export type TipoNo = "gatilho" | "agente" | "roteador" | "fim" | "cada";
+
+// Operadores da REGRA EXATA de uma saída (cérebro: orquestracao/ficha.py). Espelho
+// fiel: mudar aqui sem mudar lá faz a tela oferecer o que o motor não entende.
+export type OperadorRegra =
+  | "igual"
+  | "diferente"
+  | "contem"
+  | "nao_contem"
+  | "maior"
+  | "maior_ou_igual"
+  | "menor"
+  | "menor_ou_igual"
+  | "entre"
+  | "preenchido"
+  | "vazio";
+
+// A regra exata é conferida pelo MOTOR contra a ficha da execução — não pela IA. É o
+// que acerta a borda (10 × 11) onde uma frase avaliada por modelo erra.
+export type RegraSaida = {
+  campo: string;
+  operador: OperadorRegra;
+  valor?: string;
+  valor2?: string; // só no operador `entre` (o limite de cima)
+};
+
+// Rótulo humano de cada operador — o mesmo texto do cérebro (`DESCRICAO_OPERADOR`).
+export const OPERADORES_REGRA: { valor: OperadorRegra; rotulo: string }[] = [
+  { valor: "igual", rotulo: "é igual a" },
+  { valor: "diferente", rotulo: "é diferente de" },
+  { valor: "contem", rotulo: "contém" },
+  { valor: "nao_contem", rotulo: "não contém" },
+  { valor: "maior", rotulo: "é maior que" },
+  { valor: "maior_ou_igual", rotulo: "é maior ou igual a" },
+  { valor: "menor", rotulo: "é menor que" },
+  { valor: "menor_ou_igual", rotulo: "é menor ou igual a" },
+  { valor: "entre", rotulo: "está entre" },
+  { valor: "preenchido", rotulo: "está preenchido" },
+  { valor: "vazio", rotulo: "está vazio" },
+];
+// Operadores que não pedem valor (a comparação é sobre a existência do campo).
+export const OPERADORES_SEM_VALOR: OperadorRegra[] = ["preenchido", "vazio"];
 export type TipoGatilho =
   | "manual"
   | "agendamento"
@@ -450,6 +493,8 @@ export type SaidaCadeia = {
   quando?: string; // a CONDIÇÃO: "siga por aqui quando…" — é o que o agente avalia
   tipo?: TipoSaida; // papel da saída (condicional | erro | senao)
   destino: string; // id de outro nó (inclui o nó "fim"; pode ser anterior = loop)
+  // REGRA EXATA (opcional): quando existe, quem decide esta saída é o MOTOR, não a IA.
+  regra?: RegraSaida | null;
   tone?: ToneSaida; // cor da aresta (UI)
   lane?: "above" | "below"; // dica de curva p/ loops (UI)
 };
@@ -465,6 +510,10 @@ export type NoCadeia = {
   // aprovação aqui. Só as chaves ajustadas ficam aqui; o resto herda do fluxo.
   config?: Record<string, unknown>;
   gatilho?: TipoGatilho; // tipo 'gatilho'
+  // ─── tipo 'cada' ("Para cada item") ───
+  lista?: string; // campo da ficha que contém a lista a percorrer
+  item_em?: string; // como o item se chama na ficha de cada repetição (padrão: `item`)
+  acumular_em?: string; // campo onde o resultado de cada repetição é somado
   x?: number;
   y?: number;
   saidas: SaidaCadeia[];
@@ -521,7 +570,8 @@ export function indexarCadeia(
 }
 
 // Caminho principal (segue a 1ª saída de cada nó, do inicial ao fim/repetição),
-// só com nós-agente/roteador — para as visões compactas (dashboard, criação).
+// só com os nós que aparecem na visão compacta (agente/roteador/"para cada item")
+// — dashboard e criação.
 export function caminhoPrincipal(
   cadeia: Cadeia | null | undefined,
 ): NoCadeia[] {
@@ -532,7 +582,8 @@ export function caminhoPrincipal(
   while (atual && idx[atual] && !visto.has(atual)) {
     const no = idx[atual];
     visto.add(atual);
-    if (no.tipo === "agente" || no.tipo === "roteador") ordem.push(no);
+    if (no.tipo === "agente" || no.tipo === "roteador" || no.tipo === "cada")
+      ordem.push(no);
     atual = no.saidas?.[0]?.destino ?? null;
   }
   return ordem;
@@ -631,6 +682,10 @@ export type PassoExecucao = {
     motivo_ramo?: string | null; // por que estes caminhos, na voz do agente
     aviso?: string | null; // o ramo terminou sem caminho — e por quê
     erro?: string | null; // quando o passo falhou
+    // Ficha (Onda 2): o que o agente guardou neste passo (nomes já canônicos) e as
+    // regras exatas que o MOTOR conferiu — `resultado` null = não deu para conferir.
+    anotou?: string[];
+    regras?: { rotulo: string; regra: string; resultado: boolean | null }[];
     uso?: UsoChamada[];
   } | null;
   estado: string;
@@ -658,6 +713,10 @@ export type Execucao = {
 export type ExecucaoComPassos = Execucao & {
   passos: PassoExecucao[];
   uso?: ResumoUso | null;
+  // A FICHA da execução (Onda 2): os valores nomeados que atravessaram o grafo — o que
+  // o gatilho trouxe (`entrada`) mais o que os agentes anotaram. Nula em execuções
+  // anteriores à Onda 2.
+  dados?: Record<string, string> | null;
 };
 
 // Execução na visão consolidada (gestão de execuções), com o nome da automação

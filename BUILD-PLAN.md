@@ -2134,6 +2134,34 @@ Duas garantias novas do contrato do encaixe: `pausa_para_humano` (a marca que fa
 
 ---
 
+## FASE — O motor vira um grafo de verdade · **Onda 2: a ficha da execução**  ✅ (2026-09-01, migração `fch00ficha001`)
+
+**O buraco, provado ao vivo no dia.** Entre um nó e outro trafegava **só texto**. A execução `f1e23565` (automação "Gerar Posts Instagram") mostrou o custo em tempo real: o gatilho trouxe título, subtítulo, legenda e URL do artigo; o Gerador Post 1:1 gerou a capa, pediu aprovação, o maestro aprovou — e o agente voltou dizendo apenas *"Aprovado. Seguindo para publicação e próximos encaminhamentos."*. Foi **essa frase** que chegou ao Gerador Carrossel, que respondeu o óbvio: *"Não recebi título, subtítulo e URL do artigo"*. O markdown do agente mandava repassar os dados; ele esqueceu. E o desenho não tinha como garantir. Era a lacuna nº 15 do plano — a entrada do gatilho morrendo no primeiro nó.
+
+**O que ficou no lugar: a ficha.** `execucoes.dados` (JSONB) — um punhado de valores nomeados que atravessam o grafo inteiro. Nasce em `disparo.rodar_execucao` com `{"entrada": <o que o gatilho trouxe>}`, é mutada no lugar pelo motor, persistida **a cada passo** (não só no fim, para sobreviver a um deploy no meio) e **atravessa a pausa de aprovação** — pela tela (`retoma`) e pelo canal (`servico._turno_de_portao`). Módulo puro em `orquestracao/ficha.py`, reusado por motor, agente, validação e tela.
+
+**As quatro lacunas que a mesma peça fechou (15 a 19):**
+- **A entrada não morre no nó 1.** Chega ao prompt de todos os passos, sempre.
+- **Variável de fluxo:** a ferramenta `anotar` (injetada só quando o agente roda dentro de uma automação) guarda um valor com nome; quem vier depois lê. Nomes são canonizados — `Total do Pedido` e `total_do_pedido` são o mesmo campo.
+- **Regra exata na seta:** `saidas[].regra = {campo, operador, valor, valor2}`, 11 operadores. Quem confere é o **motor**, contra a ficha — a borda 10×11 tem teste. Quando a regra **não pode ser decidida** (campo ausente do tipo errado, valor não numérico), ela **não vira "não" em silêncio**: a saída volta para o agente e o rastro diz qual regra falhou e o que fazer (§12-A).
+- **For-each e agregação:** nó `{"tipo": "cada", "lista", "item_em", "acumular_em"}` — estrutural, não roda IA e não conta como passo. Abre **um ramo por item**; a junção implícita da Onda 1 passou a valer por `(ramo, nó)`, então as repetições não se fundem, mas dois caminhos do mesmo ramo continuam rodando o nó uma vez. A lista é lida como array JSON ou uma linha por item.
+
+**Decisões que valem registrar:**
+- **A ficha vai na MENSAGEM do turno, não no prompt de sistema.** Ela muda a cada passo; no prompt de sistema invalidaria o cache do Anthropic — que é o que segura o custo (Frente B inteira). O cache fica de pé.
+- **Só a orquestração passa ficha.** A conversa da mensageria não: lá quem guarda contexto é a memória entre turnos.
+- **O teto de passos cresce com o for-each** (`PASSOS_POR_ITEM`): repetir é trabalho planejado, não laço — sem isso um for-each de 8 itens morreria no teto de 25 como se fosse bug. Acima de `MAX_ITENS_CADA` (20) o excedente **não roda** e o rastro diz quantos ficaram de fora; corte silencioso é proibido.
+- **Não** virou dado estruturado tipado estilo n8n. Decisão explícita do maestro: quem conduz são agentes que leem texto.
+
+**Na tela (as três aprovadas):** a inspeção da execução ganhou o painel **"A ficha desta execução"** (fechado por padrão) e, em cada passo, **"Guardou na ficha"** e **"Regras conferidas pelo sistema"** com o resultado de cada uma; o editor de saída ganhou **"Regra exata (opcional)"**; o construtor ganhou o bloco **"Para cada item"** na paleta, com seu painel no inspector. Dashboard e canvas da criadora sabem desenhar o nó novo.
+
+**O que as IAs aprenderam (mesma entrega):** capítulo novo `automacoes/ficha-da-execucao`; `cadeia-e-grafo`, `condicoes-e-ramos`, `gatilhos` e `execucoes-e-inspecao` corrigidos — em especial a linha que mandava o passo seguinte "receber tudo pronto do primeiro", que era justamente o conselho que a ficha aposenta. O prompt da IA criadora ganhou a seção da ficha e passou a proibir "repasse os inputs para os próximos agentes". As docstrings de `montar_cadeia` (criadora **e** MCP) idem — e aproveitaram para varrer um resto da Parte III: a ferramenta da criadora ainda ensinava `gate: true`.
+
+**Verificação:** **1004 testes verdes** (38 novos em `test_ficha_execucao.py`, incluindo a cena exata que quebrou em produção: a ficha sobrevive à aprovação e chega ao nó seguinte com o título e a capa). `tsc`, `eslint` e `build` da interface limpos.
+
+**Falta:** teste ao vivo do maestro.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.

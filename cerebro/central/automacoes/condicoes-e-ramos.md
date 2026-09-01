@@ -45,6 +45,10 @@ tempo (a mesma capa aprovada indo para o carrossel **e** para o story).
   juntá-los.
 - Escreva a condição do ponto de vista do **resultado daquele passo**, não do passo
   seguinte: "o texto foi aprovado", não "publicar no blog".
+- **Decisão numérica não é caso para frase.** Quando o caminho depende de um número ou de
+  uma correspondência exata (faixa de valor, campo preenchido), use a **regra exata** da
+  saída: quem confere é o sistema, e a borda fica certa. Ver
+  [[automacoes/ficha-da-execucao]].
 
 ## Para a IA
 Cada saída é `{"rotulo", "quando", "tipo", "destino"}`. O `quando` é **obrigatório** quando
@@ -66,6 +70,7 @@ preenchidas: automações criadas antes de 2026-08-31 têm todas vazias.
 
 ## Relacionado
 - [[automacoes/cadeia-e-grafo]]
+- [[automacoes/ficha-da-execucao]]
 - [[automacoes/erros-no-fluxo]]
 - [[automacoes/execucoes-e-inspecao]]
 - [[automacoes/pedir-aprovacao]]
