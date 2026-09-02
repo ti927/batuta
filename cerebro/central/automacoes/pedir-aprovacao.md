@@ -27,6 +27,25 @@ a documentação dele manda; não existe mais um interruptor no desenho da autom
 4. Escreva no **skill.md** dele quando usar — ex.: *"antes de publicar, chame Pedir
    aprovação e aguardar com a arte e a legenda prontas; só publique depois do sim"*.
 
+### Onde se diz PARA QUEM o pedido vai
+No instrumento do **canal**, não no de aprovação. O "Pedir aprovação e aguardar" tem uma
+configuração só — **Canal do pedido** —, e o destino vem do campo **Destinatário** do
+canal escolhido.
+
+É de propósito, e conserta um erro antigo: quando o destinatário era um campo separado, os
+dois divergiam — o pedido ia para um chat e o sistema esperava a resposta em outro, e a
+execução ficava órfã. Agora vale uma regra só: **quem recebe é quem aprova.**
+
+- **Dois instrumentos precisam existir no time** (o de aprovação e o canal), mas **só o de
+  aprovação vai no cinto** do agente. O canal é referenciado, não encaixado — assim o
+  token do bot continua morando num lugar só.
+- **Não sabe o chat_id?** Mande qualquer mensagem ao bot e abra **Time → Conversas**: o id
+  aparece no cabeçalho da conversa. A pessoa precisa ter dado **/start** no bot antes;
+  sem isso o Telegram recusa e o instrumento diz exatamente isso.
+- **Aprovador diferente de quem o canal já atende?** Crie um **segundo** instrumento de
+  Telegram (pode apontar para a mesma credencial, sem recolar o token) com outro
+  Destinatário, e aponte a aprovação para ele. Um canal = um destino.
+
 ## Exemplos
 - Redator escreve → **pede aprovação** com o texto completo → aprovado → publica.
 - Atendente monta um lançamento no sistema do cliente → **pede aprovação** com os valores
