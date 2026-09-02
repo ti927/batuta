@@ -23,9 +23,29 @@ está acontecendo agora") — você nunca fica no escuro achando que travou.
 2. Dispare uma automação manual pelo **"Rodar agora"**, ou veja as execuções que os gatilhos iniciaram.
 3. Abra uma execução para **inspecionar**: os passos, as entradas/saídas, o tempo e o estado.
 
+## Rodar de novo a partir daqui
+Quando um fluxo longo morre perto do fim, você não precisa pagar tudo outra vez. Abra o
+passo na inspeção e use **"Rodar de novo a partir daqui"**: nasce uma **execução nova**
+que começa naquele passo, com a **mesma entrada** que ele recebeu e a **ficha** da
+execução original. A execução antiga fica intacta — histórico não se reescreve —, e a
+nova diz de quem nasceu.
+
+- Só depois que a execução **parou de andar** (concluída, falhou ou cancelada). Se ela
+  ainda está rodando ou esperando uma aprovação, resolva isso primeiro: re-rodar por
+  cima duplicaria o trabalho.
+- Só a partir de um passo que **de fato rodou** — é dele que sai a entrada. Se o mesmo
+  agente rodou duas vezes no mesmo ponto (voltou depois de uma aprovação), vale a última.
+- **Repetir um passo repete o que ele faz.** Se o agente daquele passo publica, envia ou
+  lança em sistema externo, isso acontece de novo — a tela avisa quais instrumentos dele
+  são irreversíveis antes de você confirmar.
+- A re-rodada percorre o **desenho da execução original**, mesmo que a automação tenha
+  mudado desde então.
+
 ## Exemplos
 - Acompanhar uma publicação: gera imagem → escreve legenda → **espera aprovação** → publica.
 - Investigar por que um fluxo parou: a inspeção mostra o passo e o motivo (em português).
+- Um artigo que passou por 4 agentes e morreu no publicador: **rodar de novo a partir do
+  publicador**, em vez de refazer a pesquisa, a redação e a revisão.
 
 ## Limites e cuidados
 - Um fluxo pode ficar **parado esperando uma pessoa** (o agente pediu aprovação) — isso é normal, não é falha.
@@ -53,7 +73,10 @@ está acontecendo agora") — você nunca fica no escuro achando que travou.
 Ao diagnosticar com o consultor, baseie-se no **estado real** da execução (o que a inspeção mostra), não em
 suposição. E cuidado com uma armadilha nova: a execução guarda o **desenho que rodou**, então ler a
 automação de hoje para explicar uma execução de ontem pode explicar a coisa errada — se o fluxo foi
-editado no meio, a inspeção avisa, e é a foto que vale. Um fluxo "parado" costuma ser um agente aguardando uma aprovação, não um erro.
+editado no meio, a inspeção avisa, e é a foto que vale.
+Quando um fluxo morreu no meio, **não mande refazer tudo**: oriente o consultor a abrir a execução e usar
+**"Rodar de novo a partir daqui"** no passo em que parou — e lembre-o de que repetir um passo repete o
+que ele faz (se publica, publica de novo). Você **não tem ferramenta** para disparar isso; é ação de tela. Um fluxo "parado" costuma ser um agente aguardando uma aprovação, não um erro.
 O diagnóstico já entrega, quando dá para saber: **qual instrumento** falhou (pelo nome que o próprio erro
 cita), **qual agente** o carrega e uma **ação sugerida derivada do tipo de erro** — arquivo grande demais
 pede ajuste de configuração, não cadastro de credencial. Use essas referências em vez de deduzir pelo

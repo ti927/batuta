@@ -263,6 +263,16 @@ class Execucao(IdData, Base):
     # `grafo.desenho_que_roda(execucao.desenho, automacao.cadeia)`: nulo (execução
     # anterior a esta onda) cai na cadeia viva, como antes.
     desenho: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # "Rodar de novo a partir daqui" (Onda 4, fatia 2): o nó por onde ESTA execução
+    # começa. Nulo = pelo início do grafo (o caso de sempre). O motor já sabia começar
+    # do meio (`executar_cadeia(no_inicial=...)`, usado pela retomada de aprovação) —
+    # faltava alguém pedir.
+    no_inicial: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # De qual execução esta é uma re-rodada. SET NULL (não CASCADE): apagar a antiga não
+    # pode levar junto a nova, que é trabalho de verdade.
+    origem_execucao_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("execucoes.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class PassoExecucao(IdData, Base):

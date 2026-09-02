@@ -29,6 +29,7 @@ from esquemas import (
     ExecucaoNaLista,
     PassoExecucaoLer,
     ResponderHumano,
+    RodarDeNovo,
 )
 import agendador
 import auditoria
@@ -741,6 +742,85 @@ def cancelar_execucao(
     sessao.commit()
     sessao.refresh(execucao)
     return _montar_com_passos(sessao, execucao)
+
+
+@rotas.post("/execucoes/{execucao_id}/rodar-de-novo", response_model=ExecucaoComPassos)
+def rodar_de_novo(
+    execucao_id: uuid.UUID,
+    dados: RodarDeNovo,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Roda de novo A PARTIR de um passo (Onda 4, lacuna 25).
+
+    Cria uma execução NOVA — a antiga não é reescrita, porque histórico não se
+    reescreve. A nova herda da original o DESENHO (percorre o mesmo fluxo, mesmo que
+    a automação tenha mudado desde então), a FICHA (não recomeça sem o que já se
+    sabia) e a ENTRADA EXATA que aquele passo recebeu.
+
+    Só a partir de um passo que de fato RODOU: é dele que sai a entrada. Quando o
+    mesmo nó rodou mais de uma vez (um agente que voltou depois de uma aprovação),
+    vale a ÚLTIMA vez.
+    """
+    execucao = execucao_acessivel(sessao, usuario, execucao_id, minimo="operador")
+    if execucao.modo != "fluxo" or execucao.automacao_id is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Só dá para rodar de novo uma execução de automação. O rastro de uma "
+            "conversa não se re-roda: responda pelo canal.",
+        )
+    if execucao.estado not in ESTADOS_ENCERRADOS:
+        # Re-rodar por cima de uma execução que ainda anda duplicaria o trabalho — e,
+        # num fluxo que publica, publicaria duas vezes.
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Esta execução ainda não terminou. Espere ela acabar, responda a "
+            "aprovação pendente ou cancele — e então rode de novo.",
+        )
+    auto = sessao.get(Automacao, execucao.automacao_id)
+    if auto is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "A automação desta execução não existe mais."
+        )
+
+    desenho = grafo.desenho_que_roda(execucao.desenho, auto.cadeia)
+    no = grafo.indexar(desenho).no(dados.no_id)
+    if no is None or no.get("tipo") in grafo.TIPOS_ESTRUTURAIS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Esse passo não existe no fluxo que esta execução rodou, ou não é um "
+            "passo que o motor executa.",
+        )
+    # A entrada vem do passo — a ÚLTIMA vez que este nó rodou nesta execução.
+    passo = sessao.scalars(
+        select(PassoExecucao)
+        .where(PassoExecucao.execucao_id == execucao.id)
+        .where(PassoExecucao.no_id == dados.no_id)
+        .order_by(PassoExecucao.ordem.desc())
+    ).first()
+    if passo is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Este passo não chegou a rodar nesta execução, então não há a entrada "
+            "dele para repetir. Rode a automação inteira.",
+        )
+    entrada = (passo.entrada or {}).get("texto") or ""
+
+    nova = criar_execucao(
+        sessao, auto, entrada, origem="reexecucao",
+        desenho=desenho, dados=execucao.dados,
+        no_inicial=dados.no_id, origem_execucao_id=execucao.id,
+    )
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="execucao.rodar_de_novo",
+        recurso_tipo="execucao", recurso_id=nova.id,
+        organizacao_id=auditoria.org_do_time(sessao, auto.time_id),
+        detalhe={"origem_execucao_id": str(execucao.id), "no_id": dados.no_id},
+    )
+    sessao.commit()
+    fila.enfileirar()
+    sessao.refresh(nova)
+    return _montar_com_passos(sessao, nova)
 
 
 @rotas.delete("/execucoes/{execucao_id}", status_code=status.HTTP_204_NO_CONTENT)

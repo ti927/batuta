@@ -377,6 +377,13 @@ class ResponderHumano(BaseModel):
     resposta: str = Field(min_length=1)
 
 
+class RodarDeNovo(BaseModel):
+    """"Rodar de novo a partir daqui" (Onda 4): de qual NÓ recomeçar. A entrada, a
+    ficha e o desenho vêm da execução de origem — quem pede escolhe só o ponto."""
+
+    no_id: str = Field(min_length=1, max_length=100)
+
+
 # ───────────────────────── Execuções ─────────────────────────────
 
 
@@ -411,6 +418,11 @@ class ExecucaoLer(BaseModel):
     # Feedback ao vivo (só relevante enquanto `em_andamento`): o que o agente faz agora.
     atividade: str | None = None
     atividade_em: datetime | None = None
+    # "Rodar de novo a partir daqui" (Onda 4): de qual execução esta nasceu e por qual
+    # nó ela começou. Nulos no disparo normal. A tela usa para dizer, sem mistério,
+    # que aquela execução não começou do princípio.
+    origem_execucao_id: uuid.UUID | None = None
+    no_inicial: str | None = None
 
 
 class ExecucaoNaLista(ExecucaoLer):

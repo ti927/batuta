@@ -165,7 +165,13 @@ async def diagnosticar_execucao(execucao_id: str) -> str:
     """Investiga UMA execução a fundo e devolve o diagnóstico: estado, linha do tempo dos
     passos e AVISOS (cada um com título, detalhe e ação sugerida). Use para explicar ao
     consultor por que uma execução falhou ou ficou parada e propor o próximo passo. Nunca
-    expõe segredos (só diz se um canal 'tem token', nunca o valor)."""
+    expõe segredos (só diz se um canal 'tem token', nunca o valor).
+
+    Quando um fluxo longo morreu no meio, o próximo passo raramente é "rode tudo de
+    novo": na tela da execução existe **"Rodar de novo a partir daqui"**, que cria uma
+    execução nova começando no passo escolhido, com a mesma entrada e a mesma ficha.
+    Você NÃO tem ferramenta para isso — oriente o consultor, e avise que repetir um
+    passo repete o que ele faz (se publica, publica de novo)."""
     return await anyio.to_thread.run_sync(mcp_ferramentas.diagnosticar_execucao, _sub(), execucao_id)
 
 

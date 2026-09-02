@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -12,6 +13,7 @@ import {
   Loader2,
   MessageSquare,
   Pencil,
+  RotateCcw,
   ShieldCheck,
   SquareCheckBig,
   Tag,
@@ -475,12 +477,84 @@ function LinhaPasso({
   );
 }
 
+/** "Rodar de novo a partir daqui": cria uma execução NOVA começando neste passo.
+ *  Fica atrás de uma confirmação que diz o que vai acontecer — e, quando o agente
+ *  do passo carrega instrumento que não dá para desfazer, diz isso com todas as
+ *  letras: re-rodar dali publica/envia de novo. */
+function RodarDeNovoNoPasso({
+  passo,
+  cinto,
+  onRodarDeNovo,
+  rodando,
+}: {
+  passo: PassoExecucao;
+  cinto: Instrumento[];
+  onRodarDeNovo: (noId: string) => void;
+  rodando: boolean;
+}) {
+  const [confirmando, setConfirmando] = useState(false);
+  const irreversiveis = cinto.filter((i) => i.acao_irreversivel);
+  if (!passo.no_id) return null;
+  if (!confirmando) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        className="self-start"
+        disabled={rodando}
+        onClick={() => setConfirmando(true)}
+      >
+        <RotateCcw className="size-3.5" />
+        Rodar de novo a partir daqui
+      </Button>
+    );
+  }
+  return (
+    <div className="rounded-lg border border-border bg-background p-3">
+      <p className="text-sm text-foreground">
+        Isto cria uma <strong>execução nova</strong>, começando neste passo, com a mesma
+        entrada que ele recebeu e a ficha desta execução. A execução atual fica como
+        está — nada é reescrito.
+      </p>
+      {irreversiveis.length > 0 && (
+        <Aviso variant="atencao" className="mt-2">
+          {irreversiveis.length === 1 ? "O instrumento " : "Os instrumentos "}
+          <strong>{irreversiveis.map((i) => i.nome).join(", ")}</strong>{" "}
+          {irreversiveis.length === 1 ? "faz" : "fazem"} algo que não dá para desfazer
+          (publicar, enviar, lançar). Rodar de novo daqui pode repetir isso.
+        </Aviso>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          disabled={rodando}
+          onClick={() => onRodarDeNovo(passo.no_id as string)}
+        >
+          {rodando ? "Criando…" : "Sim, rodar de novo"}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={rodando}
+          onClick={() => setConfirmando(false)}
+        >
+          Não
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function DetalheItem({
   item,
   execucao,
+  onRodarDeNovo,
+  rodandoDeNovo,
 }: {
   item: ItemPasso;
   execucao: ExecucaoComPassos;
+  onRodarDeNovo?: (noId: string) => void;
+  rodandoDeNovo?: boolean;
 }) {
   if (item.tipo === "final") {
     if (item.tom === "falha") {
@@ -603,6 +677,14 @@ function DetalheItem({
         </div>
       )}
       <Bloco rotulo="Produziu">{passo.saida?.texto || "—"}</Bloco>
+      {onRodarDeNovo && (
+        <RodarDeNovoNoPasso
+          passo={passo}
+          cinto={item.cinto}
+          onRodarDeNovo={onRodarDeNovo}
+          rodando={!!rodandoDeNovo}
+        />
+      )}
     </div>
   );
 }
@@ -613,12 +695,16 @@ function Passos({
   cintos,
   onEditarAgente,
   onEditarInstrumento,
+  onRodarDeNovo,
+  rodandoDeNovo,
 }: {
   execucao: ExecucaoComPassos;
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
   onEditarAgente?: (agenteId: string) => void;
   onEditarInstrumento?: (instrumentoId: string) => void;
+  onRodarDeNovo?: (noId: string) => void;
+  rodandoDeNovo?: boolean;
 }) {
   const itens = construirItens(execucao, agentes, cintos);
   // Começa no último item (o desfecho — entrega ou falha): é o que o usuário quer
@@ -653,7 +739,14 @@ function Passos({
         </ul>
       </div>
       <div className="overflow-y-auto rounded-lg border border-border bg-card p-4">
-        {selecionado && <DetalheItem item={selecionado} execucao={execucao} />}
+        {selecionado && (
+          <DetalheItem
+            item={selecionado}
+            execucao={execucao}
+            onRodarDeNovo={onRodarDeNovo}
+            rodandoDeNovo={rodandoDeNovo}
+          />
+        )}
       </div>
     </div>
   );
@@ -799,6 +892,8 @@ export function PainelExecucao({
   cintos,
   onEditarAgente,
   onEditarInstrumento,
+  onRodarDeNovo,
+  rodandoDeNovo,
 }: {
   execucao: ExecucaoComPassos;
   automacao: Automacao | null;
@@ -813,6 +908,8 @@ export function PainelExecucao({
   cintos?: Record<string, Instrumento[]>;
   onEditarAgente?: (agenteId: string) => void;
   onEditarInstrumento?: (instrumentoId: string) => void;
+  onRodarDeNovo?: (noId: string) => void;
+  rodandoDeNovo?: boolean;
 }) {
   // Só dá para cancelar enquanto a execução não encerrou de vez (a fila/portão
   // ainda a tem viva). O backend recusa (409) se já encerrou.
@@ -853,6 +950,18 @@ export function PainelExecucao({
         )}
       </p>
 
+      {/* Esta execução não começou do princípio: nasceu de outra, a partir de um passo.
+          Dizer isso evita a leitura errada de "o fluxo pulou os primeiros passos". */}
+      {execucao.origem_execucao_id && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Re-rodada da execução{" "}
+          <span className="font-mono">
+            #{execucao.origem_execucao_id.slice(0, 8)}
+          </span>
+          , começando pelo passo em que ela parou.
+        </p>
+      )}
+
       {/* A execução roda o desenho que fotografou ao ser disparada. Se a automação
           mudou depois, quem lê o passo a passo precisa saber — senão compara o rastro
           com um fluxo que não é o que rodou aqui. */}
@@ -878,6 +987,8 @@ export function PainelExecucao({
         />
       )}
 
+      {/* Re-rodar só aparece depois que a execução parou de andar — é a mesma regra
+          que o backend impõe (409 enquanto ela ainda anda). */}
       <div className="mt-4">
         <Passos
           execucao={execucao}
@@ -885,6 +996,10 @@ export function PainelExecucao({
           cintos={cintos ?? {}}
           onEditarAgente={onEditarAgente}
           onEditarInstrumento={onEditarInstrumento}
+          onRodarDeNovo={
+            ESTADOS_FINAIS.includes(execucao.estado) ? onRodarDeNovo : undefined
+          }
+          rodandoDeNovo={rodandoDeNovo}
         />
       </div>
 
@@ -970,6 +1085,8 @@ export function InspecaoExecucao({
   const [resposta, setResposta] = useState("");
   const [respondendo, setRespondendo] = useState(false);
   const [cancelando, setCancelando] = useState(false);
+  const [rodandoDeNovo, setRodandoDeNovo] = useState(false);
+  const router = useRouter();
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Último estado já comunicado ao pai — para avisar (refresh de lista) UMA vez por
   // transição terminal (pausa/encerramento), sem repetir a cada ciclo de poll.
@@ -1058,6 +1175,33 @@ export function InspecaoExecucao({
     }
   }
 
+  /** "Rodar de novo a partir daqui": o backend cria uma execução NOVA e devolve. A
+   *  antiga fica intacta; levamos o usuário para a nova, senão ele ficaria olhando um
+   *  rastro parado sem entender onde o trabalho foi parar. */
+  async function rodarDeNovo(noId: string) {
+    if (!execucao) return;
+    setRodandoDeNovo(true);
+    setErro(null);
+    try {
+      const nova = await api.post<ExecucaoComPassos>(
+        `/execucoes/${execucao.id}/rodar-de-novo`,
+        { no_id: noId },
+      );
+      toast.success("Nova execução criada — começando por este passo");
+      if (time) {
+        router.push(`/times/${time.id}/execucoes/${nova.id}`);
+      } else {
+        // Sem a rota do time (uso embutido), seguimos a nova aqui mesmo.
+        setExecucao(nova);
+        acompanhar(nova.id);
+      }
+    } catch (e) {
+      setErro(mensagemDeErro(e, "Não deu para rodar de novo"));
+    } finally {
+      setRodandoDeNovo(false);
+    }
+  }
+
   async function cancelar() {
     if (!execucao) return;
     setCancelando(true);
@@ -1106,6 +1250,8 @@ export function InspecaoExecucao({
         onEditarInstrumento={
           podeEditarInstrumento ? (id) => setEditInstrumentoId(id) : undefined
         }
+        onRodarDeNovo={podeCancelar ? rodarDeNovo : undefined}
+        rodandoDeNovo={rodandoDeNovo}
       />
 
       {/* Editor do agente aberto pelo lápis de um passo — corrigir sem sair daqui. */}

@@ -708,6 +708,10 @@ export type Execucao = {
   // Feedback ao vivo (só enquanto em_andamento): o que o agente faz agora + quando.
   atividade?: string | null;
   atividade_em?: string | null;
+  // "Rodar de novo a partir daqui" (Onda 4): de qual execução esta nasceu e por qual nó
+  // ela começou. Nulos no disparo normal.
+  origem_execucao_id?: string | null;
+  no_inicial?: string | null;
 };
 
 export type ExecucaoComPassos = Execucao & {

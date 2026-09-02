@@ -198,7 +198,15 @@ def _esta_cancelada(sessao: Session, execucao_id: uuid.UUID) -> bool:
 
 
 def criar_execucao(
-    sessao: Session, automacao: Automacao, entrada: str, *, origem: str = "sistema"
+    sessao: Session,
+    automacao: Automacao,
+    entrada: str,
+    *,
+    origem: str = "sistema",
+    desenho: dict | None = None,
+    dados: dict | None = None,
+    no_inicial: str | None = None,
+    origem_execucao_id: uuid.UUID | None = None,
 ) -> Execucao:
     """Enfileira uma execução: cria o registro no estado `aguardando` e devolve
     já com id. Quem roda é o pool de trabalhadores (`fila.py`); por isso o
@@ -213,12 +221,20 @@ def criar_execucao(
     É o funil único dos quatro gatilhos (manual, agendamento, webhook, comentário do
     Instagram), então uma linha só congela o fluxo para todos. A foto é do momento do
     DISPARO, não do momento em que o trabalhador pega a execução: entre um e outro pode
-    haver minutos de fila, e quem disparou espera o fluxo que existia quando disparou."""
+    haver minutos de fila, e quem disparou espera o fluxo que existia quando disparou.
+
+    "Rodar de novo a partir daqui" (fatia 2) passa pelo MESMO funil, só que trazendo o
+    que herda da execução de origem: o `desenho` (para a re-rodada percorrer o mesmo
+    fluxo), os `dados` (a ficha, para não recomeçar sem o que já se sabia), o
+    `no_inicial` (por onde começar) e de quem ela nasceu."""
     execucao = Execucao(
         automacao_id=automacao.id,
         estado="aguardando",
         entrada={"texto": entrada},
-        desenho=grafo.normalizar(automacao.cadeia or {}) or None,
+        desenho=desenho or grafo.normalizar(automacao.cadeia or {}) or None,
+        dados=dict(dados) if dados else None,
+        no_inicial=no_inicial or None,
+        origem_execucao_id=origem_execucao_id,
     )
     sessao.add(execucao)
     sessao.commit()
@@ -340,6 +356,9 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
                     # entrada deixar de morrer no primeiro nó (Onda 2, lacuna 15).
                     # Execução re-rodada do zero reaproveita a ficha que já tinha.
                     ficha=dict(execucao.dados or {}) or ficha_mod.nova(entrada),
+                    # "Rodar de novo a partir daqui" (fatia 2): começa do nó pedido, em
+                    # vez do início do grafo. Nulo = o caso de sempre.
+                    no_inicial=execucao.no_inicial or None,
                     registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
                     cancelado=lambda: _esta_cancelada(sessao, execucao.id),
                 )

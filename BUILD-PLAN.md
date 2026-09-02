@@ -2204,8 +2204,21 @@ A escolha "foto ou cadeia viva" virou **fonte única** em `grafo.desenho_que_rod
 
 **O que as IAs aprenderam:** `automacoes/execucoes-e-inspecao` (cada execução roda o desenho do disparo; editar não mexe no que já está rodando; a armadilha de diagnosticar execução antiga contra o fluxo de hoje) e as docstrings de `montar_cadeia` na criadora **e** no MCP ("execuções já disparadas não mudam").
 
-### Fatias 2 a 5 — a fazer
-2. **Rodar de novo a partir daqui** — execução nova a partir de um passo, com o desenho, a ficha e a entrada daquele passo.
+### Fatia 2 — Rodar de novo a partir daqui (lacuna 25)  ✅ (migração `rex00reexecucao01`)
+
+**O buraco.** Quando um fluxo longo morria perto do fim, a única saída era rodar a automação **inteira** de novo — jogando fora os passos bons e pagando tudo outra vez. Foi o que aconteceu em 02/09: o artigo do EST tinha quatro agentes de trabalho prontos e morreu no último passo; não havia como retomá-lo.
+
+**O que entrou.** `POST /execucoes/{id}/rodar-de-novo` com o nó escolhido. Cria uma execução **NOVA** — a antiga não é reescrita, porque histórico não se reescreve — que herda da original o **desenho** (percorre o mesmo fluxo, mesmo que a automação tenha mudado desde então), a **ficha** (não recomeça sem o que já se sabia) e a **entrada exata** que aquele passo recebeu. Colunas novas: `execucoes.no_inicial` e `execucoes.origem_execucao_id` (FK com **SET NULL**: apagar a antiga não pode levar junto a nova, que é trabalho de verdade). O motor já sabia começar do meio (`executar_cadeia(no_inicial=…)`, usado pela retomada de aprovação) — faltava alguém pedir. Tudo passa pelo **mesmo funil** `criar_execucao`, que ganhou os parâmetros herdados.
+
+**As recusas, honestas e com o que fazer:** enquanto a execução ainda anda (inclusive parada numa aprovação) o pedido é recusado — re-rodar por cima duplicaria o trabalho e, num fluxo que publica, publicaria duas vezes; nó que não existe no desenho **daquela** execução; nó estrutural, que o motor não executa; e nó que não chegou a rodar (é do passo que sai a entrada). Quando o mesmo nó rodou mais de uma vez, vale a **última**. Ação de **operador** para cima — gasta dinheiro e pode publicar.
+
+**Na tela:** no detalhe do passo, "Rodar de novo a partir daqui" atrás de uma confirmação que diz o que vai acontecer e **lista os instrumentos irreversíveis** do agente daquele passo ("publicar, enviar, lançar — rodar de novo daqui pode repetir isso"). O botão só aparece com a execução parada, a mesma regra do backend. Criada a nova, a tela leva o usuário até ela; e uma execução que nasceu assim diz de quem nasceu.
+
+**Verificação:** **1020 testes verdes** (7 novos: herda desenho/ficha/entrada e não toca a original; a re-rodada percorre o desenho da original mesmo com a automação alterada; o motor recebe o `no_inicial`; recusa enquanto anda, em nó inexistente, estrutural e não-rodado; observador barrado; rastro de conversa recusado). Migração provada nos dois sentidos. `tsc`/`eslint`/`build` limpos.
+
+**O que as IAs aprenderam:** capítulo `automacoes/execucoes-e-inspecao` com a seção "Rodar de novo a partir daqui" (e a orientação, no "Para a IA", de **não mandar refazer tudo**); prompt da criadora no bloco de diagnóstico; docstring do `diagnosticar_execucao` no MCP. Nas três, a mesma ressalva: **é ação de tela, a IA não dispara** — e repetir um passo repete o que ele faz.
+
+### Fatias 3 a 5 — a fazer
 3. **Automação que falha sozinha se desliga e avisa** — 3 falhas seguidas.
 4. **Teto de custo por execução** — opcional, no comportamento do fluxo.
 5. **Testar este nó** — com aviso explícito de que os instrumentos são reais.
