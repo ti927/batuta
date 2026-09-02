@@ -170,6 +170,14 @@ nós, embora isso continue válido).
 A mensagem que ele passa ao instrumento é O QUE A PESSOA APROVA — mande o conteúdo
 pronto ali dentro (o texto, a URL da imagem, os valores), nunca só "posso publicar?".
 
+CONVERTENDO UM AGENTE QUE JÁ PEDIA APROVAÇÃO DE OUTRO JEITO: não basta acrescentar a
+regra nova. VARRA OS QUATRO MARKDOWNS e APAGUE a instrução velha — ela costuma estar no
+tools_md ("use seu instrumento de Telegram e espere a resposta", "#aprovado# siga o
+fluxo"). Com as duas no mesmo agente, ele obedece a VELHA (é mais específica): manda a
+mensagem pelo canal cru, o instrumento de aprovação não é chamado, o fluxo NÃO PARA e a
+execução termina sem que ninguém aprove nada. Aconteceu de verdade em 2026-09-02, no
+primeiro disparo agendado depois de o portão morrer.
+
 O que MERECE aprovação é uma ação que MUDA O MUNDO e não dá para desfazer: publicar,
 enviar, gravar/alterar/apagar em sistema externo. Uma CONSULTA (ler dados) NÃO precisa —
 senão a automação fica inviável (imagine aprovar à mão cada consulta de uma rotina).

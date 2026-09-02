@@ -2162,6 +2162,28 @@ Duas garantias novas do contrato do encaixe: `pausa_para_humano` (a marca que fa
 
 ---
 
+## FASE — O primeiro disparo sem portão: a aprovação que não parou, e por quê  ✅ (2026-09-02, commit `3eee360` + correção de dados em produção, sem migração)
+
+**O sintoma.** Em 02/09 às 08:00 a automação do 🧭 EST Post Blog rodou sozinha (execução `11c9c82e`), o artigo revisado chegou no Telegram do maestro **e a execução concluiu em 3 minutos**. Nada foi publicado (o Publicador nem rodou) e nada ficou esperando: se ele respondesse "#aprovado#", não havia mais execução para religar. Era o **primeiro disparo agendado depois de o portão deixar de existir** (Parte III).
+
+**Investigação (tudo verificado no banco de produção, nada de achismo).**
+- O rastro do passo 4 mostrou `instrumentos_acionados = ["Comunicacao_Telegram_92248791"]` — o agente chamou o **canal cru**, não o instrumento `Aprovação do artigo` (`pedir_aprovacao`). Sem `pausa_para_humano` o motor não tem o que pausar: o passo saiu como `agente` (e não `espera_humano`), o nó terminou sem escolher caminho e a Onda 1 registrou o aviso correto — *"terminou sem seguir por nenhum caminho"*.
+- **Por que ontem funcionava:** o carimbo `commit` do `evento_log` provou que a execução equivalente do dia anterior (`2e89cb77`, PES) ainda rodava em **`28d40b8`** — antes da Parte III, com o portão vivo, que pausou e publicou depois do "#aprovado#". `316daa6` só chegou à produção às 12h UTC de 01/09.
+- **Causa raiz:** o religamento da Parte III acrescentou a regra nova no `skill_md` do Revisor de SEO **e deixou intacta a instrução velha no `tools_md`** — *"Para solicitar a aprovação/reprovação vc utiliza seu instrumento 'comunicação Telegram'… #aprovado# vc segue o fluxo"*. Dois textos brigando no mesmo agente; ele obedeceu o mais específico. **Não era adesão do modelo nem defeito do motor** (`CLAUDE.md §4-A`).
+- **Alcance:** os **5** Revisores de SEO tinham o `tools_md` byte-idêntico (sha `618d94b4`), e cada time dispara num dia útil às 08:00 — repetiria todo dia.
+
+**A correção (dados de produção, com aval do maestro).** Nos 5 Revisores, o parágrafo do mecanismo passou a apontar o instrumento **"Aprovação do artigo" — nunca o de Telegram**, com a frase de que *o fluxo PARA sozinho*; o fluxo de reprovação escrito pelo maestro (pedir orientação → avisar o caçador de pauta) foi preservado palavra por palavra. Script idempotente (confere o hash do texto antigo antes de gravar). Conferido depois: os 5 leem o texto novo e os 5 têm `pedir_aprovacao` no cinto.
+
+**O que as IAs aprenderam (a parte que impede a recaída).** A lição não é sobre este time, é sobre **converter agente**: prompt da IA criadora (bloco "CONVERTENDO UM AGENTE QUE JÁ PEDIA APROVAÇÃO DE OUTRO JEITO"), docstrings de `editar_agente` na criadora **e** no MCP, e quatro pontos na Central — `times-agentes/agente` (os 4 markdowns são lidos juntos; instrução contraditória vence a regra nova), `automacoes/pedir-aprovacao` (seção "Vindo de um time que pedia aprovação na mão" + o limite honesto: *se o agente não chamar, o fluxo NÃO para*) e `operacao/sinais-e-diagnostico` (família nova: *"o agente usou a ferramenta parecida e o fluxo não parou"*, com o passo 2b da ordem de investigação).
+
+**De brinde, um defeito antigo da busca da Central.** Escrever esses capítulos derrubou um teste — e a causa não era o texto: `conhecimento.buscar` contava **pedaço de palavra**, então o termo "no" somava ponto dentro de "diagnostico", "conector", "nos"… e o capítulo mais **longo** ganhava de quem realmente falava do assunto. Ou seja: acrescentar um parágrafo em qualquer capítulo podia mudar o que a IA criadora e o MCP recebem ao consultar. Agora a contagem é por **palavra inteira** e as palavras de ligação não pontuam, com teste de regressão próprio.
+
+**Verificação:** **1005 testes verdes**; `tsc` limpo; produção respondendo `3eee360` com `saudavel: true` e `elos_caidos: []`.
+
+**Fica pendente:** o **Gerador Carrossel** do 📈 COF Post Instagram (o `skill_md` manda pedir aprovação pelo Telegram e ele **não tem** `pedir_aprovacao` no cinto) e a **duplicata** de instrumento de aprovação no cinto do Revisor do 📈 COF Post Blog. O artigo do EST de 02/09 só volta rodando a automação de novo.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.

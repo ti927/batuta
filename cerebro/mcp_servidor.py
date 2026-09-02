@@ -298,7 +298,13 @@ async def editar_agente(
     modelo_ia: str | None = None,
 ) -> str:
     """Edita um agente (só os campos informados). Para ver o que já está escrito antes de
-    reescrever, use `ver_agente`."""
+    reescrever, use `ver_agente`.
+
+    Os quatro markdowns são lidos JUNTOS pelo agente. Ao trocar o JEITO de fazer algo
+    (outro instrumento, outro caminho), leia todos antes e APAGUE a instrução antiga no
+    mesmo movimento — regra nova num campo com a velha em outro faz o agente seguir a
+    velha, em silêncio. Foi assim que um time voltou a pedir aprovação pelo canal cru em
+    vez do instrumento `pedir_aprovacao`, e a execução terminou sem ninguém aprovar."""
     return await anyio.to_thread.run_sync(
         escrita.editar_agente, _sub(), agente_id, nome, papel,
         agent_md, skill_md, tools_md, soul_md, modelo_ia,

@@ -3,7 +3,7 @@ titulo: "Sinais e diagnóstico (quando algo trava ou degrada)"
 area: "operacao"
 slug: "sinais-e-diagnostico"
 tags: ["diagnostico", "log", "evento", "travou", "preso", "degradado", "silencio", "observabilidade", "turno", "status", "elo", "rede", "congelou", "reconectar"]
-revisado_em: "2026-08-27"
+revisado_em: "2026-09-02"
 fontes: ["cerebro/observabilidade/escritor.py", "cerebro/mensageria/sweeper.py", "cerebro/orquestracao/memoria_conversa.py", "cerebro/diagnostico_execucao.py", "cerebro/saude_elos.py", "CLAUDE.md §12-A"]
 ---
 
@@ -62,6 +62,23 @@ numa parte da requisição que o serviço ignora (ver [[instrumentos/construir-c
 *registro criado com um campo vazio* = confira o destino desse campo antes de qualquer outra hipótese.
 **Nada disso aparece no rastro como erro**, e é por isso que a checagem tem de ser deliberada.
 
+## Quando o agente usa a ferramenta parecida, e o fluxo não para
+Outra família sem erro nenhum: a execução **conclui normalmente** e mesmo assim a etapa não
+aconteceu. O caso clássico é a aprovação — o agente manda o material pelo **canal de
+mensageria comum** em vez de chamar **Pedir aprovação e aguardar**. Como só o instrumento de
+aprovação pausa, o fluxo segue e termina; a pessoa recebe a mensagem, responde, e **não
+acontece nada**, porque não há mais execução esperando.
+
+Como reconhecer, no rastro do passo: entre os instrumentos acionados aparece o **canal**, e
+**não** o de aprovação; o passo fica marcado como passo comum (não como espera por pessoa);
+e costuma vir junto o aviso *"terminou sem seguir por nenhum caminho"* — o nó tinha saídas
+de aprovado/reprovado e nenhuma condição foi atendida, porque ninguém aprovou.
+
+A causa quase nunca é o modelo: são **dois textos brigando** dentro do mesmo agente — a
+regra nova num markdown e a instrução antiga em outro (ver [[times-agentes/agente]]). O
+conserto é apagar a velha, não reescrever a nova. Aconteceu em 2026-09-02, no primeiro
+disparo agendado depois de o portão deixar de existir.
+
 ## A página de status e o vigia dos elos
 Desde 2026-08-27 o Batuta **sonda ativamente cada ligação da própria corrente** — banco de dados,
 memória de conversa, provedores de IA (com a chave, sem gastar token), cada canal Telegram (inclusive
@@ -97,6 +114,9 @@ Diante de *"não funcionou"*, siga esta ordem, sem adivinhar:
    acionados **não foi chamada** pelo modelo — isso é adesão do modelo ao prompt, não defeito do motor.
 2. **Procure falha devolvida como resposta** nos erros de instrumento do passo: é o caso em que o agente diz
    ter feito e não fez.
+2b. **Se a etapa não aconteceu mas nada falhou**, veja se ele chamou um instrumento **parecido** no lugar
+   do certo (o canal em vez do de aprovação). Aí o defeito está nos markdowns do agente — procure a
+   instrução ANTIGA que sobrou em outro campo e apague-a; acrescentar a regra nova de novo não resolve.
 3. **Verifique degradação**: turno carimbado como legado, conversa presa, evento de indisponibilidade.
 4. **Se o serviço aceitou mas o dado não chegou**, leia a configuração do instrumento (destino dos
    campos) — não conclua que o agente errou.

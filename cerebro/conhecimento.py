@@ -13,7 +13,9 @@ Arquivos-meta (`_GABARITO.md`, `INDICE.md`) não entram no índice navegável.
 from __future__ import annotations
 
 import json
+import re
 import unicodedata
+from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -21,6 +23,14 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parent / "central"
 # Slugs (nome do arquivo, minúsculo) que são meta e não viram capítulo navegável.
 _META = {"_gabarito", "indice"}
+# Palavras de ligação: não dizem nada sobre o assunto e, contadas, só premiavam o
+# capítulo mais comprido.
+_LIGACAO = frozenset(
+    """a as ao aos com como da das de do dos e em entre ha isso isto la lo na nas no nos
+    o os ou para pela pelas pelo pelos por que se sem ser seu seus sua suas te um uma
+    uns umas vc voce and for the with""".split()
+)
+_PALAVRA = re.compile(r"[a-z0-9_]+")
 
 
 @dataclass(frozen=True)
@@ -48,6 +58,11 @@ def _norm(s: str) -> str:
     """Minúsculas + sem acentos, para busca tolerante."""
     nfkd = unicodedata.normalize("NFKD", s or "")
     return "".join(c for c in nfkd if not unicodedata.combining(c)).lower()
+
+
+def _palavras(s: str) -> list[str]:
+    """As palavras de um texto já normalizado (para casar palavra inteira, não pedaço)."""
+    return _PALAVRA.findall(s or "")
 
 
 def _valor(bruto: str):
@@ -142,22 +157,30 @@ def obter(slug: str) -> Capitulo | None:
 def buscar(consulta: str, limite: int = 5) -> list[Capitulo]:
     """Capítulos mais relevantes à `consulta`, por pontuação simples (sem embeddings —
     acervo pequeno e curado): título e tags pesam mais que o corpo. Devolve [] quando
-    nada casa (nunca levanta erro)."""
-    termos = [t for t in _norm(consulta or "").split() if len(t) > 1]
+    nada casa (nunca levanta erro).
+
+    Conta PALAVRA INTEIRA, não pedaço de palavra, e descarta palavras de ligação. Sem
+    isso, um termo como "no" era contado dentro de "diagnostico", "conector", "nos" — e
+    o capítulo mais LONGO ganhava de quem realmente falava do assunto (era o que fazia o
+    resultado mudar toda vez que alguém acrescentava um parágrafo em qualquer capítulo).
+    """
+    termos = [
+        t for t in _palavras(_norm(consulta or "")) if len(t) > 1 and t not in _LIGACAO
+    ]
     if not termos:
         return []
     pontuados: list[tuple[int, Capitulo]] = []
     for cap in _carregar().values():
-        titulo = _norm(cap.titulo)
-        tags = _norm(" ".join(cap.tags))
-        corpo = _norm(cap.corpo)
+        titulo = set(_palavras(_norm(cap.titulo)))
+        tags = set(_palavras(_norm(" ".join(cap.tags))))
+        corpo = Counter(_palavras(_norm(cap.corpo)))
         pontos = 0
         for t in termos:
             if t in titulo:
                 pontos += 5
             if t in tags:
                 pontos += 4
-            pontos += corpo.count(t)
+            pontos += corpo[t]
         if pontos > 0:
             pontuados.append((pontos, cap))
     pontuados.sort(key=lambda p: (-p[0], p[1].slug))

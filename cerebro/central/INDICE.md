@@ -37,7 +37,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 |---|---|---|---|---|
 | O Time | `times-agentes/time` | Unidade de trabalho; o que vive dentro | ✅ | ✍️ |
 | O Líder | `times-agentes/lider` | O agente especial (ponte com humanos) | ✅ | ✍️ |
-| O Agente e os 4 markdowns | `times-agentes/agente` | agent.md / skill.md / tools.md / soul.md; modelo de IA | ✅ | ✍️ |
+| O Agente e os 4 markdowns | `times-agentes/agente` | agent.md / skill.md / tools.md / soul.md; modelo de IA; os 4 são lidos juntos — instrução contraditória vence a regra nova | ✅ | ✍️ |
 | Memória do agente | `times-agentes/memoria-do-agente` | Fichas por assunto; recall sempre/sob demanda | ✅ | ✍️ |
 | Criar com a IA | `times-agentes/criar-com-a-ia` | A IA criadora (conversa que monta o time) | ✅ | ✍️ |
 | Editar pelo dashboard | `times-agentes/editar-agente` | Drawer/popup, cinto, salvar sem perder | ✅ | ✍️ |
@@ -51,7 +51,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Quando um passo dá erro | `automacoes/erros-no-fluxo` | Saída de erro, saída "se nenhuma", aviso da falha | ✅ | ✍️ |
 | A ficha da execução | `automacoes/ficha-da-execucao` | Os dados que atravessam o fluxo; `anotar`; regra exata na seta; "Para cada item" | ✅ | ✍️ |
 | Gatilhos | `automacoes/gatilhos` | Manual, agendamento, webhook, comentário do Instagram; a "entrada" ao 1º agente | ✅ | ✍️ |
-| Pedir aprovação e aguardar | `automacoes/pedir-aprovacao` | O instrumento que para o fluxo até uma pessoa responder; por tela e por canal | ✅ | ✍️ |
+| Pedir aprovação e aguardar | `automacoes/pedir-aprovacao` | O instrumento que para o fluxo até uma pessoa responder; por tela e por canal; quem recebe é quem aprova; converter time que pedia aprovação na mão | ✅ | ✍️ |
 | Execuções e inspeção | `automacoes/execucoes-e-inspecao` | Ver o fluxo rodar; feedback ao vivo; diagnóstico | ✅ | ✍️ |
 
 ## 4. Instrumentos
@@ -115,7 +115,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 |---|---|---|---|---|
 | Uso e custos | `operacao/uso-e-custos` | Medição informativa por categoria/chave | ✅ | ✍️ |
 | Falhas e retentativa | `operacao/falhas-e-retentativa` | Retentável × não-retentável; backoff; falha devolvida como resposta; erro de rede | ✅ | ✍️ |
-| Sinais e diagnóstico | `operacao/sinais-e-diagnostico` | Nada falha em silêncio: eventos, trabalho preso, modo degradado, **página de status dos elos**, ordem de investigação | ✅ | ✍️ |
+| Sinais e diagnóstico | `operacao/sinais-e-diagnostico` | Nada falha em silêncio: eventos, trabalho preso, modo degradado, **página de status dos elos**, a ferramenta parecida que não para o fluxo, ordem de investigação | ✅ | ✍️ |
 | Auditoria e LGPD | `operacao/auditoria-e-lgpd` | Registro de ações; dados sensíveis | ✅ | ✍️ |
 
 ## 8. Administração

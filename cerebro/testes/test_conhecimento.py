@@ -41,6 +41,18 @@ def test_busca_encontra_e_vazio_nao_quebra():
     assert conhecimento.buscar("") == []
 
 
+def test_busca_conta_palavra_inteira_e_ignora_ligacao():
+    # Antes, a pontuação contava SUBSTRING: "no" somava ponto dentro de "diagnostico" e
+    # "conector", então o capítulo mais LONGO ganhava — e o vencedor mudava toda vez que
+    # alguém acrescentava um parágrafo em qualquer capítulo (foi o que quebrou a suíte
+    # em 2026-09-02). Palavra de ligação não pontua, e pedaço de palavra não conta.
+    assert conhecimento.buscar("no") == []
+    assert conhecimento.buscar("de para com") == []
+    assert conhecimento.buscar("instrum") == []  # pedaço de "instrumento", não é palavra
+    achados = conhecimento.buscar("pedir aprovacao aguardar")
+    assert achados and achados[0].slug == "automacoes/pedir-aprovacao"
+
+
 def test_rota_indice_e_capitulo(cliente, entrar, dados):
     entrar(dados["admin"])
     r = cliente.get("/ajuda/indice")

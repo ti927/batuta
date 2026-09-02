@@ -444,7 +444,12 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         tools_md: str | None = None, soul_md: str | None = None,
         modelo_ia: str | None = None,
     ) -> str:
-        """Edita um agente já existente (pelo `id`). Só os campos informados mudam."""
+        """Edita um agente já existente (pelo `id`). Só os campos informados mudam.
+
+        Os 4 markdowns são lidos JUNTOS. Se a mudança troca o JEITO de fazer algo (outro
+        instrumento, outro caminho), leia os quatro com `ver_agente` e APAGUE a instrução
+        antiga no mesmo movimento — regra nova num campo com a velha em outro faz o agente
+        seguir a velha, calado."""
         agente = _agente(agente_id)
         if agente is None:
             return _erro(f"Não há agente com id {agente_id} neste time.")

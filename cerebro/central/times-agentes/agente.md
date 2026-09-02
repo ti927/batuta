@@ -3,7 +3,7 @@ titulo: "O Agente e os 4 markdowns"
 area: "times-agentes"
 slug: "agente"
 tags: ["agente", "markdown", "agent", "skill", "tools", "soul", "modelo", "personalidade"]
-revisado_em: "2026-07-17"
+revisado_em: "2026-09-02"
 fontes: ["PRODUTO.md §11", "cerebro/modelos.py (Agente)", "feedback_sem-prompt-base-agentes"]
 ---
 
@@ -37,8 +37,17 @@ Além dos markdowns, o agente tem um **modelo de IA** (qual "cérebro" usa) e, o
 - **O comportamento vem 100% dos markdowns.** Se o agente está "tagarela" ou vago, o texto está vago —
   não há prompt-base para culpar. Seja específico.
 - Um agente que **precisa de um dado** (ex.: qual cliente) deve **pedir** — instrua isso no markdown.
+- **Os 4 markdowns são lidos juntos: instrução contraditória em um deles vence a regra nova do outro.**
+  Ao mudar o jeito de fazer alguma coisa, **apague a instrução velha** — não basta escrever a nova em
+  outro campo. Caso real (2026-09-02): a regra "chame Pedir aprovação e aguardar" entrou no `skill.md`,
+  mas o `tools.md` continuou mandando pedir aprovação pelo Telegram e esperar "#aprovado#". O agente
+  obedeceu a velha, o fluxo não parou e a execução terminou sem que ninguém aprovasse.
 
 ## Para a IA
+Ao EDITAR um agente que já existe, leia os 4 markdowns ANTES de escrever: se a mudança troca o **jeito**
+de fazer algo (outro instrumento, outro caminho), remova a instrução antiga no mesmo movimento. Regra
+nova num campo + regra velha em outro = o agente segue a velha, calado.
+
 Ao montar um agente, escreva os 4 markdowns com precisão; não confie num comportamento "padrão". Ensine
 no markdown COMO usar cada instrumento do cinto (o instrumento é genérico; quem dá contexto é o texto do
 agente). Um agente = uma função; se a tarefa tem várias etapas distintas, prefira **vários agentes**

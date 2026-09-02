@@ -3,7 +3,7 @@ titulo: "Pedir aprovação e aguardar"
 area: "automacoes"
 slug: "pedir-aprovacao"
 tags: ["aprovacao", "aprovar", "esperar", "humano", "instrumento", "pausa", "confirmar"]
-revisado_em: "2026-08-31"
+revisado_em: "2026-09-02"
 fontes: ["cerebro/instrumentos/pedir_aprovacao.py", "cerebro/mensageria/retoma.py", "PRODUTO.md §19"]
 ---
 
@@ -46,6 +46,23 @@ execução ficava órfã. Agora vale uma regra só: **quem recebe é quem aprova
   Telegram (pode apontar para a mesma credencial, sem recolar o token) com outro
   Destinatário, e aponte a aprovação para ele. Um canal = um destino.
 
+### Vindo de um time que pedia aprovação "na mão"
+Antes do instrumento, muita gente resolvia assim: o agente mandava o material pelo **canal
+de Telegram comum** e o texto dele dizia *"espere o #aprovado#"*. Isso **não para nada** —
+quem para a execução é o instrumento de aprovação, e só ele.
+
+Ao converter um agente desses, **apague a instrução velha**. Ela costuma estar no
+**`tools.md`** (o texto do cinto), enquanto a regra nova é escrita no `skill.md` — e com as
+duas no mesmo agente ele obedece a velha, que é mais específica. O resultado é silencioso e
+enganoso: a mensagem chega ao Telegram como sempre, a pessoa responde, e **nada acontece**,
+porque a execução já terminou sem esperar. Foi exatamente o que aconteceu em 2026-09-02, no
+primeiro disparo agendado depois de o portão deixar de existir.
+
+Checklist da conversão: (1) instrumento de aprovação criado e **no cinto** do agente;
+(2) regra escrita no `skill.md`; (3) instrução antiga **removida** dos outros markdowns;
+(4) sem instrumento de aprovação duplicado no cinto — dois com o mesmo papel confundem
+a escolha.
+
 ## Exemplos
 - Redator escreve → **pede aprovação** com o texto completo → aprovado → publica.
 - Atendente monta um lançamento no sistema do cliente → **pede aprovação** com os valores
@@ -55,6 +72,12 @@ execução ficava órfã. Agora vale uma regra só: **quem recebe é quem aprova
 - **A mensagem é o que a pessoa aprova.** Passe nela tudo o que ela precisa para decidir
   (o texto, o link da imagem, os valores). Não escreva "posso publicar?" e deixe o
   conteúdo de fora — foi assim que aprovações viraram carimbo no escuro.
+- **Se o agente não chamar o instrumento, o fluxo NÃO para.** A garantia mora no
+  instrumento, não no desenho da automação — é a contrapartida de a aprovação ser do
+  agente. Por isso a regra precisa estar escrita com clareza e **sem concorrente** nos
+  markdowns dele. Como conferir depois: no rastro do passo, o instrumento de aprovação tem
+  de aparecer entre os acionados; se aparecer o canal de mensageria no lugar dele, foi
+  texto do agente, não defeito do motor.
 - **Depois de pedir, o agente não faz mais nada** naquele turno. É o Batuta que garante
   isso: qualquer outra ação é recusada até a resposta chegar.
 - **Sem destinatário no canal, o pedido falha na hora** — e com razão: não haveria para
