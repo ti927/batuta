@@ -717,6 +717,11 @@ export type ExecucaoComPassos = Execucao & {
   // o gatilho trouxe (`entrada`) mais o que os agentes anotaram. Nula em execuções
   // anteriores à Onda 2.
   dados?: Record<string, string> | null;
+  // A automação foi editada DEPOIS que esta execução começou (Onda 4)? A execução roda
+  // o desenho que fotografou no disparo; quem inspeciona precisa saber que o fluxo
+  // aberto no construtor já não é o que rodou aqui. Falso também quando não há foto
+  // (execução anterior a esta onda): aí não há como afirmar nada.
+  desenho_editado_depois?: boolean;
 };
 
 // Execução na visão consolidada (gestão de execuções), com o nome da automação

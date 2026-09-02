@@ -430,7 +430,12 @@ async def montar_cadeia(automacao_id: str, cadeia: dict) -> str:
 
     APROVAÇÃO: não existe `gate` no nó (foi removido em 2026-08-31). Para um passo esperar
     uma pessoa, dê ao AGENTE dele o instrumento `pedir_aprovacao` e escreva no markdown
-    quando usá-lo. Não precisa criar os nós 'gatilho'/'fim' — o sistema completa."""
+    quando usá-lo. Não precisa criar os nós 'gatilho'/'fim' — o sistema completa.
+
+    EXECUÇÕES JÁ DISPARADAS NÃO MUDAM: cada execução roda o desenho fotografado no
+    disparo (inclusive ao retomar uma aprovação em aberto). O que você montar aqui vale
+    da PRÓXIMA execução em diante — não conserta uma execução parada, e também não a
+    quebra. Para consertar uma execução presa, aja sobre ela, não sobre o desenho."""
     return await anyio.to_thread.run_sync(escrita.montar_cadeia, _sub(), automacao_id, cadeia)
 
 

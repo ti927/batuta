@@ -55,7 +55,9 @@ def localizar_no_pausado(sessao: Session, execucao: Execucao):
     )
     if no_id is None:
         raise ValueError("passo de pausa ausente")
-    cadeia = grafo.normalizar((auto.cadeia if auto else None) or {})
+    # O desenho DESTA execução, não o vivo (Onda 4, lacuna 29): editar a automação com
+    # uma aprovação em aberto não muda mais o caminho no meio da corrida.
+    cadeia = grafo.desenho_que_roda(execucao.desenho, auto.cadeia if auto else None)
     idx = grafo.indexar(cadeia)
     no = idx.no(no_id) or {}
     return ultimo, no, no_id, cadeia, idx

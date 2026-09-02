@@ -256,6 +256,13 @@ class Execucao(IdData, Base):
     # um agente chama `anotar`. Chega ao prompt de TODOS os nós, então um dado deixa de
     # depender de o agente lembrar de repeti-lo no texto. Ver `orquestracao/ficha.py`.
     dados: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # O DESENHO que esta execução roda (Onda 4, 2026-09-02): a foto do grafo tirada no
+    # DISPARO. Antes, motor e retomada liam a `automacoes.cadeia` VIVA — então editar a
+    # automação com uma aprovação em aberto mudava o caminho no meio da corrida, e
+    # inspecionar uma execução antiga mostrava o fluxo de hoje. Quem lê usa
+    # `grafo.desenho_que_roda(execucao.desenho, automacao.cadeia)`: nulo (execução
+    # anterior a esta onda) cai na cadeia viva, como antes.
+    desenho: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
 class PassoExecucao(IdData, Base):

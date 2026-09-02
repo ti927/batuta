@@ -853,6 +853,17 @@ export function PainelExecucao({
         )}
       </p>
 
+      {/* A execução roda o desenho que fotografou ao ser disparada. Se a automação
+          mudou depois, quem lê o passo a passo precisa saber — senão compara o rastro
+          com um fluxo que não é o que rodou aqui. */}
+      {execucao.desenho_editado_depois && (
+        <Aviso variant="info" className="mt-3">
+          A automação foi <strong>editada depois</strong> que esta execução começou. O
+          que você vê aqui rodou pelo desenho de {formatarData(execucao.criado_em)} — o
+          fluxo aberto no construtor já é outro.
+        </Aviso>
+      )}
+
       {execucao.estado === "aguardando_humano" && automacao && (
         <PainelAprovacao
           aberta={execucao}

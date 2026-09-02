@@ -158,16 +158,19 @@ def _acionou(inst: Instrumento, acionados: list) -> bool:
 
 # ───────────────────────────── coleta de fatos ─────────────────────────────
 
-def _no_pausado(auto: Automacao | None, passos: list[PassoExecucao]) -> tuple[str | None, dict]:
+def _no_pausado(
+    ex: Execucao, auto: Automacao | None, passos: list[PassoExecucao]
+) -> tuple[str | None, dict]:
     """(no_id, nó do grafo) onde a execução pausou — pelo último passo, igual a
-    `aprovacao.config_aprovacao`."""
+    `aprovacao.config_aprovacao`. Lê o desenho DESTA execução (Onda 4): diagnosticar
+    uma execução antiga contra o fluxo de hoje explicava a coisa errada."""
     if auto is None or not passos:
         return (None, {})
     ultimo = passos[-1]
     no_id = ultimo.no_id or (str(ultimo.agente_id) if ultimo.agente_id else None)
     if not no_id:
         return (None, {})
-    idx = grafo.indexar(grafo.normalizar(auto.cadeia or {}))
+    idx = grafo.indexar(grafo.desenho_que_roda(ex.desenho, auto.cadeia))
     return (no_id, idx.no(no_id) or {})
 
 
@@ -227,7 +230,7 @@ def diagnosticar(sessao: Session, execucao_id, *, seguir_webhook: bool = True) -
     )
 
     resultado = ex.resultado or {}
-    no_id, no = _no_pausado(auto, passos)
+    no_id, no = _no_pausado(ex, auto, passos)
 
     d: dict = {
         "encontrada": True,

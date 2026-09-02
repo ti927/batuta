@@ -31,6 +31,7 @@ Princípio (SPEC §2): `tone`, `x`, `y` são **cosméticos** — o motor nunca d
 deles. O que o motor lê: `inicial`, `nos[].id/tipo/ref/gate`, `saidas[].rotulo/destino`.
 """
 
+import json
 from dataclasses import dataclass, field
 
 # Tipos de nó (SPEC §2). gatilho/fim/cada são ESTRUTURAIS (não rodam IA e não contam
@@ -232,6 +233,52 @@ def _completar(cadeia: dict) -> dict:
     _auto_layout(nos, inicial, id_fim)
 
     return {"inicial": inicial, "nos": nos}
+
+
+def desenho_que_roda(desenho: dict | None, cadeia_viva: dict | None) -> dict:
+    """O grafo que UMA execução roda: a foto tirada no disparo (`execucoes.desenho`),
+    caindo para a cadeia VIVA da automação quando não há foto.
+
+    FONTE ÚNICA desta escolha — motor, retomada, aprovação e diagnóstico leem daqui
+    (Onda 4, lacunas 28 e 29). Antes, todos liam a cadeia viva: editar a automação com
+    uma aprovação em aberto mudava o caminho no meio da corrida, e inspecionar uma
+    execução antiga mostrava o fluxo de hoje. A queda existe para as execuções
+    anteriores a esta onda, que não têm foto — nelas o comportamento é o de antes."""
+    return normalizar(desenho or cadeia_viva or {})
+
+
+def mesmo_desenho(a: dict | None, b: dict | None) -> bool:
+    """Dois desenhos são o MESMO fluxo? Compara só o que o motor lê — nó, tipo, ref e
+    saídas (rótulo/quando/regra/destino/tipo) — ignorando o que é cosmético (`x`, `y`,
+    `tone`). Mover uma caixa na tela não é "editar o fluxo", e dizer que é encheria a
+    inspeção de aviso falso."""
+    return _essencia(a) == _essencia(b)
+
+
+# Campos de um nó/saída que existem só para a tela desenhar. Tirar por EXCLUSÃO (e não
+# listar o que interessa) é de propósito: campo novo do motor entra na comparação
+# sozinho, em vez de ficar de fora até alguém lembrar de acrescentá-lo aqui.
+_COSMETICOS = {"x", "y", "tone"}
+
+
+def _essencia(cadeia: dict | None) -> str:
+    """A parte do grafo que o motor lê, em forma comparável (ordem estável, sem
+    cosmético)."""
+    c = normalizar(cadeia or {})
+    nos = [
+        {
+            **{k: v for k, v in n.items() if k not in _COSMETICOS and k != "saidas"},
+            "saidas": [
+                {k: v for k, v in (s or {}).items() if k not in _COSMETICOS}
+                for s in (n.get("saidas") or [])
+            ],
+        }
+        for n in sorted(c.get("nos") or [], key=lambda n: str(n.get("id")))
+    ]
+    return json.dumps(
+        {"inicial": c.get("inicial"), "nos": nos},
+        sort_keys=True, ensure_ascii=False, default=str,
+    )
 
 
 def sincronizar_gatilho(cadeia: dict | None, tipo_gatilho: str | None) -> dict | None:

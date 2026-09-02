@@ -3,8 +3,8 @@ titulo: "Execuções e inspeção"
 area: "automacoes"
 slug: "execucoes-e-inspecao"
 tags: ["execucao", "inspecao", "rodar", "ao-vivo", "diagnostico", "passo-a-passo"]
-revisado_em: "2026-08-26"
-fontes: ["PRODUTO.md §15", "cerebro/orquestracao/disparo.py", "cerebro/diagnostico_execucao.py", "project_navegacao-time-centrica", "feedback_feedback-constante-ao-usuario"]
+revisado_em: "2026-09-02"
+fontes: ["PRODUTO.md §15", "cerebro/orquestracao/disparo.py", "cerebro/orquestracao/grafo.py (desenho_que_roda)", "cerebro/diagnostico_execucao.py", "project_navegacao-time-centrica", "feedback_feedback-constante-ao-usuario"]
 ---
 
 # Execuções e inspeção
@@ -41,10 +41,19 @@ está acontecendo agora") — você nunca fica no escuro achando que travou.
   **"A ficha desta execução"**, na inspeção, mostra tudo o que atravessou o fluxo. Cada passo
   ainda diz o que **guardou na ficha** e quais **regras exatas** o sistema conferiu (com o
   resultado de cada uma). Ver [[automacoes/ficha-da-execucao]].
+- **Cada execução roda o desenho que existia quando ela foi disparada.** A automação é
+  fotografada no disparo, e é essa foto que o fluxo percorre até o fim — inclusive depois
+  de uma pausa para aprovação. Então **editar a automação não mexe no que já está
+  rodando**: a mudança vale da próxima execução em diante. Quando o fluxo mudou depois, a
+  inspeção diz isso em cima da linha do tempo, para você não comparar o rastro com um
+  desenho que não é o que rodou ali. Execuções anteriores a 02/09/2026 não têm foto e
+  continuam sendo lidas pelo desenho atual — nelas, esse aviso não aparece.
 
 ## Para a IA
 Ao diagnosticar com o consultor, baseie-se no **estado real** da execução (o que a inspeção mostra), não em
-suposição. Um fluxo "parado" costuma ser um agente aguardando uma aprovação, não um erro.
+suposição. E cuidado com uma armadilha nova: a execução guarda o **desenho que rodou**, então ler a
+automação de hoje para explicar uma execução de ontem pode explicar a coisa errada — se o fluxo foi
+editado no meio, a inspeção avisa, e é a foto que vale. Um fluxo "parado" costuma ser um agente aguardando uma aprovação, não um erro.
 O diagnóstico já entrega, quando dá para saber: **qual instrumento** falhou (pelo nome que o próprio erro
 cita), **qual agente** o carrega e uma **ação sugerida derivada do tipo de erro** — arquivo grande demais
 pede ajuste de configuração, não cadastro de credencial. Use essas referências em vez de deduzir pelo

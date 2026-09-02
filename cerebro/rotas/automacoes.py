@@ -262,10 +262,24 @@ def _montar_com_passos(sessao: Session, execucao: Execucao) -> ExecucaoComPassos
         .order_by(PassoExecucao.ordem)
     ).all()
     base = ExecucaoLer.model_validate(execucao).model_dump()
+    auto = (
+        sessao.get(Automacao, execucao.automacao_id) if execucao.automacao_id else None
+    )
+    # A automação mudou DEPOIS que esta execução começou? Só dá para saber quando há
+    # foto do desenho (Onda 4); comparação pelo que o motor lê, ignorando cosmético.
+    editada_depois = bool(
+        execucao.desenho
+        and auto is not None
+        and not grafo.mesmo_desenho(execucao.desenho, auto.cadeia)
+    )
     return ExecucaoComPassos(
         **base,
         passos=[PassoExecucaoLer.model_validate(p) for p in passos],
         uso=precos.resumir_uso(passos),
+        # A FICHA (Onda 2). Estava declarada no esquema e no front, mas ninguém a
+        # preenchia aqui — o painel "A ficha desta execução" nunca aparecia.
+        dados=execucao.dados or None,
+        desenho_editado_depois=editada_depois,
     )
 
 

@@ -2184,6 +2184,34 @@ Duas garantias novas do contrato do encaixe: `pausa_para_humano` (a marca que fa
 
 ---
 
+## FASE — O motor vira um grafo de verdade · **Onda 4: operação e confiança**  ▶️ EM ANDAMENTO (2026-09-02)
+
+Cinco fatias, nesta ordem, aprovadas pelo maestro. A ordem do plano original (Onda 3 antes da 4) foi **invertida com aval**: a Onda 4 resolve dor que já está acontecendo — no dia 02/09 um artigo morreu sem poder ser retomado, e cinco automações de blog quase passaram a falhar todo dia em silêncio.
+
+### Fatia 1 — A execução guarda o desenho que rodou (lacunas 28 e 29)  ✅ (migração `des00desenho01`)
+
+**O buraco.** A execução não guardava o fluxo: motor, retomada, aprovação e diagnóstico liam a `automacoes.cadeia` **viva**. Duas consequências, uma delas um bug de verdade: inspecionar uma execução antiga mostrava o fluxo de HOJE (28); e **editar a automação com uma aprovação em aberto mudava o caminho no meio da corrida** (29) — a retomada seguia por setas que não existiam quando a execução começou.
+
+**O que entrou.** Coluna `execucoes.desenho` (JSONB, nulável), fotografada em `disparo.criar_execucao` — o **funil único** dos quatro gatilhos (manual, agendamento, webhook, comentário do Instagram), então uma linha só congela o fluxo para todos. A foto é do momento do **disparo**, não do momento em que o trabalhador pega a execução: entre um e outro pode haver minutos de fila, e quem disparou espera o fluxo que existia quando disparou.
+
+A escolha "foto ou cadeia viva" virou **fonte única** em `grafo.desenho_que_roda`, usada pelos quatro leitores. Execução sem foto (anterior a esta onda) cai na cadeia viva — comportamento idêntico ao de antes, sem regressão.
+
+**Na tela:** a inspeção avisa, acima da linha do tempo, quando a automação foi editada depois daquela execução. A comparação (`grafo.mesmo_desenho`) olha só o que o motor lê e **ignora o cosmético** — mover uma caixa no construtor não é "editar o fluxo", e dizer que é encheria a tela de aviso falso. O critério é por **exclusão** (tira `x`/`y`/`tone`), para campo novo do motor entrar na comparação sozinho.
+
+**Um bug da Onda 2 apareceu no caminho e foi consertado junto:** o painel **"A ficha desta execução"** nunca aparecia. O campo `dados` estava declarado no esquema e no front, mas a rota de inspeção não o preenchia — a ficha existia no banco e morria antes da tela. Uma linha em `_montar_com_passos`.
+
+**Verificação:** **1013 testes verdes** (8 novos: a foto nasce no disparo; o motor roda a foto mesmo depois de a automação mudar; a retomada localiza o nó pela foto; execução sem foto usa a cadeia viva; a comparação ignora cosmético e vê mudança real; e a rota devolve a ficha e o aviso). Migração provada **nos dois sentidos** no banco local (`upgrade`/`downgrade -1`). `tsc`, `eslint` e `build` da interface limpos.
+
+**O que as IAs aprenderam:** `automacoes/execucoes-e-inspecao` (cada execução roda o desenho do disparo; editar não mexe no que já está rodando; a armadilha de diagnosticar execução antiga contra o fluxo de hoje) e as docstrings de `montar_cadeia` na criadora **e** no MCP ("execuções já disparadas não mudam").
+
+### Fatias 2 a 5 — a fazer
+2. **Rodar de novo a partir daqui** — execução nova a partir de um passo, com o desenho, a ficha e a entrada daquele passo.
+3. **Automação que falha sozinha se desliga e avisa** — 3 falhas seguidas.
+4. **Teto de custo por execução** — opcional, no comportamento do fluxo.
+5. **Testar este nó** — com aviso explícito de que os instrumentos são reais.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.

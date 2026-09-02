@@ -432,6 +432,11 @@ class ExecucaoComPassos(ExecucaoLer):
     # que o gatilho trouxe mais o que os agentes anotaram. É o que responde, na tela,
     # "com que dados este passo trabalhou?". Nula em execuções anteriores à Onda 2.
     dados: dict | None = None
+    # A automação foi EDITADA depois que esta execução começou (Onda 4)? A execução roda
+    # o desenho que ela fotografou no disparo; quem inspeciona precisa saber que o fluxo
+    # na tela do construtor já não é o que rodou aqui. `False` também quando não há foto
+    # (execução anterior a esta onda): aí não há como afirmar nada, e afirmar seria pior.
+    desenho_editado_depois: bool = False
 
 
 # ───────────────── Identidade e acesso (Etapa 2, Fase 6) ─────────────────

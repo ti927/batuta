@@ -654,6 +654,11 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         (pode ser um nó anterior = LOOP) ou "fim" para encerrar. Não precisa informar
         posições, nem criar os nós "gatilho"/"fim" — o sistema completa.
 
+        EXECUÇÕES JÁ DISPARADAS NÃO MUDAM: cada uma roda o desenho fotografado no
+        disparo, inclusive ao retomar uma aprovação em aberto. O que você montar aqui
+        vale da PRÓXIMA execução em diante — não conserta nem quebra uma execução que
+        já está no meio do caminho.
+
         BIFURCAÇÃO (mais de uma saída no nó) — leia com atenção:
         - O "quando" é OBRIGATÓRIO em cada saída quando o nó tem 2+ saídas
           condicionais. É a frase que o agente lê para decidir ("siga por aqui

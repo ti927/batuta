@@ -62,7 +62,10 @@ def no_pausado(sessao: Session, execucao: Execucao) -> dict | None:
     )
     if not no_id:
         return None
-    return grafo.indexar(grafo.normalizar(auto.cadeia or {})).no(no_id)
+    # Pelo desenho DESTA execução (Onda 4) — o mesmo que a retomada vai percorrer.
+    return grafo.indexar(
+        grafo.desenho_que_roda(execucao.desenho, auto.cadeia)
+    ).no(no_id)
 
 
 def passo_pausado(sessao: Session, execucao: Execucao) -> PassoExecucao | None:

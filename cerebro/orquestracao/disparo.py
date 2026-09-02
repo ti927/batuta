@@ -20,6 +20,7 @@ from observabilidade import contexto
 from observabilidade.escritor import registrar_evento
 from orquestracao import atividade
 from orquestracao import ficha as ficha_mod
+from orquestracao import grafo
 from orquestracao.cadeia import executar_cadeia
 from orquestracao.llm import usar_chaves
 from orquestracao.modelos_ia import provedor_do_modelo_seguro
@@ -206,11 +207,18 @@ def criar_execucao(
 
     `origem` (manual|agendamento|webhook|sistema) é registrado no log do disparo, com a
     IDENTIDADE DO SERVIDOR (host/ambiente) — o carimbo que teria delatado o cérebro local:
-    duas execuções nascidas de `ambiente` diferentes = dois processos disparando."""
+    duas execuções nascidas de `ambiente` diferentes = dois processos disparando.
+
+    Aqui também nasce o DESENHO da execução (Onda 4): a foto do grafo NESTE instante.
+    É o funil único dos quatro gatilhos (manual, agendamento, webhook, comentário do
+    Instagram), então uma linha só congela o fluxo para todos. A foto é do momento do
+    DISPARO, não do momento em que o trabalhador pega a execução: entre um e outro pode
+    haver minutos de fila, e quem disparou espera o fluxo que existia quando disparou."""
     execucao = Execucao(
         automacao_id=automacao.id,
         estado="aguardando",
         entrada={"texto": entrada},
+        desenho=grafo.normalizar(automacao.cadeia or {}) or None,
     )
     sessao.add(execucao)
     sessao.commit()
@@ -322,7 +330,11 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
             ):
                 r = executar_cadeia(
                     sessao,
-                    (automacao.cadeia if automacao else None) or {},
+                    # O DESENHO desta execução (Onda 4): a foto do disparo, ou a cadeia
+                    # viva nas execuções anteriores a esta onda. Fonte única em `grafo`.
+                    grafo.desenho_que_roda(
+                        execucao.desenho, automacao.cadeia if automacao else None
+                    ),
                     entrada,
                     # A FICHA nasce aqui, com o que o gatilho trouxe — e é o que faz a
                     # entrada deixar de morrer no primeiro nó (Onda 2, lacuna 15).
