@@ -2241,8 +2241,29 @@ A escolha "foto ou cadeia viva" virou **fonte única** em `grafo.desenho_que_rod
 
 **O que as IAs aprenderam:** `operacao/falhas-e-retentativa` ganhou a seção do disjuntor (com o porquê de cada fronteira), `automacoes/erros-no-fluxo` a nota cruzada, e o prompt da criadora e a docstring de `ativar_automacao` no MCP a mesma ordem: **não religar de cara** — investigar, dizer o que quebrou e só então sugerir ativar, porque reativar zera a contagem e religar sem consertar apenas adia o mesmo desligamento.
 
-### Fatias 4 e 5 — a fazer
-4. **Teto de custo por execução** — opcional, no comportamento do fluxo.
+### Fatia 4 — Teto de custo por execução (lacuna 30)  ✅ (sem migração)
+
+**O buraco.** O custo era só **medido**: a aba Uso mostrava o estrago depois de feito. Um fluxo que entra em laço caro, ou um "Para cada item" com uma lista maior do que se esperava, gastava até o fim sem nada para segurá-lo. O teto de **passos** (Onda 1) contém laço infinito, mas não contém 8 passos caríssimos.
+
+**O que entrou.** Uma chave nova no comportamento do fluxo, `teto_usd_execucao`, na **mesma cascata** dos outros limites (global < perfil < ajustes) — e não numa fonte de verdade nova. O motor soma o custo real de cada passo (`precos.custo_de_entrada`, a **mesma** conta da aba Uso, incluindo a chamada da IA roteadora) e, ao passar do teto, para com a exceção própria `TetoDeCustoExcedido`.
+
+**Nasce desligado (`0` = sem teto), e isso é a decisão.** A fatia é opcional: um teto ligado sem o consultor pedir interromperia fluxos legitimamente caros — gerar vídeo, um for-each de 20 itens — como se fossem defeito.
+
+**Vale por execução e atravessa a aprovação.** `custo_inicial` é o análogo do `ordem_inicial` para dinheiro: sem ele o teto zeraria a cada retomada, e uma execução que para duas vezes gastaria o teto três vezes. A conta do já-gasto sai dos passos gravados, então a re-rodada da fatia 2 e a retomada usam a mesma fonte.
+
+**A conta é fechada depois de gravar o passo e antes de abrir o próximo:** o trabalho já foi pago e precisa aparecer no rastro (escondê-lo faria a conta não fechar na aba Uso); o gasto que ainda dá para evitar é o do passo seguinte.
+
+**A execução fica `falhou`, e isso é deliberado:** ela conta para o disjuntor da fatia 3. Uma automação que estoura o teto três vezes seguidas rodando sozinha é desligada — ou o teto está baixo demais, ou o fluxo disparou em custo, e nos dois casos alguém precisa olhar antes de continuar pagando.
+
+**A mensagem é curta de propósito.** Ela viaja no aviso pelo canal do time, que corta o motivo em 300 caracteres — e o que não pode ser cortado é o "o que fazer" do fim. Por isso não repete o nome do passo, que o aviso já diz em linha própria. Um teste guarda esse limite.
+
+**Na tela: nenhuma mudança de código.** O painel "Configurações do fluxo" é montado a partir do backend (`painel_config` é fonte única, e o tipo `valor` já existia para o teto por conversa), então o campo aparece sozinho em **Fluxo › Limites da execução**.
+
+**Verificação:** **1045 testes verdes** (11 novos: sem teto roda até o fim; teto alto não atrapalha; teto baixo para no meio; o passo que estourou fica no rastro; o já-gasto conta; a soma bate com a aba Uso; execução sem passo não custou nada; o padrão é desligado; o teto sai dos ajustes; config estragada vira "sem teto" em vez de derrubar a execução; o campo chega ao painel). Sem migração. `tsc`/`eslint`/`build` limpos.
+
+**O que as IAs aprenderam:** `operacao/uso-e-custos` ganhou a seção do teto — e teve **corrigida a frase que virou mentira** ("a medição mostra, não corta o fluxo"); `operacao/falhas-e-retentativa` diz que estourar o teto conta para o disjuntor; o prompt da criadora e as docstrings de `ver_uso` e `diagnosticar_execucao` no MCP ensinam a escolher o teto **com folga** (colado no custo real, qualquer variação vira falha) e a **não tratar "passou do teto" como bug** — é a regra do consultor funcionando.
+
+### Fatia 5 — a fazer
 5. **Testar este nó** — com aviso explícito de que os instrumentos são reais.
 
 ---

@@ -26,7 +26,13 @@ from orquestracao import ficha as ficha_mod
 from orquestracao import grafo, memoria_conversa
 from orquestracao.agente import executar_agente
 from orquestracao.cadeia import _carregar_cinto, _escolher_saida, executar_cadeia
-from orquestracao.disparo import _aplicar_resultado, _esta_cancelada, _fazer_registrador
+from orquestracao.disparo import (
+    _aplicar_resultado,
+    _esta_cancelada,
+    _fazer_registrador,
+    _teto_de_custo,
+    custo_ja_gasto,
+)
 from orquestracao.llm import usar_chaves
 
 # Anti-loop do portão NA TELA (a tela não tem teto de conversa). No CANAL, quem
@@ -137,6 +143,11 @@ def avancar_apos_gate(
                 # transcript da conversa de aprovação.
                 ficha=dict(execucao.dados or {}),
                 ordem_inicial=ordem_inicial,
+                # O teto de custo vale por EXECUÇÃO e atravessa a espera: o já gasto
+                # antes da aprovação continua contando (Onda 4, fatia 4). Sem isto,
+                # uma execução que para duas vezes gastaria o teto três vezes.
+                teto_usd=_teto_de_custo(sessao.get(Automacao, execucao.automacao_id)),
+                custo_inicial=custo_ja_gasto(sessao, execucao.id),
                 registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
                 # Cancelar voltou a valer DEPOIS do portão: sem este callback, o
                 # trecho pós-aprovação era o único do sistema que ignorava o botão

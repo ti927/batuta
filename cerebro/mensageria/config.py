@@ -93,6 +93,12 @@ GLOBAL: dict = {
     # B. Limites da conversa
     "max_turnos": 40,
     "teto_usd": 1.0,
+    # B2. Limite da EXECUÇÃO (Onda 4, fatia 4). Irmão do `teto_usd`, que vale por
+    # CONVERSA: este vale por execução de automação, somando as retomadas. Zero =
+    # DESLIGADO, e é o padrão de propósito — a fatia é opcional, e um teto ligado sem
+    # o consultor pedir interromperia fluxos legitimamente caros (gerar vídeo, um
+    # for-each de 20 itens) como se fosse defeito.
+    "teto_usd_execucao": 0.0,
     # C. Atendimento (cliente externo)
     "saudacao_abertura": SAUDACAO_PADRAO,  # "" = desligada
     "horario_comercial_ativo": False,
@@ -182,6 +188,11 @@ CAMPOS = [
     {"grupo": "Limites da conversa", "campos": [
         {"chave": "max_turnos", "rotulo": "Máx. de mensagens por conversa", "tipo": "int"},
         {"chave": "teto_usd", "rotulo": "Teto de custo de IA por conversa", "tipo": "valor", "sufixo": "US$"},
+    ]},
+    {"grupo": "Limites da execução", "campos": [
+        {"chave": "teto_usd_execucao",
+         "rotulo": "Teto de custo por execução (0 = sem teto)",
+         "tipo": "valor", "sufixo": "US$"},
     ]},
     {"grupo": "Atendimento ao cliente", "campos": [
         {"chave": "saudacao_abertura", "rotulo": "Saudação no 1º contato (vazio = desligada)", "tipo": "texto"},

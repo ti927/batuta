@@ -66,6 +66,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import precos
 import segredos_instrumento
 from modelos import Agente, AgenteInstrumento, Instrumento
 from orquestracao import ficha as ficha_mod
@@ -90,6 +91,15 @@ PASSOS_POR_ITEM = 5
 
 # Destinos que encerram a cadeia (mantido para retrocompatibilidade de imports).
 _DESTINOS_FIM = grafo.DESTINOS_FIM
+
+
+class TetoDeCustoExcedido(RuntimeError):
+    """A execução passou do teto de custo do fluxo (Onda 4, fatia 4).
+
+    Exceção PRÓPRIA, e não um `RuntimeError` genérico, porque a mensagem precisa
+    chegar inteira a quem opera: "passou do teto" é uma decisão do Batuta cumprindo
+    uma regra que o consultor escolheu, não um defeito. Quem trata a falha mostra
+    este texto, e ele diz quanto gastou, qual era o teto e o que fazer."""
 
 
 class _Escolha(BaseModel):
@@ -406,6 +416,8 @@ def executar_cadeia(
     ficha: dict | None = None,
     ordem_inicial: int = 0,
     max_passos: int = MAX_PASSOS,
+    teto_usd: float = 0.0,
+    custo_inicial: float = 0.0,
     registrar_passo: Callable[[dict, int], None] | None = None,
     cancelado: Callable[[], bool] | None = None,
 ) -> dict:
@@ -451,6 +463,10 @@ def executar_cadeia(
     avisos: list[str] = []
     resultados: list[str] = []
     ordem = ordem_inicial
+    # Teto de custo POR EXECUÇÃO (Onda 4, fatia 4). `custo_inicial` traz o que já foi
+    # gasto antes desta rodada — como o `ordem_inicial` faz com os passos —, então o
+    # teto atravessa a espera de uma aprovação em vez de zerar a cada retomada.
+    custo_usd = custo_inicial
     # Campo da ficha onde cada ramo de "Para cada item" deposita o que produziu
     # (`{ramo: campo}`). É a AGREGAÇÃO: as repetições terminam em momentos diferentes e
     # cada uma soma o seu resultado no mesmo campo, na ordem em que terminam.
@@ -694,6 +710,24 @@ def executar_cadeia(
             passos.append(passo)
             if registrar_passo is not None:
                 registrar_passo(passo, ordem)
+
+            # Teto de custo (Onda 4, fatia 4): a conta é fechada DEPOIS de gravar o
+            # passo — o trabalho já foi pago e precisa aparecer no rastro — e ANTES de
+            # abrir o próximo, que é o gasto que ainda dá para evitar. Soma tudo o que
+            # o passo consumiu, inclusive a chamada da IA roteadora.
+            custo_usd += sum(precos.custo_de_entrada(e) for e in uso_passo)
+            if teto_usd and custo_usd > teto_usd:
+                # Mensagem CURTA de propósito: ela viaja no aviso pelo canal do time,
+                # que corta o motivo em 300 caracteres — e o que não pode ser cortado
+                # é o "o que fazer" do fim. Por isso não repete o nome do passo, que o
+                # aviso já diz numa linha própria.
+                raise TetoDeCustoExcedido(
+                    f"A execução passou do teto de custo do fluxo: gastou "
+                    f"US$ {custo_usd:.2f}, e o teto é US$ {teto_usd:.2f}. Os passos já "
+                    f"feitos ficam no rastro. Se o fluxo é caro por natureza, aumente "
+                    f"o teto em Fluxo › Limites da execução; se não, veja na aba Uso "
+                    f"qual passo gastou mais."
+                )
 
             # O agente PEDIU APROVAÇÃO (instrumento `pedir_aprovacao`): a execução
             # para aqui, e o que segue é decidido quando a pessoa responder. As

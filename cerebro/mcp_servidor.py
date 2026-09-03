@@ -171,7 +171,12 @@ async def diagnosticar_execucao(execucao_id: str) -> str:
     novo": na tela da execução existe **"Rodar de novo a partir daqui"**, que cria uma
     execução nova começando no passo escolhido, com a mesma entrada e a mesma ficha.
     Você NÃO tem ferramenta para isso — oriente o consultor, e avise que repetir um
-    passo repete o que ele faz (se publica, publica de novo)."""
+    passo repete o que ele faz (se publica, publica de novo).
+
+    Se o erro disser "passou do teto de custo do fluxo", NÃO é bug: é o teto por execução
+    que o consultor ligou, funcionando. Diga quanto gastou e qual era o teto, e ofereça as
+    duas saídas — subir o teto (Fluxo › Limites da execução) se o fluxo é caro por
+    natureza, ou achar o passo caro com `ver_uso`."""
     return await anyio.to_thread.run_sync(mcp_ferramentas.diagnosticar_execucao, _sub(), execucao_id)
 
 
@@ -192,7 +197,13 @@ async def ler_conversa(conversa_id: str) -> str:
 @mcp.tool()
 async def ver_uso(time_id: str) -> str:
     """Mostra o custo de IA (US$) de um time — execuções + mensageria — com a quebra por
-    categoria e os tokens. (O custo da IA criadora é por organização, não por time.)"""
+    categoria e os tokens. (O custo da IA criadora é por organização, não por time.)
+
+    Serve também para escolher o TETO DE CUSTO POR EXECUÇÃO de uma automação (Fluxo ›
+    Limites da execução, na tela — você não tem ferramenta para defini-lo): veja aqui
+    quanto uma execução saudável custa e recomende um teto com FOLGA. Teto colado no custo
+    real transforma qualquer variação (um texto mais longo, uma retentativa) em falha, e a
+    execução que estoura o teto conta para o disjuntor."""
     return await anyio.to_thread.run_sync(mcp_ferramentas.ver_uso, _sub(), time_id)
 
 

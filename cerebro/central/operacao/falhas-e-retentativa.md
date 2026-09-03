@@ -65,6 +65,11 @@ Três coisas que **não** contam para o disjuntor, e é importante saber por qu�
   três falhas reais não pode mascarar o defeito.
 - **Execução ainda em andamento ou parada numa aprovação.** Ainda pode terminar bem — não é veredito.
 
+Estourar o **teto de custo por execução** (veja [[operacao/uso-e-custos]]), por outro lado, **conta**: a
+execução fica `falhou`, e uma automação que estoura o teto três vezes seguidas rodando sozinha é desligada.
+É o desejado — ou o teto está baixo demais, ou o fluxo disparou em custo, e nos dois casos alguém precisa
+olhar antes de continuar pagando.
+
 **Um sucesso zera a conta.** E **religar zera também**: quando você ativa a automação de novo, ela ganha as
 três chances outra vez — pela tela ou pela IA, tanto faz.
 

@@ -14,6 +14,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 import medicao_instrumentos
+import precos
 from chaves import resolver_chaves_por_time
 from modelos import Automacao, Execucao, PassoExecucao, Time
 from observabilidade import contexto
@@ -134,6 +135,32 @@ def _fazer_registrador(
         sessao.commit()
 
     return registrar
+
+
+def _teto_de_custo(automacao: Automacao | None) -> float:
+    """O teto de custo por execução do fluxo, em USD. Zero = sem teto (o padrão).
+
+    Lê a MESMA cascata do resto do comportamento do fluxo (global < perfil < ajustes),
+    para o teto ser configurado no mesmo painel que os outros limites — e não virar
+    mais uma fonte de verdade."""
+    from mensageria.config import config_da_automacao
+
+    try:
+        return float(config_da_automacao(automacao).get("teto_usd_execucao") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0  # valor estragado na config não pode derrubar a execução
+
+
+def custo_ja_gasto(sessao: Session, execucao_id: uuid.UUID) -> float:
+    """Quanto esta execução já custou nos passos GRAVADOS (USD).
+
+    É o análogo do `ordem_inicial` para dinheiro: sem isto, o teto zeraria a cada
+    retomada de aprovação e uma execução que espera duas vezes gastaria o teto três
+    vezes. Fonte única de preço: `precos.custo_de_entrada`, a mesma da aba Uso."""
+    passos = sessao.scalars(
+        select(PassoExecucao).where(PassoExecucao.execucao_id == execucao_id)
+    ).all()
+    return sum(precos.custo_de_entrada(e) for e in precos.entradas_dos_passos(passos))
 
 
 def _aplicar_resultado(execucao: Execucao, r: dict) -> None:
@@ -362,6 +389,11 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
                     # "Rodar de novo a partir daqui" (fatia 2): começa do nó pedido, em
                     # vez do início do grafo. Nulo = o caso de sempre.
                     no_inicial=execucao.no_inicial or None,
+                    # Teto de custo do fluxo (Onda 4, fatia 4). Zero = sem teto, que
+                    # é o padrão. O já gasto vem dos passos: numa re-rodada do zero
+                    # não há nenhum, mas a fonte é a mesma da retomada — uma conta só.
+                    teto_usd=_teto_de_custo(automacao),
+                    custo_inicial=custo_ja_gasto(sessao, execucao.id),
                     registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
                     cancelado=lambda: _esta_cancelada(sessao, execucao.id),
                 )
