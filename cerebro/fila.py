@@ -19,6 +19,7 @@ from sqlalchemy import func, select, update
 
 from modelos import Execucao, PassoExecucao
 from observabilidade.escritor import registrar_evento
+from orquestracao import circuito
 from orquestracao.disparo import rodar_execucao, rodar_retomada
 from sessao import CriadorDeSessao
 
@@ -123,7 +124,12 @@ def _recuperar_orfas() -> None:
             .where(Execucao.estado == "em_andamento")
             .values(
                 estado="falhou",
-                resultado={"erro": "Execução interrompida por reinício do servidor."},
+                # `interrompida_pelo_batuta`: o disjuntor (Onda 4, fatia 3) PULA estas.
+                # O defeito não é da automação — foi um deploy nosso —, e sem isso três
+                # deploys em dias seguidos desligariam as automações do cliente.
+                resultado=circuito.marcar_interrompida_pelo_batuta(
+                    {"erro": "Execução interrompida por reinício do servidor."}
+                ),
                 finalizada_em=datetime.now(timezone.utc),
             )
         )
@@ -176,10 +182,14 @@ def recuperar_execucoes_presas(sessao) -> int:
     agora = datetime.now(timezone.utc)
     for ex in presas:
         ex.estado = "falhou"
-        ex.resultado = {
-            "erro": "Execução travada (sem progresso além do tempo limite) — "
-            "interrompida automaticamente pelo Batuta."
-        }
+        # Mesma razão do boot: quem interrompeu foi o Batuta, então esta falha não
+        # conta para o disjuntor da automação (Onda 4, fatia 3).
+        ex.resultado = circuito.marcar_interrompida_pelo_batuta(
+            {
+                "erro": "Execução travada (sem progresso além do tempo limite) — "
+                "interrompida automaticamente pelo Batuta."
+            }
+        )
         ex.finalizada_em = agora
     if presas:
         sessao.commit()

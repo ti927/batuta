@@ -361,6 +361,11 @@ class AutomacaoLer(BaseModel):
     cadeia: dict | None
     ativa: bool
     configuracao: dict | None
+    # Quando o disjuntor tirou esta automação do ar por falhar sozinha 3 vezes
+    # seguidas (Onda 4, fatia 3). Nulo = não foi o disjuntor. A tela usa isto para
+    # explicar por que a automação está desligada — desligar sem dizer por quê seria
+    # trocar uma falha barulhenta por um mistério.
+    desligada_por_falhas_em: datetime | None = None
     criado_em: datetime
     atualizado_em: datetime
 

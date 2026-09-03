@@ -605,6 +605,10 @@ export type Automacao = {
   cadeia: Cadeia | null;
   ativa: boolean;
   configuracao: ConfiguracaoFluxo | null;
+  // Quando o Batuta desligou esta automação por ela falhar 3× seguidas rodando
+  // sozinha. Nulo = não foi o disjuntor (ou já foi religada). Serve para a tela
+  // distinguir "eu desliguei" de "o Batuta desligou".
+  desligada_por_falhas_em: string | null;
   criado_em: string;
   atualizado_em: string;
 };

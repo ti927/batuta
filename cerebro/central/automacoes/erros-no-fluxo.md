@@ -41,6 +41,10 @@ tentar por outro caminho, registrar o ocorrido.
   naquele passo. O texto do agente nunca é prova de que a ação aconteceu.
 - **A saída de erro não repete o passo.** Ela é um caminho, não uma retentativa; para
   tentar de novo, aponte-a para um passo que tente por outro meio.
+- **Falhar sozinha 3 vezes seguidas desliga a automação.** Quando ela dispara por conta
+  própria (agendamento, webhook, comentário), a terceira falha seguida tira a automação do
+  ar e avisa pelo canal do time — para não repetir o erro todo dia. Disparo manual não
+  conta. Ver [[operacao/falhas-e-retentativa]].
 
 ## Para a IA
 Papéis de saída (`saidas[].tipo`): `condicional` (padrão), `erro`, `senao`. As de erro e

@@ -2,7 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, Copy, Layers, Plus, Sliders, Trash2, X, Zap } from "lucide-react";
+import {
+  Activity,
+  AlertCircle,
+  Copy,
+  Layers,
+  Plus,
+  Sliders,
+  Trash2,
+  X,
+  Zap,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -288,6 +298,10 @@ function EditorAutomacao({
   const nBifurca = (cadeia.nos ?? []).filter(
     (n) => (n.saidas?.length ?? 0) > 1,
   ).length;
+  // Desligada pelo disjuntor: falhou 3× seguidas rodando sozinha. Some assim que o
+  // operador marca "Ativa" — religar zera a contagem no servidor, e manter o aviso
+  // depois disso seria mentir sobre o estado atual.
+  const desligadaPorFalhas = !ativa && !!automacao?.desligada_por_falhas_em;
 
   return (
     <div className="flex w-full flex-col px-4 py-4 sm:px-6">
@@ -302,10 +316,18 @@ function EditorAutomacao({
         />
         {/* Estado da PRÓPRIA automação (não do time): pílula sempre visível + interruptor
             para o operador. Vale para TODO gatilho, inclusive Manual — que pode ser
-            disparada por agendamento e por isso também precisa poder ficar "ativa". */}
-        <Badge variant={ativa ? "success" : "neutral"}>
-          {ativa ? "ativa" : "em repouso"}
-        </Badge>
+            disparada por agendamento e por isso também precisa poder ficar "ativa".
+            Desligada pelo DISJUNTOR ela ganha pílula própria: "em repouso" faria uma
+            automação que quebrou parecer igual a uma que você mesmo desligou. */}
+        {desligadaPorFalhas ? (
+          <Badge variant="warning" className="gap-1">
+            <AlertCircle className="size-3" /> desligada por falhas
+          </Badge>
+        ) : (
+          <Badge variant={ativa ? "success" : "neutral"}>
+            {ativa ? "ativa" : "em repouso"}
+          </Badge>
+        )}
         <Badge variant="neutral" className="gap-1">
           <Layers className="size-3" /> {nAgentes} agentes · {nBifurca} bifurcações
         </Badge>
@@ -398,6 +420,25 @@ function EditorAutomacao({
       </div>
 
       {erro && <Aviso className="mb-3">{erro}</Aviso>}
+
+      {/* O Batuta desligou esta automação sozinho. Dizer só "em repouso" transformaria
+          uma automação quebrada num mistério: quem abre a tela dias depois não teria
+          como saber por que ela parou. Diz o que houve, o que fazer e por onde ver. */}
+      {desligadaPorFalhas && (
+        <Aviso variant="atencao" className="mb-3">
+          O Batuta desligou esta automação — ela falhou 3 vezes seguidas rodando
+          sozinha. Veja o que quebrou e conserte antes de ativar de novo; religar dá
+          três chances novas, então reativar sem consertar só adia o mesmo
+          desligamento.{" "}
+          <button
+            type="button"
+            onClick={() => router.push(`/times/${time.id}/execucoes`)}
+            className="underline underline-offset-2 hover:no-underline"
+          >
+            Ver execuções que falharam
+          </button>
+        </Aviso>
+      )}
 
       {refsOrfaos > 0 && (
         <Aviso className="mb-3">

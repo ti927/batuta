@@ -465,7 +465,13 @@ async def ativar_automacao(automacao_id: str) -> str:
     Não há mais trava: o Batuta NÃO recusa mais ativar uma automação com ação
     irreversível sem aprovação humana. A responsabilidade é sua: antes de ativar um time
     que publica/envia/lança, confira se o agente que faz isso tem o instrumento
-    `pedir_aprovacao` no cinto e a regra escrita no markdown — e diga isso ao consultor."""
+    `pedir_aprovacao` no cinto e a regra escrita no markdown — e diga isso ao consultor.
+
+    Se a automação estiver inativa com `desligada_por_falhas_em` preenchido, quem a
+    desligou foi o DISJUNTOR: ela falhou 3 vezes seguidas rodando sozinha. Não religue de
+    cara — veja antes o que quebrou (`listar_execucoes` com apenas_problemas +
+    `diagnosticar_execucao`) e conserte a causa. Ativar zera a contagem e dá três chances
+    novas, então religar sem consertar só adia o mesmo desligamento."""
     return await anyio.to_thread.run_sync(escrita.ativar_automacao, _sub(), automacao_id)
 
 

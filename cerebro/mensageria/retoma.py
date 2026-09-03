@@ -19,7 +19,6 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from mensageria.aviso import avisar_falha
 from mensageria.config import com_ajuste_do_no, config_da_automacao
 from modelos import Agente, Automacao, Execucao, PassoExecucao
 from observabilidade.escritor import registrar_evento
@@ -163,7 +162,14 @@ def avancar_apos_gate(
     sessao.commit()
     sessao.refresh(execucao)
     if execucao.estado == "falhou":
-        avisar_falha(sessao, execucao, str((execucao.resultado or {}).get("erro") or ""))
+        # Funil único do caminho de erro (Onda 4, fatia 3): avisa e, se for a terceira
+        # falha seguida de uma automação que roda sozinha, desliga a automação.
+        from orquestracao import circuito
+
+        circuito.apos_falha(
+            sessao, execucao, str((execucao.resultado or {}).get("erro") or "")
+        )
+        sessao.commit()
     return execucao
 
 

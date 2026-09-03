@@ -19,6 +19,7 @@ from modelos import Automacao, Execucao, PassoExecucao, Time
 from observabilidade import contexto
 from observabilidade.escritor import registrar_evento
 from orquestracao import atividade
+from orquestracao import circuito
 from orquestracao import ficha as ficha_mod
 from orquestracao import grafo
 from orquestracao.cadeia import executar_cadeia
@@ -231,6 +232,9 @@ def criar_execucao(
         automacao_id=automacao.id,
         estado="aguardando",
         entrada={"texto": entrada},
+        # A origem também FICA na execução (Onda 4, fatia 3), não só no log: o
+        # disjuntor precisa saber se esta rodada tinha gente olhando ou não.
+        origem=origem,
         desenho=desenho or grafo.normalizar(automacao.cadeia or {}) or None,
         dados=dict(dados) if dados else None,
         no_inicial=no_inicial or None,
@@ -306,8 +310,7 @@ def rodar_retomada(sessao: Session, execucao: Execucao) -> Execucao:
                 categoria="execucao", acao="retomada.falhou", nivel="error",
                 resultado="falha", erro=e, recurso_tipo="execucao", recurso_id=execucao.id,
             )
-            from mensageria.aviso import avisar_falha
-            avisar_falha(sessao, execucao, str(e))
+            circuito.apos_falha(sessao, execucao, str(e))
         sessao.commit()
         sessao.refresh(execucao)
         return execucao
@@ -388,8 +391,12 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
                 recurso_tipo="execucao", recurso_id=execucao.id,
             )
         if execucao.estado == "falhou":
-            # §12-A / PRODUTO §16: a falha não pode morrer só no banco. Avisa quem
-            # opera, pelo canal do time. Best-effort e com rastro próprio.
-            from mensageria.aviso import avisar_falha
-            avisar_falha(sessao, execucao, str((execucao.resultado or {}).get("erro") or ""))
+            # §12-A / PRODUTO §16: a falha não pode morrer só no banco. O funil único
+            # do caminho de erro avisa quem opera pelo canal do time e, se esta for a
+            # terceira falha seguida de uma automação que roda sozinha, desliga a
+            # automação (Onda 4, fatia 3). Best-effort e com rastro próprio.
+            circuito.apos_falha(
+                sessao, execucao, str((execucao.resultado or {}).get("erro") or "")
+            )
+            sessao.commit()
         return execucao

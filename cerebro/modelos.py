@@ -196,6 +196,21 @@ class Automacao(IdData, Base):
     # vive no NÓ com portão da `cadeia` (`no.aprovacao = {instrumento_id, destinatario}`,
     # construtor visual). A coluna antiga `aprovacao_instrumento_id` foi aposentada
     # (migração de drop pós-deploy).
+    # ── Disjuntor de falhas (Onda 4, fatia 3) ──────────────────────────────────
+    # Quando o Batuta desligou esta automação por falhar sozinha várias vezes seguidas.
+    # Nulo = não foi o disjuntor (ou já foi religada). É o que separa "desliguei eu" de
+    # "o Batuta desligou", e o que a tela usa para explicar por que ela está fora do ar.
+    desligada_por_falhas_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Marco zero da contagem de falhas seguidas, gravado ao (re)ativar. A contagem é
+    # DERIVADA das execuções — não há contador a manter, logo não há contador a
+    # dessincronizar —, e sem este marco religar uma automação recém-desligada a
+    # derrubaria na PRIMEIRA falha seguinte, porque as falhas velhas continuam no
+    # histórico. Nulo = conta o histórico inteiro (automações anteriores a esta onda).
+    falhas_contam_desde: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class Execucao(IdData, Base):
@@ -225,6 +240,11 @@ class Execucao(IdData, Base):
     )  # aguardando | em_andamento | aguardando_humano | concluida | falhou | conversa
     entrada: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     resultado: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Quem disparou (manual|agendamento|webhook|comentario_instagram|sistema). O valor
+    # já existia — ia só para o banco de logs; agora fica também na execução, porque o
+    # disjuntor de falhas (Onda 4, fatia 3) precisa distinguir a automação que falha
+    # SOZINHA de um teste manual, que tem gente olhando. Nulo nas execuções antigas.
+    origem: Mapped[str | None] = mapped_column(String(20), nullable=True)
     iniciada_em: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

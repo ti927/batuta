@@ -59,7 +59,7 @@ from chaves import (
 from consultoria import exigir_admin_consultoria
 from mensageria import aprovacao, config, retoma
 from mensageria.config import painel_config
-from orquestracao import grafo
+from orquestracao import circuito, grafo
 from orquestracao.cadeia import validar_cadeia
 from orquestracao.disparo import criar_execucao
 from rotas._comum import (
@@ -173,9 +173,16 @@ def editar(
 ):
     auto = automacao_acessivel(sessao, usuario, automacao_id, minimo="operador")
     _validar_cadeia_ou_422(sessao, auto.time_id, dados.cadeia)
+    estava_ativa = auto.ativa
     for campo, valor in dados.model_dump().items():
         setattr(auto, campo, valor)
     auto.cadeia = grafo.normalizar(auto.cadeia or {})  # grava no formato canônico
+    # Religar pela tela zera a contagem do disjuntor, igual a religar pela IA/MCP
+    # (`criacao.servicos.ativar`): são as DUAS portas que ligam uma automação, e a
+    # regra tem de valer nas duas — senão religar por um caminho a derruba na
+    # primeira falha e pelo outro não. Onda 4, fatia 3.
+    if auto.ativa and not estava_ativa:
+        circuito.zerar(auto)
     sessao.commit()
     sessao.refresh(auto)
     agendador.sincronizar(auto)

@@ -410,7 +410,15 @@ def ativar(sessao: Session, auto: Automacao, *, usuario: Usuario | None = None) 
     Não há mais parede: até 2026-08-31 esta função recusava ativar quando um agente
     de ação irreversível não tinha portão humano antes na cadeia. Quem segura uma
     ação que precisa de gente é o próprio agente, chamando o instrumento
-    `pedir_aprovacao` — decisão do maestro, ver `PRODUTO §19`."""
+    `pedir_aprovacao` — decisão do maestro, ver `PRODUTO §19`.
+
+    Religar ZERA a contagem do disjuntor (Onda 4, fatia 3): quem ativou já sabe das
+    falhas velhas e merece as três chances de novo. Sem isso, uma automação recém-
+    desligada cairia de novo na primeira falha seguinte."""
+    from orquestracao import circuito
+
+    if not auto.ativa:
+        circuito.zerar(auto)
     auto.ativa = True
     sessao.flush()
     _audit(sessao, usuario, "automacao.ativada", "automacao", auto.id,

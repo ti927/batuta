@@ -99,6 +99,64 @@ def montar_texto(automacao_nome: str, passo: str, erro: str) -> str:
     return "\n".join(linhas)
 
 
+def montar_texto_desligada(automacao_nome: str, quantas: int, passo: str) -> str:
+    """O recado do disjuntor (Onda 4, fatia 3). Diz o que aconteceu, o que o Batuta
+    fez a respeito e o que a pessoa precisa fazer — desligar em silêncio seria trocar
+    um problema barulhento por um mudo."""
+    linhas = [
+        f"🛑 Desliguei a automação *{automacao_nome}*.",
+        f"Ela falhou {quantas} vezes seguidas rodando sozinha.",
+    ]
+    if passo:
+        linhas.append(f"A última parou no passo: {passo}")
+    linhas.append(
+        "Ela não vai disparar de novo até você religar. Abra as execuções no Batuta "
+        "para ver o que quebrou, conserte e ative a automação outra vez — a contagem "
+        "recomeça do zero."
+    )
+    return "\n".join(linhas)
+
+
+def avisar_desligada(
+    sessao: Session, execucao: Execucao, automacao: Automacao, quantas: int
+) -> None:
+    """Avisa pelo canal do time que o disjuntor tirou a automação do ar. Best-effort e
+    SEMPRE com rastro, como o aviso de falha — um desligamento mudo seria pior que a
+    falha que ele evita."""
+    try:
+        alvo = _canal_do_time(sessao, automacao.time_id)
+        if alvo is None:
+            registrar_evento(
+                categoria="execucao", acao="desligada.sem_canal", nivel="warning",
+                recurso_tipo="automacao", recurso_id=automacao.id,
+                detalhe={
+                    "automacao": automacao.nome,
+                    "porque": "o time não tem canal de mensageria com destinatário "
+                    "configurado — o desligamento não pôde ser avisado a ninguém",
+                },
+            )
+            return
+        inst, destino = alvo
+        texto = montar_texto_desligada(
+            automacao.nome, quantas, _onde_parou(sessao, execucao)
+        )
+        token = (segredos_instrumento.decifrar(sessao, inst.id) or {}).get("token_bot")
+        entregue = bool(token) and bool(telegram.enviar(token, destino, texto).get("ok"))
+        registrar_evento(
+            categoria="execucao",
+            acao="desligada.avisada" if entregue else "desligada.aviso_nao_entregue",
+            nivel="info" if entregue else "warning",
+            recurso_tipo="automacao", recurso_id=automacao.id,
+            detalhe={"automacao": automacao.nome, "instrumento": inst.nome},
+        )
+    except Exception as e:  # o aviso NUNCA derruba o caminho de erro que o chamou
+        registrar_evento(
+            categoria="execucao", acao="desligada.aviso_quebrou", nivel="error",
+            resultado="falha", erro=e, recurso_tipo="automacao",
+            recurso_id=getattr(automacao, "id", None),
+        )
+
+
 def avisar_falha(sessao: Session, execucao: Execucao, erro: str) -> None:
     """Avisa pelo canal do time que esta execução falhou. Best-effort e SEMPRE com
     rastro: sem canal, envio recusado ou exceção viram evento no banco de logs."""

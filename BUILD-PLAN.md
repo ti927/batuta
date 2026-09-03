@@ -2218,8 +2218,30 @@ A escolha "foto ou cadeia viva" virou **fonte única** em `grafo.desenho_que_rod
 
 **O que as IAs aprenderam:** capítulo `automacoes/execucoes-e-inspecao` com a seção "Rodar de novo a partir daqui" (e a orientação, no "Para a IA", de **não mandar refazer tudo**); prompt da criadora no bloco de diagnóstico; docstring do `diagnosticar_execucao` no MCP. Nas três, a mesma ressalva: **é ação de tela, a IA não dispara** — e repetir um passo repete o que ele faz.
 
-### Fatias 3 a 5 — a fazer
-3. **Automação que falha sozinha se desliga e avisa** — 3 falhas seguidas.
+### Fatia 3 — A automação que falha sozinha se desliga e avisa (lacuna 27)  ✅ (migração `cir00circuito01`)
+
+**O buraco.** Cada falha avisava (Onda 1), mas **ninguém somava as falhas**. Uma automação agendada com uma chave vencida seguiria disparando todo dia, queimando dinheiro e enchendo o canal de avisos idênticos — ou, se ninguém abrisse os avisos, falhando em silêncio. Foi o susto de 02/09: cinco automações de blog que disparam sozinhas quase passaram a falhar diariamente sem que nada as parasse.
+
+**O que entrou.** Três falhas seguidas **desligam** a automação, com recado pelo canal do time (quantas falhas, em que passo parou a última, o que fazer). O módulo novo `orquestracao/circuito.py` virou o **funil único do caminho de erro**: os três lugares onde uma execução termina em `falhou` (a rodada normal, a rodada pós-aprovação e a retomada) chamam **só** `circuito.apos_falha` — assim aviso e disjuntor nunca se separam.
+
+**As três fronteiras, que são o que separa um disjuntor útil de um que atrapalha:**
+- **Disparo manual não conta e nunca desliga nada.** Quem clicou está olhando a tela e vê a falha na hora; desligar a automação por baixo de quem testa seria hostil. Para isso, `execucoes.origem` passou a ser **gravada na execução** — o valor já existia, mas ia só para o banco de logs.
+- **Falha causada pelo próprio Batuta não conta** (reinício por deploy, ou execução recolhida pelo vigia de presas): elas carregam `interrompida_pelo_batuta` no resultado. Sem isso, três deploys em dias seguidos desligariam as automações do cliente. Mas também **não zeram** a contagem — um reinício no meio de três falhas reais não pode mascarar o defeito.
+- **Execução ainda viva não entra.** `aguardando_humano` ainda pode terminar bem; não é veredito.
+
+**A contagem é derivada, não guardada.** O motor tem três caminhos de falha; um contador incrementado em três lugares é um contador que um dia dessincroniza. Derivando das execuções, o pior caso de esquecer um caminho é o disjuntor disparar um pouco mais tarde — **nunca desligar o que não devia**. O marco zero é `automacoes.falhas_contam_desde`, gravado ao ativar: sem ele, religar uma automação recém-desligada a derrubaria na primeira falha seguinte, porque as três falhas velhas continuam no histórico.
+
+**Duas portas ligam uma automação** — `criacao.servicos.ativar` (IA criadora e MCP) e o `PUT /automacoes/{id}` (a tela). A contagem zera **nas duas**: zerar só numa faria religar por um caminho derrubar a automação na primeira falha e pelo outro não.
+
+**O desligamento é honrado sem trabalho extra:** o agendador relê a automação no banco a cada disparo (`_rodar` volta se `not auto.ativa`) e o `reconciliar` tira o job do relógio em até um minuto; o webhook recusa com 409 e o gatilho de comentário filtra por `ativa`.
+
+**Na tela:** a pílula deixa de dizer "em repouso" e passa a dizer **"desligada por falhas"** (âmbar, com ícone — cor + ícone + texto, regra do DESIGN-SYSTEM), e uma faixa abaixo da barra explica o que houve, o que fazer e leva às execuções. Some assim que o operador religa. Uma automação desligada pelo Batuta aparecia idêntica a uma que o consultor mesmo desligou — o mistério que a fatia existe para evitar.
+
+**Verificação:** **1034 testes verdes** (14 novos: as 3 falhas desligam; 2 não bastam; um sucesso zera; manual não conta; falha nossa não conta nem interrompe a sequência; execução viva fora; as duas portas de religamento; automação já desligada não é desligada de novo; a origem gravada nos 4 gatilhos; o disjuntor nunca derruba o caminho de erro que o chamou; o texto do recado diz o que fazer). Migração provada nos dois sentidos. `tsc`/`eslint`/`build` limpos.
+
+**O que as IAs aprenderam:** `operacao/falhas-e-retentativa` ganhou a seção do disjuntor (com o porquê de cada fronteira), `automacoes/erros-no-fluxo` a nota cruzada, e o prompt da criadora e a docstring de `ativar_automacao` no MCP a mesma ordem: **não religar de cara** — investigar, dizer o que quebrou e só então sugerir ativar, porque reativar zera a contagem e religar sem consertar apenas adia o mesmo desligamento.
+
+### Fatias 4 e 5 — a fazer
 4. **Teto de custo por execução** — opcional, no comportamento do fluxo.
 5. **Testar este nó** — com aviso explícito de que os instrumentos são reais.
 
