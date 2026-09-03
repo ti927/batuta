@@ -36,7 +36,14 @@ Entender por que um fluxo às vezes se recupera sozinho e às vezes para na sua 
 - **Idempotência:** depois que uma ação que age no mundo (publicar, gerar vídeo, responder comentário) já
   aconteceu, qualquer falha vira **não-retentável** — para nunca publicar/cobrar em dobro.
 - Geração de vídeo/imagem pesada tem **teto de tempo**: se estourar, falha limpo numa vez só (não fica
-  reprocessando e multiplicando custo).
+  reprocessando e multiplicando custo). Esse teto é o que a **geração** precisa — enquanto o instrumento
+  trabalha, ele publica sinal de vida, e o Batuta reconhece isso como progresso. Antes não: o vigia só
+  olhava passos concluídos, então um passo demorado dentro de um único instrumento era interrompido mesmo
+  trabalhando, e os instrumentos de vídeo tinham de encolher o próprio limite para escapar dele.
+- **Uma execução só é considerada travada quando os três sinais de progresso estão velhos:** quando ela
+  começou, o último passo concluído e o último sinal de vida do instrumento em curso. Se o instrumento
+  parar de dar sinal por mais que o teto, aí sim ela é interrompida — é o que separa "demorado" de
+  "pendurado".
 - **Nem toda falha derruba o fluxo.** Um sistema externo pode responder "não deu" (por exemplo, arquivo
   grande demais) sem que isso seja um erro do Batuta: o agente recebe essa resposta como **dado** e decide
   como seguir — e às vezes narra sucesso. A falha fica registrada no rastro do passo, então confira o

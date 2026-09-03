@@ -34,13 +34,31 @@ from pydantic import BaseModel, Field, model_validator
 
 import arquivos
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
+# Folha (contextvars + logging): sem ciclo, e é o que publica sinal de vida na espera.
+from orquestracao import atividade
 
 TIMEOUT_S = 60.0
 FILA = "https://queue.fal.run"
-# Vídeo leva minutos; teto ~10 min (120 × 5s), abaixo do sweeper da fila (15 min).
-POLL_TENTATIVAS = 120
+# Vídeo leva minutos. O teto era 120 (~10 min) "abaixo do sweeper da fila (15 min)" —
+# o instrumento encolhendo o próprio limite para fugir de um vigia que não olhava o
+# sinal de vida. Com o vigia corrigido (Onda 3, lacuna 24) e o laço publicando
+# atividade a cada volta, o teto pode ser o que a geração realmente pede.
+POLL_TENTATIVAS = 300  # 300 × 5 s = 25 min
 POLL_INTERVALO_S = 5.0
 TENTATIVAS_DOWNLOAD = 3
+# De quantas em quantas voltas o cronômetro da frase de espera muda (~30 s).
+VOLTAS_POR_AVISO = 6
+
+def _frase_espera(volta: int) -> str:
+    """O que a tela mostra durante a geração. Com o tempo decorrido a partir de meio
+    minuto: sem número, uma espera longa é indistinguível de um travamento (§12-A)."""
+    segundos = int(volta * POLL_INTERVALO_S)
+    if segundos < 30:
+        return "Gerando o vídeo — pode levar minutos…"
+    if segundos < 120:
+        return f"Gerando o vídeo… ({segundos} s)"
+    return f"Gerando o vídeo… ({segundos // 60} min)"
+
 
 # ── FONTE ÚNICA DA VERDADE: modelos de imagem→vídeo na fal.ai ──
 # Cada entrada: endpoint (id do modelo) + durações válidas (passadas VERBATIM à API)
@@ -322,8 +340,15 @@ class GerarVideoFal(TipoInstrumento):
 
     def _aguardar(self, cli, headers, status_url: str) -> None:
         """Poll do status até COMPLETED. Erros transitórios do GET NÃO sobem como
-        retentáveis (o job existe/cobra) — dorme e reconfere; estoura em não-retentável."""
-        for _ in range(POLL_TENTATIVAS):
+        retentáveis (o job existe/cobra) — dorme e reconfere; estoura em não-retentável.
+
+        Publica sinal de vida a cada volta (Onda 3, lacuna 24): a tela mostra o
+        cronômetro andando, e o vigia de execuções presas sabe que o passo está vivo."""
+        for volta in range(POLL_TENTATIVAS):
+            # A cada ~30 s (não a cada 5 s): o batimento só precisa ser bem mais
+            # frequente que o teto do vigia, e cada publicação é uma escrita no banco.
+            if volta % VOLTAS_POR_AVISO == 0:
+                atividade.registrar(_frase_espera(volta))
             try:
                 r = cli.get(status_url, headers=headers)
             except httpx.HTTPError:

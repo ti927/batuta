@@ -151,14 +151,24 @@ def recuperar_execucoes_presas(sessao) -> int:
     worker travou SEM o processo reiniciar — o boot (`_recuperar_orfas`) não a
     alcança. "Travada" = sem progresso (heartbeat) além de `TETO_INATIVIDADE_EXEC_MIN`.
 
-    O heartbeat é o instante MAIS RECENTE entre o início desta reivindicação
-    (`iniciada_em`) e o último passo concluído — assim uma cadeia longa que vai
-    concluindo passos NUNCA é morta; só morre o que ficou pendurado dentro de um passo
-    além do teto. `iniciada_em` é reescrito a CADA reivindicação, INCLUSIVE na RETOMADA
-    de um portão: por isso uma execução que ficou horas `aguardando_humano` e acabou de
-    ser aprovada NÃO pode morrer no instante da retomada só porque o último passo
-    (anterior à espera) é antigo. Marca `falhou` de forma visível. Devolve quantas
-    recuperou."""
+    São TRÊS os sinais de progresso, e a execução só morre quando os três estão velhos:
+
+    1. `iniciada_em` — o início desta reivindicação. É reescrito a CADA reivindicação,
+       INCLUSIVE na RETOMADA de uma aprovação: por isso uma execução que ficou horas
+       `aguardando_humano` e acabou de ser retomada não morre no instante da retomada
+       só porque o último passo (anterior à espera) é antigo.
+    2. O **último passo concluído** — uma cadeia longa que vai concluindo passos nunca
+       é morta.
+    3. `atividade_em` — o **sinal de vida ao vivo**, publicado pelo instrumento
+       enquanto ele trabalha (Onda 3, lacuna 24). Sem este terceiro sinal, um passo
+       que legitimamente leva mais que o teto DENTRO de um único instrumento era morto
+       mesmo gritando "estou trabalhando" a cada poucos segundos — e a prova do
+       estrago estava no próprio código: `gerar_video` teve de encolher o teto dele
+       para ~10 min "para ficar abaixo do sweeper", ou seja, um instrumento
+       contorcendo o próprio limite para fugir de um vigia cego. Um vídeo que demora
+       12 minutos falhava aos 10 por causa disso.
+
+    Marca `falhou` de forma visível. Devolve quantas recuperou."""
     corte = datetime.now(timezone.utc) - timedelta(minutes=TETO_INATIVIDADE_EXEC_MIN)
     ultimo_passo = (
         select(func.max(PassoExecucao.finalizado_em))
@@ -166,17 +176,16 @@ def recuperar_execucoes_presas(sessao) -> int:
         .correlate(Execucao)
         .scalar_subquery()
     )
-    # "Presa" só quando OS DOIS sinais de progresso são antigos: o início desta
-    # reivindicação E o último passo concluído. Como a retomada de um portão reescreve
-    # `iniciada_em` para AGORA, a condição `iniciada_em < corte` fica falsa e a execução
-    # recém-retomada sobrevive — antes, o `coalesce(último_passo, …)` preferia o passo
-    # anterior à espera e matava a execução no exato instante em que o humano aprovava.
     presas = sessao.scalars(
         select(Execucao).where(
             Execucao.estado == "em_andamento",
             Execucao.iniciada_em.is_not(None),
             Execucao.iniciada_em < corte,
             func.coalesce(ultimo_passo, Execucao.iniciada_em) < corte,
+            # O sinal de vida do instrumento em curso. `coalesce` para `iniciada_em`
+            # porque execução sem atividade publicada não pode ficar imortal: aí valem
+            # os outros dois sinais, exatamente como antes.
+            func.coalesce(Execucao.atividade_em, Execucao.iniciada_em) < corte,
         )
     ).all()
     agora = datetime.now(timezone.utc)

@@ -2287,6 +2287,33 @@ A escolha "foto ou cadeia viva" virou **fonte única** em `grafo.desenho_que_rod
 
 ---
 
+## FASE — O motor vira um grafo de verdade · **Onda 3: tempo e composição**  ▶️ EM ANDAMENTO (2026-09-03)
+
+A última onda do plano, adiada com aval quando a ordem foi invertida. Quatro fatias, nesta ordem.
+
+### Fatia 1 — O vigia respeita o sinal de vida (lacuna 24)  ✅ (sem migração)
+
+**O buraco.** O vigia de execuções presas media progresso por dois sinais: quando a execução foi reivindicada e qual foi o último passo **concluído**. Um passo que legitimamente demora mais que o teto (15 min) **dentro de um único instrumento** era morto — mesmo publicando "estou gerando o vídeo" a cada poucos segundos, porque ninguém olhava esse sinal.
+
+**A prova do estrago estava no próprio código.** `gerar_video.py` trazia escrito: *"teto ~10 min (120 × 5s) — abaixo do sweeper da fila (TETO_INATIVIDADE_EXEC_MIN=15) p/ falhar LIMPO, sem ser morto pelo motor"*. Ou seja: um instrumento **contorcendo o próprio limite para fugir de um vigia cego**. Um vídeo do Sora que demorasse 12 minutos falhava aos 10 — não por limite da OpenAI, mas por medo do Batuta. O mesmo comentário estava no `gerar_video_fal.py`.
+
+**O que entrou, em duas metades que só funcionam juntas:**
+1. **O vigia passou a ter três sinais** (`fila.recuperar_execucoes_presas`): início da reivindicação, último passo concluído e **`atividade_em`**, o sinal de vida ao vivo. A execução só morre quando os **três** estão velhos. `coalesce` para `iniciada_em` mantém o comportamento antigo em execução que não publica atividade — nada de execução imortal por ausência de dado.
+2. **O batimento passou a bater.** `atividade.registrar` era chamado **uma vez**, antes de acionar o instrumento, e nunca mais: um vídeo de 20 minutos publicava "gerando…" no minuto zero e ficava mudo. Agora os dois instrumentos que esperam em laço publicam a cada ~30 s, **com o tempo decorrido** ("Gerando o vídeo… (7 min)") — o vigia enxerga o passo vivo, e quem olha a tela vê cronômetro em vez de tela parada (§12-A, e o "feedback constante" que o maestro pede).
+
+**E o teto dos instrumentos deixou de ser refém:** de 120 voltas (~10 min) para 300 (~25 min) nos dois, agora escolhido pelo que a geração pede.
+
+**Verificação:** **1063 testes verdes** (9 novos: instrumento lento que dá sinal de vida sobrevive; sinal de vida VELHO **não** salva — senão o vigia deixaria de existir na prática; execução sem atividade segue a regra antiga; a frase ganha cronômetro; os dois instrumentos publicam ao longo da espera; o teto dos dois passou do teto do vigia; o intervalo entre batimentos é bem menor que o teto; e publicar fora de uma execução é inofensivo). Sem migração.
+
+**O que as IAs aprenderam:** `operacao/falhas-e-retentativa` explica os três sinais de progresso e por que "demorado" deixou de ser confundido com "pendurado".
+
+### Fatias 2 a 4 — a fazer
+2. **Timeouts** — por nó (com o padrão do instrumento), por passo e por execução (lacunas 22 e 23).
+3. **Nó "Esperar"** — a execução pausa por minutos/horas/dias e volta mantendo a ficha e o ponto do fluxo (lacuna 20).
+4. **Nó "Chamar outra automação"** — sub-fluxo síncrono que devolve o resultado ao chamador (lacuna 21).
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.

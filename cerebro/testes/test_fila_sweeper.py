@@ -3,8 +3,11 @@
 Complementa a recuperação de boot (fila._recuperar_orfas): quando um worker trava
 SEM o processo reiniciar (chamada externa pendurada), a execução fica em
 `em_andamento` para sempre. O sweeper a marca `falhou` — mas só se ficou sem
-progresso além do teto. O heartbeat (início OU último passo concluído) garante que
-uma cadeia longa que VAI concluindo passos JAMAIS é morta.
+progresso além do teto. São TRÊS os sinais de progresso, e a execução só morre quando
+os três estão velhos: o início da reivindicação, o último passo concluído e o SINAL DE
+VIDA ao vivo (`atividade_em`, Onda 3 lacuna 24). Assim uma cadeia longa que vai
+concluindo passos jamais é morta — e, agora, um passo que legitimamente demora dentro
+de UM instrumento também não, desde que o instrumento publique que está trabalhando.
 
 Os testes rodam contra o banco real (transação revertida): há execuções reais que
 podem casar com a varredura, então afirmamos sobre o ESTADO da execução criada aqui
@@ -21,7 +24,7 @@ def _agora():
     return datetime.now(timezone.utc)
 
 
-def _execucao(sessao, time_id, estado, iniciada_em, passos_fim=()):
+def _execucao(sessao, time_id, estado, iniciada_em, passos_fim=(), atividade_em=None):
     auto = Automacao(time_id=time_id, nome="Auto", tipo_gatilho="manual")
     sessao.add(auto)
     sessao.flush()
@@ -30,6 +33,8 @@ def _execucao(sessao, time_id, estado, iniciada_em, passos_fim=()):
         estado=estado,
         entrada={"texto": "x"},
         iniciada_em=iniciada_em,
+        atividade="Gerando o vídeo…" if atividade_em else None,
+        atividade_em=atividade_em,
     )
     sessao.add(ex)
     sessao.flush()
@@ -127,3 +132,52 @@ def test_outros_estados_intactos(dados, sessao):
     for estado, ex in casos.items():
         sessao.refresh(ex)
         assert ex.estado == estado
+
+
+# ── O sinal de vida ao vivo (Onda 3, lacuna 24) ───────────────────────────────
+
+
+def test_instrumento_lento_que_da_sinal_de_vida_nao_e_morto(dados, sessao):
+    """O caso que motivou a fatia: um passo que demora mais que o teto DENTRO de um
+    instrumento (gerar vídeo). Início e último passo velhos, mas o instrumento acabou
+    de publicar que está trabalhando → vive. Antes disto, `gerar_video` precisava
+    encolher o próprio teto para ~10 min só para não ser morto aqui."""
+    ex = _execucao(
+        sessao,
+        dados["timeA"].id,
+        "em_andamento",
+        _agora() - timedelta(minutes=40),
+        passos_fim=[_agora() - timedelta(minutes=38)],
+        atividade_em=_agora() - timedelta(seconds=20),
+    )
+    fila.recuperar_execucoes_presas(sessao)
+    sessao.refresh(ex)
+    assert ex.estado == "em_andamento"
+
+
+def test_sinal_de_vida_VELHO_nao_salva_a_execucao(dados, sessao):
+    """O instrumento parou de dar sinal há mais que o teto: aí travou de verdade. Sem
+    esta metade, bastaria uma atividade publicada uma vez para a execução virar
+    imortal — e o vigia deixaria de existir na prática."""
+    ex = _execucao(
+        sessao,
+        dados["timeA"].id,
+        "em_andamento",
+        _agora() - timedelta(minutes=40),
+        passos_fim=[_agora() - timedelta(minutes=38)],
+        atividade_em=_agora() - timedelta(minutes=30),
+    )
+    fila.recuperar_execucoes_presas(sessao)
+    sessao.refresh(ex)
+    assert ex.estado == "falhou"
+
+
+def test_execucao_sem_atividade_publicada_segue_a_regra_antiga(dados, sessao):
+    """Sem sinal de vida nenhum, valem os outros dois sinais — exatamente como antes.
+    Nada de execução imortal por ausência de dado."""
+    ex = _execucao(
+        sessao, dados["timeA"].id, "em_andamento", _agora() - timedelta(minutes=20)
+    )
+    fila.recuperar_execucoes_presas(sessao)
+    sessao.refresh(ex)
+    assert ex.estado == "falhou"

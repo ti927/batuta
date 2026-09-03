@@ -39,15 +39,36 @@ from pydantic import BaseModel, Field, model_validator
 import arquivos
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 from instrumentos.montar_imagem import _baixar
+# `atividade` é folha (só contextvars + logging): importá-la aqui não cria ciclo, e é
+# o que deixa o instrumento publicar sinal de vida DURANTE a espera.
+from orquestracao import atividade
 
 # Rede: cada request é rápido; o poll é o laço. Timeout generoso por request.
 TIMEOUT_S = 60.0
 URL_OPENAI = "https://api.openai.com/v1/videos"
-# Poll até `completed`. Vídeo Sora leva minutos; teto ~10 min (120 × 5s) — abaixo do
-# sweeper da fila (TETO_INATIVIDADE_EXEC_MIN=15) p/ falhar LIMPO, sem ser morto pelo motor.
-POLL_TENTATIVAS = 120
+# Poll até `completed`. Vídeo Sora leva minutos — e agora o teto é o que a GERAÇÃO
+# precisa, não o que o vigia da fila permitia. Até 2026-09-03 este número era 120
+# (~10 min) escolhido "para ficar abaixo do sweeper (TETO_INATIVIDADE_EXEC_MIN=15)":
+# um instrumento contorcendo o próprio limite para fugir de um vigia que não olhava o
+# sinal de vida. Com o vigia corrigido (Onda 3, lacuna 24), o laço publica atividade a
+# cada volta e pode esperar o tempo real de um vídeo de 12 s em 1080p.
+POLL_TENTATIVAS = 300  # 300 × 5 s = 25 min
 POLL_INTERVALO_S = 5.0
 TENTATIVAS_DOWNLOAD = 3
+# De quantas em quantas voltas o cronômetro da frase de espera muda (~30 s).
+VOLTAS_POR_AVISO = 6
+
+def _frase_espera(volta: int) -> str:
+    """O que a tela mostra enquanto o vídeo é gerado. Com o tempo decorrido a partir
+    de meio minuto: sem número, uma espera de 20 minutos é indistinguível de um
+    travamento (§12-A — o usuário precisa saber o que acontece o tempo todo)."""
+    segundos = int(volta * POLL_INTERVALO_S)
+    if segundos < 30:
+        return "Gerando o vídeo — pode levar minutos…"
+    if segundos < 120:
+        return f"Gerando o vídeo… ({segundos} s)"
+    return f"Gerando o vídeo… ({segundos // 60} min)"
+
 
 _TAMANHOS_720 = ("720x1280", "1280x720")
 _TAMANHOS_1080 = ("1080x1920", "1920x1080")
@@ -337,8 +358,19 @@ class GerarVideo(TipoInstrumento):
     def _aguardar(self, cli, headers, video_id: str) -> str:
         """Poll do job até um estado terminal. Erros transitórios do GET NÃO sobem
         como retentáveis (o job existe/cobra) — dorme e reconfere. Devolve
-        'completed'; `failed`/estouro do teto viram FalhaInstrumento não-retentável."""
-        for _ in range(POLL_TENTATIVAS):
+        'completed'; `failed`/estouro do teto viram FalhaInstrumento não-retentável.
+
+        A cada volta o laço PUBLICA sinal de vida (Onda 3, lacuna 24). Isso serve a
+        duas pessoas ao mesmo tempo: quem olha a tela vê o cronômetro andando em vez de
+        uma tela parada, e o vigia de execuções presas sabe que este passo está vivo —
+        antes ele só via passos concluídos, e por isso este instrumento precisava
+        encolher o próprio teto para não ser morto."""
+        for volta in range(POLL_TENTATIVAS):
+            # A cada ~30 s, não a cada volta: o batimento precisa ser MUITO mais
+            # frequente que o teto do vigia (15 min), não a cada 5 s — isso seria uma
+            # escrita no banco por volta, à toa.
+            if volta % VOLTAS_POR_AVISO == 0:
+                atividade.registrar(_frase_espera(volta))
             try:
                 r = cli.get(f"{URL_OPENAI}/{video_id}", headers=headers)
             except httpx.HTTPError:
