@@ -151,6 +151,36 @@ def _teto_de_custo(automacao: Automacao | None) -> float:
         return 0.0  # valor estragado na config não pode derrubar a execução
 
 
+def _tetos_de_tempo(automacao: Automacao | None) -> tuple[int, int]:
+    """Os tetos de tempo do fluxo, em minutos: (por passo, pela execução). Zero = sem
+    teto (o padrão). Mesma cascata do resto do comportamento do fluxo."""
+    from mensageria.config import config_da_automacao
+
+    cfg = config_da_automacao(automacao)
+    def _int(chave: str) -> int:
+        try:
+            return max(0, int(cfg.get(chave) or 0))
+        except (TypeError, ValueError):
+            return 0  # valor estragado na config não pode derrubar a execução
+    return _int("teto_min_passo"), _int("teto_min_execucao")
+
+
+def tempo_ja_trabalhado_s(sessao: Session, execucao_id: uuid.UUID) -> float:
+    """Quanto esta execução já TRABALHOU nos passos gravados, em segundos.
+
+    A soma da duração dos passos — não o relógio desde que ela nasceu. Uma execução
+    que esperou três dias por uma aprovação não trabalhou três dias, e contar a espera
+    a mataria na retomada, punindo justamente o comportamento que o produto pede."""
+    passos = sessao.scalars(
+        select(PassoExecucao).where(PassoExecucao.execucao_id == execucao_id)
+    ).all()
+    return sum(
+        max(0.0, (p.finalizado_em - p.iniciado_em).total_seconds())
+        for p in passos
+        if p.iniciado_em and p.finalizado_em
+    )
+
+
 def custo_ja_gasto(sessao: Session, execucao_id: uuid.UUID) -> float:
     """Quanto esta execução já custou nos passos GRAVADOS (USD).
 
@@ -372,6 +402,7 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
         # com a ORIGEM por provedor para a medição, e fixa o mapa no contexto durante
         # toda a cadeia, sem tocar no motor de grafo.
         chaves, origens = resolver_chaves_por_time(sessao, time_id)
+        min_passo, min_execucao = _tetos_de_tempo(automacao)
         try:
             # `usar_atividade`: publica "o que está acontecendo agora" (feedback ao vivo)
             # numa sessão própria, para a tela mostrar progresso mesmo quando um instrumento
@@ -400,6 +431,10 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
                     # não há nenhum, mas a fonte é a mesma da retomada — uma conta só.
                     teto_usd=_teto_de_custo(automacao),
                     custo_inicial=custo_ja_gasto(sessao, execucao.id),
+                    # Tetos de TEMPO do fluxo (Onda 3, fatia 2). Zero = sem teto.
+                    teto_min_passo=min_passo,
+                    teto_min_execucao=min_execucao,
+                    tempo_inicial_s=tempo_ja_trabalhado_s(sessao, execucao.id),
                     # "Testar este nó" (fatia 5): roda o nó do `no_inicial` e para,
                     # sem seguir as setas. Falso = o caso de sempre.
                     so_um_passo=bool(execucao.teste_de_no),

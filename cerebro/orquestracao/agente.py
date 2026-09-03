@@ -29,6 +29,7 @@ from instrumentos.base import (
 from modelos import Agente, Instrumento
 from orquestracao import atividade
 from orquestracao import ficha as ficha_mod
+from orquestracao import prazo
 from orquestracao.llm import MODELO_PADRAO, construir_modelo, texto_da_resposta
 from orquestracao.modelos_ia import PROVEDOR_ANTHROPIC, provedor_do_modelo_seguro
 from sessao import CriadorDeSessao
@@ -119,12 +120,24 @@ def _registrar_resposta_com_falha(
 
 def _turno_interrompido(falhas: list[str], pedido: dict | None = None) -> str | None:
     """Resposta curta que substitui QUALQUER ação depois que o turno já acabou — por
-    falha ou por espera. Nos dois casos, deixar o agente continuar agindo é como a
-    execução faz meio trabalho e narra sucesso.
+    falha, por espera ou por prazo. Nos três casos, deixar o agente continuar agindo é
+    como a execução faz meio trabalho e narra sucesso.
 
     - Falhou uma ação IRREVERSÍVEL: o turno já está condenado (`raise` no fim).
     - Pediu APROVAÇÃO: o agente está esperando uma pessoa; agir agora seria fazer
-      justamente o que ele foi mandado confirmar antes."""
+      justamente o que ele foi mandado confirmar antes.
+    - Estourou o PRAZO do passo (Onda 3, fatia 2): o teto de tempo que o consultor
+      escolheu para este passo passou. Barramos ENTRE as ações — a que já estava em
+      andamento termina, protegida pelo limite do próprio instrumento."""
+    if prazo.expirou():
+        return json.dumps(
+            {
+                "ok": False,
+                "erro": "O tempo máximo deste passo acabou. Não execute mais nenhuma "
+                "ação; encerre agora relatando o que já conseguiu fazer.",
+            },
+            ensure_ascii=False,
+        )
     if falhas:
         return json.dumps(
             {
@@ -820,6 +833,18 @@ def executar_agente(
     # a execução falha de forma determinística e visível (nunca em silêncio).
     if falhas:
         raise FalhaInstrumento(falhas[0])
+
+    # Estourou o teto de tempo DESTE passo (Onda 3, fatia 2). Falha de propósito, em
+    # vez de seguir com o que deu tempo: um passo que passou do orçamento e entrega
+    # meio trabalho, narrado como inteiro, é justamente o padrão que o motor combate.
+    # Quem quiser tratar isso desenha uma saída "Se der erro" (Onda 1).
+    if prazo.expirou():
+        raise FalhaInstrumento(
+            f"O passo do agente '{agente.nome}' passou do tempo máximo definido no "
+            "fluxo e foi interrompido. Aumente o teto em Fluxo › Limites da execução, "
+            "ou divida a tarefa deste passo em dois.",
+            retentavel=False,
+        )
 
     mensagens = resultado["messages"]
     # DELTA do turno POR IDENTIDADE: o que NÃO estava no fio antes. Sem memória, ids_antes é

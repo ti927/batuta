@@ -31,7 +31,9 @@ from orquestracao.disparo import (
     _esta_cancelada,
     _fazer_registrador,
     _teto_de_custo,
+    _tetos_de_tempo,
     custo_ja_gasto,
+    tempo_ja_trabalhado_s,
 )
 from orquestracao.llm import usar_chaves
 
@@ -130,6 +132,8 @@ def avancar_apos_gate(
     # `em_andamento` (mecânico e conversacional, canal e tela). FONTE ÚNICA com o sweeper.
     execucao.iniciada_em = datetime.now(timezone.utc)
     sessao.commit()
+    auto_da_execucao = sessao.get(Automacao, execucao.automacao_id)
+    min_passo, min_execucao = _tetos_de_tempo(auto_da_execucao)
     try:
         with usar_chaves(chaves):
             r = executar_cadeia(
@@ -146,8 +150,14 @@ def avancar_apos_gate(
                 # O teto de custo vale por EXECUÇÃO e atravessa a espera: o já gasto
                 # antes da aprovação continua contando (Onda 4, fatia 4). Sem isto,
                 # uma execução que para duas vezes gastaria o teto três vezes.
-                teto_usd=_teto_de_custo(sessao.get(Automacao, execucao.automacao_id)),
+                teto_usd=_teto_de_custo(auto_da_execucao),
                 custo_inicial=custo_ja_gasto(sessao, execucao.id),
+                # Tetos de TEMPO (Onda 3, fatia 2). O já trabalhado atravessa a espera
+                # — mas a espera em si não conta: quem demorou a aprovar foi gente, e
+                # punir isso mataria o fluxo no instante da retomada.
+                teto_min_passo=min_passo,
+                teto_min_execucao=min_execucao,
+                tempo_inicial_s=tempo_ja_trabalhado_s(sessao, execucao.id),
                 registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
                 # Cancelar voltou a valer DEPOIS do portão: sem este callback, o
                 # trecho pós-aprovação era o único do sistema que ignorava o botão

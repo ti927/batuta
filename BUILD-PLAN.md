@@ -2307,8 +2307,25 @@ A última onda do plano, adiada com aval quando a ordem foi invertida. Quatro fa
 
 **O que as IAs aprenderam:** `operacao/falhas-e-retentativa` explica os três sinais de progresso e por que "demorado" deixou de ser confundido com "pendurado".
 
-### Fatias 2 a 4 — a fazer
-2. **Timeouts** — por nó (com o padrão do instrumento), por passo e por execução (lacunas 22 e 23).
+### Fatia 2 — Tetos de tempo, por passo e por execução (lacunas 22 e 23)  ✅ (sem migração)
+
+**O buraco.** Cada instrumento tinha (e mantém) o seu limite de rede — 15 s no REST, 120 s no gerar imagem, 25 min no vídeo. Mas isso é o limite de **uma chamada**: um agente encadeia dez chamadas, cada uma dentro do seu limite, e leva quarenta minutos assim mesmo. Não havia teto do **passo** nem da **execução**.
+
+**O que entrou.** Duas chaves no comportamento do fluxo, na mesma cascata dos outros limites: `teto_min_passo` (com **ajuste por nó**, que vence o do fluxo — é a lacuna 22) e `teto_min_execucao`. Módulo novo `orquestracao/prazo.py`, um ContextVar no mesmo padrão do `atividade`/`usar_chaves`: o motor fixa o prazo antes de rodar o nó, e o agente pergunta por ele lá no fundo, sem mudar a assinatura de nada no grafo.
+
+**Onde o teto do passo age, dito com todas as letras.** Ele barra o agente **entre as ações**, não no meio de uma: Python não mata uma thread com segurança, então a chamada em andamento vai até o fim (protegida pelo limite do próprio instrumento) e o passo para logo depois. O estouro fica limitado ao teto **mais a duração de uma chamada** — e é exatamente isso que a documentação promete, nem uma vírgula a mais. O gancho é o `_turno_interrompido`, o **ponto único** que já impedia mais ações depois de uma falha irreversível ou de um pedido de aprovação; o prazo entrou como terceiro motivo, e o turno **falha** no fim, como no caso irreversível — entregar meio trabalho narrado como inteiro é o que o motor combate, e quem quiser tratar desenha uma saída "Se der erro".
+
+**O teto da execução conta tempo de TRABALHO, não do relógio** — e essa foi a decisão que evitou um bug feio. A soma da duração dos passos, não o tempo desde que a execução nasceu. Uma execução que espera três dias por uma aprovação não trabalhou três dias: contar o relógio a mataria no **instante** em que o humano aprovasse, punindo justamente o comportamento que o produto pede. É o análogo do `custo_inicial` da Onda 4: `tempo_ja_trabalhado_s` soma os passos gravados, e o teto atravessa a espera sem consumi-la.
+
+**Os dois nascem desligados** (`0`), pelo mesmo motivo do teto de custo: um limite que o consultor não pediu interromperia trabalho legítimo e lento como se fosse defeito.
+
+**Na tela:** os dois campos do fluxo aparecem sozinhos em **Fluxo › Limites da execução** (o painel é montado a partir do backend). O ajuste **por passo** ganhou bloco próprio no painel do nó — **"Tempo deste passo"** —, deliberadamente separado do bloco "Se este passo esperar uma pessoa": um diz quanto o **agente** pode trabalhar, o outro quanto esperar uma **pessoa** responder, e misturá-los confundiria os dois.
+
+**Verificação:** **1080 testes verdes** (17 novos: sem prazo nada expira; zero/nulo = sem teto; prazo futuro não expirou; prazo vencido barra na hora; o prazo **não vaza** de um passo para o seguinte; o agente barra a ação e diz o que fazer; o teto da execução para o fluxo; o já-trabalhado atravessa a espera; a soma bate; **a espera por aprovação não conta como trabalho**; passo sem início/fim não quebra a conta; os dois nascem desligados; saem dos ajustes; valor estragado vira "sem teto"; os campos chegam ao painel; e **o ajuste do nó vence o do fluxo**). Sem migração. `tsc`/`eslint`/`build` limpos.
+
+**O que as IAs aprenderam:** `operacao/falhas-e-retentativa` ganhou a seção dos dois tetos com as duas honestidades (barra entre ações; conta trabalho, não relógio); o prompt da criadora e a docstring do `diagnosticar_execucao` no MCP mandam **não ligar por conta própria** e explicar o estouro como regra funcionando, não como bug.
+
+### Fatias 3 e 4 — a fazer
 3. **Nó "Esperar"** — a execução pausa por minutos/horas/dias e volta mantendo a ficha e o ponto do fluxo (lacuna 20).
 4. **Nó "Chamar outra automação"** — sub-fluxo síncrono que devolve o resultado ao chamador (lacuna 21).
 

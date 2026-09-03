@@ -182,7 +182,12 @@ async def diagnosticar_execucao(execucao_id: str) -> str:
     Se o erro disser "passou do teto de custo do fluxo", NÃO é bug: é o teto por execução
     que o consultor ligou, funcionando. Diga quanto gastou e qual era o teto, e ofereça as
     duas saídas — subir o teto (Fluxo › Limites da execução) se o fluxo é caro por
-    natureza, ou achar o passo caro com `ver_uso`."""
+    natureza, ou achar o passo caro com `ver_uso`.
+
+    O mesmo vale para "passou do tempo máximo": há teto de tempo por PASSO e pela EXECUÇÃO,
+    ambos desligados por padrão. Duas ressalvas ao explicar: o teto do passo barra o agente
+    ENTRE ações (a chamada em andamento termina), e o da execução conta tempo de TRABALHO —
+    a espera por uma aprovação humana não consome o teto."""
     return await anyio.to_thread.run_sync(mcp_ferramentas.diagnosticar_execucao, _sub(), execucao_id)
 
 

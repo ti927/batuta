@@ -888,6 +888,50 @@ export function Inspector({
               </div>
             </div>
 
+            {/* Teto de TEMPO deste passo (Onda 3, fatia 2) — bloco próprio, e não
+                junto do de espera: um diz quanto o AGENTE pode trabalhar, o outro
+                quanto esperar uma PESSOA responder. Assuntos diferentes. */}
+            {painel && campoPorChave["teto_min_passo"] && (
+              <div className="flex flex-col gap-3 rounded-[10px] border border-[#E8E6F0] p-3">
+                <div>
+                  <div className="text-[12.5px] font-medium text-[#1A1730]">
+                    Tempo deste passo
+                  </div>
+                  <p className="mt-0.5 text-[11px] leading-snug text-[#6B6880]">
+                    Quanto ele pode trabalhar antes de ser interrompido. Segue o{" "}
+                    <strong>Tipo de fluxo</strong>; ajuste aqui só se este passo for
+                    diferente (uma geração de vídeo, por exemplo). O limite vale para o
+                    trabalho todo do agente — cada chamada tem o seu próprio.
+                  </p>
+                </div>
+                {(() => {
+                  const cfg = no.config ?? {};
+                  const ajustado = "teto_min_passo" in cfg;
+                  return (
+                    <CampoConfig
+                      campo={campoPorChave["teto_min_passo"]}
+                      valor={
+                        ajustado
+                          ? cfg["teto_min_passo"]
+                          : efetivoDoFluxo(painel, configFluxo, "teto_min_passo")
+                      }
+                      ajustado={ajustado}
+                      podeEditar={podeEditar}
+                      rotuloHerdado="herdado do fluxo"
+                      onChange={(v) =>
+                        onPatchNode(no.id, { config: { ...cfg, teto_min_passo: v } })
+                      }
+                      onReset={() =>
+                        onPatchNode(no.id, {
+                          config: semChave(cfg, "teto_min_passo"),
+                        })
+                      }
+                    />
+                  );
+                })()}
+              </div>
+            )}
+
             {/* Regras da espera (sobrepõem o Tipo de fluxo — cascata `no.config`) */}
             {painel && (
               <div className="flex flex-col gap-3 rounded-[10px] border border-[#E8E6F0] p-3">

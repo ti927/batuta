@@ -99,6 +99,12 @@ GLOBAL: dict = {
     # o consultor pedir interromperia fluxos legitimamente caros (gerar vídeo, um
     # for-each de 20 itens) como se fosse defeito.
     "teto_usd_execucao": 0.0,
+    # Tempo (Onda 3, fatia 2). Ambos ZERO = desligados, pelo mesmo motivo do teto de
+    # custo: um teto que o consultor não pediu interromperia trabalho legítimo e lento
+    # (gerar vídeo leva ~25 min) como se fosse defeito. O do PASSO barra o agente
+    # ENTRE ações; o da EXECUÇÃO é conferido entre passos.
+    "teto_min_passo": 0,
+    "teto_min_execucao": 0,
     # C. Atendimento (cliente externo)
     "saudacao_abertura": SAUDACAO_PADRAO,  # "" = desligada
     "horario_comercial_ativo": False,
@@ -193,6 +199,12 @@ CAMPOS = [
         {"chave": "teto_usd_execucao",
          "rotulo": "Teto de custo por execução (0 = sem teto)",
          "tipo": "valor", "sufixo": "US$"},
+        {"chave": "teto_min_passo",
+         "rotulo": "Tempo máximo de um passo (0 = sem teto)",
+         "tipo": "int", "sufixo": "min"},
+        {"chave": "teto_min_execucao",
+         "rotulo": "Tempo máximo da execução inteira (0 = sem teto)",
+         "tipo": "int", "sufixo": "min"},
     ]},
     {"grupo": "Atendimento ao cliente", "campos": [
         {"chave": "saudacao_abertura", "rotulo": "Saudação no 1º contato (vazio = desligada)", "tipo": "texto"},

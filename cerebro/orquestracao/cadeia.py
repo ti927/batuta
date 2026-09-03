@@ -71,6 +71,7 @@ import segredos_instrumento
 from modelos import Agente, AgenteInstrumento, Instrumento
 from orquestracao import ficha as ficha_mod
 from orquestracao import grafo
+from orquestracao import prazo
 from orquestracao.agente import executar_agente
 from orquestracao.llm import MODELO_PADRAO, construir_modelo
 
@@ -100,6 +101,15 @@ PASSOS_POR_ITEM = 5
 
 # Destinos que encerram a cadeia (mantido para retrocompatibilidade de imports).
 _DESTINOS_FIM = grafo.DESTINOS_FIM
+
+
+class TetoDeTempoExcedido(RuntimeError):
+    """A execução passou do teto de TEMPO do fluxo (Onda 3, fatia 2).
+
+    O tempo contado é o de TRABALHO — a soma da duração dos passos —, não o do
+    relógio. A diferença não é detalhe: uma execução que espera três dias por uma
+    aprovação humana não gastou três dias de trabalho, e matá-la na retomada por causa
+    da espera puniria justamente o comportamento que o produto pede."""
 
 
 class TetoDeCustoExcedido(RuntimeError):
@@ -427,6 +437,9 @@ def executar_cadeia(
     max_passos: int = MAX_PASSOS,
     teto_usd: float = 0.0,
     custo_inicial: float = 0.0,
+    teto_min_passo: int = 0,
+    teto_min_execucao: int = 0,
+    tempo_inicial_s: float = 0.0,
     so_um_passo: bool = False,
     registrar_passo: Callable[[dict, int], None] | None = None,
     cancelado: Callable[[], bool] | None = None,
@@ -477,6 +490,9 @@ def executar_cadeia(
     # gasto antes desta rodada — como o `ordem_inicial` faz com os passos —, então o
     # teto atravessa a espera de uma aprovação em vez de zerar a cada retomada.
     custo_usd = custo_inicial
+    # Tempo de TRABALHO já gasto (segundos), somando as retomadas — como o custo. Não
+    # é tempo de relógio: a espera por uma aprovação não conta.
+    tempo_s = tempo_inicial_s
     # Campo da ficha onde cada ramo de "Para cada item" deposita o que produziu
     # (`{ramo: campo}`). É a AGREGAÇÃO: as repetições terminam em momentos diferentes e
     # cada uma soma o seu resultado no mesmo campo, na ordem em que terminam.
@@ -562,11 +578,19 @@ def executar_cadeia(
             # da falha). Sem isto o passo falho saía anônimo, justo quando importa.
             id_agente, nome_do_no = _identidade_do_no(sessao, no, tipo)
 
+            # Prazo DESTE passo (Onda 3, fatia 2): o ajuste do nó vence o do fluxo —
+            # mesma cascata do resto do comportamento. O agente pergunta por ele antes
+            # de cada ação; o limite de rede de cada instrumento segue valendo por
+            # dentro, para UMA chamada.
+            minutos_do_passo = (no.get("config") or {}).get("teto_min_passo")
+            if minutos_do_passo is None:
+                minutos_do_passo = teto_min_passo
             try:
-                executado = _rodar_no(
-                    sessao, no, no_atual, tipo, entrada_atual,
-                    condicionais=condicionais, ficha=ficha_do_ramo,
-                )
+                with prazo.usar_prazo(minutos_do_passo):
+                    executado = _rodar_no(
+                        sessao, no, no_atual, tipo, entrada_atual,
+                        condicionais=condicionais, ficha=ficha_do_ramo,
+                    )
             except Exception as e:
                 # O nó falhou. O passo falho é GRAVADO (antes a timeline pulava do
                 # último passo bom direto para "falhou", sem dizer onde) e, se o nó
@@ -725,6 +749,18 @@ def executar_cadeia(
             # passo — o trabalho já foi pago e precisa aparecer no rastro — e ANTES de
             # abrir o próximo, que é o gasto que ainda dá para evitar. Soma tudo o que
             # o passo consumiu, inclusive a chamada da IA roteadora.
+            # Teto de TEMPO da execução — irmão do de custo, e conferido no mesmo
+            # ponto. Soma a duração dos passos (tempo de TRABALHO), nunca o relógio:
+            # a espera por uma aprovação não é trabalho e não pode consumir o teto.
+            tempo_s += max(0.0, (finalizado_em - iniciado_em).total_seconds())
+            if teto_min_execucao and tempo_s > teto_min_execucao * 60:
+                raise TetoDeTempoExcedido(
+                    f"A execução passou do tempo máximo do fluxo: já trabalhou "
+                    f"{int(tempo_s // 60)} min, e o teto é {teto_min_execucao} min. Os "
+                    f"passos já feitos ficam no rastro. Se o fluxo é demorado por "
+                    f"natureza, aumente o teto em Fluxo › Limites da execução."
+                )
+
             custo_usd += sum(precos.custo_de_entrada(e) for e in uso_passo)
             if teto_usd and custo_usd > teto_usd:
                 # Mensagem CURTA de propósito: ela viaja no aviso pelo canal do time,

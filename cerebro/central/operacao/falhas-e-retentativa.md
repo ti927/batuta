@@ -3,7 +3,7 @@ titulo: "Falhas e retentativa"
 area: "operacao"
 slug: "falhas-e-retentativa"
 tags: ["falha", "erro", "retentavel", "idempotencia", "retentativa", "sweeper",
-       "disjuntor", "desligada", "falhas seguidas"]
+       "disjuntor", "desligada", "falhas seguidas", "tempo maximo", "timeout", "teto de tempo"]
 revisado_em: "2026-09-03"
 fontes: ["cerebro/instrumentos/base.py", "cerebro/http_saida.py",
          "cerebro/orquestracao/circuito.py", "PRODUTO.md §16"]
@@ -52,6 +52,29 @@ Entender por que um fluxo às vezes se recupera sozinho e às vezes para na sua 
   mensagem nomeia o host e diz que a segunda tentativa (por outro caminho de rede) também falhou. Nesse caso
   confira o endereço; se estiver certo, o destino provavelmente está fora do ar ou bloqueia servidores de
   nuvem. Repetir a chamada não costuma resolver.
+
+## Tempo máximo de um passo e da execução
+
+Em **Fluxo › Limites da execução** você pode limitar quanto tempo um **passo** e a **execução inteira**
+podem trabalhar. Os dois nascem **desligados** (`0` = sem teto), pelo mesmo motivo do teto de custo: um
+limite que você não pediu interromperia trabalho legítimo e lento — gerar um vídeo leva uns 25 minutos —
+como se fosse defeito.
+
+- **O teto do passo** vale por passo, e pode ser ajustado **só naquele passo** (o ajuste do passo vence o
+  do fluxo). É o teto do trabalho inteiro do agente ali: ele pode encadear dez chamadas, cada uma dentro
+  do seu próprio limite de rede, e ainda assim levar quarenta minutos — é isso que este teto contém.
+- **Onde ele age, com honestidade:** o Batuta barra o agente **entre uma ação e outra**, não no meio de
+  uma. Uma chamada já em andamento vai até o fim (protegida pelo limite do próprio instrumento) e o passo
+  para logo depois. Na prática o estouro fica limitado ao teto **mais a duração de uma chamada**.
+- Estourado o teto, **o passo falha** — com o motivo em português e o que fazer. Falha de propósito: um
+  passo que passou do orçamento e entrega meio trabalho, narrado como inteiro, é justamente o que o motor
+  combate. Para tratar o caso, desenhe uma saída **"Se der erro"** (veja [[automacoes/erros-no-fluxo]]).
+- **O teto da execução conta tempo de TRABALHO, não do relógio.** A soma da duração dos passos. Uma
+  execução que esperou três dias por uma aprovação **não** trabalhou três dias — contar a espera a mataria
+  no instante em que você aprovasse, punindo justamente o que o produto pede.
+
+Escolher os números: veja na inspeção quanto um passo saudável costuma levar e deixe folga. Teto colado no
+tempo real transforma qualquer variação (um texto mais longo, uma retentativa de rede) em falha.
 
 ## Quando a automação se desliga sozinha (o disjuntor)
 
