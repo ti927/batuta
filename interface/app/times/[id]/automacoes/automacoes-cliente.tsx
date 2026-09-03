@@ -302,6 +302,19 @@ function EditorAutomacao({
   // operador marca "Ativa" — religar zera a contagem no servidor, e manter o aviso
   // depois disso seria mentir sobre o estado atual.
   const desligadaPorFalhas = !ativa && !!automacao?.desligada_por_falhas_em;
+  // Há edição pendente na tela? "Testar este passo" (Onda 4, fatia 5) roda o fluxo
+  // SALVO: testar com alteração pendente e não entender o resultado — porque a
+  // mudança não estava lá — é o erro mais confuso possível. Compara só o que o teste
+  // enxerga (a cadeia, o nome e o comportamento do fluxo); mover uma caixa no
+  // construtor conta, e tudo bem: salvar é barato, e falso-negativo aqui é pior.
+  const naoSalvo =
+    !automacao ||
+    JSON.stringify([nome, normalizarCadeia(cadeia), configFluxo]) !==
+      JSON.stringify([
+        automacao.nome,
+        normalizarCadeia(automacao.cadeia ?? { nos: [] }),
+        automacao.configuracao ?? {},
+      ]);
 
   return (
     <div className="flex w-full flex-col px-4 py-4 sm:px-6">
@@ -469,6 +482,8 @@ function EditorAutomacao({
           tipos={tipos}
           time={time}
           meuPapel={meuPapel}
+          automacaoId={automacao?.id ?? null}
+          naoSalvo={naoSalvo}
         />
       </div>
 

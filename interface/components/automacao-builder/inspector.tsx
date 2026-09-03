@@ -29,6 +29,7 @@ import type {
   CampoConfigFluxo,
   ConfiguracaoFluxo,
   Credencial,
+  Instrumento,
   NoCadeia,
   OperadorRegra,
   PainelConfigFluxo,
@@ -43,6 +44,7 @@ import { UrlCopiavel } from "@/components/url-copiavel";
 
 import { CampoConfig, efetivoDoFluxo } from "./config-fluxo";
 import { TONE_KEYS, tone } from "./nucleo";
+import { TestarEstePasso } from "./testar-no";
 
 // As chaves de config que fazem sentido AJUSTAR por-passo (e que o backend honra
 // por-nó via `com_ajuste_do_no`). Fora daqui: atendimento (saudação/horário) e chaves
@@ -453,11 +455,22 @@ export function Inspector({
   onAddSaida,
   onRemoveSaida,
   onDeleteNode,
+  automacaoId,
+  timeId,
+  cintos,
+  naoSalvo,
 }: {
   no: NoCadeia | null;
   cadeia: Cadeia;
   agentes: Agente[];
   podeEditar: boolean;
+  // "Testar este passo": a automação onde o passo vive (nula = ainda não salva), o
+  // time (para o link da inspeção), o cinto de cada agente (para nomear os
+  // instrumentos irreversíveis) e se há edição pendente na tela.
+  automacaoId: string | null;
+  timeId: string;
+  cintos: Record<string, Instrumento[]>;
+  naoSalvo: boolean;
   gatilho: ConfigGatilho;
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
   webhookUrl?: string | null;
@@ -1071,6 +1084,21 @@ export function Inspector({
             Quando a tarefa chega aqui, o resultado final é entregue a quem disparou o
             fluxo.
           </p>
+        )}
+
+        {/* "Testar este passo" (Onda 4, fatia 5): só nos nós que o motor executa —
+            gatilho, fim e "Para cada item" não rodam nada, então testá-los não faria
+            sentido (e o backend recusa, pela mesma razão). */}
+        {(no.tipo === "agente" || no.tipo === "roteador") && (
+          <TestarEstePasso
+            key={no.id}
+            automacaoId={automacaoId}
+            timeId={timeId}
+            noId={no.id}
+            cinto={no.tipo === "agente" && no.ref ? (cintos[no.ref] ?? []) : []}
+            podeEditar={podeEditar}
+            naoSalvo={naoSalvo}
+          />
         )}
       </div>
 

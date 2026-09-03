@@ -30,6 +30,7 @@ from esquemas import (
     PassoExecucaoLer,
     ResponderHumano,
     RodarDeNovo,
+    TestarNo,
 )
 import agendador
 import auditoria
@@ -823,6 +824,60 @@ def rodar_de_novo(
         recurso_tipo="execucao", recurso_id=nova.id,
         organizacao_id=auditoria.org_do_time(sessao, auto.time_id),
         detalhe={"origem_execucao_id": str(execucao.id), "no_id": dados.no_id},
+    )
+    sessao.commit()
+    fila.enfileirar()
+    sessao.refresh(nova)
+    return _montar_com_passos(sessao, nova)
+
+
+@rotas.post("/automacoes/{automacao_id}/testar-no", response_model=ExecucaoComPassos)
+def testar_no(
+    automacao_id: uuid.UUID,
+    dados: TestarNo,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Roda UM passo com uma entrada escrita à mão (Onda 4, fatia 5, lacuna 26).
+
+    Para experimentar um agente — ver se o markdown está bom, se o instrumento
+    responde — era preciso rodar a automação INTEIRA, pagando todos os passos
+    anteriores e acionando tudo o que vem depois. Quem desenhava um fluxo de 6 passos
+    para ajustar o 4º pagava os 3 primeiros a cada tentativa.
+
+    O teste vira uma execução DE VERDADE — que custa dinheiro e ACIONA OS
+    INSTRUMENTOS REAIS do agente: testar um passo que publica, publica mesmo. Por isso
+    ela aparece na lista marcada como teste, deixa rastro e é ação de OPERADOR para
+    cima. Não existe modo de mentira aqui: um instrumento que só fingisse enganaria
+    justamente sobre o que o teste deveria provar.
+
+    Passa pelo mesmo funil de `criar_execucao`, então ganha de graça a fila (nada preso
+    num request longo, §12-A), o heartbeat, o rastro e a tela de inspeção.
+    """
+    auto = automacao_acessivel(sessao, usuario, automacao_id, minimo="operador")
+    # O teste roda o desenho VIVO: é justamente o que está sendo desenhado agora.
+    no = grafo.indexar(grafo.normalizar(auto.cadeia or {})).no(dados.no_id)
+    if no is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Esse passo não existe nesta automação. Salve o fluxo antes de testar um "
+            "passo recém-criado.",
+        )
+    if no.get("tipo") in grafo.TIPOS_ESTRUTURAIS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Este passo não executa nada — é uma peça do desenho (início, fim, "
+            "repetição). Teste um passo de agente.",
+        )
+    nova = criar_execucao(
+        sessao, auto, dados.entrada, origem="teste",
+        no_inicial=dados.no_id, teste_de_no=True,
+    )
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="execucao.testar_no",
+        recurso_tipo="execucao", recurso_id=nova.id,
+        organizacao_id=auditoria.org_do_time(sessao, auto.time_id),
+        detalhe={"automacao_id": str(auto.id), "no_id": dados.no_id},
     )
     sessao.commit()
     fila.enfileirar()

@@ -72,6 +72,11 @@ type BuilderProps = {
   tipos: TipoInstrumento[];
   time: Time;
   meuPapel: PapelAcesso | null;
+  // "Testar este passo" (Onda 4, fatia 5): a automação onde o passo vive (nula
+  // enquanto ela ainda não foi salva) e se há edição pendente na tela — o teste roda
+  // o fluxo SALVO, então com alteração pendente o botão espera o salvamento.
+  automacaoId: string | null;
+  naoSalvo: boolean;
 };
 
 // `useUpdateNodeInternals` exige estar dentro de um ReactFlowProvider; por isso o
@@ -99,6 +104,8 @@ function BuilderInterno({
   tipos,
   time,
   meuPapel,
+  automacaoId,
+  naoSalvo,
 }: BuilderProps) {
   const [selId, setSelId] = useState<string | null>(null);
   const updateNodeInternals = useUpdateNodeInternals();
@@ -633,6 +640,10 @@ function BuilderInterno({
           onAddSaida={addSaida}
           onRemoveSaida={removeSaida}
           onDeleteNode={deleteNode}
+          automacaoId={automacaoId}
+          timeId={time.id}
+          cintos={cintos}
+          naoSalvo={naoSalvo}
         />
       </div>
 

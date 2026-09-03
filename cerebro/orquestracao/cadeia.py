@@ -81,6 +81,15 @@ MAX_PASSOS = 25
 # Como os textos de vários ramos que reencontram o mesmo nó são juntados na entrada.
 SEPARADOR_JUNCAO = "\n\n---\n\n"
 
+# Teste de um nó cujo agente pediu aprovação: o pedido REALMENTE foi enviado (o
+# instrumento é real), mas o teste acaba ali. Quem lê o rastro precisa saber das duas
+# coisas — senão fica esperando um fluxo que não vai continuar.
+AVISO_TESTE_PEDIU_APROVACAO = (
+    "Este agente pediu aprovação — e o pedido foi enviado de verdade. Como isto é um "
+    "teste de um passo só, o fluxo não ficou esperando resposta: num fluxo de verdade, "
+    "ele pararia aqui até alguém responder."
+)
+
 # "Para cada item" (Onda 2): teto de itens de UMA lista. Acima disso, os excedentes
 # NÃO rodam e o rastro diz quantos ficaram de fora — corte silencioso é proibido.
 MAX_ITENS_CADA = 20
@@ -418,6 +427,7 @@ def executar_cadeia(
     max_passos: int = MAX_PASSOS,
     teto_usd: float = 0.0,
     custo_inicial: float = 0.0,
+    so_um_passo: bool = False,
     registrar_passo: Callable[[dict, int], None] | None = None,
     cancelado: Callable[[], bool] | None = None,
 ) -> dict:
@@ -728,6 +738,21 @@ def executar_cadeia(
                     f"o teto em Fluxo › Limites da execução; se não, veja na aba Uso "
                     f"qual passo gastou mais."
                 )
+
+            # "Testar este nó" (Onda 4, fatia 5): rodou o nó pedido, acabou. Não segue
+            # as setas nem espera aprovação — inclusive quando o agente CHAMOU
+            # `pedir_aprovacao`: a mensagem já saiu (não dá para desenviar), mas deixar
+            # uma aprovação pendente nascida de um teste seria pedir ao aprovador que
+            # decidisse sobre algo que não vai a lugar nenhum. O rastro diz o que houve.
+            if so_um_passo:
+                return {
+                    "estado": "concluida",
+                    "resultado": saida_texto,
+                    "ordem": ordem,
+                    "passos": passos,
+                    "avisos": avisos + ([AVISO_TESTE_PEDIU_APROVACAO] if pausa else []),
+                    "ficha": ficha_exec,
+                }
 
             # O agente PEDIU APROVAÇÃO (instrumento `pedir_aprovacao`): a execução
             # para aqui, e o que segue é decidido quando a pessoa responder. As

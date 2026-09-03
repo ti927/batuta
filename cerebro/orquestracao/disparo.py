@@ -235,6 +235,7 @@ def criar_execucao(
     dados: dict | None = None,
     no_inicial: str | None = None,
     origem_execucao_id: uuid.UUID | None = None,
+    teste_de_no: bool = False,
 ) -> Execucao:
     """Enfileira uma execução: cria o registro no estado `aguardando` e devolve
     já com id. Quem roda é o pool de trabalhadores (`fila.py`); por isso o
@@ -254,7 +255,11 @@ def criar_execucao(
     "Rodar de novo a partir daqui" (fatia 2) passa pelo MESMO funil, só que trazendo o
     que herda da execução de origem: o `desenho` (para a re-rodada percorrer o mesmo
     fluxo), os `dados` (a ficha, para não recomeçar sem o que já se sabia), o
-    `no_inicial` (por onde começar) e de quem ela nasceu."""
+    `no_inicial` (por onde começar) e de quem ela nasceu.
+
+    "Testar este nó" (fatia 5) também: `no_inicial` + `teste_de_no=True` + a entrada de
+    mentira. Passar pelo funil é o que dá ao teste, de graça, a fila (nada preso num
+    request longo), o heartbeat, o rastro e a tela de inspeção."""
     execucao = Execucao(
         automacao_id=automacao.id,
         estado="aguardando",
@@ -266,6 +271,7 @@ def criar_execucao(
         dados=dict(dados) if dados else None,
         no_inicial=no_inicial or None,
         origem_execucao_id=origem_execucao_id,
+        teste_de_no=teste_de_no,
     )
     sessao.add(execucao)
     sessao.commit()
@@ -394,6 +400,9 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
                     # não há nenhum, mas a fonte é a mesma da retomada — uma conta só.
                     teto_usd=_teto_de_custo(automacao),
                     custo_inicial=custo_ja_gasto(sessao, execucao.id),
+                    # "Testar este nó" (fatia 5): roda o nó do `no_inicial` e para,
+                    # sem seguir as setas. Falso = o caso de sempre.
+                    so_um_passo=bool(execucao.teste_de_no),
                     registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
                     cancelado=lambda: _esta_cancelada(sessao, execucao.id),
                 )

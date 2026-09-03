@@ -962,6 +962,16 @@ export function PainelExecucao({
         </p>
       )}
 
+      {/* Teste de um passo (Onda 4, fatia 5): sem isto, uma execução de um passo só
+          pareceria um fluxo que morreu logo no primeiro — e quem diagnosticasse
+          procuraria um defeito que não existe. */}
+      {execucao.teste_de_no && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Teste de um passo: rodou <strong>só este passo</strong>, de propósito — o
+          resto do fluxo não foi executado.
+        </p>
+      )}
+
       {/* A execução roda o desenho que fotografou ao ser disparada. Se a automação
           mudou depois, quem lê o passo a passo precisa saber — senão compara o rastro
           com um fluxo que não é o que rodou aqui. */}

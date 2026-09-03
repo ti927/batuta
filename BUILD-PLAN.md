@@ -2263,8 +2263,27 @@ A escolha "foto ou cadeia viva" virou **fonte única** em `grafo.desenho_que_rod
 
 **O que as IAs aprenderam:** `operacao/uso-e-custos` ganhou a seção do teto — e teve **corrigida a frase que virou mentira** ("a medição mostra, não corta o fluxo"); `operacao/falhas-e-retentativa` diz que estourar o teto conta para o disjuntor; o prompt da criadora e as docstrings de `ver_uso` e `diagnosticar_execucao` no MCP ensinam a escolher o teto **com folga** (colado no custo real, qualquer variação vira falha) e a **não tratar "passou do teto" como bug** — é a regra do consultor funcionando.
 
-### Fatia 5 — a fazer
-5. **Testar este nó** — com aviso explícito de que os instrumentos são reais.
+### Fatia 5 — Testar este passo (lacuna 26)  ✅ (migração `tst00testeno01`)
+
+**O buraco.** Para experimentar **um** agente — ver se o markdown está bom, se o instrumento responde — era preciso rodar a automação **inteira**, pagando todos os passos anteriores e acionando tudo o que vem depois. Quem desenhava um fluxo de 6 passos para ajustar o 4º pagava os 3 primeiros a cada tentativa.
+
+**O que entrou.** `POST /automacoes/{id}/testar-no` com o nó e uma **entrada escrita à mão**. Nasce uma execução com `origem="teste"`, `no_inicial` (a peça da fatia 2) e a coluna nova `execucoes.teste_de_no`, que diz ao motor (`executar_cadeia(so_um_passo=True)`) para rodar aquele nó e **parar**, sem seguir as setas. Tudo passa pelo **mesmo funil** `criar_execucao`, e é isso que dá ao teste, de graça, a fila (nada preso num request longo, §12-A), o heartbeat, o rastro e a tela de inspeção.
+
+**O teste é real, e essa é a decisão central.** Ele aciona os **instrumentos de verdade** do agente: testar um passo que publica **publica mesmo**. Não existe modo de mentira — um instrumento que só fingisse enganaria justamente sobre o que o teste deveria provar. Por isso a confirmação **nomeia os instrumentos irreversíveis** daquele agente antes de rodar, e a ação é de **operador** para cima.
+
+**Aprovação pedida durante um teste não deixa o fluxo pendurado.** O pedido é enviado de verdade (não dá para desenviar), mas o teste **termina ali**, com um aviso no rastro dizendo que num fluxo de verdade ele pararia. Deixar uma aprovação pendente nascida de um teste seria pedir a alguém que decidisse sobre algo que não vai a lugar nenhum.
+
+**Um teste que falha nunca desliga uma automação.** `origem="teste"` fica fora de `ORIGENS_SOZINHA`, então o disjuntor da fatia 3 o ignora — testar tem de ser seguro. Há teste guardando essa fronteira.
+
+**Na tela** (desenho escolhido pelo maestro): o bloco **"Testar este passo"** vive no painel do passo, dentro do construtor, e o resultado aparece **ali mesmo** — sair para a tela de execução a cada tentativa quebraria o ciclo ajustar-testar-ajustar, que é a razão de a fatia existir. Mostra sinal de vida enquanto roda (o passo pode chamar instrumento lento), depois o texto que o agente produziu e **quais instrumentos ele realmente acionou** (o texto do agente não é prova do que aconteceu no mundo), com link para o passo a passo. Com **alteração não salva o botão espera**: o teste roda o fluxo salvo, e testar sem entender que a sua mudança não estava lá é o erro mais confuso possível. A inspeção marca a execução como teste de um passo, senão ela pareceria um fluxo que morreu no primeiro.
+
+**Verificação:** **1054 testes verdes** (9 novos: roda um nó e para; sem a bandeira o fluxo segue igual; dá para testar um nó do meio; aprovação no teste não pendura; a rota cria execução marcada com `origem="teste"`; recusa nó inexistente e nó estrutural; observador barrado; e a fronteira com o disjuntor). Migração provada nos dois sentidos. `tsc`/`eslint`/`build` limpos.
+
+**O que as IAs aprenderam:** `automacoes/execucoes-e-inspecao` ganhou a seção "Testar este passo" (com a ressalva dos instrumentos reais e o que fazer com uma execução marcada como teste), e o prompt da criadora e as docstrings do MCP passaram a sugerir testar um passo em vez de rodar tudo ao ajustar um agente — sempre dizendo que os instrumentos são reais e que é ação de tela.
+
+---
+
+**A Onda 4 está completa.** As cinco fatias no ar: o desenho que rodou · rodar de novo a partir daqui · o disjuntor de falhas · o teto de custo por execução · testar este passo.
 
 ---
 

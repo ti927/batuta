@@ -705,7 +705,9 @@ export type Execucao = {
   // `fluxo` (execução de automação) | `conversa` (rastro-sombra de um atendimento).
   modo?: string;
   entrada: { texto?: string } | null;
-  resultado: { texto?: string; erro?: string } | null;
+  // `avisos`: ramos que terminaram sem seguir caminho, e o recado do teste de um passo
+  // cujo agente pediu aprovação. O backend já os gravava aqui — faltava o tipo dizer.
+  resultado: { texto?: string; erro?: string; avisos?: string[] } | null;
   iniciada_em: string | null;
   finalizada_em: string | null;
   criado_em: string;
@@ -716,6 +718,10 @@ export type Execucao = {
   // ela começou. Nulos no disparo normal.
   origem_execucao_id?: string | null;
   no_inicial?: string | null;
+  // "Testar este passo" (Onda 4, fatia 5): esta execução rodou UM passo e parou. Ela
+  // custou e acionou instrumento de verdade, então aparece na lista como qualquer
+  // outra — mas marcada, senão pareceria um fluxo que morreu no primeiro passo.
+  teste_de_no?: boolean;
 };
 
 export type ExecucaoComPassos = Execucao & {

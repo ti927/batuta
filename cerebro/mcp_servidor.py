@@ -173,6 +173,12 @@ async def diagnosticar_execucao(execucao_id: str) -> str:
     Você NÃO tem ferramenta para isso — oriente o consultor, e avise que repetir um
     passo repete o que ele faz (se publica, publica de novo).
 
+    Para AJUSTAR um agente sem rodar tudo, a tela do construtor tem **"Testar este
+    passo"**: roda um passo só, com um texto escrito à mão. Também é ação de tela, e os
+    instrumentos são REAIS (testar um passo que publica publica de verdade). Uma execução
+    marcada como TESTE rodou um passo só de propósito — não a diagnostique como um fluxo
+    que morreu no primeiro passo.
+
     Se o erro disser "passou do teto de custo do fluxo", NÃO é bug: é o teto por execução
     que o consultor ligou, funcionando. Diga quanto gastou e qual era o teto, e ofereça as
     duas saídas — subir o teto (Fluxo › Limites da execução) se o fluxo é caro por

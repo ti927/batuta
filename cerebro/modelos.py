@@ -293,6 +293,14 @@ class Execucao(IdData, Base):
     origem_execucao_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("execucoes.id", ondelete="SET NULL"), nullable=True
     )
+    # "Testar este nó" (Onda 4, fatia 5): esta execução roda UM nó e para, sem seguir as
+    # setas. O nó vem do `no_inicial` (fatia 2) e a entrada de mentira, do `entrada` de
+    # sempre — então o teste reaproveita funil, fila, heartbeat e tela de inspeção.
+    # É uma execução DE VERDADE (custa e aciona instrumento real), por isso aparece na
+    # lista e deixa rastro; o que esta coluna muda é só ONDE ela para.
+    teste_de_no: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
 
 class PassoExecucao(IdData, Base):

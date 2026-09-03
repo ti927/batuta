@@ -2,8 +2,9 @@
 titulo: "Execuções e inspeção"
 area: "automacoes"
 slug: "execucoes-e-inspecao"
-tags: ["execucao", "inspecao", "rodar", "ao-vivo", "diagnostico", "passo-a-passo"]
-revisado_em: "2026-09-02"
+tags: ["execucao", "inspecao", "rodar", "ao-vivo", "diagnostico", "passo-a-passo",
+       "testar", "teste", "um passo"]
+revisado_em: "2026-09-03"
 fontes: ["PRODUTO.md §15", "cerebro/orquestracao/disparo.py", "cerebro/orquestracao/grafo.py (desenho_que_roda)", "cerebro/diagnostico_execucao.py", "project_navegacao-time-centrica", "feedback_feedback-constante-ao-usuario"]
 ---
 
@@ -40,6 +41,31 @@ nova diz de quem nasceu.
   são irreversíveis antes de você confirmar.
 - A re-rodada percorre o **desenho da execução original**, mesmo que a automação tenha
   mudado desde então.
+
+## Testar este passo (um agente de cada vez)
+
+Enquanto você desenha um fluxo, dá para experimentar **um passo sozinho**: escreva à mão
+o texto que ele receberia e mande rodar. Sem isso, ajustar o 4º passo de um fluxo de 6
+custava rodar os 3 anteriores a cada tentativa.
+
+**O teste é real, e essa é a parte que importa.** Ele usa os **instrumentos de verdade**
+do agente: testar um passo que publica **publica mesmo**; um que envia, envia. Não existe
+modo de mentira aqui — um instrumento que só fingisse enganaria justamente sobre o que o
+teste deveria provar. A tela lista os instrumentos irreversíveis daquele agente antes de
+você confirmar.
+
+- **Roda um passo e para**, sem seguir as setas. O que vem depois não acontece.
+- Aparece nas execuções **marcado como teste** — ele custou dinheiro e agiu no mundo, então
+  esconder seria mentir sobre o gasto. E você inspeciona o passo a passo como em qualquer
+  execução.
+- Se o agente **pedir aprovação** durante o teste, o pedido é enviado de verdade, mas o
+  fluxo **não fica esperando**: o teste termina ali e o rastro avisa que, num fluxo de
+  verdade, ele pararia. Deixar uma aprovação pendente nascida de um teste seria pedir a
+  alguém que decidisse sobre algo que não vai a lugar nenhum.
+- **Um teste que falha nunca desliga a automação** — ele fica fora da conta do disjuntor
+  (veja [[operacao/falhas-e-retentativa]]). Testar tem de ser seguro.
+- É ação de **operador** para cima, e usa o fluxo como está salvo: salve antes de testar um
+  passo recém-criado.
 
 ## Exemplos
 - Acompanhar uma publicação: gera imagem → escreve legenda → **espera aprovação** → publica.
@@ -82,6 +108,11 @@ cita), **qual agente** o carrega e uma **ação sugerida derivada do tipo de err
 pede ajuste de configuração, não cadastro de credencial. Use essas referências em vez de deduzir pelo
 instrumento que aparece por último no passo: o que falhou pode nem ter chegado a registrar passo, se o
 agente estourou antes.
+Quando o consultor estiver **ajustando um agente** (mexendo no markdown, trocando um instrumento),
+lembre-o de **"Testar este passo"** em vez de rodar a automação inteira a cada tentativa — mas sempre com
+a ressalva de que os instrumentos são **reais** (testar um passo que publica publica de verdade). Também
+é ação de tela: você não tem ferramenta para disparar. Uma execução marcada como **teste** rodou um passo
+só de propósito — não a diagnostique como um fluxo que morreu no primeiro passo.
 
 ## Relacionado
 - [[automacoes/automacao]]

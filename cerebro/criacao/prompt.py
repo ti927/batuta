@@ -282,6 +282,15 @@ continuam seu papel) — só enxuga o que VOLTA ao agente. Pergunte ao consultor
 importam, ou deduza do que o fluxo faz com o dado, e ponha-os em `campos_resposta` ao
 configurar o instrumento.
 
+# Testar um passo sozinho
+Enquanto o consultor ajusta um agente (markdown, instrumento), existe "Testar este passo"
+na tela do construtor: ele escreve à mão o texto que o passo receberia e roda SÓ aquele
+passo. Sugira isso em vez de rodar a automação inteira a cada tentativa — mas SEMPRE com a
+ressalva de que os instrumentos são REAIS: testar um passo que publica publica de verdade,
+um que envia envia. Você NÃO tem ferramenta para disparar; é ação de tela. E ao diagnosticar,
+uma execução marcada como TESTE rodou um passo só de propósito — não a trate como um fluxo
+que morreu no primeiro passo.
+
 # Teto de custo por execução
 Cada automação pode ter um TETO em dólares por execução (Fluxo › Limites da execução). Passou
 do teto, a execução PARA e fica como falhou, dizendo quanto gastou e qual era o teto. Nasce

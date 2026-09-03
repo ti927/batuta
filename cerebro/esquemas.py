@@ -389,6 +389,15 @@ class RodarDeNovo(BaseModel):
     no_id: str = Field(min_length=1, max_length=100)
 
 
+class TestarNo(BaseModel):
+    """"Testar este nó" (Onda 4, fatia 5): roda UM passo com uma entrada de mentira,
+    sem seguir as setas. `entrada` é o que o passo receberia do passo anterior — quem
+    testa escreve à mão o que quer experimentar."""
+
+    no_id: str = Field(min_length=1, max_length=100)
+    entrada: str = Field(default="", max_length=20000)
+
+
 # ───────────────────────── Execuções ─────────────────────────────
 
 
@@ -428,6 +437,10 @@ class ExecucaoLer(BaseModel):
     # que aquela execução não começou do princípio.
     origem_execucao_id: uuid.UUID | None = None
     no_inicial: str | None = None
+    # "Testar este nó" (Onda 4, fatia 5): esta execução rodou UM passo e parou. Aparece
+    # na lista como qualquer outra — ela custou e acionou instrumento de verdade —, mas
+    # marcada, senão um teste de um passo pareceria um fluxo que morreu no primeiro.
+    teste_de_no: bool = False
 
 
 class ExecucaoNaLista(ExecucaoLer):
