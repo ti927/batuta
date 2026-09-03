@@ -38,9 +38,33 @@ from dataclasses import dataclass, field
 # como passo); o motor só roda agente/roteador.
 # `cada` é o "Para cada item" (Onda 2): lê uma lista da ficha da execução e repete o
 # trecho seguinte uma vez por item, cada repetição como um ramo próprio do grafo.
-TIPOS_VALIDOS = {"gatilho", "agente", "roteador", "fim", "cada"}
-# Tipos que não executam nada por si (nem agente, nem IA).
-TIPOS_ESTRUTURAIS = {"gatilho", "fim", "cada"}
+# `esperar` (Onda 3) é o nó que SEGURA o fluxo por um tempo e o solta depois, sem
+# perder a ficha nem o ponto do grafo — o que antes só era possível agendando OUTRA
+# execução, que começava do zero e sem contexto nenhum.
+TIPOS_VALIDOS = {"gatilho", "agente", "roteador", "fim", "cada", "esperar"}
+# Tipos que não executam nada por si (nem agente, nem IA). `esperar` entra aqui: ele
+# não produz trabalho — só adia. (Ele DEIXA passo no rastro mesmo assim, porque uma
+# espera de dois dias precisa aparecer na linha do tempo; ver `cadeia`.)
+TIPOS_ESTRUTURAIS = {"gatilho", "fim", "cada", "esperar"}
+
+# Unidades de espera aceitas pelo nó `esperar`, e quanto vale cada uma em minutos.
+UNIDADES_ESPERA = {"minutos": 1, "horas": 60, "dias": 60 * 24}
+UNIDADE_ESPERA_PADRAO = "minutos"
+# Teto de sanidade: 60 dias. Não é limitação técnica — é para um zero a mais não
+# transformar "espere 3 dias" numa execução parada até o ano que vem, em silêncio.
+MAX_ESPERA_MIN = 60 * 24 * 60
+
+
+def minutos_de_espera(no: dict | None) -> int:
+    """Quantos minutos este nó `esperar` segura o fluxo. Zero quando não há espera
+    configurada — e aí o motor apenas segue adiante, em vez de parar para sempre."""
+    espera = (no or {}).get("espera") or {}
+    try:
+        quanto = float(espera.get("quanto") or 0)
+    except (TypeError, ValueError):
+        return 0
+    fator = UNIDADES_ESPERA.get(espera.get("unidade") or UNIDADE_ESPERA_PADRAO, 1)
+    return max(0, min(int(quanto * fator), MAX_ESPERA_MIN))
 # Cor da aresta na UI (cosmético).
 TONES_VALIDOS = {"normal", "ok", "loop", "erro"}
 

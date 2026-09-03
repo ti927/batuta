@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   CircleHelp,
   Clock,
+  Hourglass,
   Layers,
   MessageCircle,
   Play,
@@ -40,6 +41,7 @@ import type {
 } from "@/lib/api";
 import { OPERADORES_REGRA, OPERADORES_SEM_VALOR, api } from "@/lib/api";
 import { RobotFace } from "@/components/robot-face";
+import { Select } from "@/components/ui/select";
 import { UrlCopiavel } from "@/components/url-copiavel";
 
 import { CampoConfig, efetivoDoFluxo } from "./config-fluxo";
@@ -100,6 +102,8 @@ function nomeNo(no: NoCadeia, agentes: Agente[]): string {
     return agentes.find((a) => a.id === no.ref)?.nome ?? "Agente";
   if (no.tipo === "roteador") return no.nome || "Roteador";
   if (no.tipo === "fim") return "Fim · entrega ao usuário";
+  if (no.tipo === "cada") return no.nome || "Para cada item";
+  if (no.tipo === "esperar") return no.nome || "Esperar";
   return "Gatilho";
 }
 
@@ -1005,6 +1009,78 @@ export function Inspector({
 
         {/* "Para cada item": qual lista percorrer, como o item se chama e onde o
             resultado de cada repetição é somado. */}
+        {no.tipo === "esperar" && (
+          <div className="mb-4 flex flex-col gap-3">
+            <p className="flex gap-2 rounded-[10px] border border-[#E8E6F0] bg-[#FAFAF7] p-3 text-[11.5px] leading-relaxed text-[#6B6880]">
+              <Hourglass size={14} color="#6D4AFF" className="mt-px flex-none" />
+              <span>
+                Este passo não faz trabalho: ele <b>segura o fluxo</b> e o solta depois
+                do tempo. A <b>ficha</b> e o ponto do fluxo são preservados — a execução
+                volta exatamente daqui, com tudo o que já se sabia. É diferente de
+                agendar outra automação, que começaria do zero.
+              </span>
+            </p>
+            <div className="flex items-end gap-2">
+              <label
+                className="block flex-1 text-[12px] font-medium"
+                style={{ color: "#6B6880" }}
+              >
+                Esperar
+                <input
+                  type="number"
+                  min={0}
+                  className={`${inputCls} mt-1.5`}
+                  style={
+                    !Number(no.espera?.quanto ?? 0)
+                      ? { borderColor: "#E5484D" }
+                      : undefined
+                  }
+                  value={no.espera?.quanto ?? 0}
+                  disabled={!podeEditar}
+                  onChange={(e) =>
+                    onPatchNode(no.id, {
+                      espera: {
+                        quanto: Number(e.target.value || 0),
+                        unidade: no.espera?.unidade ?? "minutos",
+                      },
+                    })
+                  }
+                />
+              </label>
+              <label
+                className="block flex-1 text-[12px] font-medium"
+                style={{ color: "#6B6880" }}
+              >
+                Unidade
+                <Select
+                  className="mt-1.5"
+                  value={no.espera?.unidade ?? "minutos"}
+                  disabled={!podeEditar}
+                  onChange={(e) =>
+                    onPatchNode(no.id, {
+                      espera: {
+                        quanto: Number(no.espera?.quanto ?? 0),
+                        unidade: e.target.value as "minutos" | "horas" | "dias",
+                      },
+                    })
+                  }
+                >
+                  <option value="minutos">minutos</option>
+                  <option value="horas">horas</option>
+                  <option value="dias">dias</option>
+                </Select>
+              </label>
+            </div>
+            {!Number(no.espera?.quanto ?? 0) && (
+              <span className="text-[11px]" style={{ color: "#B42318" }}>
+                Sem tempo definido, este passo não segura nada: o fluxo passa direto e
+                o rastro avisa. Melhor seguir do que parar para sempre — mas defina o
+                tempo.
+              </span>
+            )}
+          </div>
+        )}
+
         {no.tipo === "cada" && (
           <div className="mb-4 flex flex-col gap-3">
             <p className="flex gap-2 rounded-[10px] border border-[#E8E6F0] bg-[#FAFAF7] p-3 text-[11.5px] leading-relaxed text-[#6B6880]">

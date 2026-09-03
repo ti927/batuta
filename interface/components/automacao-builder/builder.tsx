@@ -18,7 +18,7 @@ import {
   type Node,
   type NodeChange,
 } from "@xyflow/react";
-import { ChevronDown, Layers, Plus, Repeat2 } from "lucide-react";
+import { ChevronDown, Hourglass, Layers, Plus, Repeat2 } from "lucide-react";
 
 import type {
   Agente,
@@ -414,7 +414,7 @@ function BuilderInterno({
   );
 
   const addNode = useCallback(
-    (kind: "agente" | "roteador" | "cada", ref?: string) => {
+    (kind: "agente" | "roteador" | "cada" | "esperar", ref?: string) => {
       const id = novoIdNo(kind);
       setCadeia((c) => {
         const fim = (c.nos ?? []).find((n) => n.tipo === "fim");
@@ -426,7 +426,27 @@ function BuilderInterno({
           !(c.nos ?? []).some((n) => n.tipo === "agente") &&
           !c.inicial;
         const novo: NoCadeia =
-          kind === "cada"
+          kind === "esperar"
+            ? {
+                id,
+                tipo: "esperar",
+                nome: "Esperar",
+                // Nasce SEM tempo definido: a validação e o próprio motor avisam que
+                // falta configurar, em vez de inventar um número que o usuário não
+                // pediu e que decidiria por ele quanto tempo o fluxo dorme.
+                espera: { quanto: 0, unidade: "minutos" },
+                x: baseX,
+                y: 360,
+                saidas: [
+                  {
+                    id: novoIdSaida(),
+                    rotulo: "depois da espera",
+                    destino: fim?.id ?? "fim",
+                    tone: "normal",
+                  },
+                ],
+              }
+            : kind === "cada"
             ? {
                 id,
                 tipo: "cada",
@@ -611,6 +631,23 @@ function BuilderInterno({
                         </span>
                         <span className="block text-[11px] leading-snug text-muted-foreground">
                           Repete o trecho seguinte por item de uma lista
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addNode("esperar")}
+                      className="flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-[#F4F1FE]"
+                    >
+                      <span className="mt-0.5 grid size-[22px] flex-none place-items-center rounded-md bg-[#EFEAFF]">
+                        <Hourglass size={13} color="#6D4AFF" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[13px] text-foreground">
+                          Esperar
+                        </span>
+                        <span className="block text-[11px] leading-snug text-muted-foreground">
+                          Segura o fluxo por um tempo e continua daqui
                         </span>
                       </span>
                     </button>

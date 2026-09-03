@@ -54,6 +54,9 @@ export const ESTADOS_TERMINAIS = [
   "concluida",
   "falhou",
   "aguardando_humano",
+  // Nó "Esperar" (Onda 3): a execução não avança sozinha agora — ela dorme até a
+  // hora marcada. Para efeito de EXIBIÇÃO é terminal como a pausa de aprovação.
+  "aguardando_tempo",
   "cancelada",
 ];
 
@@ -68,6 +71,9 @@ export const ESTADO: Record<string, { label: string; variante: VarianteBadge }> 
   aguardando: { label: "na fila", variante: "neutral" },
   em_andamento: { label: "em andamento", variante: "warning" },
   aguardando_humano: { label: "aguardando você", variante: "info" },
+  // Nó "Esperar" (Onda 3): parada pelo relógio, não por gente. Pílula PRÓPRIA —
+  // "aguardando você" pede ação sua; esta não pede nada, volta sozinha.
+  aguardando_tempo: { label: "aguardando o tempo", variante: "neutral" },
   concluida: { label: "concluída", variante: "success" },
   falhou: { label: "falhou", variante: "error" },
   cancelada: { label: "cancelada", variante: "neutral" },
@@ -301,7 +307,11 @@ function construirItens(
   agentes: Agente[],
   cintos: Record<string, Instrumento[]>,
 ): ItemPasso[] {
-  const pausado = execucao.estado === "aguardando_humano";
+  // Pausada: por gente (aprovação) ou pelo relógio (nó "Esperar", Onda 3). Nos dois
+  // casos o último passo é o ponto onde ela parou, e ganha o ponto de espera.
+  const pausado =
+    execucao.estado === "aguardando_humano" ||
+    execucao.estado === "aguardando_tempo";
   const itens: ItemPasso[] = execucao.passos.map((p, i) => {
     const ehUltimo = i === execucao.passos.length - 1;
     const idx = agentes.findIndex((a) => a.id === p.agente_id);
@@ -309,7 +319,11 @@ function construirItens(
     return {
       tipo: "passo",
       chave: p.id,
-      tom: (ehUltimo && pausado ? "espera" : "ok") as TomDot,
+      // Um passo de ESPERA já é, em si, uma espera — mesmo que outro passo tenha
+      // rodado depois dele (a execução voltou e seguiu).
+      tom: ((ehUltimo && pausado) || p.tipo === "espera_tempo"
+        ? "espera"
+        : "ok") as TomDot,
       indice: idx >= 0 ? idx : i,
       agente,
       cinto: agente ? (cintos[agente.id] ?? []) : [],
@@ -324,6 +338,7 @@ function construirItens(
       rotulo: execucao.atividade || "Trabalhando…",
     },
     aguardando: { tom: "fila", rotulo: "Na fila…" },
+    aguardando_tempo: { tom: "espera", rotulo: "Esperando o tempo passar…" },
     concluida: { tom: "ok", rotulo: "Entrega concluída" },
     falhou: { tom: "falha", rotulo: "Falhou" },
   };
@@ -959,6 +974,18 @@ export function PainelExecucao({
             #{execucao.origem_execucao_id.slice(0, 8)}
           </span>
           , começando pelo passo em que ela parou.
+        </p>
+      )}
+
+      {/* Esperando o relógio (Onda 3): dizer só "parada" faria uma espera planejada de
+          dois dias parecer travamento. A data é a informação que resolve isso. */}
+      {execucao.estado === "aguardando_tempo" && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Parada num passo <strong>Esperar</strong>
+          {execucao.retomar_em
+            ? `; volta sozinha em ${formatarData(execucao.retomar_em)}.`
+            : "."}{" "}
+          Nada é preciso da sua parte.
         </p>
       )}
 

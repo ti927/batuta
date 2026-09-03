@@ -456,6 +456,13 @@ async def montar_cadeia(automacao_id: str, cadeia: dict) -> str:
     Há também o nó {"tipo": "cada", "lista": "<campo>", "item_em": "item",
     "acumular_em": "<campo>"}: repete o trecho seguinte uma vez por item da lista.
 
+    ESPERAR: o nó {"tipo": "esperar", "espera": {"quanto": 2, "unidade": "dias"}}
+    (minutos|horas|dias) segura o fluxo e o solta depois, PRESERVANDO a ficha e o ponto do
+    grafo — a execução volta exatamente dali. Use para "publique 24h depois", "cobre o lead
+    em 2 dias". NÃO use `agendar_automacao` para isso: aquilo dispara um fluxo NOVO, que
+    começa do zero e sem a ficha. Teto de 60 dias; sem tempo definido o fluxo passa direto
+    avisando.
+
     APROVAÇÃO: não existe `gate` no nó (foi removido em 2026-08-31). Para um passo esperar
     uma pessoa, dê ao AGENTE dele o instrumento `pedir_aprovacao` e escreva no markdown
     quando usá-lo. Não precisa criar os nós 'gatilho'/'fim' — o sistema completa.

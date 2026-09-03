@@ -10,7 +10,7 @@ fato roda a cadeia é o pool de trabalhadores da fila (`fila.py`), que chama
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 import medicao_instrumentos
@@ -165,6 +165,20 @@ def _tetos_de_tempo(automacao: Automacao | None) -> tuple[int, int]:
     return _int("teto_min_passo"), _int("teto_min_execucao")
 
 
+def _ordem_ja_gravada(sessao: Session, execucao_id: uuid.UUID) -> int:
+    """A maior `ordem` de passo já gravada nesta execução. É o piso da numeração ao
+    voltar de uma espera: sem isso a contagem recomeçaria do zero, a linha do tempo
+    teria dois "passo 1" e o teto de passos por execução perderia o sentido."""
+    return int(
+        sessao.scalar(
+            select(func.max(PassoExecucao.ordem)).where(
+                PassoExecucao.execucao_id == execucao_id
+            )
+        )
+        or 0
+    )
+
+
 def tempo_ja_trabalhado_s(sessao: Session, execucao_id: uuid.UUID) -> float:
     """Quanto esta execução já TRABALHOU nos passos gravados, em segundos.
 
@@ -201,7 +215,13 @@ def _aplicar_resultado(execucao: Execucao, r: dict) -> None:
     # do que já tinha sido apurado.
     if r.get("ficha") is not None:
         execucao.dados = dict(r["ficha"])
-    if r["estado"] == "aguardando_humano":
+    if r["estado"] == "aguardando_tempo":
+        # Nó "Esperar" (Onda 3): a execução dorme até `retomar_em` e o vigia a devolve
+        # à fila. Mesma mecânica da pausa por aprovação — o que muda é quem a solta.
+        execucao.estado = "aguardando_tempo"  # sem finalizada_em: ainda viva
+        execucao.retomar_em = r.get("retomar_em")
+        execucao.pendencias = r.get("pendentes") or None
+    elif r["estado"] == "aguardando_humano":
         execucao.estado = "aguardando_humano"  # sem finalizada_em: ainda viva
         # Fan-out: os ramos da onda que ainda não rodaram quando o portão pausou. Sem
         # guardá-los, a retomada seguiria só o caminho do portão e o trabalho dos
@@ -423,6 +443,13 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
                     # entrada deixar de morrer no primeiro nó (Onda 2, lacuna 15).
                     # Execução re-rodada do zero reaproveita a ficha que já tinha.
                     ficha=dict(execucao.dados or {}) or ficha_mod.nova(entrada),
+                    # VOLTANDO DE UMA ESPERA (nó "Esperar", Onda 3): as pendências
+                    # dizem por onde continuar. Uma execução reivindicada com
+                    # pendências e sem resposta de aprovação só pode ser isto — a
+                    # pausa por aprovação sai por `rodar_retomada`, e execução nova
+                    # nasce sem pendências. Nulo = começa do início, como sempre.
+                    frente_inicial=list(execucao.pendencias or []) or None,
+                    ordem_inicial=_ordem_ja_gravada(sessao, execucao.id),
                     # "Rodar de novo a partir daqui" (fatia 2): começa do nó pedido, em
                     # vez do início do grafo. Nulo = o caso de sempre.
                     no_inicial=execucao.no_inicial or None,

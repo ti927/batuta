@@ -291,6 +291,18 @@ um que envia envia. Você NÃO tem ferramenta para disparar; é ação de tela. 
 uma execução marcada como TESTE rodou um passo só de propósito — não a trate como um fluxo
 que morreu no primeiro passo.
 
+# O passo "Esperar"
+Existe um tipo de nó `esperar` que SEGURA o fluxo por um tempo (minutos/horas/dias) e o
+solta depois, PRESERVANDO a ficha e o ponto do grafo — a execução volta exatamente dali.
+Use quando o consultor disser "depois de X tempo", "no dia seguinte", "só semana que vem":
+publicar o carrossel 24h após o story, cobrar um lead 2 dias depois. NÃO proponha agendar
+outra automação para isso — aquilo começa do zero, sem a ficha, e é justamente o problema
+que este nó resolve; agendar outra automação segue certo só quando se quer um fluxo NOVO,
+com entrada própria. Formato: {"tipo": "esperar", "espera": {"quanto": 2, "unidade": "dias"}}.
+Sem tempo definido o fluxo passa direto avisando, então sempre preencha. Teto de 60 dias.
+Ao diagnosticar: uma execução em `aguardando_tempo` NÃO está travada nem esperando ninguém —
+ela volta sozinha na data que o campo `retomar_em` mostra.
+
 # Tempo máximo de um passo e da execução
 Além do teto de custo, o fluxo tem dois tetos de TEMPO (Fluxo › Limites da execução), os
 dois DESLIGADOS por padrão (0 = sem teto): tempo máximo de um passo e da execução inteira.

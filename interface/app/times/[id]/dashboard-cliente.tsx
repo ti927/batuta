@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Pencil,
   Plus,
+  Hourglass,
   Repeat2,
 } from "lucide-react";
 
@@ -43,6 +44,9 @@ const ESTADO: Record<string, { label: string; variante: VarianteBadge }> = {
   aguardando: { label: "na fila", variante: "neutral" },
   em_andamento: { label: "em andamento", variante: "warning" },
   aguardando_humano: { label: "aguardando você", variante: "info" },
+  // Nó "Esperar" (Onda 3): parada pelo relógio, não por gente. Pílula PRÓPRIA —
+  // "aguardando você" pede ação sua; esta não pede nada, volta sozinha.
+  aguardando_tempo: { label: "aguardando o tempo", variante: "neutral" },
   concluida: { label: "concluída", variante: "success" },
   falhou: { label: "falhou", variante: "error" },
   cancelada: { label: "cancelada", variante: "neutral" },
@@ -389,17 +393,26 @@ function CadeiaHorizontal({
           (i) => i.tipo === "pedir_aprovacao",
         );
         const ehCada = no.tipo === "cada";
+        const ehEsperar = no.tipo === "esperar";
+        // Nós estruturais não têm agente: sem este ramo, um "Esperar" apareceria
+        // como um robô sem nome — o desenho mentiria sobre o que o passo é.
         const rotulo = ehCada
           ? `Para cada ${no.item_em || "item"}${no.lista ? ` de ${no.lista}` : ""}`
-          : no.tipo === "roteador"
-            ? (no.nome ?? "Roteador")
-            : (ag?.nome ?? "—");
+          : ehEsperar
+            ? `Esperar ${no.espera?.quanto ?? 0} ${no.espera?.unidade ?? "minutos"}`
+            : no.tipo === "roteador"
+              ? (no.nome ?? "Roteador")
+              : (ag?.nome ?? "—");
         return (
           <div key={no.id} className="flex items-center gap-2">
             <Chip>
               {ehCada ? (
                 <span className="flex size-6 items-center justify-center rounded-md bg-[#EFEAFF]">
                   <Repeat2 className="size-3.5 text-[#6D4AFF]" />
+                </span>
+              ) : ehEsperar ? (
+                <span className="flex size-6 items-center justify-center rounded-md bg-[#EFEAFF]">
+                  <Hourglass className="size-3.5 text-[#6D4AFF]" />
                 </span>
               ) : (
                 <RobotFace size={24} indice={idx} lider={ag?.papel === "lider"} />

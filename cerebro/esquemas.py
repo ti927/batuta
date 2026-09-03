@@ -441,6 +441,10 @@ class ExecucaoLer(BaseModel):
     # na lista como qualquer outra — ela custou e acionou instrumento de verdade —, mas
     # marcada, senão um teste de um passo pareceria um fluxo que morreu no primeiro.
     teste_de_no: bool = False
+    # Nó "Esperar" (Onda 3): quando esta execução, parada em `aguardando_tempo`, volta
+    # sozinha. A tela mostra a data — uma execução parada sem dizer até quando parece
+    # travada, e "aguardando o tempo" não pede nada de ninguém.
+    retomar_em: datetime | None = None
 
 
 class ExecucaoNaLista(ExecucaoLer):

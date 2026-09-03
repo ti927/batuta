@@ -210,6 +210,51 @@ def recuperar_execucoes_presas(sessao) -> int:
     return len(presas)
 
 
+def soltar_esperas_vencidas(sessao) -> int:
+    """Devolve à fila as execuções paradas num nó "Esperar" cujo tempo venceu.
+
+    É o vigia da espera temporal (Onda 3, lacuna 20): a execução dorme em
+    `aguardando_tempo` com `retomar_em` marcado, e aqui ela volta para `aguardando` —
+    de onde um trabalhador a pega e continua pelas `pendencias`, com a ficha intacta.
+
+    Roda no mesmo job periódico dos outros vigias, então nada fica sem quem varra
+    (§12-A): se o servidor reiniciar durante a espera, o estado está no BANCO e a
+    execução volta assim mesmo — a espera não vive na memória de ninguém.
+
+    Devolve quantas soltou."""
+    agora = datetime.now(timezone.utc)
+    r = sessao.execute(
+        update(Execucao)
+        .where(
+            Execucao.estado == "aguardando_tempo",
+            Execucao.retomar_em.is_not(None),
+            Execucao.retomar_em <= agora,
+        )
+        .values(estado="aguardando", retomar_em=None)
+    )
+    if r.rowcount:
+        sessao.commit()
+        logger.info("%d execução(ões) voltaram da espera.", r.rowcount)
+        registrar_evento(
+            categoria="fila", acao="execucao.esperas_soltas",
+            detalhe={"quantidade": r.rowcount},
+        )
+        enfileirar()
+    # Nada a soltar: NÃO damos rollback. A sessão pode não ser nossa (nos testes é a
+    # do caso, numa transação que ainda vai continuar), e desfazer o trabalho de quem
+    # chamou por causa de um UPDATE que não casou nada seria um efeito colateral feio.
+    return r.rowcount
+
+
+def soltar_esperas_job() -> None:
+    """Entrada do agendador: abre a própria sessão e solta as esperas vencidas."""
+    sessao = CriadorDeSessao()
+    try:
+        soltar_esperas_vencidas(sessao)
+    finally:
+        sessao.close()
+
+
 def varrer_presas_job() -> None:
     """Entrada do agendador: abre a própria sessão e recupera execuções presas."""
     sessao = CriadorDeSessao()

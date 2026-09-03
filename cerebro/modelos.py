@@ -301,6 +301,13 @@ class Execucao(IdData, Base):
     teste_de_no: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # Nó "Esperar" (Onda 3): quando esta execução, parada no estado `aguardando_tempo`,
+    # volta para a fila. Nula em toda execução que não está esperando o relógio. A
+    # pausa em si reusa a máquina da aprovação (`pendencias` guarda os ramos que ainda
+    # não rodaram e a ficha atravessa a espera) — o que muda é quem solta: o vigia.
+    retomar_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class PassoExecucao(IdData, Base):
@@ -315,9 +322,10 @@ class PassoExecucao(IdData, Base):
     )
     ordem: Mapped[int] = mapped_column(Integer, nullable=False)
     # Classificação do passo na timeline (Fatia 4.1): agente | roteador |
-    # espera_humano (portão / aguardando resposta) | mensagem_entrante. Nulável:
-    # passos antigos não o têm. Introduz o vocabulário que unifica o portão como
-    # passo único de espera-por-humano (REMODELAGEM-MOTOR §5).
+    # espera_humano (portão / aguardando resposta) | espera_tempo (o nó "Esperar",
+    # Onda 3) | mensagem_entrante. Nulável: passos antigos não o têm. Introduz o
+    # vocabulário que unifica o portão como passo único de espera-por-humano
+    # (REMODELAGEM-MOTOR §5).
     tipo: Mapped[str | None] = mapped_column(String(20), nullable=True)
     agente_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("agentes.id", ondelete="SET NULL"), nullable=True

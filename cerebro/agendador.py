@@ -356,6 +356,15 @@ def iniciar() -> None:
         id="execucao_sweeper",
         replace_existing=True,
     )
+    # Nó "Esperar" (Onda 3): devolve à fila as execuções cuja espera venceu. Intervalo
+    # de 30 s — a espera mais curta que a tela oferece é de 1 minuto, então o atraso
+    # máximo fica bem abaixo da menor unidade que o usuário consegue pedir.
+    _scheduler.add_job(
+        fila.soltar_esperas_job,
+        trigger=IntervalTrigger(seconds=30),
+        id="execucao_espera",
+        replace_existing=True,
+    )
     # Recuperação periódica de TURNOS da IA criadora presos em `em_andamento` (worker
     # travado sem reinício). Espelha o sweeper de execuções; usa heartbeat de atividade
     # (não mata turno em progresso). Complementa o `fila_turnos._recuperar_orfas` do boot.

@@ -60,7 +60,7 @@ de onde parou sem perder trabalho.
 
 import uuid
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -101,6 +101,18 @@ PASSOS_POR_ITEM = 5
 
 # Destinos que encerram a cadeia (mantido para retrocompatibilidade de imports).
 _DESTINOS_FIM = grafo.DESTINOS_FIM
+
+
+def _texto_da_espera(minutos: int) -> str:
+    """A duração de uma espera em português, para o rastro e a tela. Sempre na maior
+    unidade inteira que couber — "2 dias" se lê; "2880 minutos", não."""
+    if minutos >= 60 * 24 and minutos % (60 * 24) == 0:
+        d = minutos // (60 * 24)
+        return f"{d} dia" if d == 1 else f"{d} dias"
+    if minutos >= 60 and minutos % 60 == 0:
+        h = minutos // 60
+        return f"{h} hora" if h == 1 else f"{h} horas"
+    return f"{minutos} minuto" if minutos == 1 else f"{minutos} minutos"
 
 
 class TetoDeTempoExcedido(RuntimeError):
@@ -547,6 +559,78 @@ def executar_cadeia(
                 else:
                     _empilhar(proxima, destino, entradas, ramo=ramo, extra=extra)
                 continue
+            if tipo == "esperar":
+                # O nó "Esperar" (Onda 3, lacuna 20): segura o fluxo e o solta depois,
+                # SEM perder a ficha nem o ponto do grafo. Antes, "faça isto daqui a
+                # dois dias" só existia agendando OUTRA execução, que começava do zero
+                # e sem contexto — o dado apurado até ali morria no caminho.
+                #
+                # Pausa a execução INTEIRA, como a aprovação faz: as pendências levam
+                # os ramos desta onda que ainda não rodaram e os já liberados, e todos
+                # voltam juntos. Sem isso, o trabalho dos outros ramos sumiria.
+                minutos = grafo.minutos_de_espera(no)
+                saidas_e = no.get("saidas") or []
+                destino_e = saidas_e[0].get("destino") if saidas_e else None
+                nome_espera = no.get("nome") or "Esperar"
+                if not minutos:
+                    # Espera não configurada: seguir adiante é melhor que parar para
+                    # sempre — mas nunca em silêncio (§12-A).
+                    avisos.append(
+                        f"O passo '{nome_espera}' não diz quanto tempo esperar, então o "
+                        "fluxo seguiu direto. Abra a automação e defina a espera."
+                    )
+                    if not destino_e or idx.eh_fim(destino_e):
+                        _terminou(entradas, ramo)
+                    else:
+                        _empilhar(proxima, destino_e, entradas, ramo=ramo, extra=extra)
+                    continue
+                entrada_espera = (
+                    entradas[0] if len(entradas) == 1
+                    else SEPARADOR_JUNCAO.join(entradas)
+                )
+                agora = datetime.now(timezone.utc)
+                retomar_em = agora + timedelta(minutes=minutos)
+                ordem += 1
+                # A espera DEIXA passo, mesmo sendo um nó estrutural: uma pausa de dois
+                # dias que não aparecesse na linha do tempo seria um buraco inexplicável
+                # entre dois passos.
+                passo_espera = _montar_passo(
+                    no_atual, "espera_tempo", agente_id=None, agente_nome=nome_espera,
+                    entrada=entrada_espera,
+                    saida=f"Esperando {_texto_da_espera(minutos)}; volta em "
+                          f"{retomar_em.isoformat()}.",
+                    instrumentos=[], erros_instrumentos=[], uso=[], escolhidas=[],
+                    motivo=None, iniciado_em=agora, finalizado_em=agora,
+                    ficha=dict(ficha_do_ramo),
+                )
+                passos.append(passo_espera)
+                if registrar_passo is not None:
+                    registrar_passo(passo_espera, ordem)
+                pendentes_e = (
+                    ([{"no": destino_e, "entradas": [entrada_espera],
+                       **({"ramo": ramo} if ramo else {}),
+                       **({"extra": dict(extra)} if extra else {})}]
+                     if destino_e and not idx.eh_fim(destino_e) else [])
+                    + [
+                        {"no": i["no"], "entradas": list(i["entradas"]),
+                         **({"ramo": i["ramo"]} if i.get("ramo") else {}),
+                         **({"extra": dict(i["extra"])} if i.get("extra") else {})}
+                        for i in onda[pos + 1 :]
+                    ]
+                    + _como_itens(proxima)
+                )
+                if destino_e and idx.eh_fim(destino_e):
+                    _terminou([entrada_espera], ramo)
+                return {
+                    "estado": "aguardando_tempo",
+                    "retomar_em": retomar_em,
+                    "pendentes": pendentes_e,
+                    "ordem": ordem,
+                    "passos": passos,
+                    "avisos": avisos,
+                    "ficha": ficha_exec,
+                    "resultado": SEPARADOR_JUNCAO.join(resultados),
+                }
             if tipo == "cada":
                 entrada_cada = (
                     entradas[0] if len(entradas) == 1
@@ -931,8 +1015,14 @@ def _montar_passo(
     return {
         "no_id": no_id,
         # Tipo do passo na timeline (Fatia 4.1): o passo em que o agente PEDIU
-        # aprovação é uma espera por humano; os demais, agente ou roteador.
-        "tipo": "espera_humano" if espera else ("roteador" if tipo == "roteador" else "agente"),
+        # aprovação é uma espera por humano; `espera_tempo` é o nó "Esperar" (Onda 3),
+        # que não é trabalho de agente nenhum; os demais, agente ou roteador.
+        "tipo": (
+            "espera_humano" if espera
+            else "espera_tempo" if tipo == "espera_tempo"
+            else "roteador" if tipo == "roteador"
+            else "agente"
+        ),
         # Por onde o pedido foi apresentado e de quem se espera a resposta — é o que
         # a borda usa para amarrar a conversa de quem aprova a esta execução. Antes
         # isso vinha do NÓ (`no.aprovacao`); agora vem de quem realmente pediu.

@@ -439,7 +439,13 @@ export type ToneSaida = "normal" | "ok" | "loop" | "erro";
 export type TipoSaida = "condicional" | "erro" | "senao";
 // `cada` = "Para cada item": nó estrutural (não roda IA) que lê uma lista da ficha da
 // execução e repete o trecho seguinte uma vez por item.
-export type TipoNo = "gatilho" | "agente" | "roteador" | "fim" | "cada";
+export type TipoNo =
+  | "gatilho"
+  | "agente"
+  | "roteador"
+  | "fim"
+  | "cada"
+  | "esperar";
 
 // Operadores da REGRA EXATA de uma saída (cérebro: orquestracao/ficha.py). Espelho
 // fiel: mudar aqui sem mudar lá faz a tela oferecer o que o motor não entende.
@@ -514,6 +520,10 @@ export type NoCadeia = {
   lista?: string; // campo da ficha que contém a lista a percorrer
   item_em?: string; // como o item se chama na ficha de cada repetição (padrão: `item`)
   acumular_em?: string; // campo onde o resultado de cada repetição é somado
+  // ─── tipo 'esperar' (Onda 3) ───
+  // Quanto o fluxo fica parado aqui. `quanto: 0` = ainda não configurado: o nó avisa
+  // na tela e o motor segue adiante em vez de parar para sempre.
+  espera?: { quanto: number; unidade: "minutos" | "horas" | "dias" };
   x?: number;
   y?: number;
   saidas: SaidaCadeia[];
@@ -677,6 +687,10 @@ export type PassoExecucao = {
   ordem: number;
   agente_id: string | null;
   no_id?: string | null; // id do nó do grafo onde o passo rodou
+  // Classificação na timeline: agente | roteador | espera_humano (o agente pediu
+  // aprovação) | espera_tempo (o nó "Esperar") | mensagem_entrante. Ausente nos
+  // passos antigos, anteriores ao campo.
+  tipo?: string | null;
   entrada: { texto?: string } | null;
   saida: {
     texto?: string;
@@ -722,6 +736,9 @@ export type Execucao = {
   // custou e acionou instrumento de verdade, então aparece na lista como qualquer
   // outra — mas marcada, senão pareceria um fluxo que morreu no primeiro passo.
   teste_de_no?: boolean;
+  // Nó "Esperar" (Onda 3): quando esta execução, parada em `aguardando_tempo`, volta
+  // sozinha. A tela mostra a data — parada sem dizer até quando parece travada.
+  retomar_em?: string | null;
 };
 
 export type ExecucaoComPassos = Execucao & {

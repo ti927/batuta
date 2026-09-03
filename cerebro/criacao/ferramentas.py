@@ -689,6 +689,14 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         Lê uma lista da ficha e repete o trecho seguinte UMA VEZ POR ITEM, cada
         repetição como caminho próprio. Não roda IA. Teto de 20 itens.
 
+        NÓ "ESPERAR":
+        {"id": "...", "tipo": "esperar",
+         "espera": {"quanto": 2, "unidade": "minutos"|"horas"|"dias"}, "saidas": [...]}.
+        Segura o fluxo pelo tempo pedido e o solta depois, PRESERVANDO a ficha e o ponto
+        do grafo — a execução volta exatamente dali. Use para "publique 24h depois",
+        "cobre o lead em 2 dias"; NÃO use `agendar_automacao` para isso, que dispara um
+        fluxo NOVO e começa do zero, sem a ficha. Não roda IA. Teto de 60 dias.
+
         APROVAÇÃO HUMANA: não existe portão no desenho. Quem para o fluxo é o AGENTE,
         chamando o instrumento `pedir_aprovacao` porque o markdown dele manda — então
         dê o instrumento ao agente e escreva a regra no skill_md dele. Um nó pode

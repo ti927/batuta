@@ -2325,8 +2325,30 @@ A última onda do plano, adiada com aval quando a ordem foi invertida. Quatro fa
 
 **O que as IAs aprenderam:** `operacao/falhas-e-retentativa` ganhou a seção dos dois tetos com as duas honestidades (barra entre ações; conta trabalho, não relógio); o prompt da criadora e a docstring do `diagnosticar_execucao` no MCP mandam **não ligar por conta própria** e explicar o estouro como regra funcionando, não como bug.
 
-### Fatias 3 e 4 — a fazer
-3. **Nó "Esperar"** — a execução pausa por minutos/horas/dias e volta mantendo a ficha e o ponto do fluxo (lacuna 20).
+### Fatia 3 — O nó "Esperar" (lacuna 20)  ✅ (migração `esp00esperar01`)
+
+**O buraco.** Não havia espera temporal no fluxo. Para "publique isto daqui a dois dias" só existia **agendar outra automação** — que começa do zero, sem a ficha e sem o ponto do grafo. Todo o contexto apurado até ali morria no caminho, e o time precisava redescobrir o próprio trabalho.
+
+**O que entrou.** Tipo de nó novo `esperar`, com `{quanto, unidade}` em minutos/horas/dias. Ao alcançá-lo, o motor **pausa a execução inteira** — exatamente como a aprovação faz — guardando em `execucoes.pendencias` os ramos que ainda não rodaram, a ficha em `dados` e agora `execucoes.retomar_em`. Estado novo `aguardando_tempo`.
+
+**A peça mais importante foi de REÚSO, não de invenção.** O motor já sabia pausar e retomar mantendo tudo: é o que a aprovação faz desde sempre. Faltava um motivo de pausa que não fosse gente — o relógio. Por isso a fatia é pequena no motor e grande no que entrega.
+
+**Quem solta é um vigia**, no mesmo job periódico dos outros (a cada 30 s, bem abaixo da menor espera que a tela oferece): `fila.soltar_esperas_vencidas` devolve a execução para `aguardando`, e o trabalhador continua pelas pendências. Como o estado vive no **banco**, reiniciar o Batuta não perde espera nenhuma — e nada fica em andamento sem alguém que o varra (§12-A).
+
+**Três decisões que valem registro:**
+- **Espera sem tempo definido segue adiante, avisando.** Parar para sempre por causa de um campo vazio seria o pior desfecho possível; o rastro diz o que faltou e a tela marca o nó em vermelho.
+- **Teto de 60 dias.** Não é limitação técnica — é para um zero a mais não deixar uma execução dormindo até o ano que vem, em silêncio.
+- **A espera não conta como trabalho** para o teto de tempo da fatia 2 (que soma a duração dos passos). As duas fatias se encaixam sem se atrapalhar.
+
+**O passo aparece no rastro** (`tipo: "espera_tempo"`), embora `esperar` seja um nó estrutural: uma pausa de dois dias que não aparecesse na linha do tempo seria um buraco inexplicável entre dois passos. A numeração continua de onde parou (`_ordem_ja_gravada`) — sem isso a inspeção teria dois "passo 1".
+
+**Na tela** (desenho aprovado pelo maestro): o nó novo na paleta e no canvas (ampulheta, família visual do roteador), com **quantidade + unidade** no painel — e o cartão em vermelho enquanto o tempo não for definido. A execução esperando ganhou **pílula própria "aguardando o tempo"** e a data em que volta: reaproveitar "aguardando você" faria uma pausa que não pede nada parecer uma pendência do consultor. Filtro novo na lista, e o dashboard passou a desenhar o nó — sem isso ele apareceria como um robô sem nome.
+
+**Verificação:** **1095 testes verdes** (15 novos: a duração em português na maior unidade; a conversão das unidades; espera ausente/estragada = zero; o teto de 60 dias; o fluxo para no nó; a pendência guarda por onde continuar; **a ficha atravessa a espera**; espera sem tempo segue avisando; retomar continua de onde parou; o vigia solta no tempo certo e **não** antes; **execução esperando não é morta pelo vigia de presas**; a numeração continua; e o tipo é válido e estrutural). Migração provada nos dois sentidos. `tsc`/`eslint`/`build` limpos.
+
+**O que as IAs aprenderam:** capítulo novo `automacoes/esperar` (no INDICE), mais o prompt da criadora, o schema de `montar_cadeia` e a docstring do MCP — todos com a mesma ordem: **não use `agendar_automacao` para isto**, porque aquilo dispara um fluxo novo, do zero e sem a ficha, que é justamente o problema que o nó resolve.
+
+### Fatia 4 — a fazer
 4. **Nó "Chamar outra automação"** — sub-fluxo síncrono que devolve o resultado ao chamador (lacuna 21).
 
 ---
