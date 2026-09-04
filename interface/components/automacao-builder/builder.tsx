@@ -29,6 +29,7 @@ import {
 
 import type {
   Agente,
+  AutomacaoDaOrg,
   Cadeia,
   ConfiguracaoFluxo,
   Credencial,
@@ -136,15 +137,11 @@ function BuilderInterno({
   // Falha silenciosa de propósito: sem a lista o cartão diz "automação não
   // encontrada" e o seletor fica vazio — nada quebra, e o resto do construtor
   // continua utilizável.
-  const [automacoesOrg, setAutomacoesOrg] = useState<
-    { id: string; nome: string; time_nome?: string }[]
-  >([]);
+  const [automacoesOrg, setAutomacoesOrg] = useState<AutomacaoDaOrg[]>([]);
   useEffect(() => {
     let vivo = true;
     api
-      .get<{ id: string; nome: string; time_nome?: string }[]>(
-        `/organizacoes/${time.organizacao_id}/automacoes`,
-      )
+      .get<AutomacaoDaOrg[]>(`/organizacoes/${time.organizacao_id}/automacoes`)
       .then((d) => vivo && setAutomacoesOrg(d))
       .catch(() => {});
     return () => {

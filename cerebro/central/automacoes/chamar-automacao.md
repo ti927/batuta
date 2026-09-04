@@ -56,6 +56,12 @@ para receber a resposta.
 - **Sem automação escolhida, o fluxo não salva.** Diferente do passo *Esperar* sem tempo
   (que apenas segue avisando): uma chamada sem alvo é trabalho que **não seria feito**, e o
   passo seguinte receberia uma entrada vazia como se estivesse tudo certo.
+- **Chamar uma automação DESATIVADA funciona** — e é de propósito: uma automação que só
+  existe para ser chamada não tem gatilho próprio, e obrigá-la a ficar ativa seria dizer
+  que ela pode disparar sozinha. Mas o Batuta avisa em três lugares: o seletor mostra
+  `(ativa)`/`(desativada)`, o painel do passo alerta, e o **rastro registra**. Quando quem
+  a desligou foi o **disjuntor** (3 falhas seguidas), o aviso diz isso com todas as
+  letras — chamá-la é herdar um problema conhecido.
 - **Máximo de 3 automações encadeadas**, e nenhuma pode chamar outra que já esteja rodando
   mais acima na mesma corrente — A→B→A rodaria para sempre, gastando dinheiro a cada volta.
 - **O que o sub-fluxo gasta conta nos tetos** de custo e de tempo do chamador. Sem isso,

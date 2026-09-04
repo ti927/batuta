@@ -537,6 +537,21 @@ export type NoCadeia = {
   saidas: SaidaCadeia[];
 };
 
+// Uma automação da organização, como os SELETORES de automação-alvo a enxergam: o do
+// instrumento `agendar_automacao` e o do nó "Chamar outra automação"
+// (GET /organizacoes/{id}/automacoes). `ativa` vem junto porque quem escolhe um alvo
+// precisa ver o estado dele na hora de escolher.
+export type AutomacaoDaOrg = {
+  id: string;
+  nome: string;
+  time_id: string;
+  time_nome: string;
+  ativa: boolean;
+  // Quem a desligou foi o DISJUNTOR (3 falhas seguidas rodando sozinha) — e ela continua
+  // desligada. Escolher uma assim sem saber é herdar um problema conhecido.
+  desligada_por_falhas: boolean;
+};
+
 export type Cadeia = {
   inicial?: string; // id do nó inicial (nó-agente que recebe a entrada do gatilho)
   nos?: NoCadeia[];

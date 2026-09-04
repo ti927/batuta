@@ -400,18 +400,34 @@ def listar_automacoes_da_organizacao(
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
-    """Todas as automações da organização (id, nome, time) — alimenta o seletor de
-    'automação a agendar' do instrumento `agendar_automacao` (escopo: mesma org)."""
+    """Todas as automações da organização (id, nome, time, se está ativa) — alimenta os
+    seletores de automação-alvo: o do instrumento `agendar_automacao` e o do nó "Chamar
+    outra automação".
+
+    `ativa` e `desligada_por_falhas` vão junto porque quem escolhe um alvo precisa ver o
+    estado dele na hora de escolher: chamar (ou agendar) uma automação desativada
+    funciona, mas raramente é o que se quer — e quando o desligamento foi o DISJUNTOR
+    (3 falhas seguidas), escolhê-la sem saber disso é herdar um problema conhecido."""
     organizacao_acessivel(sessao, usuario, organizacao_id)
     linhas = sessao.execute(
-        select(Automacao.id, Automacao.nome, Time.id, Time.nome)
+        select(
+            Automacao.id, Automacao.nome, Time.id, Time.nome,
+            Automacao.ativa, Automacao.desligada_por_falhas_em,
+        )
         .join(Time, Time.id == Automacao.time_id)
         .where(Time.organizacao_id == organizacao_id)
         .order_by(Time.nome, Automacao.nome)
     ).all()
     return [
-        {"id": str(aid), "nome": anome, "time_id": str(tid), "time_nome": tnome}
-        for aid, anome, tid, tnome in linhas
+        {
+            "id": str(aid), "nome": anome, "time_id": str(tid), "time_nome": tnome,
+            "ativa": bool(ativa),
+            # Só é "desligada pelo disjuntor" se ela está mesmo desligada agora: a marca
+            # do desligamento antigo sobrevive à reativação, e dizer que o disjuntor a
+            # derrubou quando alguém já a religou seria informação falsa.
+            "desligada_por_falhas": bool(desligada_em) and not ativa,
+        }
+        for aid, anome, tid, tnome, ativa, desligada_em in linhas
     ]
 
 

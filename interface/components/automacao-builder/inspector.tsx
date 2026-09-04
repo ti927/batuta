@@ -27,6 +27,7 @@ import {
 
 import type {
   Agente,
+  AutomacaoDaOrg,
   Cadeia,
   CampoConfigFluxo,
   ConfiguracaoFluxo,
@@ -481,7 +482,7 @@ export function Inspector({
   // Automações da organização — o seletor do nó "Chamar outra automação". Vem do
   // construtor (que já as busca para os cartões) em vez de ser buscada de novo aqui:
   // duas buscas do mesmo dado é como duas telas passam a discordar.
-  automacoesOrg: { id: string; nome: string; time_nome?: string }[];
+  automacoesOrg: AutomacaoDaOrg[];
   gatilho: ConfigGatilho;
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
   webhookUrl?: string | null;
@@ -530,6 +531,13 @@ export function Inspector({
 
   const ag = no.tipo === "agente" ? agentes.find((a) => a.id === no.ref) : undefined;
   const indice = ag ? agentes.findIndex((a) => a.id === ag.id) : 0;
+  // A automação que o nó "Chamar outra automação" roda — para avisar quando ela está
+  // desativada. Chamar uma automação desligada FUNCIONA (avisar, não impedir), então o
+  // aviso é o que separa a escolha deliberada do engano.
+  const alvoEscolhido =
+    no.tipo === "chamar"
+      ? automacoesOrg.find((a) => a.id === no.chamar?.automacao_id)
+      : undefined;
   // Candidatos a "primeiro nó": só o que o motor sabe executar (agente/roteador).
   const inicios = (cadeia.nos ?? []).filter(
     (n) => n.tipo === "agente" || n.tipo === "roteador",
@@ -1121,11 +1129,33 @@ export function Inspector({
                 <option value="">— escolha a automação —</option>
                 {automacoesOrg.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.time_nome ? `${a.time_nome} · ${a.nome}` : a.nome}
+                    {a.time_nome ? `${a.time_nome} · ${a.nome}` : a.nome} (
+                    {a.ativa ? "ativa" : "desativada"})
                   </option>
                 ))}
               </Select>
             </label>
+            {alvoEscolhido && !alvoEscolhido.ativa && (
+              <p
+                className="rounded-md px-2.5 py-2 text-[11px] leading-relaxed"
+                style={{ background: "#FDF1E3", color: "#A9681A" }}
+              >
+                {alvoEscolhido.desligada_por_falhas ? (
+                  <>
+                    <b>{alvoEscolhido.nome}</b> foi <b>desligada pelo disjuntor</b> — ela
+                    falhou 3 vezes seguidas rodando sozinha. Este passo vai chamá-la assim
+                    mesmo, mas veja o que quebrou nela antes de confiar no resultado.
+                  </>
+                ) : (
+                  <>
+                    <b>{alvoEscolhido.nome}</b> está <b>desativada</b>. Este passo vai
+                    chamá-la assim mesmo — chamar não depende de a automação estar ativa,
+                    porque uma automação que só existe para ser chamada não tem gatilho
+                    próprio. Confira se é isso que você quer.
+                  </>
+                )}
+              </p>
+            )}
             {!no.chamar?.automacao_id && (
               <span className="text-[11px]" style={{ color: "#B42318" }}>
                 Sem automação escolhida este passo não chama nada — e não dá para
@@ -1283,19 +1313,22 @@ export function Inspector({
         )}
       </div>
 
-      {/* rodapé: remover (os nós que o usuário acrescentou; gatilho e fim são fixos) */}
-      {podeEditar &&
-        (no.tipo === "agente" || no.tipo === "roteador" || no.tipo === "cada") && (
-          <div className="border-t border-[#E8E6F0] p-3.5">
-            <button
-              type="button"
-              onClick={() => onDeleteNode(no.id)}
-              className="inline-flex items-center gap-1.5 text-[13px] text-destructive"
-            >
-              <X size={15} /> Remover nó do fluxo
-            </button>
-          </div>
-        )}
+      {/* rodapé: remover (os nós que o usuário acrescentou; gatilho e fim são fixos).
+          A regra é por EXCLUSÃO de propósito: enquanto era uma lista do que PODE
+          (`agente|roteador|cada`), todo tipo de nó novo nascia sem botão de remover — foi
+          o que aconteceu com "Esperar" e "Chamar outra automação". Assim, tipo novo já
+          nasce removível, e só os dois nós fixos ficam de fora. */}
+      {podeEditar && no.tipo !== "gatilho" && no.tipo !== "fim" && (
+        <div className="border-t border-[#E8E6F0] p-3.5">
+          <button
+            type="button"
+            onClick={() => onDeleteNode(no.id)}
+            className="inline-flex items-center gap-1.5 text-[13px] text-destructive"
+          >
+            <X size={15} /> Remover nó do fluxo
+          </button>
+        </div>
+      )}
     </div>
   );
 }

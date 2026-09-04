@@ -643,6 +643,83 @@ def test_as_duas_pausas_que_nao_pedem_nada_tem_frase_propria():
     assert "chamou" in resumo_estado("aguardando_sub_fluxo", None)
 
 
+# ───────────── alvo desativado: AVISAR, não impedir ─────────────
+# Decisão do maestro (2026-09-04): uma automação que só existe para ser chamada não tem
+# gatilho próprio e pode legitimamente ficar desativada — então chamar funciona. O que
+# não pode é ser mudo: o rastro avisa, o seletor mostra o estado e o painel do nó alerta.
+
+
+def test_chamar_automacao_desativada_FUNCIONA_e_avisa(sessao, dados, ag):
+    alvo = _automacao(sessao, dados, "Revisão")
+    alvo.ativa = False
+    chamador = _execucao(sessao, _automacao(sessao, dados, "Conteúdo"))
+
+    r = executar_cadeia(
+        sessao, _cadeia(str(ag.id), str(alvo.id)), "vai", execucao_id=chamador.id
+    )
+
+    # rodou: a filha existe e o fluxo pausou esperando por ela
+    assert r["estado"] == "aguardando_sub_fluxo"
+    assert sessao.scalars(_filhas(chamador.id)).one().automacao_id == alvo.id
+    # e não foi em silêncio: aviso no passo E na execução
+    assert "desativada" in r["passos"][1]["aviso"]
+    assert any("desativada" in a for a in r["avisos"])
+
+
+def test_alvo_derrubado_pelo_disjuntor_avisa_diferente(sessao, dados, ag):
+    """Quem foi desligada pelo disjuntor já falhou 3 vezes seguidas — chamá-la é herdar
+    um problema conhecido, e o recado precisa dizer isso."""
+    alvo = _automacao(sessao, dados, "Revisão")
+    alvo.ativa = False
+    alvo.desligada_por_falhas_em = datetime.now(timezone.utc)
+    chamador = _execucao(sessao, _automacao(sessao, dados, "Conteúdo"))
+
+    r = executar_cadeia(
+        sessao, _cadeia(str(ag.id), str(alvo.id)), "vai", execucao_id=chamador.id
+    )
+
+    assert "disjuntor" in r["passos"][1]["aviso"]
+    assert "3 vezes seguidas" in r["passos"][1]["aviso"]
+
+
+def test_alvo_ATIVO_nao_gera_aviso_nenhum(sessao, dados, ag):
+    """O aviso só vale alguma coisa se o caso normal for silencioso."""
+    alvo = _automacao(sessao, dados, "Revisão")
+    chamador = _execucao(sessao, _automacao(sessao, dados, "Conteúdo"))
+
+    r = executar_cadeia(
+        sessao, _cadeia(str(ag.id), str(alvo.id)), "vai", execucao_id=chamador.id
+    )
+
+    assert r["passos"][1]["aviso"] is None
+    assert r["avisos"] == []
+
+
+def test_o_seletor_recebe_o_estado_de_cada_automacao(cliente, entrar, dados, sessao):
+    """Quem escolhe um alvo precisa ver o estado dele NA HORA de escolher."""
+    viva = _automacao(sessao, dados, "Viva")
+    morta = _automacao(sessao, dados, "Desligada pelo disjuntor")
+    morta.ativa = False
+    morta.desligada_por_falhas_em = datetime.now(timezone.utc)
+    religada = _automacao(sessao, dados, "Religada depois de cair")
+    religada.desligada_por_falhas_em = datetime.now(timezone.utc)  # marca antiga
+    sessao.flush()
+    entrar(dados["operador"])
+
+    por_id = {a["id"]: a for a in cliente.get(
+        f"/organizacoes/{dados['orgA'].id}/automacoes"
+    ).json()}
+
+    assert por_id[str(viva.id)]["ativa"] is True
+    assert por_id[str(viva.id)]["desligada_por_falhas"] is False
+    assert por_id[str(morta.id)]["ativa"] is False
+    assert por_id[str(morta.id)]["desligada_por_falhas"] is True
+    # Religada: a marca do desligamento antigo sobrevive, mas dizer que o disjuntor a
+    # derrubou quando alguém já a religou seria informação falsa.
+    assert por_id[str(religada.id)]["ativa"] is True
+    assert por_id[str(religada.id)]["desligada_por_falhas"] is False
+
+
 # ─────────────────── o disjuntor ignora o sub-fluxo ───────────────────
 
 

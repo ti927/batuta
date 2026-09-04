@@ -100,6 +100,28 @@ AVISO_TESTE_CHAMOU = (
     "passo seguinte: num fluxo de verdade, ele continuaria com o resultado dela."
 )
 
+def _aviso_alvo_desativado(alvo) -> str:
+    """O recado de quando o nó `chamar` roda uma automação DESATIVADA.
+
+    Chamar uma automação desligada funciona de propósito (decisão do maestro: **avisar,
+    não impedir** — uma automação que só existe para ser chamada pode legitimamente ficar
+    desativada, já que não tem gatilho próprio). Mas não pode ser mudo: se quem a desligou
+    foi o DISJUNTOR, este fluxo está reinvocando algo que já falhou três vezes seguidas
+    rodando sozinho, e quem lê o rastro precisa saber disso antes de confiar no
+    resultado."""
+    if alvo.desligada_por_falhas_em is not None:
+        return (
+            f"A automação chamada ('{alvo.nome}') está DESLIGADA pelo disjuntor — ela "
+            "falhou 3 vezes seguidas rodando sozinha. Rodou assim mesmo por ter sido "
+            "chamada por este fluxo, mas veja o que quebrou nela antes de confiar neste "
+            "resultado."
+        )
+    return (
+        f"A automação chamada ('{alvo.nome}') está desativada. Rodou assim mesmo por ter "
+        "sido chamada por este fluxo — confira se era isso que você queria."
+    )
+
+
 # "Para cada item" (Onda 2): teto de itens de UMA lista. Acima disso, os excedentes
 # NÃO rodam e o rastro diz quantos ficaram de fora — corte silencioso é proibido.
 MAX_ITENS_CADA = 20
@@ -730,6 +752,14 @@ def executar_cadeia(
                     dados=dict(ficha_do_ramo),
                     chamada_por_execucao_id=execucao_id,
                 )
+                # Avisos deste passo. Podem valer os dois ao mesmo tempo: um alvo
+                # desativado num teste de um passo só.
+                avisos_do_passo: list[str] = []
+                if not alvo.ativa:
+                    avisos_do_passo.append(_aviso_alvo_desativado(alvo))
+                if so_um_passo:
+                    avisos_do_passo.append(AVISO_TESTE_CHAMOU)
+                avisos.extend(avisos_do_passo)
                 ordem += 1
                 passo_chamada = _montar_passo(
                     no_atual, "sub_fluxo", agente_id=None, agente_nome=nome_chamada,
@@ -748,13 +778,11 @@ def executar_cadeia(
                         "time_id": str(alvo.time_id),
                         "nome": alvo.nome,
                     },
-                    aviso=AVISO_TESTE_CHAMOU if so_um_passo else None,
+                    aviso="\n".join(avisos_do_passo) or None,
                 )
                 passos.append(passo_chamada)
                 if registrar_passo is not None:
                     registrar_passo(passo_chamada, ordem)
-                if so_um_passo:
-                    avisos.append(AVISO_TESTE_CHAMOU)
                 # O ramo que espera guarda TUDO o que o retorno precisa: qual filha
                 # (`aguarda_execucao`), qual passo reescrever com o que voltou
                 # (`passo_ordem`) e para onde ir se ela falhar (`destinos_erro`).

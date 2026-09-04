@@ -317,6 +317,10 @@ peça a ele que escolha a automação no passo. Sem alvo o fluxo NÃO SALVA (dif
 `esperar` sem tempo, que apenas segue avisando) — porque uma chamada sem alvo é trabalho
 que não seria feito. Limite: 3 automações encadeadas, e uma automação não pode chamar
 outra que já esteja rodando mais acima na mesma corrente (seria laço sem fim).
+A automação chamada NÃO precisa estar ativa — chamar funciona mesmo com ela desativada
+(uma automação que só existe para ser chamada não tem gatilho próprio). O Batuta avisa no
+seletor, no painel e no rastro; se ela foi desligada pelo DISJUNTOR, diga ao consultor que
+ela falhou 3 vezes seguidas e que vale ver o que quebrou antes de confiar no resultado.
 Ao diagnosticar: uma execução em `aguardando_sub_fluxo` NÃO está travada — ela espera a
 automação chamada terminar; abra o passo para ver o rastro dela. Se a automação chamada
 falhar, o chamador falha junto, a menos que o passo tenha uma saída "Se der erro". E o que

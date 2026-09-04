@@ -479,7 +479,10 @@ async def montar_cadeia(automacao_id: str, cadeia: dict) -> str:
     que vira a entrada do passo seguinte. Use para "passa pelo time X e usa o parecer".
     NÃO use `agendar_automacao` para isso: aquilo é fogo-e-esquece e nunca fica sabendo o
     resultado. Sem `automacao_id` o fluxo não salva; máximo de 3 automações encadeadas e
-    nenhum laço (A→B→A é recusado). Ao diagnosticar, `aguardando_sub_fluxo` não é
+    nenhum laço (A→B→A é recusado). A automação chamada NÃO precisa estar ativa: chamar
+    funciona com ela desativada (quem só existe para ser chamada não tem gatilho próprio),
+    e o rastro registra o aviso — inclusive dizendo quando quem a desligou foi o
+    DISJUNTOR, caso em que ela já falhou 3 vezes seguidas. Ao diagnosticar, `aguardando_sub_fluxo` não é
     travamento: é a espera pela automação chamada, cujo rastro fica no passo.
 
     APROVAÇÃO: não existe `gate` no nó (foi removido em 2026-08-31). Para um passo esperar
