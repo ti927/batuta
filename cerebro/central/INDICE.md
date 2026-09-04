@@ -53,6 +53,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Gatilhos | `automacoes/gatilhos` | Manual, agendamento, webhook, comentário do Instagram; a "entrada" ao 1º agente | ✅ | ✍️ |
 | Pedir aprovação e aguardar | `automacoes/pedir-aprovacao` | O instrumento que para o fluxo até uma pessoa responder; por tela e por canal; quem recebe é quem aprova; converter time que pedia aprovação na mão | ✅ | ✍️ |
 | O passo Esperar | `automacoes/esperar` | Segura o fluxo por minutos/horas/dias e continua daqui, com a ficha intacta | ✅ | ✍️ |
+| O passo Chamar outra automação | `automacoes/chamar-automacao` | Roda outra automação inteira e ESPERA o resultado dela; a ficha vai e volta | ✅ | ✍️ |
 | Execuções e inspeção | `automacoes/execucoes-e-inspecao` | Ver o fluxo rodar; feedback ao vivo; diagnóstico | ✅ | ✍️ |
 
 ## 4. Instrumentos

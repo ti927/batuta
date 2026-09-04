@@ -41,5 +41,9 @@ real do disparo: alvo **ativo**; recomende alvo com gatilho **manual** para não
 junto. A "entrada" é um texto que vira a entrada do 1º agente do alvo.
 
 ## Relacionado
+- [[automacoes/chamar-automacao]] — quando você precisa do **resultado** da outra
+  automação, é aquele passo, não este instrumento: este dispara e não fica sabendo o que
+  aconteceu.
+- [[automacoes/esperar]] — para adiar um passo **do mesmo fluxo**, sem perder a ficha.
 - [[automacoes/gatilhos]]
 - [[automacoes/automacao]]

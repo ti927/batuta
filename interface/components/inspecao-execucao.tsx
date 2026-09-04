@@ -57,6 +57,9 @@ export const ESTADOS_TERMINAIS = [
   // Nó "Esperar" (Onda 3): a execução não avança sozinha agora — ela dorme até a
   // hora marcada. Para efeito de EXIBIÇÃO é terminal como a pausa de aprovação.
   "aguardando_tempo",
+  // Nó "Chamar outra automação" (Onda 3): também não avança sozinha — ela espera
+  // OUTRA execução terminar.
+  "aguardando_sub_fluxo",
   "cancelada",
 ];
 
@@ -74,6 +77,13 @@ export const ESTADO: Record<string, { label: string; variante: VarianteBadge }> 
   // Nó "Esperar" (Onda 3): parada pelo relógio, não por gente. Pílula PRÓPRIA —
   // "aguardando você" pede ação sua; esta não pede nada, volta sozinha.
   aguardando_tempo: { label: "aguardando o tempo", variante: "neutral" },
+  // Nó "Chamar outra automação" (Onda 3): parada esperando OUTRA automação. Pílula
+  // própria pela mesma razão da de cima — reaproveitar "aguardando você" faria a
+  // lista pedir atenção do consultor para algo que não depende dele.
+  aguardando_sub_fluxo: {
+    label: "rodando outra automação",
+    variante: "neutral",
+  },
   concluida: { label: "concluída", variante: "success" },
   falhou: { label: "falhou", variante: "error" },
   cancelada: { label: "cancelada", variante: "neutral" },
@@ -311,7 +321,8 @@ function construirItens(
   // casos o último passo é o ponto onde ela parou, e ganha o ponto de espera.
   const pausado =
     execucao.estado === "aguardando_humano" ||
-    execucao.estado === "aguardando_tempo";
+    execucao.estado === "aguardando_tempo" ||
+    execucao.estado === "aguardando_sub_fluxo";
   const itens: ItemPasso[] = execucao.passos.map((p, i) => {
     const ehUltimo = i === execucao.passos.length - 1;
     const idx = agentes.findIndex((a) => a.id === p.agente_id);
@@ -321,7 +332,11 @@ function construirItens(
       chave: p.id,
       // Um passo de ESPERA já é, em si, uma espera — mesmo que outro passo tenha
       // rodado depois dele (a execução voltou e seguiu).
-      tom: ((ehUltimo && pausado) || p.tipo === "espera_tempo"
+      tom: ((ehUltimo && pausado) ||
+      p.tipo === "espera_tempo" ||
+      // Um passo que chamou outra automação é uma espera em si — mesmo que o fluxo
+      // já tenha voltado e seguido.
+      p.tipo === "sub_fluxo"
         ? "espera"
         : "ok") as TomDot,
       indice: idx >= 0 ? idx : i,
@@ -339,6 +354,10 @@ function construirItens(
     },
     aguardando: { tom: "fila", rotulo: "Na fila…" },
     aguardando_tempo: { tom: "espera", rotulo: "Esperando o tempo passar…" },
+    aguardando_sub_fluxo: {
+      tom: "espera",
+      rotulo: "Esperando a automação chamada terminar…",
+    },
     concluida: { tom: "ok", rotulo: "Entrega concluída" },
     falhou: { tom: "falha", rotulo: "Falhou" },
   };
@@ -649,6 +668,24 @@ function DetalheItem({
       {passo.saida?.erro && (
         <p className="rounded-md bg-[#FDECEC] px-2.5 py-2 text-xs leading-relaxed text-[#B42318]">
           {passo.saida.erro}
+        </p>
+      )}
+      {/* Nó "Chamar outra automação" (Onda 3): o elo para o rastro da filha. Sem ele,
+          um passo que demorou oito minutos não teria como ser inspecionado — e o
+          trabalho todo aconteceu do outro lado. */}
+      {passo.saida?.sub_execucao?.id && passo.saida.sub_execucao.time_id && (
+        <p className="text-xs text-muted-foreground">
+          {passo.saida.sub_execucao.estado
+            ? "Rodou a automação"
+            : "Rodando a automação"}{" "}
+          <strong>{passo.saida.sub_execucao.nome ?? "chamada"}</strong>.{" "}
+          <a
+            className="underline underline-offset-2 hover:text-foreground"
+            href={`/times/${passo.saida.sub_execucao.time_id}/execucoes/${passo.saida.sub_execucao.id}`}
+          >
+            Ver o rastro dela
+          </a>
+          .
         </p>
       )}
       <RegrasDoPasso regras={passo.saida?.regras} />
@@ -986,6 +1023,37 @@ export function PainelExecucao({
             ? `; volta sozinha em ${formatarData(execucao.retomar_em)}.`
             : "."}{" "}
           Nada é preciso da sua parte.
+        </p>
+      )}
+
+      {/* Rodando um sub-fluxo (Onda 3): dizer só "parada" faria uma chamada legítima
+          de oito minutos parecer travamento. O link para a execução-filha é o que
+          permite ver o que está acontecendo lá dentro. */}
+      {execucao.estado === "aguardando_sub_fluxo" && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Parada num passo <strong>Chamar outra automação</strong>, esperando a
+          automação chamada terminar. Abra o passo para ver o rastro dela. Nada é
+          preciso da sua parte.
+        </p>
+      )}
+
+      {/* Esta execução é o sub-fluxo de outra: sem dizê-lo, ela pareceria ter sido
+          disparada do nada. */}
+      {execucao.chamada_por_execucao_id && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Esta execução foi <strong>chamada por outra automação</strong>.
+          {execucao.chamada_por_time_id ? (
+            <>
+              {" "}
+              <a
+                className="underline underline-offset-2 hover:text-foreground"
+                href={`/times/${execucao.chamada_por_time_id}/execucoes/${execucao.chamada_por_execucao_id}`}
+              >
+                Ver quem chamou
+              </a>
+              .
+            </>
+          ) : null}
         </p>
       )}
 

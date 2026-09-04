@@ -41,11 +41,16 @@ from dataclasses import dataclass, field
 # `esperar` (Onda 3) é o nó que SEGURA o fluxo por um tempo e o solta depois, sem
 # perder a ficha nem o ponto do grafo — o que antes só era possível agendando OUTRA
 # execução, que começava do zero e sem contexto nenhum.
-TIPOS_VALIDOS = {"gatilho", "agente", "roteador", "fim", "cada", "esperar"}
+# `chamar` (Onda 3) é o sub-fluxo SÍNCRONO: roda outra automação inteira e espera o
+# resultado dela para seguir. Diferente do instrumento `agendar_automacao`, que é
+# fogo-e-esquece — dispara e nunca fica sabendo o que aconteceu.
+TIPOS_VALIDOS = {"gatilho", "agente", "roteador", "fim", "cada", "esperar", "chamar"}
 # Tipos que não executam nada por si (nem agente, nem IA). `esperar` entra aqui: ele
-# não produz trabalho — só adia. (Ele DEIXA passo no rastro mesmo assim, porque uma
-# espera de dois dias precisa aparecer na linha do tempo; ver `cadeia`.)
-TIPOS_ESTRUTURAIS = {"gatilho", "fim", "cada", "esperar"}
+# não produz trabalho — só adia. `chamar` também: o trabalho é da automação chamada,
+# que tem execução e rastro PRÓPRIOS. (Os dois DEIXAM passo no rastro mesmo assim,
+# porque uma pausa de dois dias — ou oito minutos rodando outro time — precisa
+# aparecer na linha do tempo; ver `cadeia`.)
+TIPOS_ESTRUTURAIS = {"gatilho", "fim", "cada", "esperar", "chamar"}
 
 # Unidades de espera aceitas pelo nó `esperar`, e quanto vale cada uma em minutos.
 UNIDADES_ESPERA = {"minutos": 1, "horas": 60, "dias": 60 * 24}
@@ -65,6 +70,27 @@ def minutos_de_espera(no: dict | None) -> int:
         return 0
     fator = UNIDADES_ESPERA.get(espera.get("unidade") or UNIDADE_ESPERA_PADRAO, 1)
     return max(0, min(int(quanto * fator), MAX_ESPERA_MIN))
+
+
+# Quantos níveis de sub-fluxo o motor aceita (A chama B chama C). Não é limitação
+# técnica: é o freio de mão contra a recursão. Uma automação que se chama — direta ou
+# indiretamente — rodaria para sempre, gastando dinheiro de verdade a cada volta. O
+# ciclo em si já é barrado (`sub_fluxo.pode_chamar`); a profundidade barra a árvore
+# que cresce sem ciclo nenhum, A→B→C→D→…, que dá no mesmo prejuízo.
+MAX_PROFUNDIDADE_CHAMADA = 3
+
+
+def automacao_chamada(no: dict | None) -> str | None:
+    """Qual automação este nó `chamar` roda. `None` quando ainda não foi escolhida —
+    e aí o nó FALHA ao ser alcançado, em vez de seguir adiante calado.
+
+    A diferença de tratamento em relação ao `esperar` sem tempo (que segue avisando)
+    é deliberada: uma espera sem tempo é inofensiva — o fluxo continua correto, só não
+    espera. Um `chamar` sem alvo é trabalho que NÃO foi feito, e seguir adiante
+    entregaria ao próximo nó uma entrada vazia como se estivesse tudo certo."""
+    alvo = ((no or {}).get("chamar") or {}).get("automacao_id")
+    alvo = str(alvo or "").strip()
+    return alvo or None
 # Cor da aresta na UI (cosmético).
 TONES_VALIDOS = {"normal", "ok", "loop", "erro"}
 
@@ -383,6 +409,15 @@ class GrafoIndex:
             return True
         n = self.nos.get(destino)
         return bool(n) and n.get("tipo") == "fim"
+
+    def id_fim(self) -> str | None:
+        """O id do nó `fim` deste grafo (a normalização sempre cria um).
+
+        Serve a quem precisa PARAR num ponto do grafo em vez de simplesmente sumir:
+        o nó `chamar`, ao pausar sem saída desenhada, deixa o ramo apontado para o
+        `fim` — assim ele volta do sub-fluxo, encerra e entrega o resultado, em vez
+        de virar uma pendência para um nó inexistente."""
+        return next((nid for nid, n in self.nos.items() if n.get("tipo") == "fim"), None)
 
 
 def indexar(cadeia: dict | None) -> GrafoIndex:

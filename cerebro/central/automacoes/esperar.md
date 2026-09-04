@@ -67,6 +67,7 @@ travamento nem uma pendência de ninguém: ela volta sozinha.
 
 ## Relacionado
 - [[automacoes/cadeia-e-grafo]]
+- [[automacoes/chamar-automacao]]
 - [[automacoes/pedir-aprovacao]]
 - [[instrumentos/agendar-automacao]]
 - [[operacao/falhas-e-retentativa]]

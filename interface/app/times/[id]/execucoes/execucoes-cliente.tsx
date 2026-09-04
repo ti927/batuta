@@ -47,6 +47,11 @@ const FILTROS: { valor: string; rotulo: string; casa: (e: string) => boolean }[]
     rotulo: "Esperando o tempo",
     casa: (e) => e === "aguardando_tempo",
   },
+  {
+    valor: "aguardando_sub_fluxo",
+    rotulo: "Rodando outra automação",
+    casa: (e) => e === "aguardando_sub_fluxo",
+  },
   { valor: "falhou", rotulo: "Falhou", casa: (e) => e === "falhou" },
 ];
 

@@ -18,7 +18,14 @@ import {
   type Node,
   type NodeChange,
 } from "@xyflow/react";
-import { ChevronDown, Hourglass, Layers, Plus, Repeat2 } from "lucide-react";
+import {
+  ArrowRightLeft,
+  ChevronDown,
+  Hourglass,
+  Layers,
+  Plus,
+  Repeat2,
+} from "lucide-react";
 
 import type {
   Agente,
@@ -33,6 +40,7 @@ import type {
   TipoInstrumento,
   ToneSaida,
 } from "@/lib/api";
+import { api } from "@/lib/api";
 import { DrawerAgente } from "@/components/drawer-agente";
 import { DrawerInstrumento } from "@/components/drawer-instrumento";
 import { RobotFace } from "@/components/robot-face";
@@ -122,6 +130,27 @@ function BuilderInterno({
     (instrumentoId: string) => setEditInstrumentoId(instrumentoId),
     [],
   );
+  // Automações da organização — alimentam o nó "Chamar outra automação" (o cartão
+  // mostra o NOME do alvo) e o seletor do painel. O nó guarda só o id: o nome vem
+  // sempre daqui, para renomear uma automação não deixar cartão mentindo por aí.
+  // Falha silenciosa de propósito: sem a lista o cartão diz "automação não
+  // encontrada" e o seletor fica vazio — nada quebra, e o resto do construtor
+  // continua utilizável.
+  const [automacoesOrg, setAutomacoesOrg] = useState<
+    { id: string; nome: string; time_nome?: string }[]
+  >([]);
+  useEffect(() => {
+    let vivo = true;
+    api
+      .get<{ id: string; nome: string; time_nome?: string }[]>(
+        `/organizacoes/${time.organizacao_id}/automacoes`,
+      )
+      .then((d) => vivo && setAutomacoesOrg(d))
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [time.organizacao_id]);
 
   const idx = useMemo(() => indexar(cadeia), [cadeia]);
   const sel = selId ? (idx[selId] ?? null) : null;
@@ -156,6 +185,7 @@ function BuilderInterno({
           agente,
           indice,
           cinto,
+          automacoes: automacoesOrg,
           onEditarAgente: editarAgente,
           // editar instrumento é só para quem opera (a tela de Instrumentos
           // também só abre o editor para operador).
@@ -165,7 +195,16 @@ function BuilderInterno({
         selected: no.id === selId,
       };
     },
-    [agentes, cintos, gatilho.tipo, podeEditar, selId, editarAgente, editarInstrumento],
+    [
+      agentes,
+      cintos,
+      automacoesOrg,
+      gatilho.tipo,
+      podeEditar,
+      selId,
+      editarAgente,
+      editarInstrumento,
+    ],
   );
 
   // Assinatura do que afeta a PROJEÇÃO dos nós. Dispara a reconciliação
@@ -192,10 +231,19 @@ function BuilderInterno({
             s.tone,
             s.lane,
           ]),
+          // O que o CARTÃO dos nós estruturais mostra: o tempo do "Esperar", a
+          // lista do "Para cada item" e a automação do "Chamar outra automação".
+          // Sem isto a projeção não é refeita ao mexer só nesses campos, e o
+          // cartão segue exibindo o valor antigo até outra alteração qualquer
+          // (tinha sido esquecido nas fatias do `esperar` e do `cada`).
+          c: [n.espera?.quanto, n.espera?.unidade, n.lista, n.chamar?.automacao_id],
         })),
         gat: gatilho.tipo,
         e: podeEditar,
         sel: selId,
+        // Nomes das automações: o cartão do "Chamar outra automação" mostra o nome
+        // do alvo, que vem desta lista (o nó guarda só o id).
+        aut: automacoesOrg.map((a) => [a.id, a.nome]),
         // identidade do agente: renomear/trocar modelo pelo drawer refaz o rótulo
         // do nó (a reconciliação preserva posição/medição).
         ag: agentes.map((a) => [a.id, a.nome, a.modelo_ia, a.papel]),
@@ -210,7 +258,7 @@ function BuilderInterno({
               .join(","),
           ]),
       }),
-    [cadeia, gatilho.tipo, podeEditar, selId, agentes, cintos],
+    [cadeia, gatilho.tipo, podeEditar, selId, agentes, cintos, automacoesOrg],
   );
 
   const [rfNodes, setRfNodes] = useState<Node[]>(() =>
@@ -414,7 +462,7 @@ function BuilderInterno({
   );
 
   const addNode = useCallback(
-    (kind: "agente" | "roteador" | "cada" | "esperar", ref?: string) => {
+    (kind: "agente" | "roteador" | "cada" | "esperar" | "chamar", ref?: string) => {
       const id = novoIdNo(kind);
       setCadeia((c) => {
         const fim = (c.nos ?? []).find((n) => n.tipo === "fim");
@@ -426,7 +474,27 @@ function BuilderInterno({
           !(c.nos ?? []).some((n) => n.tipo === "agente") &&
           !c.inicial;
         const novo: NoCadeia =
-          kind === "esperar"
+          kind === "chamar"
+            ? {
+                id,
+                tipo: "chamar",
+                nome: "Chamar outra automação",
+                // Nasce SEM alvo: o cartão avisa em vermelho e o salvamento é
+                // recusado até o consultor escolher. Inventar um alvo seria pior
+                // que qualquer aviso — o fluxo rodaria a automação errada.
+                chamar: { automacao_id: "" },
+                x: baseX,
+                y: 360,
+                saidas: [
+                  {
+                    id: novoIdSaida(),
+                    rotulo: "com o resultado",
+                    destino: fim?.id ?? "fim",
+                    tone: "normal",
+                  },
+                ],
+              }
+            : kind === "esperar"
             ? {
                 id,
                 tipo: "esperar",
@@ -651,6 +719,23 @@ function BuilderInterno({
                         </span>
                       </span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => addNode("chamar")}
+                      className="flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-[#F4F1FE]"
+                    >
+                      <span className="mt-0.5 grid size-[22px] flex-none place-items-center rounded-md bg-[#EFEAFF]">
+                        <ArrowRightLeft size={13} color="#6D4AFF" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[13px] text-foreground">
+                          Chamar outra automação
+                        </span>
+                        <span className="block text-[11px] leading-snug text-muted-foreground">
+                          Roda outra automação e espera o resultado dela
+                        </span>
+                      </span>
+                    </button>
                   </div>
                 )}
               </div>
@@ -681,6 +766,7 @@ function BuilderInterno({
           timeId={time.id}
           cintos={cintos}
           naoSalvo={naoSalvo}
+          automacoesOrg={automacoesOrg}
         />
       </div>
 

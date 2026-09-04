@@ -21,6 +21,7 @@ from sqlalchemy import and_, delete, or_, select
 import fila
 import fila_turnos
 from modelos import Agendamento, Automacao, Credencial, EventoLog
+from orquestracao import sub_fluxo
 from orquestracao.disparo import criar_execucao
 from sessao import CriadorDeSessao
 
@@ -363,6 +364,17 @@ def iniciar() -> None:
         fila.soltar_esperas_job,
         trigger=IntervalTrigger(seconds=30),
         id="execucao_espera",
+        replace_existing=True,
+    )
+    # Nó "Chamar outra automação" (Onda 3): devolve à fila os chamadores cuja
+    # automação-filha já terminou. O retorno normal é IMEDIATO (o fim da filha chama a
+    # mesma função); este vigia é a rede para o que escapa — filha morta por reinício,
+    # recolhida pelo vigia de presas ou apagada. Sem ele, um chamador ficaria parado
+    # para sempre, e nada em andamento pode ficar sem quem o varra (§12-A).
+    _scheduler.add_job(
+        sub_fluxo.soltar_sub_fluxos_job,
+        trigger=IntervalTrigger(seconds=30),
+        id="execucao_sub_fluxo",
         replace_existing=True,
     )
     # Recuperação periódica de TURNOS da IA criadora presos em `em_andamento` (worker

@@ -4,6 +4,7 @@
 
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import {
+  ArrowRightLeft,
   CheckCircle2,
   Layers,
   Pencil,
@@ -27,6 +28,10 @@ export type DadosNo = {
   no: NoCadeia;
   agente?: Agente;
   indice?: number;
+  // Automações da organização — o nó "Chamar outra automação" guarda só o ID do
+  // alvo, e o NOME sai daqui. Guardar o nome no próprio nó faria duas fontes de
+  // verdade: renomear a automação deixaria o cartão mentindo para sempre.
+  automacoes?: { id: string; nome: string }[];
   // Cinto do agente: vira badges no corpo do nó (um por linha).
   cinto?: Instrumento[];
   // Abre o editor do agente (drawer flutuante) direto do nó, sem trocar de aba.
@@ -254,6 +259,53 @@ export function EsperarNode({ data, selected }: NodeProps) {
   );
 }
 
+/**
+ * O nó "Chamar outra automação" (Onda 3): roda outra automação inteira e ESPERA o
+ * resultado dela para seguir.
+ *
+ * Mesma família visual do "Esperar" e do roteador — peças que dirigem o fluxo sem
+ * produzir conteúdo por si. Sem automação escolhida, o cartão diz isso em vermelho:
+ * aqui o aviso importa ainda mais que no "Esperar", porque um `chamar` sem alvo não
+ * atrasa o fluxo — ele deixa de fazer o trabalho.
+ */
+export function ChamarNode({ data, selected }: NodeProps) {
+  const d = data as DadosNo;
+  const no = d.no;
+  const alvoId = no.chamar?.automacao_id ?? "";
+  const alvo = (d.automacoes ?? []).find((a) => a.id === alvoId);
+  // Alvo escolhido mas fora da lista = automação apagada (ou de outra organização).
+  // Dizer "escolha a automação" ali seria mentira; o cartão diz o que houve.
+  const rotulo = alvo?.nome ?? (alvoId ? "automação não encontrada" : "escolha a automação");
+  return (
+    <div style={{ ...cartao(!!selected, "#FBFAFF", "#6D4AFF", "#E0DAF6"), height: 74 }}>
+      <div className="flex h-full items-center gap-2.5 px-3.5">
+        <span
+          className="grid size-8 flex-none place-items-center rounded-[9px]"
+          style={{ background: "#EFEAFF" }}
+        >
+          <ArrowRightLeft size={17} color="#6D4AFF" />
+        </span>
+        <div className="min-w-0">
+          <div
+            className="text-[11px] font-medium uppercase tracking-wide"
+            style={{ color: "#9A8CCB" }}
+          >
+            Chamar automação
+          </div>
+          <div
+            className="truncate text-[14px] font-medium"
+            style={{ color: alvo ? "#1A1730" : "#B42318" }}
+          >
+            {rotulo}
+          </div>
+        </div>
+      </div>
+      <HandleEntrada />
+      <HandlesSaida no={no} />
+    </div>
+  );
+}
+
 export function AgenteNode({ data, selected }: NodeProps) {
   const d = data as DadosNo;
   const no = d.no;
@@ -377,5 +429,6 @@ export const tiposDeNo = {
   roteador: RoteadorNode,
   cada: CadaNode,
   esperar: EsperarNode,
+  chamar: ChamarNode,
   fim: FimNode,
 };

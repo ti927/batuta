@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Pencil,
   Plus,
+  ArrowRightLeft,
   Hourglass,
   Repeat2,
 } from "lucide-react";
@@ -47,6 +48,8 @@ const ESTADO: Record<string, { label: string; variante: VarianteBadge }> = {
   // Nó "Esperar" (Onda 3): parada pelo relógio, não por gente. Pílula PRÓPRIA —
   // "aguardando você" pede ação sua; esta não pede nada, volta sozinha.
   aguardando_tempo: { label: "aguardando o tempo", variante: "neutral" },
+  // Nó "Chamar outra automação" (Onda 3): parada esperando OUTRA automação terminar.
+  aguardando_sub_fluxo: { label: "rodando outra automação", variante: "neutral" },
   concluida: { label: "concluída", variante: "success" },
   falhou: { label: "falhou", variante: "error" },
   cancelada: { label: "cancelada", variante: "neutral" },
@@ -394,15 +397,18 @@ function CadeiaHorizontal({
         );
         const ehCada = no.tipo === "cada";
         const ehEsperar = no.tipo === "esperar";
+        const ehChamar = no.tipo === "chamar";
         // Nós estruturais não têm agente: sem este ramo, um "Esperar" apareceria
         // como um robô sem nome — o desenho mentiria sobre o que o passo é.
         const rotulo = ehCada
           ? `Para cada ${no.item_em || "item"}${no.lista ? ` de ${no.lista}` : ""}`
           : ehEsperar
             ? `Esperar ${no.espera?.quanto ?? 0} ${no.espera?.unidade ?? "minutos"}`
-            : no.tipo === "roteador"
-              ? (no.nome ?? "Roteador")
-              : (ag?.nome ?? "—");
+            : ehChamar
+              ? "Chamar outra automação"
+              : no.tipo === "roteador"
+                ? (no.nome ?? "Roteador")
+                : (ag?.nome ?? "—");
         return (
           <div key={no.id} className="flex items-center gap-2">
             <Chip>
@@ -413,6 +419,10 @@ function CadeiaHorizontal({
               ) : ehEsperar ? (
                 <span className="flex size-6 items-center justify-center rounded-md bg-[#EFEAFF]">
                   <Hourglass className="size-3.5 text-[#6D4AFF]" />
+                </span>
+              ) : ehChamar ? (
+                <span className="flex size-6 items-center justify-center rounded-md bg-[#EFEAFF]">
+                  <ArrowRightLeft className="size-3.5 text-[#6D4AFF]" />
                 </span>
               ) : (
                 <RobotFace size={24} indice={idx} lider={ag?.papel === "lider"} />

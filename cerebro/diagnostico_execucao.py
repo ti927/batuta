@@ -115,6 +115,13 @@ def resumo_estado(estado: str, resultado: dict | None) -> str:
         return "Falhou: " + (_trunc((resultado or {}).get("erro"), 120) or "erro não registrado")
     if estado == "aguardando_humano":
         return "Parada esperando uma aprovação humana."
+    # As duas pausas que NÃO pedem nada de ninguém (Onda 3). Sem estas frases o
+    # diagnóstico devolvia o nome cru do estado, e quem lesse "aguardando_tempo"
+    # concluiria que a execução travou — justamente o contrário do que acontece.
+    if estado == "aguardando_tempo":
+        return "Parada num passo Esperar; volta sozinha na hora marcada."
+    if estado == "aguardando_sub_fluxo":
+        return "Parada esperando a automação que ela chamou terminar."
     if estado == "em_andamento":
         return "Ainda em andamento."
     if estado == "aguardando":

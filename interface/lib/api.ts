@@ -439,13 +439,16 @@ export type ToneSaida = "normal" | "ok" | "loop" | "erro";
 export type TipoSaida = "condicional" | "erro" | "senao";
 // `cada` = "Para cada item": nó estrutural (não roda IA) que lê uma lista da ficha da
 // execução e repete o trecho seguinte uma vez por item.
+// `chamar` = "Chamar outra automação": nó estrutural que roda outra automação inteira
+// e ESPERA o resultado dela para seguir (sub-fluxo síncrono).
 export type TipoNo =
   | "gatilho"
   | "agente"
   | "roteador"
   | "fim"
   | "cada"
-  | "esperar";
+  | "esperar"
+  | "chamar";
 
 // Operadores da REGRA EXATA de uma saída (cérebro: orquestracao/ficha.py). Espelho
 // fiel: mudar aqui sem mudar lá faz a tela oferecer o que o motor não entende.
@@ -524,6 +527,11 @@ export type NoCadeia = {
   // Quanto o fluxo fica parado aqui. `quanto: 0` = ainda não configurado: o nó avisa
   // na tela e o motor segue adiante em vez de parar para sempre.
   espera?: { quanto: number; unidade: "minutos" | "horas" | "dias" };
+  // ─── tipo 'chamar' ("Chamar outra automação", Onda 3) ───
+  // Qual automação este passo roda. Vazio = ainda não escolhida: o nó avisa em
+  // vermelho e o salvamento é recusado — diferente do `esperar` sem tempo, porque
+  // uma chamada sem alvo é trabalho que não seria feito.
+  chamar?: { automacao_id?: string };
   x?: number;
   y?: number;
   saidas: SaidaCadeia[];
@@ -688,8 +696,8 @@ export type PassoExecucao = {
   agente_id: string | null;
   no_id?: string | null; // id do nó do grafo onde o passo rodou
   // Classificação na timeline: agente | roteador | espera_humano (o agente pediu
-  // aprovação) | espera_tempo (o nó "Esperar") | mensagem_entrante. Ausente nos
-  // passos antigos, anteriores ao campo.
+  // aprovação) | espera_tempo (o nó "Esperar") | sub_fluxo (o nó "Chamar outra
+  // automação") | mensagem_entrante. Ausente nos passos antigos, anteriores ao campo.
   tipo?: string | null;
   entrada: { texto?: string } | null;
   saida: {
@@ -704,6 +712,17 @@ export type PassoExecucao = {
     // regras exatas que o MOTOR conferiu — `resultado` null = não deu para conferir.
     anotou?: string[];
     regras?: { rotulo: string; regra: string; resultado: boolean | null }[];
+    // Nó "Chamar outra automação" (Onda 3): a execução-filha que este passo rodou. É
+    // o que permite abrir o rastro dela a partir daqui — sem o elo, um passo que
+    // demorou oito minutos não teria como ser inspecionado. Gravado já na CHAMADA
+    // (`estado` chega depois, no retorno); `time_id` é o time da automação chamada,
+    // que pode ser outro — o link da inspeção é por time.
+    sub_execucao?: {
+      id: string;
+      time_id?: string;
+      nome?: string;
+      estado?: string;
+    } | null;
     uso?: UsoChamada[];
   } | null;
   estado: string;
@@ -739,9 +758,15 @@ export type Execucao = {
   // Nó "Esperar" (Onda 3): quando esta execução, parada em `aguardando_tempo`, volta
   // sozinha. A tela mostra a data — parada sem dizer até quando parece travada.
   retomar_em?: string | null;
+  // Nó "Chamar outra automação" (Onda 3): de qual execução esta é o sub-fluxo. Nula
+  // em toda execução disparada normalmente.
+  chamada_por_execucao_id?: string | null;
 };
 
 export type ExecucaoComPassos = Execucao & {
+  // O TIME de quem chamou esta execução como sub-fluxo (Onda 3) — o chamador pode ser
+  // de outro time, e a inspeção é uma rota por time.
+  chamada_por_time_id?: string | null;
   passos: PassoExecucao[];
   uso?: ResumoUso | null;
   // A FICHA da execução (Onda 2): os valores nomeados que atravessaram o grafo — o que

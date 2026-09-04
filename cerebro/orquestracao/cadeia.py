@@ -91,6 +91,15 @@ AVISO_TESTE_PEDIU_APROVACAO = (
     "ele pararia aqui até alguém responder."
 )
 
+# Teste de um nó "Chamar outra automação": a automação-alvo roda DE VERDADE (mesma
+# razão do aviso acima — fingir enganaria sobre o que o teste prova), e o teste termina
+# quando ela termina, sem seguir para o passo seguinte.
+AVISO_TESTE_CHAMOU = (
+    "A automação chamada rodou de verdade, com execução própria — abra-a para ver o "
+    "que ela fez. Como isto é um teste de um passo só, o fluxo não seguiu para o "
+    "passo seguinte: num fluxo de verdade, ele continuaria com o resultado dela."
+)
+
 # "Para cada item" (Onda 2): teto de itens de UMA lista. Acima disso, os excedentes
 # NÃO rodam e o rastro diz quantos ficaram de fora — corte silencioso é proibido.
 MAX_ITENS_CADA = 20
@@ -199,6 +208,16 @@ def validar_cadeia(
                     f"O passo '{nome}' repete uma lista, mas não diz QUAL. Abra-o e "
                     "escreva o nome do campo da ficha que contém a lista (o mesmo nome "
                     "que o passo anterior guarda com 'anotar')."
+                )
+        if tipo == "chamar":
+            # "Chamar outra automação" sem alvo não chamaria nada. Barrar ao SALVAR é
+            # melhor que descobrir no meio de uma execução: aqui o consultor está com
+            # a tela aberta e conserta em dois cliques.
+            if not grafo.automacao_chamada(no):
+                nome = no.get("nome") or no["id"]
+                raise ValueError(
+                    f"O passo '{nome}' chama outra automação, mas não diz QUAL. "
+                    "Abra-o e escolha a automação em 'Automação a chamar'."
                 )
         rotulos: set[str] = set()
         for saida in no.get("saidas") or []:
@@ -453,6 +472,7 @@ def executar_cadeia(
     teto_min_execucao: int = 0,
     tempo_inicial_s: float = 0.0,
     so_um_passo: bool = False,
+    execucao_id: uuid.UUID | None = None,
     registrar_passo: Callable[[dict, int], None] | None = None,
     cancelado: Callable[[], bool] | None = None,
 ) -> dict:
@@ -625,6 +645,135 @@ def executar_cadeia(
                     "estado": "aguardando_tempo",
                     "retomar_em": retomar_em,
                     "pendentes": pendentes_e,
+                    "ordem": ordem,
+                    "passos": passos,
+                    "avisos": avisos,
+                    "ficha": ficha_exec,
+                    "resultado": SEPARADOR_JUNCAO.join(resultados),
+                }
+            if tipo == "chamar":
+                # O nó "Chamar outra automação" (Onda 3, lacuna 21): roda a
+                # automação-alvo INTEIRA e espera o resultado dela. É o que o
+                # instrumento `agendar_automacao` nunca soube fazer — ele dispara e
+                # nunca fica sabendo o que aconteceu do outro lado.
+                #
+                # Pausa a execução INTEIRA, como a aprovação e o "Esperar" fazem; o
+                # que muda é quem solta: a própria filha, ao chegar num veredito
+                # (`sub_fluxo.soltar_chamadores_concluidos`).
+                from orquestracao import sub_fluxo
+
+                nome_chamada = no.get("nome") or "Chamar outra automação"
+                cond_c, erro_c, senao_c = grafo.separar_saidas(no.get("saidas"))
+                # O caminho normal é a primeira saída que não seja de erro. Sem
+                # nenhuma, o ramo volta do sub-fluxo direto para o nó `fim` — que
+                # encerra entregando o resultado, em vez de virar pendência órfã.
+                normais = cond_c + senao_c
+                destino_c = (normais[0].get("destino") if normais else None) or idx.id_fim()
+                destinos_erro = [
+                    s.get("destino") for s in erro_c
+                    if s.get("destino") and not idx.eh_fim(s.get("destino"))
+                ]
+                entrada_chamada = (
+                    entradas[0] if len(entradas) == 1
+                    else SEPARADOR_JUNCAO.join(entradas)
+                )
+                iniciado_chamada = datetime.now(timezone.utc)
+
+                alvo, problema = sub_fluxo.pode_chamar(
+                    sessao, execucao_id, grafo.automacao_chamada(no)
+                )
+                if problema is None and execucao_id is None:
+                    # Fora de uma execução de verdade não há a quem devolver o
+                    # resultado — e uma filha sem chamador ficaria rodando sozinha,
+                    # cobrada, sem ninguém esperando por ela.
+                    problema = (
+                        "Este passo chama outra automação, o que só funciona dentro "
+                        "de uma execução de verdade."
+                    )
+                if problema:
+                    # Sem alvo válido não há trabalho a fazer, e seguir adiante
+                    # entregaria ao próximo nó uma entrada vazia como se estivesse
+                    # tudo certo. O passo falha — e a saída "Se der erro", se houver,
+                    # transforma a falha em caminho, como em qualquer outro nó.
+                    ordem += 1
+                    passo_falho_c = _montar_passo(
+                        no_atual, "sub_fluxo", agente_id=None,
+                        agente_nome=nome_chamada, entrada=entrada_chamada,
+                        saida=f"Falhou: {problema}", instrumentos=[],
+                        erros_instrumentos=[], uso=[], escolhidas=[], motivo=None,
+                        iniciado_em=iniciado_chamada,
+                        finalizado_em=datetime.now(timezone.utc),
+                        estado="falhou", erro=problema, ficha=dict(ficha_do_ramo),
+                    )
+                    passos.append(passo_falho_c)
+                    if registrar_passo is not None:
+                        registrar_passo(passo_falho_c, ordem)
+                    if not destinos_erro:
+                        raise ValueError(problema)
+                    for d in destinos_erro:
+                        _empilhar(
+                            proxima, d,
+                            [f"O passo '{nome_chamada}' falhou.\nErro: {problema}"],
+                            ramo=ramo, extra=extra,
+                        )
+                    continue
+
+                # A filha nasce com uma CÓPIA da ficha do chamador: ela precisa saber
+                # tudo o que ele sabia — que é justamente o que se perdia ao agendar
+                # outra execução. Passa pelo funil único de nascimento de execução, e
+                # com isso ganha fila, heartbeat, rastro e tela de inspeção de graça.
+                from orquestracao.disparo import criar_execucao
+
+                filha = criar_execucao(
+                    sessao, alvo, entrada_chamada,
+                    origem=sub_fluxo.ORIGEM,
+                    dados=dict(ficha_do_ramo),
+                    chamada_por_execucao_id=execucao_id,
+                )
+                ordem += 1
+                passo_chamada = _montar_passo(
+                    no_atual, "sub_fluxo", agente_id=None, agente_nome=nome_chamada,
+                    entrada=entrada_chamada,
+                    saida=f"Chamou a automação '{alvo.nome}' e está esperando o "
+                          f"resultado (execução {filha.id}).",
+                    instrumentos=[], erros_instrumentos=[], uso=[], escolhidas=[],
+                    motivo=None, iniciado_em=iniciado_chamada,
+                    finalizado_em=datetime.now(timezone.utc),
+                    ficha=dict(ficha_do_ramo),
+                    sub_execucao={
+                        "id": str(filha.id),
+                        # O time da automação CHAMADA, que pode ser outro: o link da
+                        # inspeção é por time, e mandar o time errado carregaria os
+                        # agentes errados na tela da filha.
+                        "time_id": str(alvo.time_id),
+                        "nome": alvo.nome,
+                    },
+                    aviso=AVISO_TESTE_CHAMOU if so_um_passo else None,
+                )
+                passos.append(passo_chamada)
+                if registrar_passo is not None:
+                    registrar_passo(passo_chamada, ordem)
+                if so_um_passo:
+                    avisos.append(AVISO_TESTE_CHAMOU)
+                # O ramo que espera guarda TUDO o que o retorno precisa: qual filha
+                # (`aguarda_execucao`), qual passo reescrever com o que voltou
+                # (`passo_ordem`) e para onde ir se ela falhar (`destinos_erro`).
+                pendentes_c = (
+                    [{"no": destino_c, "entradas": [],
+                      "aguarda_execucao": str(filha.id), "passo_ordem": ordem,
+                      **({"destinos_erro": destinos_erro} if destinos_erro else {}),
+                      **({"ramo": ramo} if ramo else {}),
+                      **({"extra": dict(extra)} if extra else {})}]
+                    if destino_c else []
+                ) + [
+                    {"no": i["no"], "entradas": list(i["entradas"]),
+                     **({"ramo": i["ramo"]} if i.get("ramo") else {}),
+                     **({"extra": dict(i["extra"])} if i.get("extra") else {})}
+                    for i in onda[pos + 1 :]
+                ] + _como_itens(proxima)
+                return {
+                    "estado": sub_fluxo.ESTADO_CHAMADOR,
+                    "pendentes": pendentes_c,
                     "ordem": ordem,
                     "passos": passos,
                     "avisos": avisos,
@@ -1009,17 +1158,19 @@ def _montar_passo(
     iniciado_em, finalizado_em, estado: str = "concluido", erro: str | None = None,
     aviso: str | None = None, espera: bool = False, aprovacao: dict | None = None,
     regras: list[dict] | None = None, anotou: list[str] | None = None,
-    ficha: dict | None = None,
+    ficha: dict | None = None, sub_execucao: dict | None = None,
 ) -> dict:
     """O registro de um passo, no formato que `disparo._fazer_registrador` grava."""
     return {
         "no_id": no_id,
         # Tipo do passo na timeline (Fatia 4.1): o passo em que o agente PEDIU
         # aprovação é uma espera por humano; `espera_tempo` é o nó "Esperar" (Onda 3),
-        # que não é trabalho de agente nenhum; os demais, agente ou roteador.
+        # que não é trabalho de agente nenhum; `sub_fluxo` é o nó "Chamar outra
+        # automação", cujo trabalho é de OUTRA execução; os demais, agente ou roteador.
         "tipo": (
             "espera_humano" if espera
             else "espera_tempo" if tipo == "espera_tempo"
+            else "sub_fluxo" if tipo == "sub_fluxo"
             else "roteador" if tipo == "roteador"
             else "agente"
         ),
@@ -1044,6 +1195,10 @@ def _montar_passo(
         "regras": regras or [],
         "anotou": anotou or [],
         "ficha": ficha or {},
+        # Nó "Chamar outra automação": a execução-filha que este passo rodou
+        # ({id, time_id, nome} e, na volta, `estado`). Gravado JÁ NA CHAMADA, e não
+        # só no retorno: é enquanto a filha roda que se quer abrir o rastro dela.
+        "sub_execucao": sub_execucao,
         "aviso": aviso,
         "estado": estado,
         "erro": erro,

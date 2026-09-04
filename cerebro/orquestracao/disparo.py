@@ -114,6 +114,13 @@ def _fazer_registrador(
                     # têm e a tela lê com `.get(...)`.
                     **({"regras": passo["regras"]} if passo.get("regras") else {}),
                     **({"anotou": passo["anotou"]} if passo.get("anotou") else {}),
+                    # Nó "Chamar outra automação" (Onda 3): o elo para a execução-filha
+                    # ({id, time_id, nome}), para a inspeção abrir o rastro dela.
+                    **(
+                        {"sub_execucao": passo["sub_execucao"]}
+                        if passo.get("sub_execucao")
+                        else {}
+                    ),
                 },
                 # O passo que FALHOU fica gravado como falho (antes tudo era gravado
                 # "concluido" e a timeline pulava do último passo bom para "falhou",
@@ -179,18 +186,34 @@ def _ordem_ja_gravada(sessao: Session, execucao_id: uuid.UUID) -> int:
     )
 
 
+def _passos_da_arvore(sessao: Session, execucao_id: uuid.UUID) -> list[PassoExecucao]:
+    """Os passos desta execução e os das automações que ela chamou como sub-fluxo.
+
+    Os TETOS (custo e tempo) olham a árvore inteira, e não só a execução: sem isso
+    bastaria pôr o trabalho caro num nó "Chamar outra automação" para o teto do
+    chamador nunca ser alcançado — o limite viraria enfeite. A aba Uso não muda: lá
+    cada execução continua contando por si, e ninguém soma o mesmo dinheiro duas
+    vezes."""
+    from orquestracao import sub_fluxo
+
+    ids = sub_fluxo.ids_da_arvore(sessao, execucao_id)
+    return list(
+        sessao.scalars(
+            select(PassoExecucao).where(PassoExecucao.execucao_id.in_(ids))
+        ).all()
+    )
+
+
 def tempo_ja_trabalhado_s(sessao: Session, execucao_id: uuid.UUID) -> float:
     """Quanto esta execução já TRABALHOU nos passos gravados, em segundos.
 
     A soma da duração dos passos — não o relógio desde que ela nasceu. Uma execução
     que esperou três dias por uma aprovação não trabalhou três dias, e contar a espera
-    a mataria na retomada, punindo justamente o comportamento que o produto pede."""
-    passos = sessao.scalars(
-        select(PassoExecucao).where(PassoExecucao.execucao_id == execucao_id)
-    ).all()
+    a mataria na retomada, punindo justamente o comportamento que o produto pede.
+    Soma também o trabalho dos sub-fluxos que ela chamou (ver `_passos_da_arvore`)."""
     return sum(
         max(0.0, (p.finalizado_em - p.iniciado_em).total_seconds())
-        for p in passos
+        for p in _passos_da_arvore(sessao, execucao_id)
         if p.iniciado_em and p.finalizado_em
     )
 
@@ -200,10 +223,9 @@ def custo_ja_gasto(sessao: Session, execucao_id: uuid.UUID) -> float:
 
     É o análogo do `ordem_inicial` para dinheiro: sem isto, o teto zeraria a cada
     retomada de aprovação e uma execução que espera duas vezes gastaria o teto três
-    vezes. Fonte única de preço: `precos.custo_de_entrada`, a mesma da aba Uso."""
-    passos = sessao.scalars(
-        select(PassoExecucao).where(PassoExecucao.execucao_id == execucao_id)
-    ).all()
+    vezes. Fonte única de preço: `precos.custo_de_entrada`, a mesma da aba Uso. Conta
+    também o que os sub-fluxos gastaram (ver `_passos_da_arvore`)."""
+    passos = _passos_da_arvore(sessao, execucao_id)
     return sum(precos.custo_de_entrada(e) for e in precos.entradas_dos_passos(passos))
 
 
@@ -215,7 +237,14 @@ def _aplicar_resultado(execucao: Execucao, r: dict) -> None:
     # do que já tinha sido apurado.
     if r.get("ficha") is not None:
         execucao.dados = dict(r["ficha"])
-    if r["estado"] == "aguardando_tempo":
+    if r["estado"] == "aguardando_sub_fluxo":
+        # Nó "Chamar outra automação" (Onda 3): a execução dorme enquanto a filha
+        # roda, e quem a solta é a própria filha ao chegar num veredito. Mesma
+        # mecânica da pausa por aprovação e da espera por tempo — muda só o gatilho
+        # do retorno. As `pendencias` levam, no ramo que espera, qual filha aguardar.
+        execucao.estado = "aguardando_sub_fluxo"  # sem finalizada_em: ainda viva
+        execucao.pendencias = r.get("pendentes") or None
+    elif r["estado"] == "aguardando_tempo":
         # Nó "Esperar" (Onda 3): a execução dorme até `retomar_em` e o vigia a devolve
         # à fila. Mesma mecânica da pausa por aprovação — o que muda é quem a solta.
         execucao.estado = "aguardando_tempo"  # sem finalizada_em: ainda viva
@@ -286,6 +315,7 @@ def criar_execucao(
     no_inicial: str | None = None,
     origem_execucao_id: uuid.UUID | None = None,
     teste_de_no: bool = False,
+    chamada_por_execucao_id: uuid.UUID | None = None,
 ) -> Execucao:
     """Enfileira uma execução: cria o registro no estado `aguardando` e devolve
     já com id. Quem roda é o pool de trabalhadores (`fila.py`); por isso o
@@ -309,7 +339,13 @@ def criar_execucao(
 
     "Testar este nó" (fatia 5) também: `no_inicial` + `teste_de_no=True` + a entrada de
     mentira. Passar pelo funil é o que dá ao teste, de graça, a fila (nada preso num
-    request longo), o heartbeat, o rastro e a tela de inspeção."""
+    request longo), o heartbeat, o rastro e a tela de inspeção.
+
+    E o nó "Chamar outra automação" (Onda 3, fatia 4) também: a filha nasce AQUI, com
+    `chamada_por_execucao_id` apontando para quem a chamou e uma cópia da ficha dele em
+    `dados`. Ela é uma execução como qualquer outra — aparece na lista, deixa rastro e
+    pode ela mesma pedir aprovação —, e o que a distingue é só saber a quem devolver o
+    resultado."""
     execucao = Execucao(
         automacao_id=automacao.id,
         estado="aguardando",
@@ -322,6 +358,7 @@ def criar_execucao(
         no_inicial=no_inicial or None,
         origem_execucao_id=origem_execucao_id,
         teste_de_no=teste_de_no,
+        chamada_por_execucao_id=chamada_por_execucao_id,
     )
     sessao.add(execucao)
     sessao.commit()
@@ -396,6 +433,10 @@ def rodar_retomada(sessao: Session, execucao: Execucao) -> Execucao:
             circuito.apos_falha(sessao, execucao, str(e))
         sessao.commit()
         sessao.refresh(execucao)
+        # A filha pode ter parado numa aprovação e só agora terminado: quem espera por
+        # ela é liberado aqui também (§12-A — nenhum estado "em andamento" sem quem o
+        # varra; e o vigia periódico segue como rede).
+        _devolver_ao_chamador(sessao, execucao)
         return execucao
 
 
@@ -465,6 +506,10 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
                     # "Testar este nó" (fatia 5): roda o nó do `no_inicial` e para,
                     # sem seguir as setas. Falso = o caso de sempre.
                     so_um_passo=bool(execucao.teste_de_no),
+                    # Quem está rodando (Onda 3, fatia 4): o nó "Chamar outra
+                    # automação" precisa dele para subir a linhagem (barrar o laço
+                    # A→B→A) e para carimbar a filha com quem a chamou.
+                    execucao_id=execucao.id,
                     registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
                     cancelado=lambda: _esta_cancelada(sessao, execucao.id),
                 )
@@ -502,4 +547,21 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
                 sessao, execucao, str((execucao.resultado or {}).get("erro") or "")
             )
             sessao.commit()
+        _devolver_ao_chamador(sessao, execucao)
         return execucao
+
+
+def _devolver_ao_chamador(sessao: Session, execucao: Execucao) -> None:
+    """Se esta execução é o sub-fluxo de alguém e acabou de dar seu veredito, devolve
+    o chamador à fila NA HORA, em vez de deixá-lo esperar o próximo giro do vigia.
+
+    Chama a MESMA função do vigia (`soltar_chamadores_concluidos`) de propósito: um
+    segundo caminho de retorno seria exatamente o tipo de duplicação que um dia
+    diverge — um deles ganharia um conserto e o outro não."""
+    from orquestracao import sub_fluxo
+
+    if not execucao.chamada_por_execucao_id:
+        return
+    if execucao.estado not in sub_fluxo.ESTADOS_FINAIS:
+        return
+    sub_fluxo.soltar_chamadores_concluidos(sessao)

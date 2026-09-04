@@ -463,6 +463,15 @@ async def montar_cadeia(automacao_id: str, cadeia: dict) -> str:
     começa do zero e sem a ficha. Teto de 60 dias; sem tempo definido o fluxo passa direto
     avisando.
 
+    CHAMAR OUTRA AUTOMAÇÃO: o nó
+    {"tipo": "chamar", "chamar": {"automacao_id": "<id>"}} roda outra automação INTEIRA e
+    espera o resultado dela — ela recebe a ficha desta execução e devolve o que produziu,
+    que vira a entrada do passo seguinte. Use para "passa pelo time X e usa o parecer".
+    NÃO use `agendar_automacao` para isso: aquilo é fogo-e-esquece e nunca fica sabendo o
+    resultado. Sem `automacao_id` o fluxo não salva; máximo de 3 automações encadeadas e
+    nenhum laço (A→B→A é recusado). Ao diagnosticar, `aguardando_sub_fluxo` não é
+    travamento: é a espera pela automação chamada, cujo rastro fica no passo.
+
     APROVAÇÃO: não existe `gate` no nó (foi removido em 2026-08-31). Para um passo esperar
     uma pessoa, dê ao AGENTE dele o instrumento `pedir_aprovacao` e escreva no markdown
     quando usá-lo. Não precisa criar os nós 'gatilho'/'fim' — o sistema completa.

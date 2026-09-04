@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
+  ArrowRightLeft,
   CheckCircle2,
   CircleHelp,
   Clock,
@@ -104,6 +105,7 @@ function nomeNo(no: NoCadeia, agentes: Agente[]): string {
   if (no.tipo === "fim") return "Fim · entrega ao usuário";
   if (no.tipo === "cada") return no.nome || "Para cada item";
   if (no.tipo === "esperar") return no.nome || "Esperar";
+  if (no.tipo === "chamar") return no.nome || "Chamar outra automação";
   return "Gatilho";
 }
 
@@ -463,6 +465,7 @@ export function Inspector({
   timeId,
   cintos,
   naoSalvo,
+  automacoesOrg,
 }: {
   no: NoCadeia | null;
   cadeia: Cadeia;
@@ -475,6 +478,10 @@ export function Inspector({
   timeId: string;
   cintos: Record<string, Instrumento[]>;
   naoSalvo: boolean;
+  // Automações da organização — o seletor do nó "Chamar outra automação". Vem do
+  // construtor (que já as busca para os cartões) em vez de ser buscada de novo aqui:
+  // duas buscas do mesmo dado é como duas telas passam a discordar.
+  automacoesOrg: { id: string; nome: string; time_nome?: string }[];
   gatilho: ConfigGatilho;
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
   webhookUrl?: string | null;
@@ -1007,8 +1014,7 @@ export function Inspector({
           </div>
         )}
 
-        {/* "Para cada item": qual lista percorrer, como o item se chama e onde o
-            resultado de cada repetição é somado. */}
+        {/* "Esperar": quanto tempo o fluxo fica parado aqui. */}
         {no.tipo === "esperar" && (
           <div className="mb-4 flex flex-col gap-3">
             <p className="flex gap-2 rounded-[10px] border border-[#E8E6F0] bg-[#FAFAF7] p-3 text-[11.5px] leading-relaxed text-[#6B6880]">
@@ -1078,6 +1084,61 @@ export function Inspector({
                 tempo.
               </span>
             )}
+          </div>
+        )}
+
+        {/* "Chamar outra automação": qual automação roda aqui. O alvo é fixado pelo
+            HUMANO (nunca escolhido pelo agente) — mesma regra do instrumento
+            `agendar_automacao`, e pela mesma razão: agente que escolhe alvo pode
+            apontar para o lugar errado. */}
+        {no.tipo === "chamar" && (
+          <div className="mb-4 flex flex-col gap-3">
+            <p className="flex gap-2 rounded-[10px] border border-[#E8E6F0] bg-[#FAFAF7] p-3 text-[11.5px] leading-relaxed text-[#6B6880]">
+              <ArrowRightLeft size={14} color="#6D4AFF" className="mt-px flex-none" />
+              <span>
+                Este passo roda <b>outra automação inteira</b> e <b>espera o resultado
+                dela</b> para seguir. A automação chamada recebe a ficha desta execução
+                e devolve o que produziu — inclusive se ela mesma parar para pedir uma
+                aprovação, caso em que este fluxo continua parado até lá.
+              </span>
+            </p>
+            <label
+              className="block text-[12px] font-medium"
+              style={{ color: "#6B6880" }}
+            >
+              Automação a chamar
+              <Select
+                className="mt-1.5"
+                style={
+                  !no.chamar?.automacao_id ? { borderColor: "#E5484D" } : undefined
+                }
+                value={no.chamar?.automacao_id ?? ""}
+                disabled={!podeEditar}
+                onChange={(e) =>
+                  onPatchNode(no.id, { chamar: { automacao_id: e.target.value } })
+                }
+              >
+                <option value="">— escolha a automação —</option>
+                {automacoesOrg.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.time_nome ? `${a.time_nome} · ${a.nome}` : a.nome}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            {!no.chamar?.automacao_id && (
+              <span className="text-[11px]" style={{ color: "#B42318" }}>
+                Sem automação escolhida este passo não chama nada — e não dá para
+                salvar o fluxo assim. Diferente do &quot;Esperar&quot; sem tempo, aqui
+                seguir adiante entregaria ao próximo passo uma entrada vazia como se
+                estivesse tudo certo.
+              </span>
+            )}
+            <p className="text-[11px] leading-relaxed text-[#6B6880]">
+              Desenhe uma saída <b>&quot;Se der erro&quot;</b> se quiser tratar a falha
+              da automação chamada. Sem ela, se a chamada falhar, esta execução falha
+              junto.
+            </p>
           </div>
         )}
 

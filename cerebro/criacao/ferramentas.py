@@ -697,6 +697,17 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         "cobre o lead em 2 dias"; NÃO use `agendar_automacao` para isso, que dispara um
         fluxo NOVO e começa do zero, sem a ficha. Não roda IA. Teto de 60 dias.
 
+        NÓ "CHAMAR OUTRA AUTOMAÇÃO":
+        {"id": "...", "tipo": "chamar", "chamar": {"automacao_id": "<id>"},
+         "saidas": [...]}.
+        Roda OUTRA automação inteira e ESPERA o resultado dela: ela recebe a ficha desta
+        execução e devolve o que produziu (o texto final vira a entrada do passo
+        seguinte). Use para "passa pelo time X e usa o parecer"; NÃO use
+        `agendar_automacao`, que é fogo-e-esquece e nunca fica sabendo o resultado. Não
+        roda IA. Sem `automacao_id` o fluxo NÃO SALVA. Máximo de 3 automações
+        encadeadas, e nenhuma pode chamar outra que já esteja rodando acima na corrente.
+        Desenhe uma saída "Se der erro" se quiser tratar a falha da chamada.
+
         APROVAÇÃO HUMANA: não existe portão no desenho. Quem para o fluxo é o AGENTE,
         chamando o instrumento `pedir_aprovacao` porque o markdown dele manda — então
         dê o instrumento ao agente e escreva a regra no skill_md dele. Um nó pode

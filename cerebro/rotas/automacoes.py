@@ -281,8 +281,21 @@ def _montar_com_passos(sessao: Session, execucao: Execucao) -> ExecucaoComPassos
         and auto is not None
         and not grafo.mesmo_desenho(execucao.desenho, auto.cadeia)
     )
+    # O time de quem chamou (sub-fluxo, Onda 3): uma consulta a mais, só na tela de
+    # detalhe (uma execução por vez), para o link "ver quem chamou" apontar para o time
+    # certo — o chamador pode ser de outro time.
+    chamador_time_id = (
+        sessao.scalar(
+            select(Automacao.time_id)
+            .join(Execucao, Execucao.automacao_id == Automacao.id)
+            .where(Execucao.id == execucao.chamada_por_execucao_id)
+        )
+        if execucao.chamada_por_execucao_id
+        else None
+    )
     return ExecucaoComPassos(
         **base,
+        chamada_por_time_id=chamador_time_id,
         passos=[PassoExecucaoLer.model_validate(p) for p in passos],
         uso=precos.resumir_uso(passos),
         # A FICHA (Onda 2). Estava declarada no esquema e no front, mas ninguém a

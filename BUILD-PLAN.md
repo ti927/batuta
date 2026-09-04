@@ -2287,9 +2287,9 @@ A escolha "foto ou cadeia viva" virou **fonte única** em `grafo.desenho_que_rod
 
 ---
 
-## FASE — O motor vira um grafo de verdade · **Onda 3: tempo e composição**  ▶️ EM ANDAMENTO (2026-09-03)
+## FASE — O motor vira um grafo de verdade · **Onda 3: tempo e composição**  ✅ COMPLETA (2026-09-04)
 
-A última onda do plano, adiada com aval quando a ordem foi invertida. Quatro fatias, nesta ordem.
+A última onda do plano, adiada com aval quando a ordem foi invertida. Quatro fatias, nesta ordem — **as quatro entregues**.
 
 ### Fatia 1 — O vigia respeita o sinal de vida (lacuna 24)  ✅ (sem migração)
 
@@ -2348,8 +2348,37 @@ A última onda do plano, adiada com aval quando a ordem foi invertida. Quatro fa
 
 **O que as IAs aprenderam:** capítulo novo `automacoes/esperar` (no INDICE), mais o prompt da criadora, o schema de `montar_cadeia` e a docstring do MCP — todos com a mesma ordem: **não use `agendar_automacao` para isto**, porque aquilo dispara um fluxo novo, do zero e sem a ficha, que é justamente o problema que o nó resolve.
 
-### Fatia 4 — a fazer
-4. **Nó "Chamar outra automação"** — sub-fluxo síncrono que devolve o resultado ao chamador (lacuna 21).
+### Fatia 4 — O nó "Chamar outra automação" (lacuna 21)  ✅ (migração `sub00chamada01`)
+
+**O buraco.** Uma automação só conseguia acionar outra pelo instrumento `agendar_automacao`, que é **fogo-e-esquece**: grava um agendamento e a execução que chamou segue em frente sem jamais saber o que aconteceu do outro lado. Dava para pedir o trabalho; não dava para receber a resposta. Um time de conteúdo não conseguia chamar o time de revisão e **usar** o parecer — disparava e torcia.
+
+**O que entrou.** Tipo de nó novo `chamar`, com a automação-alvo escolhida pelo **humano** no painel (nunca pelo agente em tempo de execução — mesma regra do `agendar_automacao`, e pela mesma razão: agente que escolhe alvo pode apontar para o lugar errado). Ao alcançá-lo, o motor cria uma **execução-filha de verdade** — com linha do tempo, ficha e rastro próprios — e **pausa o chamador** no estado novo `aguardando_sub_fluxo`.
+
+**A mecânica é REÚSO, pela terceira vez.** O motor já sabia pausar guardando tudo e retomar depois: a aprovação faz isso desde sempre, o nó "Esperar" reusou trocando quem solta, e aqui trocamos de novo — quem solta é a **própria filha**, ao chegar num veredito. Por isso três coisas caíram de graça, sem código próprio: **(a)** se a filha parar para pedir aprovação, o chamador simplesmente continua parado (é a mesma pausa, aninhada); **(b)** reiniciar o Batuta não perde nada, porque o estado vive no banco; **(c)** a ficha atravessa — nos dois sentidos.
+
+**O que vai e o que volta.** A filha nasce com uma **cópia da ficha** do chamador (ela precisa saber tudo o que ele sabia — exatamente o que o `agendar_automacao` perdia). Na volta, o **texto final dela vira a entrada do próximo passo** e a ficha dela é mesclada **por cima** da do chamador: como partiu de uma cópia, toda diferença é trabalho que ela fez, e o valor dela é o mais recente.
+
+**Quatro decisões que valem registro:**
+- **Sem alvo, o passo FALHA** — e não "segue avisando" como o `esperar` sem tempo. A diferença é deliberada: uma espera sem tempo é inofensiva (o fluxo continua correto, só não espera), enquanto uma chamada sem alvo é **trabalho que não foi feito**, e seguir entregaria ao próximo nó uma entrada vazia como se estivesse tudo certo. A validação recusa salvar, e em execução o passo falha pela saída "Se der erro" — ou derruba a execução, se não houver uma.
+- **Anti-laço em duas camadas.** O ciclo (A→B→A) é barrado subindo a **linhagem** (`execucoes.chamada_por_execucao_id`); a profundidade (3 níveis) barra a árvore que cresce sem ciclo nenhum, A→B→C→D, que dá no mesmo prejuízo. Uma automação que se chama rodaria para sempre gastando dinheiro de verdade a cada volta.
+- **Os tetos enxergam a árvore.** `custo_ja_gasto` e `tempo_ja_trabalhado_s` passaram a somar as execuções-filhas. Sem isso bastaria pôr o trabalho caro num sub-fluxo para o teto do chamador nunca ser alcançado — o limite viraria enfeite. A aba **Uso** não muda: lá cada execução segue contando por si, e ninguém soma o mesmo dinheiro duas vezes.
+- **Falha de filha não conta no disjuntor da automação chamada.** O disjuntor conta o que falha **rodando sozinho**; aqui quem rodou foi o chamador, e a falha já conta para ele. Sem isso, uma automação usada como sub-fluxo por um chamador quebrado se desligaria por culpa alheia.
+
+**Um caminho de retorno só, chamado de dois lugares.** `sub_fluxo.soltar_chamadores_concluidos` é a única implementação: o fim de uma execução a chama (retorno imediato) e um vigia de 30 s a chama de novo (a rede para o que escapa — filha morta por reinício, recolhida pelo vigia de presas, ou apagada). Um segundo caminho de retorno seria o tipo de duplicação que um dia diverge, com um deles ganhando um conserto e o outro não. E nada em andamento fica sem quem o varra (§12-A): chamador esperando filha inexistente é solto com recado honesto.
+
+**Na tela** (desenho aprovado pelo maestro): nó novo na paleta e no canvas (seta que sai e volta, família visual do "Esperar"), **vermelho enquanto nenhuma automação estiver escolhida**; no painel do nó, o seletor de automações da organização (o mesmo endpoint que o `agendar_automacao` já usava); na inspeção, o passo mostra **"Rodando/Rodou a automação X"** com **link para o rastro da filha** — gravado **já na chamada**, porque é enquanto ela roda que se quer olhar lá dentro —, e a execução chamada diz **quem a chamou**; pílula própria **"rodando outra automação"** e filtro novo na lista.
+
+**Dois consertos de fatias anteriores encontrados no caminho** (mesma camada, mesma regra — [[feedback-corrigir-cobrindo-todos-cenarios]]):
+1. **A assinatura que redesenha o canvas ignorava o conteúdo dos nós estruturais.** Mudar só o tempo do "Esperar" ou a lista do "Para cada item" não refazia a projeção, e o cartão seguia mostrando o valor antigo até outra alteração qualquer. Os três tipos entraram na assinatura.
+2. **O diagnóstico devolvia o nome cru do estado** para `aguardando_tempo` (e devolveria para `aguardando_sub_fluxo`): quem lesse "aguardando_tempo" concluiria que a execução travou — o contrário do que acontece. Os dois ganharam frase honesta.
+
+**Verificação:** **1135 testes verdes** (40 novos: o tipo de nó e a leitura do alvo; a validação que recusa salvar sem alvo; a pausa e a criação da filha; a ficha que vai; a linhagem e a origem carimbadas; a pendência que guarda qual filha esperar e por onde seguir; o `chamar` sem saída que volta para o `fim`; os quatro freios — sem alvo, alvo apagado, laço direto, laço indireto, profundidade — e a corrente curta que passa; a chamada fora de uma execução de verdade; o vigia que solta ao concluir e **não** solta enquanto roda nem quando a filha espera uma pessoa; a ficha que volta por cima; o passo reescrito com o desfecho; a filha que falha com e sem saída de erro; a filha cancelada; a filha apagada; o dado estragado com e sem ramo sobrando; o chamador que **não** é morto pelo vigia de presas; o teste de um passo que deixa a filha rodar e para; os outros ramos da onda preservados; a árvore de execuções; os dois tetos somando o sub-fluxo; o elo gravado já na chamada com o time certo; as frases do diagnóstico; e o disjuntor que ignora a origem `sub_fluxo`). Migração provada nos dois sentidos (coluna, índice e chave estrangeira). `tsc`/`eslint`/`build` limpos.
+
+**O que as IAs aprenderam:** capítulo novo `automacoes/chamar-automacao` (no INDICE, com elo cruzado a partir de `esperar` e de `instrumentos/agendar-automacao`), mais o prompt da criadora, o schema de `montar_cadeia` e a docstring do MCP — todos com a mesma ordem: **não use `agendar_automacao` quando você precisa do resultado**, porque aquilo dispara e não fica sabendo o que aconteceu.
+
+---
+
+**A Onda 3 está completa, e com ela a frente "O motor vira um grafo de verdade" inteira** — Ondas 1, 2, Parte III, 3 e 4. Falta o **teste ao vivo** do maestro.
 
 ---
 

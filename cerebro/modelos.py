@@ -237,7 +237,9 @@ class Execucao(IdData, Base):
     )
     estado: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default=text("'aguardando'")
-    )  # aguardando | em_andamento | aguardando_humano | concluida | falhou | conversa
+    )  # aguardando | em_andamento | aguardando_humano | aguardando_tempo (nó
+    # "Esperar") | aguardando_sub_fluxo (nó "Chamar outra automação") | concluida |
+    # falhou | cancelada | conversa
     entrada: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     resultado: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     # Quem disparou (manual|agendamento|webhook|comentario_instagram|sistema). O valor
@@ -308,6 +310,16 @@ class Execucao(IdData, Base):
     retomar_em: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Nó "Chamar outra automação" (Onda 3): de qual execução ESTA é o sub-fluxo. É a
+    # LINHAGEM — por ela se barra o laço A→B→A e se mede a profundidade da corrente
+    # antes de criar mais uma filha, e é por ela que a tela mostra "chamada por".
+    # O elo de volta (chamador → filha) vive em `pendencias[].aguarda_execucao`, que
+    # é quem diz qual filha aquele ramo específico está esperando.
+    # SET NULL (não CASCADE): apagar o chamador não pode levar junto o trabalho que a
+    # filha realmente fez.
+    chamada_por_execucao_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("execucoes.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
 
 class PassoExecucao(IdData, Base):
@@ -323,7 +335,9 @@ class PassoExecucao(IdData, Base):
     ordem: Mapped[int] = mapped_column(Integer, nullable=False)
     # Classificação do passo na timeline (Fatia 4.1): agente | roteador |
     # espera_humano (portão / aguardando resposta) | espera_tempo (o nó "Esperar",
-    # Onda 3) | mensagem_entrante. Nulável: passos antigos não o têm. Introduz o
+    # Onda 3) | sub_fluxo (o nó "Chamar outra automação", Onda 3, cuja saída é
+    # reescrita com o que a filha devolveu) | mensagem_entrante. Nulável: passos
+    # antigos não o têm. Introduz o
     # vocabulário que unifica o portão como passo único de espera-por-humano
     # (REMODELAGEM-MOTOR §5).
     tipo: Mapped[str | None] = mapped_column(String(20), nullable=True)

@@ -445,6 +445,10 @@ class ExecucaoLer(BaseModel):
     # sozinha. A tela mostra a data — uma execução parada sem dizer até quando parece
     # travada, e "aguardando o tempo" não pede nada de ninguém.
     retomar_em: datetime | None = None
+    # Nó "Chamar outra automação" (Onda 3): de qual execução esta é o sub-fluxo. A tela
+    # o mostra porque, sem isso, uma execução que ninguém disparou pareceria ter
+    # nascido do nada.
+    chamada_por_execucao_id: uuid.UUID | None = None
 
 
 class ExecucaoNaLista(ExecucaoLer):
@@ -466,6 +470,10 @@ class ExecucaoComPassos(ExecucaoLer):
     # que o gatilho trouxe mais o que os agentes anotaram. É o que responde, na tela,
     # "com que dados este passo trabalhou?". Nula em execuções anteriores à Onda 2.
     dados: dict | None = None
+    # O TIME de quem chamou esta execução como sub-fluxo (Onda 3). A inspeção é uma rota
+    # por time, e o chamador pode ser de OUTRO time — mandar o time errado no link
+    # carregaria os agentes errados na tela. Nulo quando ninguém a chamou.
+    chamada_por_time_id: uuid.UUID | None = None
     # A automação foi EDITADA depois que esta execução começou (Onda 4)? A execução roda
     # o desenho que ela fotografou no disparo; quem inspeciona precisa saber que o fluxo
     # na tela do construtor já não é o que rodou aqui. `False` também quando não há foto

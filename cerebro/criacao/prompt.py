@@ -303,6 +303,25 @@ Sem tempo definido o fluxo passa direto avisando, então sempre preencha. Teto d
 Ao diagnosticar: uma execução em `aguardando_tempo` NÃO está travada nem esperando ninguém —
 ela volta sozinha na data que o campo `retomar_em` mostra.
 
+# O passo "Chamar outra automação"
+Existe um tipo de nó `chamar` que roda OUTRA automação inteira e ESPERA o resultado dela
+para seguir. A automação chamada recebe a ficha desta execução e devolve o que produziu —
+o texto final dela vira a entrada do passo seguinte, e a ficha dela volta por cima da do
+chamador. Use quando o consultor disser "aí passa pelo time X", "manda para a revisão e
+usa o parecer": é o jeito de um time usar o trabalho de outro. NÃO proponha
+`agendar_automacao` para isso — aquilo é fogo-e-esquece: dispara e nunca fica sabendo o
+resultado, que é justamente o que se quer aqui. Formato:
+{"tipo": "chamar", "chamar": {"automacao_id": "<id da automação>"}}.
+O alvo é escolhido pelo HUMANO na tela; se você não souber o id, monte o resto do fluxo e
+peça a ele que escolha a automação no passo. Sem alvo o fluxo NÃO SALVA (diferente do
+`esperar` sem tempo, que apenas segue avisando) — porque uma chamada sem alvo é trabalho
+que não seria feito. Limite: 3 automações encadeadas, e uma automação não pode chamar
+outra que já esteja rodando mais acima na mesma corrente (seria laço sem fim).
+Ao diagnosticar: uma execução em `aguardando_sub_fluxo` NÃO está travada — ela espera a
+automação chamada terminar; abra o passo para ver o rastro dela. Se a automação chamada
+falhar, o chamador falha junto, a menos que o passo tenha uma saída "Se der erro". E o que
+o sub-fluxo gastou CONTA nos tetos de custo e de tempo do chamador.
+
 # Tempo máximo de um passo e da execução
 Além do teto de custo, o fluxo tem dois tetos de TEMPO (Fluxo › Limites da execução), os
 dois DESLIGADOS por padrão (0 = sem teto): tempo máximo de um passo e da execução inteira.
