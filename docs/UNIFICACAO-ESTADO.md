@@ -181,9 +181,29 @@ decisão adiada (§ abaixo) tomada com número na mão, e a sequência das fatia
 > **Nota de custo — importa para esta Frente:** a ficha vai na **mensagem do turno**, não no
 > prompt de sistema; ali ela mudaria a cada passo e invalidaria o **cache de prompt** que a
 > Frente B/Parte D ligou. O ganho de −88%/turno segue de pé.
-> **Faltam:** Onda 3 (tempo e composição: nó "Esperar", sub-fluxo síncrono, timeouts) e
-> Onda 4 (operação: rodar de novo a partir daqui, testar um nó, circuit breaker, versão do
-> desenho guardada na execução).
+> **✅ Onda 4 COMPLETA (2026-09-02/03)** — operação e confiança, em cinco fatias, com a
+> ordem do plano **invertida por aval do maestro** (a Onda 3 ficou para depois porque a 4
+> resolvia dor que já estava acontecendo): **(1)** a execução guarda o **desenho** que rodou
+> (`df7809e`, `des00desenho01`) — editar a automação deixou de mudar o caminho no meio da
+> corrida; **(2)** **rodar de novo a partir daqui** (`289dde9`, `rex00reexecucao01`) —
+> execução nova herdando desenho, ficha e a entrada exata do passo; **(3)** o **disjuntor**
+> (`6764592`, `cir00circuito01`) — automação que falha sozinha 3× seguidas se desliga e
+> avisa, com a contagem DERIVADA das execuções (o motor tem três caminhos de falha; um
+> contador guardado dessincronizaria); **(4)** **teto de custo por execução** (`04f6e48`,
+> sem migração), na mesma cascata dos outros limites do fluxo; **(5)** **testar este passo**
+> (`27af895`, `tst00testeno01`) — um passo só, com entrada escrita à mão, acionando os
+> instrumentos REAIS (não há modo de mentira: fingir enganaria sobre o que o teste prova).
+> **▶️ Onda 3 EM ANDAMENTO (3 de 4, 2026-09-03/04)** — tempo e composição:
+> **(1)** o vigia de execuções presas passou a respeitar o **sinal de vida** (`73ef527`) — o
+> achado estava escrito no próprio código, onde `gerar_video` encolhia o teto dele "para
+> ficar abaixo do sweeper"; junto, o batimento passou a **bater durante a espera**;
+> **(2)** **tetos de tempo** por passo e por execução (`6fb88db`, módulo `orquestracao/prazo.py`)
+> — o do passo barra o agente ENTRE ações, o da execução conta tempo de **trabalho**, não de
+> relógio (contar relógio mataria, na retomada, quem esperou dias por uma aprovação);
+> **(3)** o nó **"Esperar"** (`a65227d`, `esp00esperar01`) — pausa por minutos/horas/dias
+> **reusando a máquina da aprovação**, mantendo a ficha e o ponto do grafo, com um vigia
+> soltando a execução no tempo certo. **Falta:** a fatia 4 — nó **"Chamar outra automação"**
+> (sub-fluxo síncrono que devolve o resultado ao chamador).
 
 ### Frente B — as partes da economia (do `ECONOMIA-TOKENS-IA-CRIADORA.md`)
 - **A ✅ NO AR (2026-07-26)** — Resumo rolante + janela de turnos recentes (−62% do histórico provado; commit `3621138`).  **B ✅ NO AR (2026-07-27)** — Painel "Sobre este time" (resumo visível/editável, drawer à direita; edição humana vence a da IA; commit `4815f14`).

@@ -162,6 +162,12 @@ Um fluxo precisa saber **pausar, fazer uma pergunta a um humano, e retomar de on
 
 > **Estado de implementação:** o motor de pausar/perguntar/retomar está pronto e validado, respondido **na tela do Batuta** e também **pelo canal** (Telegram já no ar; o WhatsApp do Líder, §10, segue na fila da Mensageria). **Quem decide esperar é o próprio agente**, chamando o instrumento *Pedir aprovação e aguardar* porque a documentação dele manda — não há interruptor de aprovação no desenho do fluxo (ver §19). Ao receber a resposta, ele **continua de onde parou**: pode perguntar de volta antes de seguir (ex.: pedir o porquê de uma reprovação) e só então escolher os caminhos. O motor executa; o agente decide.
 
+### Espera por tempo
+
+Um fluxo também precisa saber **esperar o relógio**: publicar o carrossel 24 h depois do story, cobrar um lead 2 dias depois do primeiro contato, reconferir um pedido meia hora depois de enviá-lo.
+
+Isso é um **passo do desenho** ("Esperar", com quantidade e unidade), não um agendamento à parte — e a diferença importa: a execução **para e volta exatamente daquele ponto**, com a ficha inteira. Agendar outro fluxo começaria do zero, sem nada do que já se sabia, e o time teria de redescobrir o próprio trabalho. Enquanto espera, a execução não pede nada de ninguém: ela volta sozinha, e a tela diz quando.
+
 ### Bifurcação por intenção
 
 Um fluxo pode ter ramos. Cada seta que sai de um passo carrega uma **condição escrita** ("siga por aqui quando…"), e o agente avalia todas elas — ex.: se a mensagem é sobre agenda, consulta o sistema de agendamento; se é sobre exame, envia as instruções do exame.
@@ -218,6 +224,12 @@ Um instrumento vai falhar às vezes: a API do cliente caiu, o ERP não respondeu
 - Se desistir, quem é avisado, e como?
 - O fluxo nunca pode "morrer em silêncio". Uma falha sempre resulta em alguém sabendo que falhou.
 
+**E falhar todo dia é pior que falhar uma vez.** Uma automação que dispara sozinha e falha **três vezes seguidas** é **desligada** pelo Batuta, com um recado dizendo quantas falhas houve, onde parou a última e o que fazer. Sem isso, uma chave vencida faria o fluxo disparar diariamente, queimando dinheiro e enchendo o canal de avisos iguais — ou, se ninguém abrisse os avisos, falhando em silêncio, que é justamente o que esta seção proíbe.
+
+Duas coisas **não** contam para esse desligamento, e o motivo é o mesmo — não punir quem não errou: um disparo **manual** (quem clicou está olhando a tela e vê a falha na hora) e uma interrupção causada pelo **próprio Batuta** (uma atualização do sistema, por exemplo). Religar a automação devolve as três chances.
+
+**Depois da falha, o trabalho bom não se joga fora.** Quando um fluxo longo morre perto do fim, dá para **rodar de novo a partir do passo que quebrou** — nasce uma execução nova começando ali, com a mesma entrada e a mesma ficha, sem repetir (nem pagar) tudo o que já tinha dado certo. E, ao ajustar um agente, dá para **testar um passo sozinho**, com um texto escrito à mão, em vez de rodar a automação inteira a cada tentativa. Nos dois casos vale a mesma ressalva, dita com todas as letras na tela: os instrumentos são **reais** — repetir um passo que publica publica de novo.
+
 ## 17. Espera e feedback de progresso
 
 Uma cadeia de muitos passos pode levar minutos. Quem mandou a mensagem no WhatsApp não pode ficar no silêncio achando que travou. O produto precisa dar sinal de vida — confirmar o recebimento e, em fluxos longos, sinalizar progresso. Um fluxo funcionando sem feedback é indistinguível de um fluxo quebrado, aos olhos do cliente.
@@ -243,6 +255,8 @@ Decisão de produto a ser detalhada: até onde o agente lembra. Da conversa de h
 ## 21. Custo visível
 
 Cada passo de um fluxo é uma chamada de IA paga. Uma cadeia de 15 passos custa 15 vezes. O usuário leigo não tem noção disso. O produto precisa tornar o custo visível — dar uma estimativa de quanto um fluxo custa antes de rodar, e mostrar o consumo real depois (ver seção 24).
+
+Visível não basta quando algo dispara: um fluxo pode ter um **teto de custo por execução** (em dólares) e um **teto de tempo**, por passo e pela execução inteira. Estourou, ele **para** e diz quanto gastou, qual era o limite e o que fazer. Os três nascem **desligados**, de propósito: um limite que o usuário não pediu interromperia trabalho legítimo e lento — gerar um vídeo leva uns 25 minutos — como se fosse defeito. O teto de tempo da execução conta **tempo de trabalho**, não de relógio: uma execução que esperou dois dias por uma aprovação humana não gastou dois dias de trabalho.
 
 ## 22. Supervisão e erro do agente
 
