@@ -175,6 +175,27 @@ def _sonda_vigia_mensageria() -> str | None:
     return f"última varredura há {int(atraso)} s"
 
 
+def _sonda_vigias_execucao() -> str | None:
+    """Os vigias que soltam execução PAUSADA estão rodando?
+
+    O padrão das Ondas 3 e 4 é: a execução pausa e um vigia a solta. Se o vigia morre,
+    ela fica parada para sempre — e, sem esta sonda, em silêncio: o `agendador` continua
+    "saudável" porque `_scheduler.running` só diz que o relógio gira, não que os jobs
+    disparam. É a §12-A um nível acima: nenhum vigia sem quem o vigie."""
+    import vigias
+
+    quebrados = vigias.quebrados()
+    if quebrados:
+        raise RuntimeError(
+            "; ".join(vigias.frase_do_atraso(n, a) for n, a in quebrados)
+        )
+    if vigias.nunca_rodaram():
+        # No boot os jobs ainda não deram a primeira volta. Degradado (amarelo), não
+        # quebrado: um app que acabou de subir não tem atraso nenhum a explicar.
+        raise EloDegradado("aguardando a primeira volta desde o boot")
+    return vigias.resumo_em_dia()
+
+
 # Sondas dos provedores de IA: o endpoint de LISTAR MODELOS é grátis (não gera
 # token) e valida rede + chave de uma vez. Só os provedores com chave no cofre
 # viram elo (resolvidos pela cascata da consultoria, sem org).
@@ -338,6 +359,13 @@ def montar_elos() -> list[Elo]:
         Elo(
             "vigia_mensageria", "Vigia das conversas", "interno", PERIODO_INTERNO_S,
             _sonda_vigia_mensageria, _reconectar_agendador,
+        ),
+        # As execuções que PAUSAM (passo "Esperar", passo "Chamar outra automação") e as
+        # que travam dependem de um vigia periódico para voltar. Vigia morto = execução
+        # parada para sempre, com o resto da página verde.
+        Elo(
+            "vigia_execucoes", "Vigia das execuções", "interno", PERIODO_INTERNO_S,
+            _sonda_vigias_execucao, _reconectar_agendador,
         ),
     ]
 

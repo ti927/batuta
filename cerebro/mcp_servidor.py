@@ -197,7 +197,13 @@ async def diagnosticar_execucao(execucao_id: str) -> str:
       automação chamada terminar; o rastro dela fica no passo. A execução chamada carrega
       `chamada_por_execucao_id`, e a falha dela NÃO conta para o disjuntor da automação
       chamada (quem rodou foi o chamador).
-    Nas duas últimas, não diga ao consultor que travou nem mande reiniciar nada."""
+    Nas duas últimas, não diga ao consultor que travou nem mande reiniciar nada.
+
+    A EXCEÇÃO: se a data de `retomar_em` já passou faz tempo, ou se a automação chamada
+    já terminou e mesmo assim o chamador segue parado, aí sim há problema — e ele NÃO
+    está na automação: é o vigia que solta essas execuções que morreu. Mande o consultor
+    abrir a página `/status` e olhar o elo **"Vigia das execuções"**; se estiver vermelho,
+    o conserto é o botão Reconectar de lá. Não proponha mexer no fluxo nesse caso."""
     return await anyio.to_thread.run_sync(mcp_ferramentas.diagnosticar_execucao, _sub(), execucao_id)
 
 

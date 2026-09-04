@@ -356,8 +356,14 @@ def soltar_sub_fluxos_job() -> None:
     """Entrada do agendador: abre a própria sessão e devolve os chamadores prontos."""
     from sessao import CriadorDeSessao
 
+    import vigias
+
     sessao = CriadorDeSessao()
     try:
         soltar_chamadores_concluidos(sessao)
+        # Carimba no FIM: é o que permite ao `/status` perceber que este vigia morreu.
+        # Sem ele, todo chamador ficaria parado em `aguardando_sub_fluxo` para sempre
+        # com a página verde.
+        vigias.bateu("sub_fluxos")
     finally:
         sessao.close()

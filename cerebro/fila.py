@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select, update
 
+import vigias
 from modelos import Execucao, PassoExecucao
 from observabilidade.escritor import registrar_evento
 from orquestracao import circuito
@@ -247,10 +248,16 @@ def soltar_esperas_vencidas(sessao) -> int:
 
 
 def soltar_esperas_job() -> None:
-    """Entrada do agendador: abre a própria sessão e solta as esperas vencidas."""
+    """Entrada do agendador: abre a própria sessão e solta as esperas vencidas.
+
+    Carimba o batimento no FIM (`vigias.bateu`): é isso que permite à página de status
+    perceber que este vigia morreu. Sem o carimbo, um job que passasse a levantar
+    exceção a cada volta deixaria toda execução em `aguardando_tempo` parada para
+    sempre, com o `/saude` ainda dizendo `agendador: true`."""
     sessao = CriadorDeSessao()
     try:
         soltar_esperas_vencidas(sessao)
+        vigias.bateu("esperas")
     finally:
         sessao.close()
 
@@ -260,6 +267,7 @@ def varrer_presas_job() -> None:
     sessao = CriadorDeSessao()
     try:
         recuperar_execucoes_presas(sessao)
+        vigias.bateu("presas")
     finally:
         sessao.close()
 

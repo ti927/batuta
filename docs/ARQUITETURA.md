@@ -163,7 +163,11 @@ pareceu morto — com `/saude` verde, porque ele só lê memória. Duas resposta
 2. **O vigia dos ELOS (`saude_elos.py`)**: sonda ativa de cada ligação da corrente — banco, checkpointer,
    provedores de IA com chave (GET /models, grátis), cada canal Telegram (`getMe` + `getWebhookInfo`, que
    conta os erros do Telegram ao ENTREGAR pra gente), Meta, Storage, borda pública, serviço MCP e os
-   motores internos (fila, agendador, vigia da mensageria — heartbeat `ULTIMA_VARREDURA_EM`). Estado por
+   motores internos (fila, agendador, vigia da mensageria — heartbeat `ULTIMA_VARREDURA_EM` — e o
+   **vigia das execuções**, `vigias.py`: o batimento dos três jobs que soltam execução PAUSADA —
+   esperas, sub-fluxos e presas. Sem ele, um job morto deixaria toda execução em `aguardando_tempo`/
+   `aguardando_sub_fluxo` parada para sempre com a página verde, porque `agendador.esta_saudavel()`
+   só reporta `_scheduler.running`: o relógio girando, não os jobs disparando). Estado por
    elo com erro **traduzido** (rede × credencial × quota), evento em toda transição (`elo.caiu`/`elo.voltou`/
    `elo.reconectado`), **auto-cura nos elos de banco** (2 falhas seguidas → `engine.dispose()` /
    reconstrução do pool) e reconexão por botão (`POST /saude/elos/{id}/reconectar`, admin da consultoria).

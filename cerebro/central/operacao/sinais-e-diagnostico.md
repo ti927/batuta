@@ -95,6 +95,28 @@ da interface (o selo de versão da barra lateral leva até ela) e na API em `GET
 - Instrumentos de cliente **não** são sondados automaticamente (custo/limites) — o teste deles é sob
   demanda, no Construtor.
 
+### O "Vigia das execuções" — quem vigia os vigias
+As Ondas 3 e 4 do motor criaram um padrão: **a execução pausa e um vigia a solta.** Um passo
+*Esperar* volta porque um vigia a devolve à fila a cada 30 s; um passo *Chamar outra automação*
+volta porque outro vigia percebe que a automação chamada terminou; execuções travadas são recolhidas
+por um terceiro, a cada 2 min.
+
+Se um desses vigias morre, a execução fica parada **para sempre** — e era para ficar em silêncio: o
+elo *Agendador* diz apenas que o **relógio está girando**, não que os jobs estão disparando. Por isso
+existe um elo próprio, o **Vigia das execuções**, que lê o **batimento** de cada um dos três e
+avisa quando algum parou, dizendo **o que deixou de funcionar** (não o nome interno do job):
+
+> *o vigia que solta os sub-fluxos do passo Chamar outra automação não roda há 6 min (deveria ser a
+> cada 30 s)*
+
+- Logo depois de um deploy ele fica **âmbar** por alguns segundos ("aguardando a primeira volta"):
+  os jobs ainda não deram a primeira passada. É normal, não é defeito.
+- A tolerância é folgada de propósito (minutos, para jobs de segundos): o alvo é o vigia **morto**,
+  não o que atrasou porque o banco estava lento. Alarme que dispara à toa é alarme que ninguém lê.
+- **Se este elo estiver vermelho e você tiver execuções paradas em "aguardando o tempo" ou "rodando
+  outra automação", a causa é essa** — e o conserto é o botão *Reconectar*, que reinicia o agendador.
+  Não mexa na automação.
+
 **Por que existe:** em 2026-08-27 a rede entre o servidor e o banco **congelou por ~30 minutos** —
 sem erro, sem fechamento, bytes parados em trânsito. O app respondia normalmente e todos os
 atendimentos ficaram mudos; ninguém tinha para onde olhar. A família de problema *"a rede congelou"*
