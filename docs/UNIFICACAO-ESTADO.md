@@ -193,7 +193,7 @@ decisão adiada (§ abaixo) tomada com número na mão, e a sequência das fatia
 > sem migração), na mesma cascata dos outros limites do fluxo; **(5)** **testar este passo**
 > (`27af895`, `tst00testeno01`) — um passo só, com entrada escrita à mão, acionando os
 > instrumentos REAIS (não há modo de mentira: fingir enganaria sobre o que o teste prova).
-> **▶️ Onda 3 EM ANDAMENTO (3 de 4, 2026-09-03/04)** — tempo e composição:
+> **✅ Onda 3 COMPLETA (2026-09-03/04)** — tempo e composição:
 > **(1)** o vigia de execuções presas passou a respeitar o **sinal de vida** (`73ef527`) — o
 > achado estava escrito no próprio código, onde `gerar_video` encolhia o teto dele "para
 > ficar abaixo do sweeper"; junto, o batimento passou a **bater durante a espera**;
@@ -202,8 +202,26 @@ decisão adiada (§ abaixo) tomada com número na mão, e a sequência das fatia
 > relógio (contar relógio mataria, na retomada, quem esperou dias por uma aprovação);
 > **(3)** o nó **"Esperar"** (`a65227d`, `esp00esperar01`) — pausa por minutos/horas/dias
 > **reusando a máquina da aprovação**, mantendo a ficha e o ponto do grafo, com um vigia
-> soltando a execução no tempo certo. **Falta:** a fatia 4 — nó **"Chamar outra automação"**
-> (sub-fluxo síncrono que devolve o resultado ao chamador).
+> soltando a execução no tempo certo;
+> **(4)** o nó **"Chamar outra automação"** (`1465e7b`, `sub00chamada01`) — sub-fluxo
+> **síncrono**: roda a automação-alvo inteira (execução, ficha e rastro próprios) e devolve
+> o resultado a quem chamou. **Reúso da mesma máquina de pausa pela terceira vez** — a
+> aprovação é solta por gente, o "Esperar" pelo relógio, e este pela **própria filha** ao
+> chegar num veredito; por isso a filha que pede aprovação simplesmente deixa o chamador
+> parado, e a ficha atravessa nos dois sentidos. Freios: laço barrado pela linhagem +
+> profundidade 3; os tetos de custo/tempo somam a **árvore** de execuções (senão bastaria
+> pôr o trabalho caro num sub-fluxo para o limite virar enfeite).
+>
+> **✅ Com esta fatia a frente "O motor vira um grafo de verdade" está COMPLETA** — Ondas 1,
+> 2, Parte III, 3 e 4. Falta apenas o **teste ao vivo do maestro**. Depois dela vieram três
+> entregas de acabamento, todas nascidas de perguntas dele: a **varredura da Central e do
+> MCP** (`b8e18d5`, cinco lacunas de fatias anteriores — a pior fazia uma IA externa ver
+> `aguardando_sub_fluxo` e chamar de travamento); o conserto do **botão "Remover nó do
+> fluxo"**, que não aparecia nos nós novos, e o **aviso de automação desativada** no passo
+> que a chama (`b8ff137`, decisão do maestro: **avisar, não impedir**); e o elo **"Vigia das
+> execuções"** no `/status` (`3d9a86a`, módulo `vigias.py`) — porque os três jobs que soltam
+> execução pausada não tinham batimento nem sonda, e `agendador.esta_saudavel()` só reporta
+> `_scheduler.running`: o relógio girando, não os jobs disparando.
 
 ### Frente B — as partes da economia (do `ECONOMIA-TOKENS-IA-CRIADORA.md`)
 - **A ✅ NO AR (2026-07-26)** — Resumo rolante + janela de turnos recentes (−62% do histórico provado; commit `3621138`).  **B ✅ NO AR (2026-07-27)** — Painel "Sobre este time" (resumo visível/editável, drawer à direita; edição humana vence a da IA; commit `4815f14`).

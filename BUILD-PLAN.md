@@ -2382,6 +2382,48 @@ A última onda do plano, adiada com aval quando a ordem foi invertida. Quatro fa
 
 ---
 
+## FASE — Acabamento da frente do motor  ✅ (2026-09-04, sem migração)
+
+Três entregas depois de a frente fechar, **todas nascidas de perguntas do maestro** — o que é, por si, o registro mais útil: nenhuma delas teria aparecido numa varredura minha.
+
+### 1. A varredura da Central e do MCP (`b8e18d5`)
+
+**A pergunta:** *"tudo que mudamos em todas essas fases está documentado na central de conhecimento e também no MCP para IA externa?"*
+
+A resposta era "quase". A auditoria (varredura por capacidade nos 61 capítulos + script que confere índice e elos `[[...]]`) achou **cinco buracos, todos de fatias anteriores**:
+
+1. `automacoes/cadeia-e-grafo` — o capítulo que **define** o grafo listava os tipos de nó e parava no `cada`: nem `esperar` nem `chamar` apareciam.
+2. `automacoes/ficha-da-execucao` — dizia que a ficha atravessa "a pausa de aprovação" e citava o **portão**, vocabulário morto desde a Parte III. Agora diz as **três** pausas.
+3. `automacoes/execucoes-e-inspecao` — afirmava que fluxo "parado" costuma ser aprovação; são três pausas legítimas e só uma pede algo de alguém.
+4. **MCP, `diagnosticar_execucao`** — explicava os tetos mas não os dois estados de pausa novos. **Era o pior:** uma IA externa veria `aguardando_sub_fluxo` e chamaria de travamento, mandando reiniciar o que estava funcionando.
+5. `INDICE.md` — dois capítulos existiam em disco e não estavam nele (`instrumentos/construir-conector`, `operacao/operar-pelo-claude-mcp`).
+
+**O que sobrou de regra:** capacidade nova exige varrer o **capítulo canônico** do assunto (o que traz a lista fechada), o vocabulário morto e a **docstring do MCP que uma IA externa usaria para aquilo** — quem diagnostica não lê a docstring de quem constrói. Criar o capítulo novo não é a entrega inteira.
+
+### 2. Dois consertos de tela (`b8ff137`)
+
+**(a) O botão "Remover nó do fluxo" não aparecia** nos passos "Esperar" e "Chamar outra automação". A condição era uma lista do que **pode** (`agente|roteador|cada`), enquanto o comentário ao lado já dizia a regra certa: *"os nós que o usuário acrescentou; gatilho e fim são fixos"*. Virou **exclusão** — assim tipo de nó novo já nasce removível, em vez de a lista envelhecer a cada fatia. (`deleteNode` sempre foi agnóstico de tipo; o defeito era só o portão na frente dele.)
+
+**(b) Chamar uma automação DESATIVADA.** A apuração mostrou que **todo gatilho automático exige `ativa`** (agendador, webhook) **menos o nó `chamar`** — o que furava o disjuntor: uma automação desligada por 3 falhas seguidas seguiria sendo reinvocada por quem a chama. **Decisão do maestro: avisar, não impedir** — uma automação que só existe para ser chamada não tem gatilho próprio e pode legitimamente ficar desativada. O aviso saiu em **três** lugares: o seletor mostra `(ativa)`/`(desativada)`, o painel do nó alerta (com texto próprio quando quem desligou foi o disjuntor), e o **rastro registra**. `GET /organizacoes/{id}/automacoes` passou a devolver `ativa` e `desligada_por_falhas` — este só quando ela está desligada **agora**, porque a marca sobrevive à reativação e dizer que o disjuntor a derrubou depois de alguém religá-la seria informação falsa.
+
+### 3. O elo "Vigia das execuções" (`3d9a86a`, módulo `vigias.py`)
+
+**A pergunta:** *"com essas mudanças no motor, existe alguma coisa que precisa ser monitorada no `/status`?"*
+
+Existia. As Ondas 3 e 4 criaram o padrão **a execução pausa e um vigia a solta** — e os três jobs que fazem isso (`soltar_esperas_job` 30 s, `soltar_sub_fluxos_job` 30 s, `varrer_presas_job` 120 s) **não tinham batimento nem sonda**. O agravante: `agendador.esta_saudavel()` devolve só `_scheduler.running` — diz que o **relógio gira**, não que os **jobs disparam**. Um job que passasse a levantar exceção a cada volta deixaria execuções paradas para sempre com o `/saude` respondendo `agendador: true` e o `/status` todo verde. É a §12-A um nível acima: **nenhum vigia sem quem o vigie**.
+
+Um mecanismo de batimento, três carimbadores, uma sonda — generalizando o que já provava valor no vigia das conversas (`ULTIMA_VARREDURA_EM`), em vez de três timestamps soltos que um dia divergem. Cada job carimba no **FIM**: bater na entrada diria só que ele começou, e um job que trava no meio continuaria parecendo saudável — exatamente o modo de falha que isto persegue.
+
+**A página `/status` é orientada a dados, então não houve mudança de tela.** Três cuidados: tolerância **por job** e folgada (o alvo é o vigia **morto**, não o atraso por banco lento — alarme que dispara à toa é alarme que ninguém lê); **âmbar, não vermelho, logo após o boot** (um app que acabou de subir não tem atraso a explicar); e a mensagem diz a **consequência**, não o nome do job (*"o vigia que solta os sub-fluxos do passo Chamar outra automação não roda há 6 min"*).
+
+**Verificação ao vivo em produção:** o elo nasceu âmbar e ficou verde sozinho em 2 min — a janela é governada pelo job mais lento (o de execuções presas, 120 s), já que o elo só passa a verde quando os **três** deram a primeira volta.
+
+**Verificação:** **1153 testes verdes** (18 novos nesta fase — 4 do alvo desativado e 14 do vigia, entre eles os três que provam que os jobs **de verdade** carimbam o ponto; sem eles a sonda estaria certa e ninguém batendo). Sem migração. `tsc`/`eslint`/`build` limpos.
+
+**O que as IAs aprenderam:** `operacao/sinais-e-diagnostico` ganhou a seção do "Vigia das execuções" (com o *"se este elo está vermelho e você tem execução parada, a causa é essa — não mexa na automação"*), a docstring do `diagnosticar_execucao` no MCP manda olhar o `/status` em vez de propor mexer no fluxo, e `docs/ARQUITETURA.md §11` registra o módulo.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.

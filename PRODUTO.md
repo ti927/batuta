@@ -168,6 +168,18 @@ Um fluxo também precisa saber **esperar o relógio**: publicar o carrossel 24 h
 
 Isso é um **passo do desenho** ("Esperar", com quantidade e unidade), não um agendamento à parte — e a diferença importa: a execução **para e volta exatamente daquele ponto**, com a ficha inteira. Agendar outro fluxo começaria do zero, sem nada do que já se sabia, e o time teria de redescobrir o próprio trabalho. Enquanto espera, a execução não pede nada de ninguém: ela volta sozinha, e a tela diz quando.
 
+### Um time chamando outro
+
+Um fluxo também precisa poder **usar o trabalho de outro time**: o time de conteúdo manda o artigo para o time de revisão e **decide com base no parecer**; o comercial pede uma simulação ao financeiro e **segue com o número**.
+
+Isso é o passo **"Chamar outra automação"**: ele roda a automação escolhida **inteira** — com execução, rastro e custo próprios — e **espera o resultado dela** para continuar. A automação chamada recebe a ficha de quem a chamou (ela começa sabendo tudo o que ele sabia) e devolve o que produziu, que vira a entrada do passo seguinte.
+
+A diferença em relação a *agendar* outra automação é a mesma da espera por tempo, e é o ponto todo: agendar **dispara e esquece** — quem chamou nunca fica sabendo o que aconteceu do outro lado. Aqui, fica.
+
+Duas consequências que valem dizer: se a automação chamada parar para pedir uma aprovação, **quem chamou continua parado** até alguém responder lá; e se ela falhar, quem chamou trata pela saída "Se der erro" — ou falha junto, em vez de seguir adiante com um resultado que não existe.
+
+> **Freio deliberado:** uma automação não pode chamar outra que já esteja rodando acima na mesma corrente, e a corrente tem no máximo três níveis. Sem isso, um desenho esquecido rodaria para sempre, gastando dinheiro de verdade a cada volta.
+
 ### Bifurcação por intenção
 
 Um fluxo pode ter ramos. Cada seta que sai de um passo carrega uma **condição escrita** ("siga por aqui quando…"), e o agente avalia todas elas — ex.: se a mensagem é sobre agenda, consulta o sistema de agendamento; se é sobre exame, envia as instruções do exame.
