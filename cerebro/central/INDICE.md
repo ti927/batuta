@@ -83,6 +83,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Busca semântica (Exa) | `instrumentos/busca-exa` | Alternativa semântica | ✅ | ✍️ |
 | **Dados & integração** | | | | |
 | Chamar API REST | `instrumentos/chamar-rest` | GET/POST/…; leitura × escrita | ✅ | ✍️ |
+| Construir um conector | `instrumentos/construir-conector` | Criar instrumento SEM código: testar e detectar, operações, credencial do próprio conector | ✅ | ✍️ |
 | Banco SQL | `instrumentos/banco-sql` | Ler/escrever em SQL; somente-leitura | ✅ | ✍️ |
 | Conectar MCP | `instrumentos/mcp` | Ferramentas de um servidor MCP | ✅ | ✍️ |
 | Webhook de saída | `instrumentos/webhook-saida` | Avisar/disparar um sistema externo | ✅ | ✍️ |
@@ -119,6 +120,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Falhas e retentativa | `operacao/falhas-e-retentativa` | Retentável × não-retentável; backoff; falha devolvida como resposta; erro de rede | ✅ | ✍️ |
 | Sinais e diagnóstico | `operacao/sinais-e-diagnostico` | Nada falha em silêncio: eventos, trabalho preso, modo degradado, **página de status dos elos**, a ferramenta parecida que não para o fluxo, ordem de investigação | ✅ | ✍️ |
 | Auditoria e LGPD | `operacao/auditoria-e-lgpd` | Registro de ações; dados sensíveis | ✅ | ✍️ |
+| Operar pelo Claude (MCP) | `operacao/operar-pelo-claude-mcp` | O consultor opera o Batuta pelo próprio claude.ai, com login real e escopo por papel | ✅ | ✍️ |
 
 ## 8. Administração
 | Capítulo | slug | O que cobre | Recurso | Escrita |

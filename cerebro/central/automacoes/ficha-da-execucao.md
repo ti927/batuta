@@ -80,8 +80,10 @@ Opcionalmente, o que cada repetição produzir é **somado** num campo da ficha
 ## Para a IA
 `execucoes.dados` (JSONB) é a ficha; o módulo puro é `orquestracao/ficha.py`. Ela nasce em
 `disparo.rodar_execucao` com `{"entrada": <texto do gatilho>}`, é mutada no lugar pelo motor
-e persistida a cada passo (e no fim). Atravessa a pausa de aprovação: `retoma` e o portão
-por canal a leem e a devolvem.
+e persistida a cada passo (e no fim). Atravessa **as três pausas** sem perder nada: a
+aprovação (`retoma` e o aprovador por canal a leem e a devolvem), o passo **Esperar** e o
+passo **Chamar outra automação** — neste último ela vai como cópia para a automação chamada
+e volta **por cima** da do chamador.
 
 O agente recebe a ficha na **mensagem do turno** (não no prompt de sistema — ali ela
 invalidaria o cache de prompt) e ganha a ferramenta `anotar` **apenas** quando roda dentro

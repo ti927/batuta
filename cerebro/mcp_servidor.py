@@ -187,7 +187,17 @@ async def diagnosticar_execucao(execucao_id: str) -> str:
     O mesmo vale para "passou do tempo máximo": há teto de tempo por PASSO e pela EXECUÇÃO,
     ambos desligados por padrão. Duas ressalvas ao explicar: o teto do passo barra o agente
     ENTRE ações (a chamada em andamento termina), e o da execução conta tempo de TRABALHO —
-    a espera por uma aprovação humana não consome o teto."""
+    a espera por uma aprovação humana não consome o teto.
+
+    NEM TODA EXECUÇÃO PARADA ESTÁ COM PROBLEMA. São TRÊS as pausas legítimas, e só a
+    primeira pede algo de alguém:
+    - `aguardando_humano` — o agente chamou `pedir_aprovacao` e espera uma pessoa.
+    - `aguardando_tempo` — está num passo "Esperar"; volta SOZINHA na data de `retomar_em`.
+    - `aguardando_sub_fluxo` — está num passo "Chamar outra automação", esperando a
+      automação chamada terminar; o rastro dela fica no passo. A execução chamada carrega
+      `chamada_por_execucao_id`, e a falha dela NÃO conta para o disjuntor da automação
+      chamada (quem rodou foi o chamador).
+    Nas duas últimas, não diga ao consultor que travou nem mande reiniciar nada."""
     return await anyio.to_thread.run_sync(mcp_ferramentas.diagnosticar_execucao, _sub(), execucao_id)
 
 

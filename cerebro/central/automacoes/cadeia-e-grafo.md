@@ -44,8 +44,13 @@ Loops são permitidos (voltar a um passo anterior). Como se escreve cada condiç
   gatilho e tudo o que os agentes guardarem com `anotar` viajam na **ficha da execução** e
   chegam a todos os passos — ver [[automacoes/ficha-da-execucao]]. Não escreva na
   documentação do agente "repita os dados no texto final": mande-o **anotar**.
-- Além de agente e roteador, há o nó **"Para cada item"**, que repete o trecho seguinte uma
-  vez por item de uma lista da ficha.
+- Além de agente e roteador, há três passos que **não rodam IA** e existem para dirigir o
+  fluxo:
+  - **"Para cada item"** — repete o trecho seguinte uma vez por item de uma lista da ficha;
+  - **"Esperar"** — segura o fluxo por minutos/horas/dias e continua daqui
+    ([[automacoes/esperar]]);
+  - **"Chamar outra automação"** — roda outra automação inteira e espera o resultado dela
+    ([[automacoes/chamar-automacao]]).
 - **Cancelar** é embutido (não se desenha uma saída de cancelar).
 - **Um nó sem saída ligada encerra o fluxo ali** e a execução mostra um aviso dizendo isso — não
   é um "verde" silencioso.
@@ -56,12 +61,14 @@ apresenta chama `pedir_aprovacao` e, com o sim, publica — não existe mais `ga
 Confira sempre a cadeia real antes de propor mudanças.
 Toda saída de um nó que bifurca precisa de `quando` preenchido, e o fluxo segue **todas** as
 condições atendidas — detalhes em [[automacoes/condicoes-e-ramos]] e [[automacoes/erros-no-fluxo]].
-Tipos de nó: `gatilho`, `agente`, `roteador`, `cada` ("Para cada item", estrutural — não roda
-IA) e `fim`.
+Tipos de nó: `gatilho`, `agente`, `roteador`, `fim` e os três estruturais (não rodam IA):
+`cada` ("Para cada item"), `esperar` ("Esperar") e `chamar` ("Chamar outra automação").
 
 ## Relacionado
 - [[automacoes/automacao]]
 - [[automacoes/condicoes-e-ramos]]
+- [[automacoes/esperar]]
+- [[automacoes/chamar-automacao]]
 - [[automacoes/ficha-da-execucao]]
 - [[automacoes/erros-no-fluxo]]
 - [[automacoes/pedir-aprovacao]]
