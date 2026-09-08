@@ -382,6 +382,26 @@ class ResponderHumano(BaseModel):
     resposta: str = Field(min_length=1)
 
 
+class AgendamentoEditar(BaseModel):
+    """Corrigir um agendamento PENDENTE criado por um agente: o texto de entrada e/ou
+    o horário. Existe porque quem agenda é um AGENTE, e agente erra — se ele montou o
+    texto inicial errado, sem isto a única saída era cancelar e perder o disparo. Os
+    dois campos são opcionais: o que vier `None` fica como está."""
+
+    entrada: str | None = Field(default=None, max_length=20000)
+    quando_executar: datetime | None = None
+
+
+class RecuperarAgendamento(BaseModel):
+    """Resgatar um agendamento que NÃO disparou (cancelado porque o alvo estava
+    desativado/removido, ou cancelado à mão). `quando_executar` ausente = rodar AGORA;
+    presente = reagendar para aquele instante. `entrada` permite corrigir o texto do
+    agente no mesmo gesto — é justamente ao resgatar que se percebe que ele errou."""
+
+    entrada: str | None = Field(default=None, max_length=20000)
+    quando_executar: datetime | None = None
+
+
 class RodarDeNovo(BaseModel):
     """"Rodar de novo a partir daqui" (Onda 4): de qual NÓ recomeçar. A entrada, a
     ficha e o desenho vêm da execução de origem — quem pede escolhe só o ponto."""

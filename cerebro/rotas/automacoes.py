@@ -19,6 +19,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from esquemas import (
+    AgendamentoEditar,
     AutomacaoCriar,
     AutomacaoEditar,
     AutomacaoLer,
@@ -28,6 +29,7 @@ from esquemas import (
     ExecucaoLer,
     ExecucaoNaLista,
     PassoExecucaoLer,
+    RecuperarAgendamento,
     ResponderHumano,
     RodarDeNovo,
     TestarNo,
@@ -451,6 +453,10 @@ def listar_agendamentos(
         {
             "id": str(a.id),
             "quando_executar": a.quando_executar.isoformat(),
+            # O texto que o AGENTE montou. Ficava só no banco: a tela mostrava a hora e
+            # nada do conteúdo, então um texto inicial errado só aparecia depois — na
+            # execução já rodada. Mostrá-lo aqui é o que permite corrigir ANTES.
+            "entrada": a.entrada,
             "criado_em": a.criado_em.isoformat(),
         }
         for a in ags
@@ -470,7 +476,7 @@ def listar_agendamentos_do_time(
     time_acessivel(sessao, usuario, time_id)
     corte = datetime.now(timezone.utc) - timedelta(days=7)
     linhas = sessao.execute(
-        select(Agendamento, Automacao.nome)
+        select(Agendamento, Automacao.nome, Automacao.ativa)
         .join(Automacao, Automacao.id == Agendamento.automacao_id)
         .where(
             Automacao.time_id == time_id,
@@ -492,10 +498,187 @@ def listar_agendamentos_do_time(
             "quando_executar": a.quando_executar.isoformat(),
             "estado": a.estado,
             "motivo": a.motivo,
+            # O texto que o agente montou — ver o comentário na rota por automação.
+            "entrada": a.entrada,
+            # Para o resgate: se já foi tratado (e o botão deve sumir), qual execução
+            # nasceu dele, e se a automação-alvo está ativa AGORA — sem isso a tela
+            # deixaria reagendar em silêncio para uma automação que segue desligada, e
+            # o disparo morreria de novo pelo mesmo motivo.
+            "recuperado_em": a.recuperado_em.isoformat() if a.recuperado_em else None,
+            "execucao_id": str(a.execucao_id) if a.execucao_id else None,
+            "automacao_ativa": bool(ativa),
             "criado_em": a.criado_em.isoformat(),
         }
-        for a, nome in linhas
+        for a, nome, ativa in linhas
     ]
+
+
+def _instante_do_agendamento(quando: datetime) -> datetime:
+    """Normaliza e valida o instante de um agendamento pedido pela TELA.
+
+    Sem fuso = horário de Brasília, e o piso é o mesmo ~1 min do instrumento
+    `agendar_automacao` — as duas regras vêm de lá (`FUSO`, `MIN_ATRASO_S`) em vez de
+    reescritas aqui, senão um dia a tela e o agente passam a aceitar coisas diferentes
+    ([[feedback-bug-recorrente-fonte-de-verdade]])."""
+    from instrumentos.agendar_automacao import FUSO, MIN_ATRASO_S
+
+    if quando.tzinfo is None:
+        quando = quando.replace(tzinfo=FUSO)
+    quando = quando.astimezone(timezone.utc)
+    if quando < datetime.now(timezone.utc) + timedelta(seconds=MIN_ATRASO_S):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "O horário precisa estar no futuro (pelo menos um minuto a partir de agora).",
+        )
+    return quando
+
+
+@rotas.patch("/agendamentos/{agendamento_id}")
+def editar_agendamento(
+    agendamento_id: uuid.UUID,
+    dados: AgendamentoEditar,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Corrige um agendamento PENDENTE: o texto de entrada e/ou o horário (operador).
+
+    Por que existe: quem cria estes agendamentos é um AGENTE (instrumento "Agendar
+    automação"), e o texto que ele monta é a entrada do fluxo futuro. Se ele errar, sem
+    isto a única saída era cancelar e perder o disparo — e como o texto nem aparecia na
+    tela, o erro só se revelava depois, na execução já rodada.
+
+    Só `pendente` se edita: `enfileirado` já virou execução (mexer aqui não mudaria
+    nada, e mentiria) e `cancelado` é história — para esse, o caminho é recuperar."""
+    ag = sessao.get(Agendamento, agendamento_id)
+    if ag is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Agendamento não encontrado")
+    auto = automacao_acessivel(sessao, usuario, ag.automacao_id, minimo="operador")
+    if ag.estado != "pendente":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Este agendamento já disparou ou foi cancelado, então não dá mais para "
+            "editá-lo. Se ele não chegou a rodar, use “Disparar agora” ou “Reagendar”.",
+        )
+    mudou = []
+    if dados.entrada is not None and dados.entrada != (ag.entrada or ""):
+        ag.entrada = dados.entrada or None
+        mudou.append("entrada")
+    if dados.quando_executar is not None:
+        novo = _instante_do_agendamento(dados.quando_executar)
+        if novo != ag.quando_executar:
+            ag.quando_executar = novo
+            mudou.append("quando_executar")
+    if mudou:
+        auditoria.registrar(
+            sessao, usuario=usuario, acao="agendamento.editado",
+            recurso_tipo="agendamento", recurso_id=ag.id,
+            organizacao_id=auditoria.org_do_time(sessao, auto.time_id),
+            detalhe={"campos": mudou},
+        )
+        sessao.commit()
+    return {
+        "id": str(ag.id),
+        "quando_executar": ag.quando_executar.isoformat(),
+        "entrada": ag.entrada,
+        "estado": ag.estado,
+    }
+
+
+@rotas.post("/agendamentos/{agendamento_id}/recuperar")
+def recuperar_agendamento(
+    agendamento_id: uuid.UUID,
+    dados: RecuperarAgendamento,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Resgata um agendamento que NÃO disparou (operador): roda agora ou reagenda.
+
+    Sem `quando_executar`, cria a execução na hora; com ele, cria um agendamento novo
+    para aquele instante. Nos dois casos o texto do agente é reaproveitado — e pode ser
+    corrigido no mesmo gesto (`entrada`), porque é ao resgatar que se percebe o erro.
+
+    Existe porque um cancelamento é definitivo e o texto era invisível: uma automação
+    momentaneamente desativada matava o disparo, e refazê-lo à mão exigia adivinhar o
+    que o agente tinha escrito. Um fluxo que PRECISA rodar não pode depender disso.
+
+    A execução nasce com `origem="recuperacao"` — de propósito FORA de
+    `circuito.ORIGENS_SOZINHA`: quem clicou está olhando a tela, e o disjuntor só conta
+    o que falha sozinho. Contá-la desligaria a automação por baixo de quem a resgatava,
+    que é o oposto do que este botão existe para fazer.
+
+    Um resgate por agendamento (`recuperado_em`): sem isso um duplo clique rodaria duas
+    vezes um fluxo importante, que é justamente o tipo de estrago que se veio evitar."""
+    ag = sessao.get(Agendamento, agendamento_id)
+    if ag is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Agendamento não encontrado")
+    auto = automacao_acessivel(sessao, usuario, ag.automacao_id, minimo="operador")
+    if ag.estado != "cancelado":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Só dá para recuperar um agendamento que não chegou a disparar. Este está "
+            f"“{ag.estado}”."
+            + (" Para mudar o texto ou o horário dele, use Editar." if ag.estado == "pendente" else ""),
+        )
+    if ag.recuperado_em is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Este agendamento já foi recuperado — para rodar de novo, dispare a "
+            "automação pela tela dela.",
+        )
+    entrada = dados.entrada if dados.entrada is not None else (ag.entrada or "")
+    org_id = auditoria.org_do_time(sessao, auto.time_id)
+
+    if dados.quando_executar is None:
+        # Rodar AGORA. Passa pelo mesmo funil de sempre (fila, heartbeat, rastro,
+        # tela de inspeção) — nada aqui é um caminho paralelo de execução.
+        #
+        # Cria e DEPOIS marca, ao contrário do varredor, que reivindica antes. A
+        # diferença não é descuido: o varredor relê as mesmas linhas a cada 30 s, então
+        # falhar depois de criar o faria disparar de novo sozinho — risco que aqui não
+        # existe, porque quem repete é uma pessoa clicando. Em troca, um erro no meio
+        # devolve erro sem queimar o resgate, e o botão continua lá.
+        execucao = criar_execucao(sessao, auto, entrada, origem="recuperacao")
+        ag.execucao_id = execucao.id
+        ag.recuperado_em = datetime.now(timezone.utc)
+        auditoria.registrar(
+            sessao, usuario=usuario, acao="agendamento.recuperado",
+            recurso_tipo="agendamento", recurso_id=ag.id, organizacao_id=org_id,
+            detalhe={"modo": "disparo_imediato", "execucao_id": str(execucao.id)},
+        )
+        sessao.commit()
+        fila.enfileirar()
+        return {
+            "modo": "disparado",
+            "execucao_id": str(execucao.id),
+            "agendamento_id": str(ag.id),
+        }
+
+    quando = _instante_do_agendamento(dados.quando_executar)
+    novo = Agendamento(
+        automacao_id=ag.automacao_id,
+        quando_executar=quando,
+        entrada=entrada or None,
+        estado="pendente",
+    )
+    sessao.add(novo)
+    ag.recuperado_em = datetime.now(timezone.utc)
+    sessao.flush()
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="agendamento.recuperado",
+        recurso_tipo="agendamento", recurso_id=ag.id, organizacao_id=org_id,
+        detalhe={
+            "modo": "reagendado",
+            "novo_agendamento_id": str(novo.id),
+            "quando_executar": quando.isoformat(),
+        },
+    )
+    sessao.commit()
+    return {
+        "modo": "reagendado",
+        "agendamento_id": str(ag.id),
+        "novo_agendamento_id": str(novo.id),
+        "quando_executar": quando.isoformat(),
+    }
 
 
 @rotas.delete("/agendamentos/{agendamento_id}", status_code=status.HTTP_204_NO_CONTENT)

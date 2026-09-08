@@ -18,9 +18,11 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import and_, delete, or_, select
 
+import auditoria
 import fila
 import fila_turnos
 from modelos import Agendamento, Automacao, Credencial, EventoLog
+from observabilidade.escritor import registrar_evento
 from orquestracao import sub_fluxo
 from orquestracao.disparo import criar_execucao
 from sessao import CriadorDeSessao
@@ -233,6 +235,29 @@ def varrer_agendamentos(sessao) -> int:
             sessao.commit()
             logger.warning(
                 "Agendamento %s cancelado: automação-alvo ausente/inativa.", ag.id
+            )
+            # §12-A: o motivo na tela só é visto por quem ABRE a tela. Um disparo que
+            # devia acontecer e não aconteceu é falha, e falha precisa de endereço no
+            # banco de logs — senão um fluxo que PRECISA rodar morre em silêncio até
+            # alguém desconfiar. `logger.warning` sozinho não conta: ninguém lê o log
+            # do servidor. Nível `error` porque, do ponto de vista de quem agendou, o
+            # trabalho combinado não foi feito.
+            registrar_evento(
+                categoria="agendamento",
+                acao="agendamento.nao_disparou",
+                nivel="error",
+                origem="agendamento",
+                automacao_id=str(ag.automacao_id),
+                time_id=auto.time_id if auto else None,
+                organizacao_id=auditoria.org_do_time(sessao, auto.time_id) if auto else None,
+                recurso_tipo="agendamento",
+                recurso_id=ag.id,
+                detalhe={
+                    "automacao": auto.nome if auto else None,
+                    "causa": "alvo_removido" if auto is None else "alvo_desativado",
+                    "quando_executar": ag.quando_executar.isoformat(),
+                    "motivo": ag.motivo,
+                },
             )
             continue
         try:

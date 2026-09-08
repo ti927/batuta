@@ -5,9 +5,12 @@ import { useEffect, useState } from "react";
 import {
   Activity,
   CalendarClock,
+  CheckCircle2,
   ChevronRight,
   Clock,
   MessageCircle,
+  Pencil,
+  Play,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -23,6 +26,11 @@ import {
 } from "@/lib/api";
 import { podeOperar } from "@/lib/permissoes";
 import { ESTADO, formatarData } from "@/components/inspecao-execucao";
+import {
+  DialogoAgendamento,
+  TextoDoAgente,
+  type ModoAgendamento,
+} from "@/components/dialogo-agendamento";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
@@ -100,6 +108,10 @@ export function ExecucoesCliente({
   const [filtro, setFiltro] = useState("todas");
   // Agendamentos do time (aba "Agendadas") — outra tabela, buscada no cliente (dinâmica).
   const [agendamentos, setAgendamentos] = useState<AgendamentoDoTime[]>([]);
+  // Sobe a cada gravação (editar/resgatar): a linha muda no servidor — o texto, o
+  // horário, a marca de já-recuperado — e reler é mais honesto do que remendar o
+  // estado local e torcer para bater com o que ficou gravado.
+  const [recarga, setRecarga] = useState(0);
   useEffect(() => {
     let vivo = true;
     api
@@ -111,7 +123,11 @@ export function ExecucoesCliente({
     return () => {
       vivo = false;
     };
-  }, [time.id]);
+  }, [time.id, recarga]);
+  // O agendamento aberto no diálogo (editar / disparar agora / reagendar).
+  const [emFoco, setEmFoco] = useState<
+    { modo: ModoAgendamento; ag: AgendamentoDoTime } | null
+  >(null);
   const pendentes = agendamentos.filter((a) => a.estado === "pendente");
   const cancelados = agendamentos.filter((a) => a.estado === "cancelado");
 
@@ -255,6 +271,8 @@ export function ExecucoesCliente({
           cancelados={cancelados}
           souOperador={souOperador}
           onCancelar={cancelarAgendamento}
+          onAbrir={(modo, ag) => setEmFoco({ modo, ag })}
+          timeId={time.id}
         />
       ) : filtro === "conversas" ? (
         <Conversas conversas={conversas} timeId={time.id} />
@@ -299,23 +317,50 @@ export function ExecucoesCliente({
           })}
         </div>
       )}
+
+      {emFoco && (
+        <DialogoAgendamento
+          modo={emFoco.modo}
+          agendamentoId={emFoco.ag.id}
+          automacaoNome={emFoco.ag.automacao_nome}
+          entradaInicial={emFoco.ag.entrada}
+          quandoInicial={emFoco.ag.quando_executar}
+          automacaoAtiva={emFoco.ag.automacao_ativa}
+          onFechar={() => setEmFoco(null)}
+          onPronto={(r) => {
+            setRecarga((n) => n + 1);
+            if (r?.modo === "disparado") {
+              toast.success("Disparado. A execução já está na fila.");
+            } else if (r?.modo === "reagendado") {
+              toast.success("Reagendado.");
+            } else {
+              toast.success("Agendamento atualizado.");
+            }
+          }}
+        />
+      )}
     </main>
   );
 }
 
 // Aba "Agendadas": os próximos disparos (pendentes, "no ar") + os que NÃO dispararam
 // (cancelados, com o MOTIVO — §12-A: nada em silêncio). Um agendamento ainda não é uma
-// execução (não há passo a passo), então a linha é só informativa + Cancelar.
+// execução (não há passo a passo), então a linha traz o que se pode FAZER com ele:
+// corrigir o que ainda vai rodar, e resgatar o que não rodou.
 function Agendadas({
   pendentes,
   cancelados,
   souOperador,
   onCancelar,
+  onAbrir,
+  timeId,
 }: {
   pendentes: AgendamentoDoTime[];
   cancelados: AgendamentoDoTime[];
   souOperador: boolean;
   onCancelar: (id: string) => void;
+  onAbrir: (modo: ModoAgendamento, ag: AgendamentoDoTime) => void;
+  timeId: string;
 }) {
   if (pendentes.length === 0 && cancelados.length === 0) {
     return (
@@ -336,11 +381,11 @@ function Agendadas({
           {pendentes.map((a, i) => (
             <div
               key={a.id}
-              className={`flex items-center gap-3 px-4 py-3 ${
+              className={`flex items-start gap-3 px-4 py-3 ${
                 i > 0 ? "border-t border-border" : ""
               }`}
             >
-              <Badge variant="info" className="gap-1">
+              <Badge variant="info" className="mt-0.5 gap-1">
                 <Clock className="size-3" /> agendada
               </Badge>
               <span className="min-w-0 flex-1">
@@ -350,11 +395,17 @@ function Agendadas({
                 <span className="text-xs text-muted-foreground">
                   dispara {FMT_BRT.format(new Date(a.quando_executar))}
                 </span>
+                <TextoDoAgente entrada={a.entrada} />
               </span>
               {souOperador && (
-                <Button size="sm" variant="ghost" onClick={() => onCancelar(a.id)}>
-                  <X className="size-4" /> Cancelar
-                </Button>
+                <span className="flex shrink-0 items-center">
+                  <Button size="sm" variant="ghost" onClick={() => onAbrir("editar", a)}>
+                    <Pencil className="size-4" /> Editar
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => onCancelar(a.id)}>
+                    <X className="size-4" /> Cancelar
+                  </Button>
+                </span>
               )}
             </div>
           ))}
@@ -374,7 +425,9 @@ function Agendadas({
                   i > 0 ? "border-t border-border" : ""
                 }`}
               >
-                <Badge variant="warning">cancelada</Badge>
+                <Badge variant="warning" className="mt-0.5">
+                  cancelada
+                </Badge>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm text-foreground">
                     {a.automacao_nome}
@@ -387,7 +440,42 @@ function Agendadas({
                       {a.motivo}
                     </span>
                   )}
+                  <TextoDoAgente entrada={a.entrada} />
+                  {/* Já resgatado: o botão sai de cena e a linha diz o que houve —
+                      senão a falha continua parecendo aberta. */}
+                  {a.recuperado_em && (
+                    <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                      <CheckCircle2 className="size-3.5 text-success" />
+                      recuperado em {FMT_BRT.format(new Date(a.recuperado_em))}
+                      {a.execucao_id && (
+                        <Link
+                          href={`/times/${timeId}/execucoes/${a.execucao_id}`}
+                          className="underline underline-offset-2 hover:text-foreground"
+                        >
+                          ver a execução
+                        </Link>
+                      )}
+                    </span>
+                  )}
                 </span>
+                {souOperador && !a.recuperado_em && (
+                  <span className="flex shrink-0 items-center">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onAbrir("disparar", a)}
+                    >
+                      <Play className="size-4" /> Disparar agora
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onAbrir("reagendar", a)}
+                    >
+                      <CalendarClock className="size-4" /> Reagendar
+                    </Button>
+                  </span>
+                )}
               </div>
             ))}
           </div>

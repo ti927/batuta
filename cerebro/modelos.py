@@ -678,9 +678,17 @@ class Agendamento(IdData, Base):
     # (manual) OU "a automação-alvo estava desativada/removida" (sweeper). Nulo enquanto
     # pendente/enfileirado. A aba "Agendadas" das Execuções mostra isto.
     motivo: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # Preenchido quando o sweeper dispara (auditoria).
+    # Preenchido quando o sweeper dispara (auditoria) — e também quando um humano
+    # RESGATA um agendamento que não disparou com "Disparar agora": nos dois casos o
+    # significado é o mesmo, "a execução que este agendamento gerou".
     execucao_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("execucoes.id", ondelete="SET NULL"), nullable=True
+    )
+    # Quando alguém resgatou este agendamento (disparou agora ou reagendou). Marca a
+    # linha como já tratada: sem isso, um clique repetido rodaria de novo um fluxo
+    # importante — e a lista não teria como mostrar que a falha já foi resolvida.
+    recuperado_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     __table_args__ = (

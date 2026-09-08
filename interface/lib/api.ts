@@ -134,6 +134,12 @@ export const api = {
       { method: "PUT", body: JSON.stringify(corpo) },
       await tokenNavegador(),
     ),
+  patch: async <T>(caminho: string, corpo: unknown) =>
+    requisitar<T>(
+      caminho,
+      { method: "PATCH", body: JSON.stringify(corpo) },
+      await tokenNavegador(),
+    ),
   delete: async (caminho: string) =>
     requisitar<void>(caminho, { method: "DELETE" }, await tokenNavegador()),
 };
@@ -812,6 +818,14 @@ export type AgendamentoDoTime = {
   quando_executar: string;
   estado: "pendente" | "cancelado";
   motivo: string | null;
+  /** O texto que o AGENTE montou — a entrada do fluxo futuro. Editável. */
+  entrada: string | null;
+  /** Quando alguém resgatou este agendamento (disparou agora ou reagendou). */
+  recuperado_em: string | null;
+  /** A execução que nasceu dele — pelo sweeper ou por um "Disparar agora". */
+  execucao_id: string | null;
+  /** Se a automação-alvo está ativa AGORA (reagendar para uma desligada avisa). */
+  automacao_ativa: boolean;
   criado_em: string;
 };
 

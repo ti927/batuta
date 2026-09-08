@@ -79,6 +79,30 @@ regra nova num markdown e a instrução antiga em outro (ver [[times-agentes/age
 conserto é apagar a velha, não reescrever a nova. Aconteceu em 2026-09-02, no primeiro
 disparo agendado depois de o portão deixar de existir.
 
+## Quando o disparo agendado não deixou execução nenhuma
+Família diferente das anteriores, e a mais fácil de diagnosticar errado: *"era para rodar às
+8:30 e não rodou"* — e **não existe execução** para inspecionar. Sem execução, procurar no rastro
+não acha nada, e a conclusão apressada é "o motor travou" ou "o agendamento se perdeu". Nem uma
+coisa nem outra: o disparo **nunca nasceu**.
+
+Acontece quando um agente agendou um disparo futuro (instrumento **Agendar automação**) e, na
+hora marcada, a automação-alvo estava **desativada** — ou tinha sido removida. O agendamento é
+então **cancelado**: ele não fica esperando ela voltar.
+
+Onde olhar, nesta ordem:
+- A aba **Agendadas** das Execuções, seção **"Não dispararam (últimos 7 dias)"** — a linha está
+  lá com o **motivo** escrito.
+- O evento **`agendamento.nao_disparou`** (nível `error`) no banco de logs, com a causa
+  (`alvo_desativado` ou `alvo_removido`) — é o que permite descobrir sem ninguém abrir a tela.
+
+O conserto **não é recriar nada**: reative a automação e use, na própria linha, **Disparar agora**
+(roda na hora, com o texto que o agente tinha montado) ou **Reagendar**. O trabalho não se perdeu.
+
+E se o disparo aconteceu mas **com o texto errado**, a causa não é o motor: quem escreve esse texto
+é o agente que agenda. Ele é editável na linha (botão **Editar**, enquanto pendente) — e a correção
+de raiz é no markdown desse agente, senão o próximo sai errado igual. Detalhe em
+[[instrumentos/agendar-automacao]].
+
 ## A página de status e o vigia dos elos
 Desde 2026-08-27 o Batuta **sonda ativamente cada ligação da própria corrente** — banco de dados,
 memória de conversa, provedores de IA (com a chave, sem gastar token), cada canal Telegram (inclusive
@@ -139,6 +163,10 @@ Diante de *"não funcionou"*, siga esta ordem, sem adivinhar:
 2b. **Se a etapa não aconteceu mas nada falhou**, veja se ele chamou um instrumento **parecido** no lugar
    do certo (o canal em vez do de aprovação). Aí o defeito está nos markdowns do agente — procure a
    instrução ANTIGA que sobrou em outro campo e apague-a; acrescentar a regra nova de novo não resolve.
+2c. **Se NÃO EXISTE execução no horário em que era para rodar**, não conclua que o motor falhou: um
+   disparo agendado por agente é cancelado quando a automação-alvo está desativada na hora marcada.
+   Peça a aba **Agendadas** (seção "Não dispararam") ou o evento `agendamento.nao_disparou`. Isso se
+   recupera pela tela com **Disparar agora**/**Reagendar** — não mande recriar a automação.
 3. **Verifique degradação**: turno carimbado como legado, conversa presa, evento de indisponibilidade.
 4. **Se o serviço aceitou mas o dado não chegou**, leia a configuração do instrumento (destino dos
    campos) — não conclua que o agente errou.

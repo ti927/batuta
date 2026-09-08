@@ -154,7 +154,17 @@ async def listar_execucoes(
 ) -> str:
     """Lista as execuções recentes de um time — para achar a que o consultor relata como
     problema. Filtre por automação e/ou só as com problema (`apenas_problemas=true`:
-    falhou, parada esperando humano, presa ou na fila)."""
+    falhou, parada esperando humano, presa ou na fila).
+
+    ATENÇÃO ao "era para rodar e não rodou": se NÃO HÁ execução no horário reclamado, não
+    conclua que o motor falhou nem mande recriar a automação — o disparo pode nunca ter
+    nascido. Um disparo AGENDADO POR UM AGENTE (instrumento "Agendar automação") é
+    CANCELADO se, na hora marcada, a automação-alvo estiver desativada ou removida; ele
+    não fica esperando ela voltar. Você não tem ferramenta para ler agendamentos: peça ao
+    consultor a aba **Agendadas** das Execuções, seção "Não dispararam (últimos 7 dias)",
+    onde a linha traz o motivo escrito. Isso é RECUPERÁVEL na própria linha — **Disparar
+    agora** (roda na hora, com o texto que o agente tinha montado) ou **Reagendar** —, e
+    reativar a automação é o que impede a repetição. O trabalho não se perdeu."""
     return await anyio.to_thread.run_sync(
         mcp_ferramentas.listar_execucoes, _sub(), time_id, automacao_id, apenas_problemas, limite
     )
@@ -203,7 +213,12 @@ async def diagnosticar_execucao(execucao_id: str) -> str:
     já terminou e mesmo assim o chamador segue parado, aí sim há problema — e ele NÃO
     está na automação: é o vigia que solta essas execuções que morreu. Mande o consultor
     abrir a página `/status` e olhar o elo **"Vigia das execuções"**; se estiver vermelho,
-    o conserto é o botão Reconectar de lá. Não proponha mexer no fluxo nesse caso."""
+    o conserto é o botão Reconectar de lá. Não proponha mexer no fluxo nesse caso.
+
+    E se o consultor reclama de um horário em que NÃO EXISTE execução nenhuma, esta
+    ferramenta não se aplica — veja a orientação em `listar_execucoes`: um disparo
+    agendado por agente é cancelado quando a automação-alvo está desativada na hora
+    marcada, e isso se recupera pela tela."""
     return await anyio.to_thread.run_sync(mcp_ferramentas.diagnosticar_execucao, _sub(), execucao_id)
 
 

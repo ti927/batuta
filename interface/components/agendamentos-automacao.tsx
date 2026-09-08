@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CalendarClock, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { CalendarClock, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -9,12 +9,26 @@ import {
   mensagemDeErro,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import {
+  DialogoAgendamento,
+  TextoDoAgente,
+} from "@/components/dialogo-agendamento";
 
 // Seção "Próximas execuções agendadas" da automação: lista os agendamentos PENDENTES
 // (disparos futuros criados por um agente pelo instrumento "Agendar automação") e
-// permite cancelar. Some quando não há nenhum. Ilha cliente: busca sob demanda.
+// permite ver o texto que o agente montou, corrigi-lo e cancelar. Some quando não há
+// nenhum. Ilha cliente: busca sob demanda.
+//
+// A aba "Agendadas" das Execuções é a visão CENTRAL (o time inteiro, incluindo os que
+// não dispararam e o resgate deles); aqui é a visão de UMA automação. As duas mostram
+// e editam o texto pela mesma regra — o que a camada permite, permite nas duas.
 
-type Agendamento = { id: string; quando_executar: string; criado_em: string };
+type Agendamento = {
+  id: string;
+  quando_executar: string;
+  entrada: string | null;
+  criado_em: string;
+};
 
 const FMT = new Intl.DateTimeFormat("pt-BR", {
   timeZone: "America/Sao_Paulo",
@@ -32,24 +46,23 @@ export function AgendamentosAutomacao({
   const [itens, setItens] = useState<Agendamento[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [cancelando, setCancelando] = useState<string | null>(null);
+  const [editando, setEditando] = useState<Agendamento | null>(null);
+
+  const buscar = useCallback(
+    (primeiraVez = false) =>
+      api
+        .get<Agendamento[]>(`/automacoes/${automacaoId}/agendamentos`)
+        .then(setItens)
+        .catch(() => {
+          /* silencioso: a seção some */
+        })
+        .finally(() => primeiraVez && setCarregando(false)),
+    [automacaoId],
+  );
 
   useEffect(() => {
-    let vivo = true;
-    api
-      .get<Agendamento[]>(`/automacoes/${automacaoId}/agendamentos`)
-      .then((d) => {
-        if (vivo) setItens(d);
-      })
-      .catch(() => {
-        /* silencioso: a seção some */
-      })
-      .finally(() => {
-        if (vivo) setCarregando(false);
-      });
-    return () => {
-      vivo = false;
-    };
-  }, [automacaoId]);
+    buscar(true);
+  }, [buscar]);
 
   async function cancelar(id: string) {
     setCancelando(id);
@@ -58,7 +71,7 @@ export function AgendamentosAutomacao({
       setItens((l) => l.filter((a) => a.id !== id));
       toast.success("Agendamento cancelado.");
     } catch (e) {
-      toast.error(mensagemDeErro(e, "Falha ao cancelar."));
+      toast.error(mensagemDeErro(e, "Não consegui cancelar o agendamento."));
     } finally {
       setCancelando(null);
     }
@@ -75,28 +88,51 @@ export function AgendamentosAutomacao({
         {itens.map((a) => (
           <li
             key={a.id}
-            className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-1.5 text-sm"
+            className="flex items-start justify-between gap-3 rounded-lg border border-border px-3 py-1.5 text-sm"
           >
-            <span className="text-foreground">
-              {FMT.format(new Date(a.quando_executar))}
+            <span className="min-w-0 flex-1">
+              <span className="block text-foreground">
+                {FMT.format(new Date(a.quando_executar))}
+              </span>
+              <TextoDoAgente entrada={a.entrada} />
             </span>
             {podeOperar && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => cancelar(a.id)}
-                disabled={cancelando === a.id}
-              >
-                <X className="size-4" /> Cancelar
-              </Button>
+              <span className="flex shrink-0 items-center">
+                <Button size="sm" variant="ghost" onClick={() => setEditando(a)}>
+                  <Pencil className="size-4" /> Editar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => cancelar(a.id)}
+                  disabled={cancelando === a.id}
+                >
+                  <X className="size-4" /> Cancelar
+                </Button>
+              </span>
             )}
           </li>
         ))}
       </ul>
       <p className="mt-2 text-xs text-muted-foreground">
-        Disparos futuros criados por um agente (instrumento “Agendar automação”).
+        Disparos futuros criados por um agente (instrumento “Agendar automação”). O
+        texto entre aspas é o que ele escreveu como entrada — dá para corrigir.
         Horário de Brasília.
       </p>
+
+      {editando && (
+        <DialogoAgendamento
+          modo="editar"
+          agendamentoId={editando.id}
+          entradaInicial={editando.entrada}
+          quandoInicial={editando.quando_executar}
+          onFechar={() => setEditando(null)}
+          onPronto={() => {
+            buscar();
+            toast.success("Agendamento atualizado.");
+          }}
+        />
+      )}
     </section>
   );
 }

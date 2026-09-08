@@ -84,7 +84,8 @@ class AgendarAutomacao(TipoInstrumento):
         "organização — o alvo é fixado na configuração do instrumento pelo humano). Use "
         "ao fim de um fluxo para reprogramar um próximo passo: informe daqui a quanto "
         "tempo disparar (dias/horas/minutos) ou uma data/hora. A execução acontece na "
-        "hora marcada; dá para ver e cancelar os agendamentos na tela da automação."
+        "hora marcada; na tela dá para ver o texto agendado, corrigi-lo e cancelar — e, "
+        "se o disparo não acontecer porque a automação estava desativada, recuperá-lo."
     )
     Config = ConfigAgendar
     Args = ArgsAgendar
