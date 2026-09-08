@@ -157,7 +157,11 @@ export function DialogoAgendamento({
         onClick={onFechar}
         aria-label="Fechar"
       />
-      <div className="relative w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-xl">
+      {/* Largo porque o "texto inicial" costuma ser o payload que o agente montou —
+          às vezes um JSON de várias linhas —, e editar isso numa caixa estreita é
+          sofrível. `max-h`/`overflow` em vez de altura fixa: no celular (e em tela
+          baixa com o teclado aberto) o diálogo rola em vez de estourar para fora. */}
+      <div className="relative max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-xl">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-2 font-heading text-lg font-medium text-foreground">
             <Icone className="size-4" /> {TITULOS[modo]}
@@ -193,8 +197,11 @@ export function DialogoAgendamento({
         <div className="flex flex-col gap-3">
           <Label className="flex-col items-start gap-1">
             Texto inicial (o que o agente escreveu)
+            {/* Alta o bastante para ler o que se está editando, e menor no celular
+                para o botão Salvar não ficar fora do alcance. `resize-y` deixa
+                esticar quando o texto é maior do que o previsto. */}
             <Textarea
-              className="min-h-24"
+              className="min-h-40 resize-y font-mono leading-relaxed sm:min-h-64"
               placeholder="O que esta execução deve fazer?"
               value={entrada}
               onChange={(e) => setEntrada(e.target.value)}
