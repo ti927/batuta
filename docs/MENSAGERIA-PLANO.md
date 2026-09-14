@@ -118,6 +118,11 @@ novos modelos/migration, novos endpoints, **um** job no agendador, telas novas n
      atualiza `contato_nome`.
   2. **Debounce leve** por contato (janela curta via `ultima_entrada_em`) para juntar rajada.
   3. Se `estado=="humano_assumiu"`: só registra (operador responde pela inbox). Retorna.
+     **⚠️ Corrigido em 2026-09-14 (`e4e498b`):** isso valia para TUDO, inclusive para a resposta de
+     uma aprovação que o próprio Batuta acabara de pedir por aquele canal — a mensagem era gravada e
+     nunca lida, enquanto novos pedidos continuavam saindo por ali. Hoje, **resposta a portão pendente
+     é sempre processada**, e um `pedir_aprovacao` novo RELIGA a conversa (`aprovacao.vincular_pausa`).
+     Só a conversa que uma pessoa assumiu de propósito (`atribuida_a`) continua calada para o bot.
   4. **Modo conversacional:** monta a entrada com o **histórico** da conversa + preâmbulo de contexto e
      roda 1 turno do agente (`executar_agente`), grava `MensagemConversa(agente)`, **entrega a saída ao
      contato**, marca `aguardando_resposta` + `aguardando_ate`.
@@ -170,6 +175,17 @@ novos modelos/migration, novos endpoints, **um** job no agendador, telas novas n
 - Em `mensageria/servico.py`, antes de cada turno: incrementa `turnos`, soma custo do último passo
   (`precos.resumir_uso`) em `custo_acumulado_usd`. **Estourou teto/turnos → passa para humano** (decisão
   do maestro): `estado="humano_assumiu"` + aviso na inbox. Rate-limit/debounce por `(instrumento, contato)`.
+- **Revisado em 2026-09-14 (`e4e498b`), depois de o teto derrubar trabalho legítimo em produção:**
+  - o teto de custo da conversa conta só a IA que **conversa**; trabalho de instrumento (imagem, vídeo) é
+    do fluxo e responde ao `teto_usd_execucao`. Antes, três imagens de um carrossel (US$ 0,50) estouravam
+    sozinhas o teto de uma conversa inteira;
+  - o **portão** não usa mais teto/turnos da conversa: usa a mesma régua da tela, `portao_max_rodadas`
+    (idas-e-vindas DAQUELE portão). Eram duas fontes de verdade para a mesma regra;
+  - atingir um limite **não transfere mais o portão para humano**: o agente explica (qual limite, quanto
+    valia, onde se muda, que nada se perdeu) e a resposta segue pelo caminho mecânico;
+  - `humano_assumiu` deixou de ser um buraco sem fundo: `sweeper.varrer_transferidas` devolve ao bot o que
+    ninguém assumiu, contando o prazo desde **quem está esperando** (a mensagem mais antiga sem resposta),
+    nunca desde a última mexida na linha — senão insistir adiaria o próprio resgate.
 
 ### Fase J — Timeout de inatividade + nudge (job no agendador)
 - **Convenção na cadeia/destino:** `timeout_s` + rota `"sem_resposta"` (lida pela borda; JSONB livre,
@@ -221,7 +237,8 @@ Horário/entrega/métricas=K · Rótulo de contato=B/D (nome vem no webhook).
 - **R2 — Endpoint público.** Exige o secret token desde o M1 (senão injeção de mensagens = gasto de
   tokens).
 - **R3 — `MAX_PASSOS=25`** limita o modo fluxo em conversas longas; o modo conversacional (execução por
-  turno) não sofre disso.
+  turno) não sofre disso. **Desde 2026-09-14 é configurável** (`max_passos`, na cascata do Tipo de fluxo);
+  o `MAX_PASSOS` do `cadeia.py` fica só como default.
 - **R4 — Ordem/reentrância de mensagens** em rajada → debounce desde o M1.
 - **R5 — Custo de Whisper** sem teto → coberto na Fase I.
 - **R6 — `_escolher_saida` gasta 1 chamada de LLM por retoma no modo fluxo** → roteamento determinístico

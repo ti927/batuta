@@ -270,6 +270,16 @@ Cada passo de um fluxo é uma chamada de IA paga. Uma cadeia de 15 passos custa 
 
 Visível não basta quando algo dispara: um fluxo pode ter um **teto de custo por execução** (em dólares) e um **teto de tempo**, por passo e pela execução inteira. Estourou, ele **para** e diz quanto gastou, qual era o limite e o que fazer. Os três nascem **desligados**, de propósito: um limite que o usuário não pediu interromperia trabalho legítimo e lento — gerar um vídeo leva uns 25 minutos — como se fosse defeito. O teto de tempo da execução conta **tempo de trabalho**, não de relógio: uma execução que esperou dois dias por uma aprovação humana não gastou dois dias de trabalho.
 
+### Nenhum limite é secreto
+
+Todo limite do Batuta — teto de mensagens e de custo de uma conversa, idas-e-vindas de uma aprovação, passos e custo de uma execução, prazo do vigia que destrava trabalho travado — obedece a três regras, e elas valem para qualquer limite que venha a existir:
+
+1. **É configurável.** Vive num painel só (*Configurações do fluxo*), na mesma cascata do resto do comportamento. Não existe teto que só o código conheça.
+2. **É visível antes de doer.** Os números efetivos daquele fluxo aparecem em português já na abertura do painel, sem o usuário precisar caçar. Um limite que ninguém sabe que existe é indistinguível de um defeito quando dispara.
+3. **Se explica quando dispara.** O agente diz **o que** acabou, **quanto** valia, que **nada se perdeu** e **onde** se muda o número — e o trabalho segue pelo melhor caminho disponível em vez de morrer. Um limite nunca emudece um canal nem deixa alguém esperando resposta que não vem.
+
+A régua também tem de ser **uma por propósito**. O teto de custo de uma conversa vigia a IA que **conversa**; gerar imagem ou vídeo é trabalho do **fluxo** e responde ao teto por execução. Somar as duas coisas num teto só faz trabalho legítimo parecer abuso — foi assim que um carrossel de três imagens derrubou, sozinho, uma aprovação inteira.
+
 ## 22. Supervisão e erro do agente
 
 O agente pode responder errado ao cliente final — informar algo incorreto a um pai, a um paciente. O produto precisa permitir que isso seja percebido e corrigido:

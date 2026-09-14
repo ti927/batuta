@@ -91,6 +91,7 @@ Os dois reimplementam, cada um do seu jeito: rodar agente, bifurcar (A/B), esper
 ### Config colapsada (de 5 camadas → o mínimo, separada por dimensão)
 - **Dimensão A — Tempos de conversa** (debounce/timeout/nudge/encerrar). Só em `modo=conversa`. Camadas: `global < canal`. Perfil deixa de governar isto.
 - **Dimensão B — Limites de segurança** (teto de passos, `teto_usd`, ação ao estourar). Camada: `global < automacao`. **`max_passos` (morto) e `max_turnos` (conversa) viram a MESMA chave "teto de passos".**
+  > **⚠️ Parcialmente superado em 2026-09-14 (`e4e498b`).** `max_passos` **ressuscitou** — deixou de ser chave morta e voltou à cascata, agora LIDA de verdade (`disparo._teto_de_passos` → `executar_cadeia(max_passos=…)`), porque a lei do maestro passou a ser *nenhum limite pode viver só no código*. **Não** foi unificada com `max_turnos`: são coisas diferentes (passos de uma execução × mensagens de uma conversa) e fundi-las esconderia uma das duas. Entraram na cascata pelo mesmo motivo os prazos do vigia de turno preso. Se a Fatia 4 for adiante, parta deste estado, não do texto acima.
 - **Dimensão C — Portão** (forma, ação ao abandonar, max rodadas). Camada: `automacao < no`.
 - **Presets:** de 4 (que misturam dimensões) para **2 honestos** (`Interno`, `Atendimento externo`). "Disparo" deixa de ser preset (é um **gatilho**). "Personalizado" deixa de ser preset (é "sem preset + ajustes").
 - **Morrem:** `max_passos`, `modelo_roteador`, `acao_ao_estourar` como camada de perfil. Constantes espelhadas (`TETO_INATIVIDADE`/`LIMIAR_PRESO`) viram uma só.
@@ -138,6 +139,7 @@ Teto de custo/turnos passa a ler da timeline (contagem de passos + soma de uso);
 
 > **✅ FATIA 3 (PARTE SEGURA) COMPLETA (2026-08-04).** Backend puro, SEM migração, **zero mudança de comportamento** (verificado contra a produção: 18 automações, só `interno`/sem-perfil; ninguém usava disparo/personalizado; 0 canais com regra própria). Decisão do maestro: fazer só a parte segura agora e **adiar** o re-dimensionar a cascata + o teto-de-passos para a Fatia 4. O que entrou:
 > - **Chaves MORTAS removidas:** `max_passos`, `modelo_roteador` (o motor usa o fixo `MAX_PASSOS`/`MODELO_PADRAO`, nunca lia essas) e `acao_ao_estourar` (o teto SEMPRE passa para humano — o campo na tela era decorativo/enganoso). Saíram de `GLOBAL`/`PERFIS`/`ESCOLHAS`/`CAMPOS`.
+>   **↩️ `max_passos` VOLTOU em 2026-09-14 (`e4e498b`)** — desta vez ligada ao motor, não decorativa. O erro de 2026-08-04 não foi removê-la (ela era mesmo morta), foi deixar o limite existir só como constante: quando ele morde, ninguém sabe onde fica. `acao_ao_estourar` continua morta, e agora com um motivo mais forte: atingir um limite **não passa mais o portão para humano** — o agente explica e o fluxo segue.
 > - **Presets 4 → 2 honestos:** `interno` (Processo interno) + `atendimento` (Atendimento externo). Caíram `disparo` (é um GATILHO, vira `origem` na Fatia 4) e `personalizado` (é só "sem tipo + ajustes", já é como a tela trata a ausência de perfil).
 > - **Constante espelhada unificada:** `diagnostico_execucao.LIMIAR_PRESO_MIN` passou a importar `fila.TETO_INATIVIDADE_EXEC_MIN` (fonte única; sem ciclo de import — verificado).
 > - **Front:** a tela de config é 100% data-driven de `/config/fluxo` (`painel_config`) → o seletor mostra 2 tipos e o campo "Ao estourar o limite" some **sozinho**; `tsc` verde, nenhuma linha de front mudou.
@@ -195,7 +197,7 @@ O congelamento (`MIGRACAO.md §6.1`) precisa ser **suspenso de forma limitada e 
 
 ## 9. Arquivos-chave (por fatia)
 - **Fatia 1:** `cerebro/mensageria/servico.py` (`_rodar_turno` grava passo; para de descartar `erros_instrumentos`), `cerebro/orquestracao/disparo.py` (`_fazer_registrador` como registrador único), `cerebro/modelos.py` (`Execucao` sombra), `cerebro/diagnostico_execucao.py`, tela de inspeção de execução (front).
-- **Fatia 3:** `cerebro/mensageria/config.py`, `cerebro/fila.py` + `cerebro/diagnostico_execucao.py` (unificar constantes), `cerebro/orquestracao/cadeia.py` (`MAX_PASSOS` → teto configurável).
+- **Fatia 3:** `cerebro/mensageria/config.py`, `cerebro/fila.py` + `cerebro/diagnostico_execucao.py` (unificar constantes), `cerebro/orquestracao/cadeia.py` (`MAX_PASSOS` → teto configurável ✅ **feito em 2026-09-14**, fora da fatia, por necessidade de produção).
 - **Fatias 4–5:** `cerebro/orquestracao/cadeia.py`, `cerebro/orquestracao/agente.py`, `cerebro/mensageria/retoma.py` (colapsar os dois caminhos), `cerebro/mensageria/aprovacao.py` + `cerebro/mensageria/servico.py` (`_turno_de_portao` vira adaptador), `cerebro/mensageria/sweeper.py` + `cerebro/fila.py` (sweepers convergem), `cerebro/modelos.py` (`PassoExecucao.tipo`; `Conversa` encolhe).
 - **Espinha reusada (apoiar-se, não reescrever):** `cerebro/fila.py`, `cerebro/observabilidade/` (`evento_log` transversal), `cerebro/orquestracao/disparo.py::_fazer_registrador` (`PassoExecucao` como registro único).
 

@@ -30,6 +30,11 @@ degradado silencioso é considerado defeito, não proteção.
 ## Exemplos
 - Uma aprovação respondida no Telegram que "não fez nada": o turno começou e não voltou. Passados ~30
   minutos, o contato é avisado, a conversa é destravada e a aprovação continua pendente — nada se perde.
+- **"Respondo no Telegram e o agente não lê — mas ele continua me mandando pedidos por lá."** A conversa
+  foi passada para uma pessoa (por um teto atingido, por exemplo) e ninguém assumiu. Hoje isso se desfaz
+  sozinho por três caminhos: um pedido de aprovação novo devolve a conversa ao bot na hora, a resposta a
+  uma aprovação pendente é sempre lida, e o vigia devolve o atendimento se ninguém aparecer. Se ainda
+  assim acontecer, procure no registro **conversa passada para um humano** sem a devolução correspondente.
 - Um agente que "esqueceu" o que já tinha buscado: os turnos aparecem carimbados como **legado**, sinal de
   que a memória entre turnos estava indisponível.
 
@@ -42,6 +47,11 @@ degradado silencioso é considerado defeito, não proteção.
     enviar), e repetir arriscaria fazer duas vezes. Quem reenvia é a pessoa.
   - **memória de conversa indisponível** — o sistema caiu para o modo legado: cada turno recomeça do texto
     e a trava de ação irreversível fica inativa. É degradação, não normalidade — peça verificação.
+  - **limite da aprovação atingido** — um teto configurado interrompeu a condução daquela aprovação. **Não
+    é travamento e o fluxo não parou:** a resposta segue pelo caminho que ela indicar e o canal continua
+    funcionando. O evento diz qual limite foi e quanto valia, e a pessoa recebe isso em texto.
+  - **conversa devolvida ao bot** — ela tinha sido passada para uma pessoa automaticamente, ninguém
+    assumiu dentro do prazo, e o vigia devolveu o atendimento, avisando quem esperava.
   - **falha de ferramenta pelo MCP** — vem com um **código** que aparece também na resposta ao Claude; cite
     esse código ao pedir ajuda.
 - **Falha que a ferramenta devolve como resposta também entra no rastro.** Quando um sistema externo

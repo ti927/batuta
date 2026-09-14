@@ -2424,6 +2424,57 @@ Um mecanismo de batimento, três carimbadores, uma sonda — generalizando o que
 
 ---
 
+## FASE — Nenhum teto secreto, nenhum canal surdo, nenhuma espera muda  ✅ NO AR (2026-09-14, commits `e4e498b` + `d865395`, sem migração)
+
+Nasceu de um relato bruto do maestro sobre a execução `3a1edfd6` do **📈 COF Post Instagram**: *"executou a capa ok; no carrossel pedi pra trocar alguma coisa nas imagens, não trocou; na segunda tentativa me disse que o limite do telegram expirou; fui no batuta, em conversas, e o agente simplesmente morreu pra ler minhas respostas; aprovei no portão do batuta ok; daí veio o agente 9:16, me manda a aprovação no telegram, mas o telegram morreu... que diabos está acontecendo???"* — e, no meio da apuração, *"além disso o gerador de enquete não pediu aprovação"*.
+
+### A apuração (rastro do banco, não palpite)
+
+O evento no banco de logs às 11:49:07 entregou a causa: `conversa.transferida_humano` — *"Limite do portão atingido"*. **O limite que estourou foi o teto de CUSTO da conversa, US$ 0,50** do perfil "Processo interno":
+
+```
+custo_acumulado_usd: 0.5627   (teto: 0.50)
+  turno 11:41:54 → $0.507 = gpt-image-2 $0.167 × 3 slides + sonnet5 $0.006
+```
+
+Ou seja: **gerar três imagens uma única vez já custa US$ 0,50.** A primeira reprovação de um carrossel estourava o teto sempre — não era azar, era aritmética. E o desfecho era pior que o limite: a conversa ia para `humano_assumiu` e **ficava surda para sempre**, enquanto o Batuta seguia mandando pedidos de aprovação por ela (o Story 9:16 pediu às 11:57:50, `entregue=True`, e as três respostas do maestro no Telegram foram gravadas no banco e nunca lidas). As três aprovações seguintes saíram da TELA — `escrita/portao.aprovado` às 11:53:24, 11:56:18 e 11:58:46.
+
+Três defeitos em cascata, todos confirmados no código: `servico.py` não processava NADA em `humano_assumiu` (nem resposta de portão pendente); `aprovacao.vincular_pausa` enviava o pedido novo sem tirar a conversa desse estado; e **nenhum vigia varria `humano_assumiu`** — era o único estado de conversa sem dono.
+
+O "não trocou" do carrossel **não era do fluxo**: o turno de 11:41:54 durou **161 s** e produziu três arquivos novos. O que não mudou foi a logo sair certa — assunto em aberto (ver abaixo).
+
+### As três leis do maestro
+
+> *"Todo tipo de limitação tem que ser CONFIGURÁVEL, não dá pra ter um teto e a gente nem sabe onde isso fica."*
+> *"Se o agente mandou uma aprovação depois que a mensageria passou pra um humano, quer dizer que a conversa voltou, então ele tem que ler a resposta."*
+> *"O agente da conversa tem que saber tudo que acontece, e tem que explicar pro humano — 'vou passar pra um humano' parece estagiário fugindo do trabalho."*
+
+**1. Nenhum teto secreto.** `max_passos` (era o fixo `cadeia.MAX_PASSOS`) e os prazos do vigia de turno preso (eram fixos no `sweeper`) entraram na cascata. `resumo_dos_limites(conf)` virou a **redação única** dos limites efetivos em português, servida por `GET /config/fluxo` e pelo endpoint puro novo `POST /config/fluxo/limites`; o diálogo do fluxo mostra o bloco **"Limites deste fluxo"** *antes* do "Avançado". Um teste (`test_todo_limite_aparece_na_tela`) quebra se um limite novo não ganhar botão.
+
+Duas correções de régua entraram junto, ambas casos de **fonte de verdade divergindo**: o teto de custo da conversa parou de contar trabalho de instrumento (imagem/vídeo é do FLUXO, responde ao `teto_usd_execucao`; `Conversa.custo_acumulado_usd` segue sendo o total honesto), e o **portão passou a usar a mesma régua da tela** — `portao_max_rodadas` (idas-e-vindas daquele nó), não turnos/custo da conversa. Atingido o limite, o agente **explica** (o quê / quanto / onde muda / que nada se perdeu) e a resposta segue pelo caminho mecânico, exatamente como na tela. O canal não morre.
+
+**2. Pedido novo religa a conversa.** `vincular_pausa` devolve ao bot a conversa transferida automaticamente, e — segunda trava — **resposta a portão pendente é sempre lida**, venha o estado de onde vier. Exceção única: conversa que uma PESSOA assumiu de propósito (`atribuida_a`), porque aí há um responsável de verdade.
+
+**3. Ninguém espera em silêncio.** `sweeper.varrer_transferidas` devolve ao bot o que ninguém assumiu, com aviso honesto e evento `conversa.devolvida_ao_bot`. O relógio conta desde **quem está esperando** (a mensagem mais antiga sem resposta) — medir por `atualizado_em` era ao contrário: cada mensagem nova da pessoa adiaria o próprio resgate dela (`d865395`). E `MSG_LIMITE` deixou de ser *"Vou te encaminhar para um atendente humano. Um instante."*
+
+### De quebra: por que o Gerador Enquete não fez nada
+
+Aprovar **pela tela** entregava ao nó seguinte `material + "[Resposta do humano] arprovado"`; aprovar **pelo Telegram** entregava o transcript da conversa. Duas verdades para a mesma passagem — e é por isso que a automação rodou inteira em 07/09 (tudo pelo Telegram) e quebrou em 14/09 (aprovações pela tela). O Enquete recebeu um texto terminando em *"Aprovar ou reprovar a arte?"* + a resposta, leu como decisão a encaminhar, chamou `seguir_para('aprovado')` e encerrou: `instrumentos_acionados: ['anotar','seguir_para']`, sem FotoMontagem, sem Pedir aprovação. **O markdown dele estava correto** — não era o caso de varrer markdown.
+
+As duas superfícies passaram a mandar a mesma coisa, com o rótulo dizendo que a decisão é **do passo anterior, já resolvida**. O rótulo é descritivo (diz o que o texto é), não instrução de comportamento — o que o agente faz continua vindo só dos markdowns.
+
+E o agente passou a **ver o que acontece na própria conversa**: no modo memória a entrada filtrava por `papel == 'contato'`, então ele era o único a não saber da transferência nem do que o maestro escreveu como operador às 11:49:38.
+
+### Verificação
+
+**1187 testes verdes** (17 novos, um por lei/armadilha); `tsc`/`eslint`/`build` limpos; sem migração. **Prova ao vivo em produção:** a conversa `00918530`, presa em `humano_assumiu` desde 14/09 11:49, foi resgatada às **12:58:36** pelo vigia novo — `conversa.devolvida_ao_bot {"parada_min": 60, "portao": false}` — com o recado honesto entregue no Telegram e o estado de volta a `aguardando_resposta`.
+
+**✋ Em aberto, e dito como tal:** **por que a marca LURE saiu errada nos slides**. O markdown do Carrossel manda enviar o arquivo da logomarca como "Imagem 1 (para PRESERVAR)"; se o agente enviou de fato em 11:42 não dá para provar hoje, porque o vigia de imagem guarda só a **última** chamada e ela foi sobrescrita pela do Story às 11:56:30 (essa foi com **uma** imagem-base, a capa). Fica para o próximo disparo.
+
+**O que as IAs aprenderam:** `automacoes/pedir-aprovacao` ganhou o teto de idas-e-vindas, a separação dos dois tetos de custo e o religar do canal; `mensageria/conversas` ganhou "todo limite é configurável e nenhum é secreto", a distinção conversa × execução e o fim do beco `humano_assumiu`; a docstring do `diagnosticar_execucao` no MCP manda **não** chamar de travamento um portão que atingiu o teto de rodadas, e desmente a confusão "o carrossel estourou o teto da conversa". `PRODUTO.md §21` ganhou a seção **"Nenhum limite é secreto"**; `docs/ARQUITETURA.md`, `docs/MENSAGERIA-PLANO.md` e `docs/REMODELAGEM-MOTOR.md` foram corrigidos onde descreviam o comportamento antigo como certo.
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
