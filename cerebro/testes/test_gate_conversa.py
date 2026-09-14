@@ -1030,3 +1030,37 @@ def test_agente_ve_o_que_aconteceu_na_conversa(sessao, dados, monkeypatch):
     assert "[Operador (humano)] troque a cor" in novo  # rotulado
     assert "[Sistema] Limite atingido." in novo
     assert "Aprova?" not in novo  # a própria fala dele, não
+
+
+def test_vigia_conta_desde_quem_esta_esperando(sessao, dados, monkeypatch):
+    """O relógio do resgate conta desde a mensagem mais antiga SEM resposta — não desde
+    a última mexida na conversa. Pelo caminho errado, cada mensagem nova da pessoa
+    adiaria o próprio resgate dela: quem mais insistisse seria o último a ser atendido."""
+    from mensageria import sweeper
+
+    enviados = []
+    canal, ag, auto, execucao = _setup_canal(sessao, dados, monkeypatch, enviados)
+    conv = _conv(sessao, execucao.id)
+    conv.estado = "humano_assumiu"
+    conv.atribuida_a = None
+    sessao.commit()
+    # O que o portão já tinha falado fica no passado, para a fala do contato ser a
+    # última: é ele que está esperando.
+    for m in sessao.scalars(
+        select(MensagemConversa).where(MensagemConversa.conversa_id == conv.id)
+    ).all():
+        m.criado_em = datetime.now(timezone.utc) - timedelta(hours=6)
+    sessao.add(
+        MensagemConversa(
+            conversa_id=conv.id, papel="contato", conteudo="alguém aí?",
+            criado_em=datetime.now(timezone.utc) - timedelta(hours=5),
+        )
+    )
+    sessao.commit()
+    # ... e a conversa foi "mexida" agora há pouco (o que renovaria `atualizado_em`).
+    conv.atualizado_em = datetime.now(timezone.utc)
+    sessao.commit()
+
+    assert sweeper.varrer_transferidas(sessao) == 1
+    sessao.refresh(conv)
+    assert conv.estado == "aguardando_resposta"

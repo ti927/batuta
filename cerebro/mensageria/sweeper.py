@@ -212,6 +212,27 @@ def varrer_turnos_presos(sessao: Session) -> int:
     return len(presas)
 
 
+def _esperando_desde(sessao: Session, conversa: Conversa):
+    """Desde quando alguém está esperando resposta nesta conversa: a mensagem mais
+    antiga do CONTATO depois da última fala de quem atende (agente ou operador). None
+    se ninguém está esperando."""
+    ultima_resposta = sessao.scalars(
+        select(MensagemConversa.criado_em)
+        .where(MensagemConversa.conversa_id == conversa.id)
+        .where(MensagemConversa.papel.in_(("agente", "operador")))
+        .order_by(MensagemConversa.criado_em.desc())
+        .limit(1)
+    ).first()
+    q = (
+        select(MensagemConversa.criado_em)
+        .where(MensagemConversa.conversa_id == conversa.id)
+        .where(MensagemConversa.papel == "contato")
+    )
+    if ultima_resposta is not None:
+        q = q.where(MensagemConversa.criado_em > ultima_resposta)
+    return sessao.scalars(q.order_by(MensagemConversa.criado_em).limit(1)).first()
+
+
 def varrer_transferidas(sessao: Session) -> int:
     """Devolve ao bot a conversa que foi transferida AUTOMATICAMENTE e ninguém pegou.
 
@@ -244,7 +265,12 @@ def varrer_transferidas(sessao: Session) -> int:
         # O prazo é o mesmo "tempo até cutucar quem some" do fluxo: se um operador não
         # apareceu nesse tempo, ninguém vai aparecer. Configurável como todo limite.
         prazo = timedelta(minutes=int(conf["timeout_min"]))
-        desde = conversa.atualizado_em or conversa.criado_em
+        # O relógio conta desde que ALGUÉM ESTÁ ESPERANDO — a mensagem mais antiga do
+        # contato que ninguém respondeu. Contar por `atualizado_em` seria ao contrário:
+        # cada mensagem nova da pessoa adiaria o resgate dela, e quem mais insistisse
+        # seria o último a ser atendido. Sem ninguém esperando, o relógio é o da própria
+        # conversa (ela também não pode apodrecer na inbox para sempre).
+        desde = _esperando_desde(sessao, conversa) or conversa.atualizado_em
         if desde is None or agora - desde < prazo:
             continue
         portao = execucao is not None and execucao.estado == "aguardando_humano"
