@@ -334,6 +334,14 @@ class AutomacaoCriar(BaseModel):
     configuracao: dict = Field(default_factory=dict)
 
 
+class ConfiguracaoFluxoEntrada(BaseModel):
+    """A configuração de fluxo que está na tela (perfil + ajustes), para o endpoint
+    que devolve os LIMITES efetivos em português. Não toca banco."""
+
+    perfil: str | None = None
+    ajustes: dict = Field(default_factory=dict)
+
+
 class AutomacaoEditar(BaseModel):
     nome: str = Field(min_length=1, max_length=200)
     tipo_gatilho: str = Field(default="manual", max_length=50)

@@ -88,6 +88,19 @@ a escolha.
 - Quem não responde não trava o fluxo para sempre: o **Tipo de fluxo** define quanto
   esperar e o que fazer no silêncio (estacionar ou cancelar), e dá para ajustar isso só
   num passo, no construtor.
+- **Uma aprovação tem um teto de idas-e-vindas** (*Máx. de idas-e-vindas na aprovação*,
+  8 por padrão). Enquanto ele não estoura, reprovar com um pedido de ajuste faz o agente
+  refazer o material quantas vezes forem precisas. Ao estourar, o agente **diz o que
+  aconteceu** e a sua resposta segue direto pelo caminho que ela indicar — o fluxo anda,
+  o canal continua funcionando, e o material inteiro continua visível no Batuta.
+- **Gerar imagem ou vídeo não consome o teto de custo da CONVERSA.** São contas
+  diferentes de propósito: o teto da conversa vigia a IA que conversa; o trabalho pesado
+  é do fluxo e responde ao *Teto de custo por execução*. Sem essa separação, um carrossel
+  de três imagens estourava sozinho o teto de uma conversa inteira na primeira
+  reprovação.
+- **Um pedido de aprovação novo devolve a conversa ao bot.** Se o canal tinha sido
+  passado para uma pessoa automaticamente e ninguém assumiu, o Batuta volta a ler as
+  respostas — em vez de continuar pedindo aprovação por um canal em que não escuta.
 
 ## Para a IA
 Tipo `pedir_aprovacao`. Config: `canal_instrumento_id` (id de um instrumento de

@@ -38,6 +38,7 @@ from modelos import (
     MensagemConversa,
     PassoExecucao,
 )
+from observabilidade.escritor import registrar_evento
 from orquestracao import grafo
 
 # Tipos de instrumento que são canais de mensageria (podem ser canal de aprovação).
@@ -206,7 +207,28 @@ def vincular_pausa(sessao: Session, execucao: Execucao) -> None:
         sessao.add(conversa)
     else:
         conversa.execucao_id = execucao.id
-        if conversa.estado not in ("humano_assumiu", "fechada"):
+        # PEDIDO NOVO = A CONVERSA VOLTOU (lei do maestro, 2026-09-14): "se o agente
+        # mandou uma aprovação depois que a mensageria passou pra um humano, quer dizer
+        # que a conversa voltou, então ele tem que ler a resposta". Antes, uma conversa
+        # em `humano_assumiu` ficava de fora: o pedido era ENVIADO pelo canal e a
+        # resposta era engolida — o Batuta falava por um canal em que não escutava.
+        # Só a conversa que uma PESSOA assumiu de propósito (`atribuida_a`) fica com
+        # ela; a transferência automática (teto atingido) é retomada pelo bot.
+        pessoa_conduz = (
+            conversa.estado == "humano_assumiu" and conversa.atribuida_a is not None
+        )
+        if conversa.estado != "fechada" and not pessoa_conduz:
+            if conversa.estado == "humano_assumiu":
+                registrar_evento(
+                    categoria="mensageria", acao="conversa.religada_por_portao",
+                    nivel="warning", persistir=True,
+                    recurso_tipo="conversa", recurso_id=conversa.id,
+                    detalhe={
+                        "canal": conversa.canal,
+                        "execucao_id": str(execucao.id),
+                        "efeito": "pedido de aprovação novo devolveu a conversa ao bot",
+                    },
+                )
             conversa.estado = "aguardando_resposta"
     sessao.flush()
 

@@ -11,7 +11,15 @@
 // não vencer o tipo em silêncio.
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Clock, RotateCcw, ShieldCheck, Sliders, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Clock,
+  Gauge,
+  RotateCcw,
+  ShieldCheck,
+  Sliders,
+  X,
+} from "lucide-react";
 
 import {
   api,
@@ -178,6 +186,11 @@ export function DialogoConfigFluxo({
   const [painel, setPainel] = useState<PainelConfigFluxo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [avancado, setAvancado] = useState(false);
+  // Os limites EFETIVOS (perfil + ajustes) em português. A redação vive no backend
+  // (`config.resumo_dos_limites`) — se ela fosse reescrita aqui, as duas versões
+  // divergiriam com o tempo, que é a origem clássica de bug recorrente neste projeto.
+  const [limites, setLimites] = useState<string[]>([]);
+  const [ondeMudar, setOndeMudar] = useState<string>("");
 
   useEffect(() => {
     api
@@ -185,6 +198,30 @@ export function DialogoConfigFluxo({
       .then(setPainel)
       .catch(() => setErro("Não consegui carregar as opções de configuração."));
   }, []);
+
+  const configSerializada = JSON.stringify({
+    perfil: valor.perfil ?? null,
+    ajustes: valor.ajustes ?? {},
+  });
+  useEffect(() => {
+    let vivo = true;
+    api
+      .post<{ limites: string[]; onde_mudar: string }>(
+        "/config/fluxo/limites",
+        JSON.parse(configSerializada),
+      )
+      .then((r) => {
+        if (!vivo) return;
+        setLimites(r.limites);
+        setOndeMudar(r.onde_mudar);
+      })
+      .catch(() => {
+        if (vivo) setLimites([]);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [configSerializada]);
 
   const ajustes = valor.ajustes ?? {};
   // HONESTO: só considera "tem tipo" um perfil realmente salvo e conhecido. Sem tipo
@@ -300,6 +337,28 @@ export function DialogoConfigFluxo({
                   </span>
                 </div>
               </div>
+
+              {/* Os LIMITES, à vista. Antes viviam só dentro do "Avançado", como
+                  números soltos: um teto de custo de US$ 0,50 derrubou uma aprovação
+                  em 14/09/2026 e ninguém sabia que ele existia. */}
+              {limites.length > 0 && (
+                <div className="mt-3 flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3 text-[13px] text-foreground">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Gauge className="size-3.5" /> Limites deste fluxo
+                  </div>
+                  <ul className="flex list-disc flex-col gap-1 pl-4">
+                    {limites.map((l) => (
+                      <li key={l}>{l}</li>
+                    ))}
+                  </ul>
+                  <p className="text-[11px] text-muted-foreground">
+                    Todos são ajustáveis no “Avançado” abaixo
+                    {ondeMudar ? ` (${ondeMudar})` : ""}. Quando um deles é atingido, o
+                    agente avisa quem está esperando e o fluxo segue — nada fica parado
+                    em silêncio.
+                  </p>
+                </div>
+              )}
 
               <button
                 type="button"

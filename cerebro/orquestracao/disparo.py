@@ -23,7 +23,7 @@ from orquestracao import atividade
 from orquestracao import circuito
 from orquestracao import ficha as ficha_mod
 from orquestracao import grafo
-from orquestracao.cadeia import executar_cadeia
+from orquestracao.cadeia import MAX_PASSOS, executar_cadeia
 from orquestracao.llm import usar_chaves
 from orquestracao.modelos_ia import provedor_do_modelo_seguro
 from sessao import CriadorDeSessao
@@ -156,6 +156,21 @@ def _teto_de_custo(automacao: Automacao | None) -> float:
         return float(config_da_automacao(automacao).get("teto_usd_execucao") or 0.0)
     except (TypeError, ValueError):
         return 0.0  # valor estragado na config não pode derrubar a execução
+
+
+def _teto_de_passos(automacao: Automacao | None) -> int:
+    """O nº máximo de passos por execução deste fluxo. Mesma cascata do resto.
+
+    Era o fixo `cadeia.MAX_PASSOS` (25): um limite real, que interrompe a execução, e
+    que nenhuma tela mostrava nem ninguém podia mudar. Lei do maestro (2026-09-14):
+    todo limite é configurável e aparece no painel do fluxo."""
+    from mensageria.config import config_da_automacao
+
+    try:
+        valor = int(config_da_automacao(automacao).get("max_passos") or 0)
+    except (TypeError, ValueError):
+        return MAX_PASSOS  # valor estragado na config não pode derrubar a execução
+    return valor if valor > 0 else MAX_PASSOS
 
 
 def _tetos_de_tempo(automacao: Automacao | None) -> tuple[int, int]:
@@ -497,6 +512,7 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
                     # Teto de custo do fluxo (Onda 4, fatia 4). Zero = sem teto, que
                     # é o padrão. O já gasto vem dos passos: numa re-rodada do zero
                     # não há nenhum, mas a fonte é a mesma da retomada — uma conta só.
+                    max_passos=_teto_de_passos(automacao),
                     teto_usd=_teto_de_custo(automacao),
                     custo_inicial=custo_ja_gasto(sessao, execucao.id),
                     # Tetos de TEMPO do fluxo (Onda 3, fatia 2). Zero = sem teto.

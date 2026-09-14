@@ -540,27 +540,61 @@ def test_canal_turno_vazio_nao_fica_aberto_pra_sempre(sessao, dados, monkeypatch
     assert conv.aguardando_ate is not None
 
 
-def test_canal_teto_passa_humano_e_cancela_execucao(sessao, dados, monkeypatch):
+def test_canal_limite_de_rodadas_nao_mata_o_canal_e_roteia(sessao, dados, monkeypatch):
+    """Atingido o limite de idas-e-vindas do portão, o canal NÃO emudece.
+
+    Era o defeito de 2026-09-14: o teto passava a conversa para `humano_assumiu`, e
+    nesse estado toda resposta do contato era engolida — o Batuta seguia MANDANDO
+    pedidos de aprovação por um canal em que já não escutava. Agora vale a mesma régua
+    da tela: o agente explica o que houve e a resposta segue pelo caminho mecânico."""
     enviados = []
-    # ajuste explícito: abandono do portão = cancelar (o default agora é estacionar)
     canal, ag, auto, execucao = _setup_canal(
         sessao, dados, monkeypatch, enviados,
-        configuracao={"ajustes": {"portao_acao_abandono": "cancelar"}},
+        configuracao={"ajustes": {"portao_max_rodadas": 1}},  # já estourado (1 passo)
     )
     conv = _conv(sessao, execucao.id)
-    conv.custo_acumulado_usd = 999  # estoura o teto
-    sessao.commit()
 
     def explode(*a, **k):
-        raise AssertionError("não devia rodar o agente após o teto")
+        raise AssertionError("no limite, o agente do portão não re-roda")
     monkeypatch.setattr(servico, "executar_agente", explode)
+    monkeypatch.setattr(
+        "mensageria.retoma._escolher_saida",
+        lambda resp, saidas: ({"rotulo": "aprovado", "destino": "fim"}, {}),
+    )
 
-    _responder(sessao, canal, "reprovado")
+    _responder(sessao, canal, "aprovado")
 
     sessao.refresh(conv)
     sessao.refresh(execucao)
-    assert conv.estado == "humano_assumiu"
-    assert execucao.estado == "cancelada"  # abandono → cancelar (perfil interno)
+    assert conv.estado != "humano_assumiu"  # o canal continua ouvindo
+    assert execucao.estado == "concluida"  # a resposta andou pelo caminho mecânico
+    # E a pessoa foi informada do QUE aconteceu e de ONDE se muda o número.
+    aviso = next(t for t in enviados if "limite" in t.lower())
+    assert "idas-e-vindas" in aviso and "batuta.team" in aviso
+    assert "Configurações do fluxo" in aviso
+
+
+def test_canal_teto_de_custo_nao_conta_trabalho_de_instrumento(sessao, dados, monkeypatch):
+    """Gerar imagem não estoura o teto da CONVERSA. Foi a causa raiz do incidente: três
+    imagens de um carrossel (US$ 0,167 cada) batiam os US$ 0,50 do perfil e derrubavam o
+    canal. Trabalho de instrumento é do fluxo (`teto_usd_execucao`), não da conversa."""
+    enviados = []
+    canal, ag, auto, execucao = _setup_canal(
+        sessao, dados, monkeypatch, enviados,
+        configuracao={"ajustes": {"teto_usd": 0.5}},
+    )
+    conv = _conv(sessao, execucao.id)
+    # O total honesto da conversa já passa do teto — mas é tudo trabalho de instrumento.
+    conv.custo_acumulado_usd = 999
+    sessao.commit()
+    _mock_servico_agente(monkeypatch, ramo="aprovado", saida="Aprovado.")
+
+    _responder(sessao, canal, "aprovado")
+
+    sessao.refresh(conv)
+    sessao.refresh(execucao)
+    assert conv.estado != "humano_assumiu"
+    assert execucao.estado == "concluida"  # o agente conduziu normalmente
 
 
 def test_canal_portao_direto_roteia_mecanico(sessao, dados, monkeypatch):
@@ -808,3 +842,191 @@ def test_vincular_pausa_avisar_e_a_prova_de_falha(sessao, dados, monkeypatch):
     ).all()
     aviso = next(m for m in msgs if (m.midia or {}).get("tipo") == "aviso_portao")
     assert aviso.entregue is False
+
+
+# ── As três leis de 2026-09-14 (incidente da execução 3a1edfd6) ────────────────
+# 1. Todo limite é configurável e se explica quando dispara.
+# 2. Pedido de aprovação novo = a conversa voltou → o bot lê a resposta.
+# 3. Nenhum estado fica sem vigia; ninguém espera em silêncio.
+
+
+def test_portao_novo_religa_conversa_transferida(sessao, dados, monkeypatch):
+    """Lei nº 2 do maestro: "se o agente mandou uma aprovação depois que a mensageria
+    passou pra um humano, quer dizer que a conversa voltou, então ele tem que ler a
+    resposta". Antes, `vincular_pausa` mantinha `humano_assumiu` e o pedido saía por um
+    canal surdo — foi assim que o Gerador Story 9:16 pediu aprovação no Telegram e as
+    três respostas do maestro foram engolidas."""
+    canal = _canal(sessao, dados)
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal)
+    execucao = _exec_pausada(sessao, auto, ag)
+    aprovacao.vincular_pausa(sessao, execucao)
+    conv = _conv(sessao, execucao.id)
+    # O bot tinha entregado a conversa sozinho (teto atingido): sem operador atribuído.
+    conv.estado = "humano_assumiu"
+    conv.atribuida_a = None
+    sessao.commit()
+
+    # Um pedido de aprovação NOVO chega neste mesmo canal.
+    aprovacao.vincular_pausa(sessao, execucao)
+    sessao.refresh(conv)
+
+    assert conv.estado == "aguardando_resposta"  # a conversa voltou ao bot
+
+
+def test_portao_novo_respeita_operador_que_assumiu(sessao, dados, monkeypatch):
+    """A exceção da lei nº 2: quando uma PESSOA assumiu de propósito (`atribuida_a`),
+    o portão não arranca a conversa dela no meio — a aprovação segue pela tela."""
+    canal = _canal(sessao, dados)
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal)
+    execucao = _exec_pausada(sessao, auto, ag)
+    aprovacao.vincular_pausa(sessao, execucao)
+    conv = _conv(sessao, execucao.id)
+    conv.estado = "humano_assumiu"
+    conv.atribuida_a = dados["operador"].id
+    sessao.commit()
+
+    aprovacao.vincular_pausa(sessao, execucao)
+    sessao.refresh(conv)
+
+    assert conv.estado == "humano_assumiu"
+
+
+def test_resposta_a_portao_pendente_sempre_e_lida(sessao, dados, monkeypatch):
+    """Lei nº 2, a segunda trava: mesmo que a conversa tenha sido transferida, se há
+    um portão esperando a resposta DESTE contato, a resposta é processada.
+
+    Sem isto, a mensagem era gravada no banco e nunca lida — o modo de falha mais
+    cruel, porque tudo parecia normal nas duas pontas."""
+    canal = _canal(sessao, dados)
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal)
+    execucao = _exec_pausada(sessao, auto, ag)
+    aprovacao.vincular_pausa(sessao, execucao)
+    conv = _conv(sessao, execucao.id)
+    conv.estado = "humano_assumiu"
+    conv.atribuida_a = None
+    sessao.commit()
+
+    _, deve = servico.registrar_entrada(
+        sessao, canal,
+        telegram.MensagemEntrante(
+            contato_chave="555", contato_nome="Chefe", texto="Aprovado", midia=None
+        ),
+    )
+    assert deve is True  # a resposta do aprovador NÃO é mais engolida
+
+
+def test_vigia_devolve_conversa_que_ninguem_assumiu(sessao, dados, monkeypatch):
+    """Lei nº 3: `humano_assumiu` era o único estado de conversa sem vigia — e por isso
+    o pior. Se ninguém pegou a conversa dentro do prazo do fluxo, ela volta ao bot, com
+    aviso honesto a quem estava esperando e evento no banco de logs."""
+    from mensageria import sweeper
+
+    enviados = []
+    canal, ag, auto, execucao = _setup_canal(sessao, dados, monkeypatch, enviados)
+    conv = _conv(sessao, execucao.id)
+    conv.estado = "humano_assumiu"
+    conv.atribuida_a = None
+    conv.atualizado_em = datetime.now(timezone.utc) - timedelta(hours=5)
+    sessao.commit()
+
+    assert sweeper.varrer_transferidas(sessao) == 1
+    sessao.refresh(conv)
+    assert conv.estado == "aguardando_resposta"
+    assert conv.aguardando_ate is not None  # volta ao relógio normal do sweeper
+    assert any("aprovação continua pendente" in t for t in enviados)
+
+
+def test_vigia_nao_toca_conversa_de_operador(sessao, dados, monkeypatch):
+    """O vigia devolve só a transferência AUTOMÁTICA. Conversa que uma pessoa assumiu
+    é dela — quem devolve é o botão."""
+    from mensageria import sweeper
+
+    enviados = []
+    canal, ag, auto, execucao = _setup_canal(sessao, dados, monkeypatch, enviados)
+    conv = _conv(sessao, execucao.id)
+    conv.estado = "humano_assumiu"
+    conv.atribuida_a = dados["operador"].id
+    conv.atualizado_em = datetime.now(timezone.utc) - timedelta(hours=5)
+    sessao.commit()
+
+    assert sweeper.varrer_transferidas(sessao) == 0
+    sessao.refresh(conv)
+    assert conv.estado == "humano_assumiu"
+
+
+def test_proximo_no_recebe_a_decisao_rotulada_como_ja_tomada(sessao, dados, monkeypatch):
+    """A causa do Gerador Enquete não ter feito nada em 2026-09-14.
+
+    O nó seguinte recebia o material + "[Resposta do humano] aprovado" — um texto que
+    termina numa pergunta de aprovação já respondida. O agente seguinte leu aquilo como
+    uma decisão a ENCAMINHAR: chamou `seguir_para('aprovado')` e encerrou sem gerar
+    nada. O rótulo passa a dizer que a decisão é do passo ANTERIOR e já está resolvida.
+
+    E vale nas DUAS superfícies: antes o canal mandava o transcript da conversa e a
+    tela mandava o apresentado — duas verdades para a mesma passagem, e o fluxo se
+    comportava diferente conforme ONDE a aprovação tinha sido dada."""
+    apresentado = "Arte 9:16 pronta.\nImagem: http://x/y.png\nAprovar ou reprovar?"
+    texto = retoma.entrada_retomada(apresentado, "aprovado", proximo_no=True)
+
+    assert apresentado in texto  # o material não se perde
+    assert "[Resposta do humano]" not in texto
+    assert "já tomada" in texto and "passo anterior" in texto
+
+
+def test_canal_e_tela_mandam_a_mesma_coisa_ao_proximo_no(sessao, dados, monkeypatch):
+    """A trava da paridade: se alguém voltar a divergir os dois caminhos, quebra aqui."""
+    enviados = []
+    canal, ag, auto, execucao = _setup_canal(sessao, dados, monkeypatch, enviados)
+    ultimo = sessao.scalars(
+        select(PassoExecucao)
+        .where(PassoExecucao.execucao_id == execucao.id)
+        .order_by(PassoExecucao.ordem.desc())
+    ).first()
+    apresentado = (ultimo.saida or {}).get("texto", "")
+
+    capturado = {}
+
+    def espiar(sessao_, execucao_, **k):
+        capturado["entrada"] = k["entrada_proxima"]
+        return execucao_
+
+    monkeypatch.setattr(servico.retoma, "avancar_apos_gate", espiar)
+    _mock_servico_agente(monkeypatch, ramo="aprovado", saida="Aprovado.")
+
+    _responder(sessao, canal, "aprovado")
+
+    assert capturado["entrada"] == retoma.entrada_retomada(
+        apresentado, "aprovado", proximo_no=True
+    )
+
+
+def test_agente_ve_o_que_aconteceu_na_conversa(sessao, dados, monkeypatch):
+    """Lei nº 3 do maestro: "o agente da conversa tem que saber tudo que acontece".
+
+    No modo memória, a entrada do turno é só a fala nova — e ela filtrava por
+    `papel == 'contato'`. O agente era o único que não ficava sabendo do que tinha
+    acontecido na própria conversa: não via a transferência para um humano, nem a
+    resposta que uma pessoa escreveu pela inbox. Seguia conduzindo às cegas."""
+    canal = _canal(sessao, dados)
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal)
+    execucao = _exec_pausada(sessao, auto, ag)
+    aprovacao.vincular_pausa(sessao, execucao)
+    conv = _conv(sessao, execucao.id)
+    sessao.add_all([
+        MensagemConversa(conversa_id=conv.id, papel="agente", conteudo="Aprova?"),
+        MensagemConversa(conversa_id=conv.id, papel="contato", conteudo="não gostei"),
+        MensagemConversa(conversa_id=conv.id, papel="operador", conteudo="troque a cor"),
+        MensagemConversa(conversa_id=conv.id, papel="sistema", conteudo="Limite atingido."),
+    ])
+    sessao.commit()
+
+    novo = servico._conteudo_novo(sessao, conv)
+
+    assert "não gostei" in novo  # o contato, cru
+    assert "[Operador (humano)] troque a cor" in novo  # rotulado
+    assert "[Sistema] Limite atingido." in novo
+    assert "Aprova?" not in novo  # a própria fala dele, não

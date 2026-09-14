@@ -33,7 +33,14 @@ MSG_FORA_HORARIO_PADRAO = (
     "Olá! No momento estamos fora do horário de atendimento. "
     "Assim que possível retornaremos sua mensagem."
 )
-MSG_LIMITE = "Vou te encaminhar para um atendente humano. Um instante."
+# O bot atingiu um limite da conversa e passa a bola para uma pessoa. O texto diz o
+# que houve e o que acontece agora — o antigo "Vou te encaminhar para um atendente
+# humano. Um instante." escondia o motivo e prometia um "instante" que ninguém cumpria.
+MSG_LIMITE = (
+    "Esta conversa atingiu o limite configurado de atendimento automático, então vou "
+    "passá-la para uma pessoa da equipe. Nada do que você escreveu se perdeu — está "
+    "tudo registrado aqui e alguém retoma a partir do ponto em que paramos."
+)
 NUDGE_MSG = "Ainda está por aí? Se precisar de algo, é só me escrever."
 DESPEDIDA_MSG = (
     "Vou encerrar por aqui por enquanto. Quando precisar, é só mandar uma mensagem."
@@ -73,6 +80,17 @@ TURNO_PRESO_MSG = (
     "⚠️ Tive uma falha interna e não consegui concluir a resposta à sua última mensagem. "
     "Pode reenviá-la, por favor?"
 )
+# A conversa tinha sido passada para uma pessoa e ninguém assumiu: o vigia
+# (`sweeper.varrer_transferidas`) devolve ao bot. Honesto nas duas pontas — diz que
+# ninguém veio e que o atendimento continua, em vez de deixar o contato no vácuo.
+DEVOLVIDA_AO_BOT_MSG = (
+    "Desculpe a demora — ninguém da equipe conseguiu assumir esta conversa a tempo, "
+    "então volto a te atender por aqui. Pode seguir de onde paramos."
+)
+DEVOLVIDA_AO_BOT_PORTAO_MSG = (
+    "Desculpe a demora — ninguém da equipe assumiu esta conversa, então volto a te "
+    f"atender por aqui. A aprovação continua pendente: responda por aqui ou no {URL_APP}."
+)
 # O turno FALHOU (a IA não respondeu a tempo, um instrumento estourou). Diferente do turno
 # preso: aqui o Batuta sabe na hora que deu errado, então avisa na hora — em vez de deixar
 # o contato no vácuo esperando uma resposta que não vem.
@@ -92,7 +110,17 @@ GLOBAL: dict = {
     "encerrar_por_inatividade": True,
     # B. Limites da conversa
     "max_turnos": 40,
+    # Teto de custo da CONVERSA: conta a IA que CONVERSA (o turno do agente e a
+    # transcrição de áudio), NÃO o trabalho que ele manda fazer (gerar imagem, vídeo,
+    # PDF). O trabalho é do FLUXO e tem o teto dele (`teto_usd_execucao`) — contar as
+    # duas coisas aqui fazia um único carrossel (3 imagens = US$ 0,50) estourar o teto
+    # de uma conversa inteira na PRIMEIRA reprovação, emudecendo o canal (incidente de
+    # 2026-09-14, execução 3a1edfd6). Uma régua por propósito, sem dupla contagem.
     "teto_usd": 1.0,
+    # Guarda contra laço infinito no motor: nº máximo de passos por EXECUÇÃO (a conta
+    # soma as retomadas). Era o fixo `cadeia.MAX_PASSOS` — um teto que ninguém via nem
+    # podia mudar. Todo limite do Batuta é configurável e aparece no resumo do fluxo.
+    "max_passos": 25,
     # B2. Limite da EXECUÇÃO (Onda 4, fatia 4). Irmão do `teto_usd`, que vale por
     # CONVERSA: este vale por execução de automação, somando as retomadas. Zero =
     # DESLIGADO, e é o padrão de propósito — a fatia é opcional, e um teto ligado sem
@@ -123,7 +151,17 @@ GLOBAL: dict = {
     # resolve); `cancelar` = encerra a execução. (Antes havia uma 2ª chave só no sweeper,
     # `acao_ao_encerrar`, que podia divergir desta — unificadas.)
     "portao_acao_abandono": "estacionar",
+    # Idas-e-vindas de UM portão (apresentar + cada volta com feedback). Vale nas DUAS
+    # superfícies — tela e canal. Antes o canal usava outra régua (`max_turnos`/`teto_usd`
+    # da conversa inteira): duas fontes de verdade para a mesma regra, que é a receita
+    # de bug recorrente — e foi o que estourou em 2026-09-14.
     "portao_max_rodadas": 8,
+    # E. Vigia de turno preso (§12-A). Eram fixos no `sweeper`: quanto tempo um turno
+    # pode ficar "rodando" antes de o vigia declarar que morreu, avisar a pessoa e
+    # destravar a conversa. Dois valores porque os casos legítimos são diferentes —
+    # atendimento responde rápido; retomada de fluxo pode demorar.
+    "teto_turno_preso_min": 8,
+    "teto_turno_preso_portao_min": 30,
 }
 # (Fatia 3) As chaves MORTAS `max_passos`, `modelo_roteador` e `acao_ao_estourar`
 # saíram: nunca eram lidas — o motor usa o fixo `MAX_PASSOS` (cadeia.py) e o roteador
@@ -193,11 +231,22 @@ CAMPOS = [
     ]},
     {"grupo": "Limites da conversa", "campos": [
         {"chave": "max_turnos", "rotulo": "Máx. de mensagens por conversa", "tipo": "int"},
-        {"chave": "teto_usd", "rotulo": "Teto de custo de IA por conversa", "tipo": "valor", "sufixo": "US$"},
+        {"chave": "teto_usd",
+         "rotulo": "Teto de custo da conversa — só a IA que conversa",
+         "tipo": "valor", "sufixo": "US$"},
+        {"chave": "teto_turno_preso_min",
+         "rotulo": "Tempo até declarar um turno travado (atendimento)",
+         "tipo": "int", "sufixo": "min"},
+        {"chave": "teto_turno_preso_portao_min",
+         "rotulo": "Tempo até declarar um turno travado (aprovação)",
+         "tipo": "int", "sufixo": "min"},
     ]},
     {"grupo": "Limites da execução", "campos": [
+        {"chave": "max_passos",
+         "rotulo": "Máx. de passos de uma execução",
+         "tipo": "int"},
         {"chave": "teto_usd_execucao",
-         "rotulo": "Teto de custo por execução (0 = sem teto)",
+         "rotulo": "Teto de custo por execução — inclui imagem/vídeo (0 = sem teto)",
          "tipo": "valor", "sufixo": "US$"},
         {"chave": "teto_min_passo",
          "rotulo": "Tempo máximo de um passo (0 = sem teto)",
@@ -217,7 +266,7 @@ CAMPOS = [
     {"grupo": "Aprovação humana", "campos": [
         {"chave": "portao_forma", "rotulo": "Como o agente conduz a aprovação", "tipo": "escolha"},
         {"chave": "portao_acao_abandono", "rotulo": "Se o aprovador abandona a conversa", "tipo": "escolha"},
-        {"chave": "portao_max_rodadas", "rotulo": "Máx. de idas-e-vindas na aprovação (tela)", "tipo": "int"},
+        {"chave": "portao_max_rodadas", "rotulo": "Máx. de idas-e-vindas na aprovação", "tipo": "int"},
     ]},
 ]
 
@@ -227,7 +276,15 @@ def painel_config() -> dict:
     única): os perfis (com os defaults que cada um aplica), os grupos de botões e o
     padrão global. O front não duplica rótulos/valores."""
     perfis = [
-        {"id": pid, "rotulo": PERFIS_ROTULOS.get(pid, pid), "defaults": _mesclar(GLOBAL, PERFIS.get(pid))}
+        {
+            "id": pid,
+            "rotulo": PERFIS_ROTULOS.get(pid, pid),
+            "defaults": _mesclar(GLOBAL, PERFIS.get(pid)),
+            # Os limites deste perfil em português, para a tela mostrar SEM o usuário
+            # ter de abrir o "Avançado" e interpretar números soltos. Lei do maestro:
+            # nenhum teto pode existir sem a pessoa saber que existe e onde fica.
+            "limites": resumo_dos_limites(_mesclar(GLOBAL, PERFIS.get(pid))),
+        }
         for pid in PERFIS
     ]
     grupos = []
@@ -240,7 +297,13 @@ def painel_config() -> dict:
             c["padrao"] = GLOBAL.get(c["chave"])
             campos.append(c)
         grupos.append({"grupo": g["grupo"], "campos": campos})
-    return {"perfis": perfis, "grupos": grupos, "padrao_global": dict(GLOBAL)}
+    return {
+        "perfis": perfis,
+        "grupos": grupos,
+        "padrao_global": dict(GLOBAL),
+        "limites_padrao": resumo_dos_limites(GLOBAL),
+        "onde_mudar": ONDE_MUDAR,
+    }
 
 
 def _mesclar(base: dict, extra: dict | None) -> dict:
@@ -338,3 +401,93 @@ def complemento_nudge_portao(conf: dict) -> str:
         f"\n\n(Sem resposta, encerro em ~{y} min — a aprovação segue no {URL_APP}. "
         f"Ou responda *cancelar* para encerrar o fluxo.)"
     )
+
+
+# ── Limites: nenhum teto secreto ───────────────────────────────────────────────
+# Lei do maestro (2026-09-14): "todo tipo de limitação tem que ser CONFIGURÁVEL, não
+# dá pra ter um teto e a gente nem sabe onde isso fica". Então TODO limite (a) mora na
+# cascata acima, (b) aparece na tela em português, e (c) quando dispara, se explica —
+# dizendo qual foi, quanto valia e onde se muda. Estas três funções são a fonte única
+# desses textos: a tela, o recado ao humano e o rastro leem daqui.
+
+# Onde o consultor muda qualquer um destes números (uma frase só, reusada).
+ONDE_MUDAR = (
+    "Construtor da automação → Configurações do fluxo → Avançado"
+)
+
+
+def resumo_dos_limites(conf: dict) -> list[str]:
+    """Os limites EFETIVOS deste fluxo, em português claro — um item por limite.
+
+    Serve ao painel (o consultor lê sem abrir o 'Avançado') e ao recado honesto. Zero
+    em teto de custo/tempo significa DESLIGADO, e isso é dito com todas as letras em
+    vez de mostrar um "0" que ninguém interpreta."""
+
+    def _n(chave: str, padrao=0):
+        try:
+            return type(padrao)(conf.get(chave, padrao) or padrao)
+        except (TypeError, ValueError):
+            return padrao
+
+    def _teto(valor, texto: str) -> str:
+        return texto if valor else "sem teto"
+
+    usd_conversa = float(_n("teto_usd", 0.0))
+    usd_exec = float(_n("teto_usd_execucao", 0.0))
+    min_passo = int(_n("teto_min_passo", 0))
+    min_exec = int(_n("teto_min_execucao", 0))
+    execucao = [f"até {int(_n('max_passos', 25))} passos"]
+    if usd_exec:
+        execucao.append(f"US$ {usd_exec:.2f} de custo (inclui imagem e vídeo)")
+    if min_exec:
+        execucao.append(f"{min_exec} min de duração")
+    if min_passo:
+        execucao.append(f"{min_passo} min por passo")
+    if not (usd_exec or min_exec or min_passo):
+        execucao.append("sem teto de custo nem de tempo")
+    return [
+        f"Aprovação: até {int(_n('portao_max_rodadas', 8))} idas-e-vindas por portão; "
+        "passado isso, a resposta segue direto pelo caminho que ela indicar.",
+        f"Conversa: até {int(_n('max_turnos', 40))} mensagens e "
+        f"{_teto(usd_conversa, f'US$ {usd_conversa:.2f}')} de IA de conversa "
+        "(gerar imagem/vídeo não conta aqui — conta no teto da execução).",
+        "Execução: " + ", ".join(execucao) + ".",
+        f"Turno travado: o vigia destrava e avisa em {int(_n('teto_turno_preso_min', 8))} min "
+        f"(atendimento) ou {int(_n('teto_turno_preso_portao_min', 30))} min (aprovação).",
+    ]
+
+
+# Os limites que podem interromper uma aprovação em andamento, com o nome que a
+# pessoa entende e a chave que ela procura na tela. Fonte única do recado e do rastro.
+LIMITES_DO_PORTAO = {
+    "rodadas": ("idas-e-vindas desta aprovação", "portao_max_rodadas"),
+    "custo": ("custo de IA desta conversa", "teto_usd"),
+    "mensagens": ("mensagens desta conversa", "max_turnos"),
+}
+
+
+def explicacao_limite_portao(qual: str, conf: dict, *, valor_atual: str) -> str:
+    """O recado HONESTO quando um limite interrompe a condução de uma aprovação.
+
+    Substitui o antigo "Vou te encaminhar para um atendente humano. Um instante." —
+    que não dizia o que tinha acontecido, não dizia o que fazer, e (pior) vinha junto
+    com o canal ficando surdo. Diz as quatro coisas que importam: o QUE acabou, QUANTO
+    valia, que o trabalho NÃO se perdeu, e ONDE se muda o número."""
+    rotulo, chave = LIMITES_DO_PORTAO.get(qual, (qual, qual))
+    return (
+        f"Atingi o limite de {rotulo} ({valor_atual}), então não vou continuar "
+        f"refazendo o material nesta conversa.\n\n"
+        f"Nada se perdeu: sua última resposta vale e o fluxo segue por ela. Se quiser "
+        f"rever o material inteiro ou responder com calma, ele está em {URL_APP}.\n\n"
+        f"Para mudar esse limite: {ONDE_MUDAR} → “{_rotulo_do_campo(chave)}”."
+    )
+
+
+def _rotulo_do_campo(chave: str) -> str:
+    """O rótulo que a tela mostra para esta chave (para o recado apontar o botão pelo
+    nome que a pessoa vê, não pelo nome técnico)."""
+    for grupo in CAMPOS:
+        for campo in grupo["campos"]:
+            if campo["chave"] == chave:
+                return campo["rotulo"]
+    return chave

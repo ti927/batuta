@@ -31,6 +31,7 @@ from orquestracao.disparo import (
     _esta_cancelada,
     _fazer_registrador,
     _teto_de_custo,
+    _teto_de_passos,
     _tetos_de_tempo,
     custo_ja_gasto,
     tempo_ja_trabalhado_s,
@@ -42,9 +43,23 @@ from orquestracao.llm import usar_chaves
 MAX_RODADAS_GATE = 8
 
 
-def entrada_retomada(saida_pausada: str, resposta: str) -> str:
-    """A entrada do próximo nó ao retomar uma pausa: o trabalho que o agente
-    produziu + a decisão/feedback do humano, separados e rotulados."""
+def entrada_retomada(saida_pausada: str, resposta: str, *, proximo_no: bool = False) -> str:
+    """A entrada ao retomar uma pausa: o trabalho que o agente produziu + a
+    decisão/feedback do humano, separados e rotulados.
+
+    `proximo_no=True` é o texto que desce para o PRÓXIMO nó, e aí o rótulo muda: ele
+    diz que a decisão é do passo ANTERIOR e já está resolvida. Sem essa distinção, o
+    agente seguinte recebia um texto que terminava em "Aprovar ou reprovar a arte?" +
+    "[Resposta do humano] aprovado" e lia aquilo como uma decisão a encaminhar — foi o
+    que aconteceu em 2026-09-14: o Gerador Enquete chamou `seguir_para('aprovado')` e
+    encerrou sem gerar nada, achando que a aprovação pendente era a dele. O rótulo é
+    DESCRITIVO (diz o que o texto é), não uma instrução de comportamento — o que o
+    agente faz continua vindo só dos markdowns dele."""
+    if proximo_no:
+        return (
+            f"{saida_pausada}\n\n---\n"
+            f"[Decisão já tomada sobre o material acima, no passo anterior]\n{resposta}"
+        )
     return f"{saida_pausada}\n\n---\n[Resposta do humano]\n{resposta}"
 
 
@@ -147,6 +162,9 @@ def avancar_apos_gate(
                 # transcript da conversa de aprovação.
                 ficha=dict(execucao.dados or {}),
                 ordem_inicial=ordem_inicial,
+                # Teto de PASSOS do fluxo, configurável como todo limite. A conta
+                # soma as retomadas (`ordem_inicial` carrega o que já rodou).
+                max_passos=_teto_de_passos(auto_da_execucao),
                 # O teto de custo vale por EXECUÇÃO e atravessa a espera: o já gasto
                 # antes da aprovação continua contando (Onda 4, fatia 4). Sem isto,
                 # uma execução que para duas vezes gastaria o teto três vezes.
@@ -247,7 +265,9 @@ def retomar_execucao(
     else:
         with usar_chaves(chaves):
             escolhida, _ = _escolher_saida(resposta, saidas)
-    entrada_proxima = entrada_retomada((ultimo.saida or {}).get("texto", ""), resposta)
+    entrada_proxima = entrada_retomada(
+        (ultimo.saida or {}).get("texto", ""), resposta, proximo_no=True
+    )
     return avancar_apos_gate(
         sessao, execucao, idx=idx, cadeia=cadeia,
         escolhidas=[escolhida] if escolhida else [],
@@ -372,6 +392,6 @@ def _retomar_conversando_tela(
     apresentado_aprovado = (ultimo.saida or {}).get("texto", "")
     return avancar_apos_gate(
         sessao, execucao, idx=idx, cadeia=cadeia, escolhidas=escolhidas,
-        entrada_proxima=entrada_retomada(apresentado_aprovado, resposta),
+        entrada_proxima=entrada_retomada(apresentado_aprovado, resposta, proximo_no=True),
         ordem_inicial=ordem, chaves=chaves, origens=origens,
     )

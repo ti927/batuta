@@ -199,6 +199,18 @@ async def diagnosticar_execucao(execucao_id: str) -> str:
     ENTRE ações (a chamada em andamento termina), e o da execução conta tempo de TRABALHO —
     a espera por uma aprovação humana não consome o teto.
 
+    Se o rastro mostrar que uma APROVAÇÃO atingiu o limite de idas-e-vindas (evento
+    `portao.limite_atingido`), também não é bug e o fluxo NÃO ficou parado: passado o teto
+    (*Máx. de idas-e-vindas na aprovação*, 8 por padrão), o agente avisa a pessoa e a
+    resposta dela segue direto pelo caminho que indicar. O canal continua funcionando —
+    não diga que a conversa morreu nem mande reiniciar. Se o consultor precisa de mais
+    rodadas de ajuste, o número é dele: Fluxo › Aprovação humana.
+
+    ATENÇÃO a uma confusão comum: o teto de custo da CONVERSA não conta geração de imagem
+    ou vídeo — isso é trabalho do fluxo e responde ao teto por EXECUÇÃO. Se o consultor
+    disser que "o carrossel estourou o teto da conversa", o dado está errado (era assim
+    até 2026-09-14, e era justamente o defeito).
+
     NEM TODA EXECUÇÃO PARADA ESTÁ COM PROBLEMA. São TRÊS as pausas legítimas, e só a
     primeira pede algo de alguém:
     - `aguardando_humano` — o agente chamou `pedir_aprovacao` e espera uma pessoa.

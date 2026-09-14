@@ -665,11 +665,16 @@ export type PerfilFluxo = {
   id: string;
   rotulo: string;
   defaults: Record<string, unknown>;
+  // Os limites deste perfil em português (fonte única no backend). A tela mostra
+  // sem o usuário abrir o "Avançado": nenhum teto pode existir sem ele saber.
+  limites: string[];
 };
 export type PainelConfigFluxo = {
   perfis: PerfilFluxo[];
   grupos: { grupo: string; campos: CampoConfigFluxo[] }[];
   padrao_global: Record<string, unknown>;
+  limites_padrao: string[];
+  onde_mudar: string;
 };
 
 export type UsoChamada = {

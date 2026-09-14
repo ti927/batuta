@@ -18,6 +18,8 @@ from mensageria.config import (  # noqa: F401 (compat sweeper.X)
     DESPEDIDA_MSG,
     DESPEDIDA_PORTAO_CANCELA_MSG,
     DESPEDIDA_PORTAO_MSG,
+    DEVOLVIDA_AO_BOT_MSG,
+    DEVOLVIDA_AO_BOT_PORTAO_MSG,
     NUDGE_MSG,
     TETO_TURNO_PRESO_MIN,
     TETO_TURNO_PRESO_PORTAO_MIN,
@@ -141,21 +143,35 @@ def varrer_turnos_presos(sessao: Session) -> int:
     O portão NÃO é resolvido aqui: a execução segue `aguardando_humano` e retomável
     (por resposta tardia no canal ou pela tela) — só a conversa é destravada."""
     agora = datetime.now(timezone.utc)
-    # Busca pelo teto MENOR (atendimento); o teto maior do portão é aplicado por
-    # conversa logo abaixo (a retomada de fluxo pode legitimamente demorar mais).
-    limite = agora - timedelta(minutes=TETO_TURNO_PRESO_MIN)
-    limite_portao = agora - timedelta(minutes=TETO_TURNO_PRESO_PORTAO_MIN)
+    # Traz TODA conversa em `bot_respondendo` (estado transitório, são poucas) e aplica
+    # o teto DESTE fluxo a cada uma. Antes o corte vinha de duas constantes fixas no
+    # módulo: além de invisíveis (lei do maestro — não existe teto secreto), um corte
+    # global na consulta ignoraria um fluxo que configurasse um teto MENOR.
     candidatas = sessao.scalars(
         select(Conversa).where(
             Conversa.estado == "bot_respondendo",
             Conversa.ultima_entrada_em.is_not(None),
-            Conversa.ultima_entrada_em <= limite,
         )
     ).all()
+
+    def _teto_min(conversa: Conversa) -> int:
+        conf = resolver_config(sessao, conversa)
+        chave = (
+            "teto_turno_preso_portao_min" if conversa.execucao_id
+            else "teto_turno_preso_min"
+        )
+        padrao = (
+            TETO_TURNO_PRESO_PORTAO_MIN if conversa.execucao_id else TETO_TURNO_PRESO_MIN
+        )
+        try:
+            return max(1, int(conf.get(chave) or padrao))
+        except (TypeError, ValueError):
+            return padrao  # valor estragado na config não pode cegar o vigia
+
     presas = [
         c
         for c in candidatas
-        if not c.execucao_id or c.ultima_entrada_em <= limite_portao
+        if agora - c.ultima_entrada_em >= timedelta(minutes=_teto_min(c))
     ]
     for conversa in presas:
         parado_min = int((agora - conversa.ultima_entrada_em).total_seconds() // 60)
@@ -196,6 +212,76 @@ def varrer_turnos_presos(sessao: Session) -> int:
     return len(presas)
 
 
+def varrer_transferidas(sessao: Session) -> int:
+    """Devolve ao bot a conversa que foi transferida AUTOMATICAMENTE e ninguém pegou.
+
+    `humano_assumiu` era o único estado de conversa sem vigia — e por isso o pior. Uma
+    conversa que o bot entregou sozinho (teto atingido) ficava ali PARA SEMPRE: nenhuma
+    varredura olhava para ela e `servico.registrar_entrada` engolia calada toda mensagem
+    do contato, inclusive a resposta de uma aprovação pendente. Em 2026-09-14 foi
+    exatamente isso: o Batuta continuou mandando pedidos de aprovação por um canal em
+    que já não escutava, e só o maestro percebeu — pela tela, no braço.
+
+    Regra: se NINGUÉM assumiu de fato (`atribuida_a` nulo) e o silêncio do operador
+    passou do prazo do fluxo, a conversa volta para o bot (`aguardando_resposta`), com
+    evento no banco de logs e aviso honesto a quem estava esperando. Conversa que uma
+    PESSOA assumiu de propósito não é tocada — quem devolve é o botão `/devolver`."""
+    agora = datetime.now(timezone.utc)
+    candidatas = sessao.scalars(
+        select(Conversa).where(
+            Conversa.estado == "humano_assumiu",
+            Conversa.atribuida_a.is_(None),
+        )
+    ).all()
+    devolvidas = 0
+    for conversa in candidatas:
+        conf = resolver_config(sessao, conversa)
+        execucao = (
+            sessao.get(Execucao, conversa.execucao_id) if conversa.execucao_id else None
+        )
+        if execucao is not None:
+            conf = com_ajuste_do_no(conf, aprovacao.no_pausado(sessao, execucao))
+        # O prazo é o mesmo "tempo até cutucar quem some" do fluxo: se um operador não
+        # apareceu nesse tempo, ninguém vai aparecer. Configurável como todo limite.
+        prazo = timedelta(minutes=int(conf["timeout_min"]))
+        desde = conversa.atualizado_em or conversa.criado_em
+        if desde is None or agora - desde < prazo:
+            continue
+        portao = execucao is not None and execucao.estado == "aguardando_humano"
+        instrumento = sessao.get(Instrumento, conversa.instrumento_id)
+        token = (
+            segredos_instrumento.decifrar(sessao, instrumento.id).get("token_bot")
+            if instrumento
+            else None
+        )
+        msg = DEVOLVIDA_AO_BOT_PORTAO_MSG if portao else DEVOLVIDA_AO_BOT_MSG
+        entregue = _enviar(token, conversa.contato_chave, msg)
+        _registrar(sessao, conversa, msg, entregue)
+        conversa.estado = "aguardando_resposta"
+        conversa.nudge_enviado = False
+        conversa.aguardando_ate = agora + timedelta(minutes=int(conf["timeout_min"]))
+        devolvidas += 1
+        registrar_evento(
+            categoria="mensageria",
+            acao="conversa.devolvida_ao_bot",
+            nivel="warning",
+            persistir=True,
+            recurso_tipo="conversa",
+            recurso_id=conversa.id,
+            detalhe={
+                "parada_min": int((agora - desde).total_seconds() // 60),
+                "canal": conversa.canal,
+                "portao": portao,
+                "execucao_id": str(conversa.execucao_id) if conversa.execucao_id else None,
+                "aviso_entregue": entregue,
+                "efeito": "nenhum operador assumiu; a conversa voltou a ser atendida",
+            },
+        )
+    if devolvidas:
+        sessao.commit()
+    return devolvidas
+
+
 # Heartbeat do vigia (lido pela sonda `vigia_mensageria` do `saude_elos`): quando a
 # última varredura completou. None = ainda não varreu desde o boot. Sem isto, um job
 # morto no agendador deixaria as conversas sem vigia EM SILÊNCIO — exatamente a
@@ -210,6 +296,7 @@ def varrer_job() -> None:
     try:
         varrer(sessao)
         varrer_turnos_presos(sessao)
+        varrer_transferidas(sessao)
         ULTIMA_VARREDURA_EM = datetime.now(timezone.utc)
     finally:
         sessao.close()

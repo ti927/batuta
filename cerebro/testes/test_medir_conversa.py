@@ -108,9 +108,14 @@ def test_medir_bate_com_o_contador_em_chat_puro(sessao, dados, monkeypatch):
 
 
 def test_medir_inclui_custo_alem_do_agente(sessao, dados, monkeypatch):
-    """A correção da Fatia 2: o passo passa a guardar o uso CHEIO do turno (agente +
-    transcrição + visão + instrumento pago). Antes guardava só o do agente, e a medição
-    pela timeline ficaria MENOR que o contador — afrouxando o teto. Prova que batem."""
+    """O passo guarda o uso CHEIO do turno (agente + transcrição + visão + instrumento
+    pago) — é o TOTAL honesto, e é ele que vai para `custo_acumulado_usd`.
+
+    Mas o que `medir_conversa` devolve — a conta que o `teto_usd` vigia — é só a IA de
+    CONVERSA: agente, transcrição e visão. O trabalho de INSTRUMENTO (gerar imagem,
+    vídeo) é do fluxo e tem a régua dele (`teto_usd_execucao`). Contar as duas coisas no
+    mesmo teto fazia um carrossel legítimo (3 imagens = US$ 0,50) estourar o teto da
+    conversa inteira na primeira reprovação — incidente de 2026-09-14."""
     enviados = []
     canal, _ = _setup(sessao, dados, monkeypatch, enviados)
     _mock_agente(monkeypatch, saida="pronto", uso=[{"custo_usd": 0.10}])
@@ -137,8 +142,10 @@ def test_medir_inclui_custo_alem_do_agente(sessao, dados, monkeypatch):
 
     turnos, custo = servico.medir_conversa(sessao, conv)
     assert turnos == conv.turnos == 1
-    # 0.10 + 0.02 + 0.03 + 0.05 — a timeline e o contador chegam ao mesmo custo.
-    assert round(custo, 6) == round(float(conv.custo_acumulado_usd), 6) == 0.20
+    # O TOTAL honesto da conversa soma tudo: 0.10 + 0.02 + 0.03 + 0.05.
+    assert round(float(conv.custo_acumulado_usd), 6) == 0.20
+    # O que o TETO vigia exclui o instrumento (0.05): 0.10 + 0.02 + 0.03.
+    assert round(custo, 6) == 0.15
 
 
 def test_turno_sem_produto_nao_conta(sessao, dados, monkeypatch):

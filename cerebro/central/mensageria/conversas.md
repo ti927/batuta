@@ -28,6 +28,18 @@ conversa e sabe quando chamar uma pessoa. Cada canal tem **um agente atendente**
 - Um bot de atendimento que resolve dúvidas simples e passa para o humano os casos delicados.
 
 ## Limites e cuidados
+- **Todo limite é configurável, e nenhum é secreto.** Teto de mensagens e de custo da conversa, idas-e-
+  vindas de uma aprovação, passos e custo da execução, prazo do vigia de turno travado — todos vivem no
+  mesmo painel (*Configurações do fluxo*), e os números efetivos aparecem em português logo na abertura
+  dele, sem precisar abrir o "Avançado". Quando um limite dispara, o agente **diz qual foi, quanto valia e
+  onde se muda** — e o trabalho não se perde.
+- **Teto de custo da conversa ≠ teto da execução.** O da conversa vigia a IA que conversa (o raciocínio do
+  agente, transcrição de áudio, leitura de imagem). Gerar imagem ou vídeo é trabalho do fluxo e responde ao
+  *Teto de custo por execução*. Contar as duas coisas no mesmo lugar fazia trabalho legítimo parecer abuso.
+- **Conversa passada para um humano não é fim de linha.** Se o bot transferiu sozinho (teto atingido) e
+  ninguém assumiu dentro do prazo, o vigia devolve a conversa ao bot e avisa o contato. E se chega um pedido
+  de **aprovação** novo por aquele canal, ele volta a ouvir na hora. Só a conversa que uma pessoa assumiu de
+  propósito continua com ela, até apertar "devolver".
 - O atendimento tem **regras de borda uniformes**: junta mensagens em rajada (debounce), tem **teto** de
   idas e vindas antes de chamar um humano, **timeout** com aviso de retomada (nudge), proteção contra
   injeção de instruções, transcrição de **áudio** (Whisper) e leitura de **imagem** (visão — o agente

@@ -29,8 +29,10 @@ from chaves import resolver_chaves_por_time
 from mensageria import aprovacao, retoma, telegram, transcricao, visao
 from mensageria.config import (  # MSG_LIMITE: compat servico.X
     FALHA_TURNO_MSG,
+    LIMITES_DO_PORTAO,
     MSG_LIMITE,
     com_ajuste_do_no,
+    explicacao_limite_portao,
     resolver_config,
 )
 from modelos import (
@@ -183,9 +185,17 @@ def _preambulo_sistema(conversa: Conversa, *, gate: bool = False) -> str:
 
 
 def _conteudo_novo(sessao: Session, conversa: Conversa) -> str:
-    """A fala NOVA do turno (modo memória): as mensagens do CONTATO ainda não respondidas —
-    as que chegaram depois do último turno do agente. O resto o agente lembra do fio salvo,
-    então não se reenvia o histórico. Debounce: uma rajada vira várias linhas aqui."""
+    """O que ACONTECEU desde o último turno do agente (modo memória). O resto ele lembra
+    do fio salvo, então não se reenvia o histórico. Debounce: uma rajada vira várias
+    linhas aqui.
+
+    Entra tudo que não é fala do próprio agente: o CONTATO, o OPERADOR humano que
+    respondeu pela inbox e os eventos de SISTEMA (limite atingido, conversa devolvida
+    pelo vigia). Antes só o contato entrava — o agente era o único que não ficava
+    sabendo do que tinha acontecido na própria conversa. Em 2026-09-14 isso significou
+    que ele não viu nem a transferência para um humano nem a mensagem que o maestro
+    escreveu como operador, e seguiu conduzindo às cegas. Cada linha vem rotulada
+    (`_ROTULOS`), igual ao histórico — o agente distingue quem falou."""
     ultimo_agente = sessao.scalars(
         select(MensagemConversa.criado_em)
         .where(MensagemConversa.conversa_id == conversa.id)
@@ -196,12 +206,20 @@ def _conteudo_novo(sessao: Session, conversa: Conversa) -> str:
     q = (
         select(MensagemConversa)
         .where(MensagemConversa.conversa_id == conversa.id)
-        .where(MensagemConversa.papel == "contato")
+        .where(MensagemConversa.papel != "agente")
     )
     if ultimo_agente is not None:
         q = q.where(MensagemConversa.criado_em > ultimo_agente)
     novas = sessao.scalars(q.order_by(MensagemConversa.criado_em)).all()
-    texto = "\n".join((m.conteudo or "") for m in novas).strip()
+    # Só o contato fala "cru": rotular a fala dele mudaria o formato que o agente já
+    # conhece. Operador e sistema vêm rotulados, porque são vozes diferentes da dele.
+    linhas = [
+        (m.conteudo or "")
+        if m.papel == "contato"
+        else f"[{_ROTULOS.get(m.papel, m.papel)}] {m.conteudo or ''}"
+        for m in novas
+    ]
+    texto = "\n".join(linhas).strip()
     # Defensivo: sem fala nova identificável, reconstrói do texto (nunca manda vazio).
     return texto or _historico_texto(sessao, conversa)
 
@@ -272,6 +290,35 @@ def registrar_entrada(
     # Aprovação por canal: se a conversa conduz uma execução pausada, a resposta do
     # contato é a decisão do aprovador (processada como retoma, não conversacional).
     aprovacao_pendente = _execucao_pausada(sessao, conversa) is not None
+
+    # UMA APROVAÇÃO PENDENTE SEMPRE É LIDA. Antes, `humano_assumiu` calava a conversa
+    # para tudo — inclusive para a resposta de um portão que o próprio Batuta acabara de
+    # pedir por este mesmo canal. Em 2026-09-14 isso deixou o maestro respondendo
+    # "Aprovado" no Telegram três vezes, com as mensagens gravadas no banco e nenhuma
+    # lida, enquanto o Batuta seguia mandando pedidos novos pelo canal surdo.
+    #
+    # A regra passa a ser a do maestro: se há um portão esperando a resposta DESTE
+    # contato, a conversa voltou a ser do bot — ele lê. A exceção é a conversa que uma
+    # PESSOA assumiu de propósito (`atribuida_a`): aí quem conduz é ela, e arrancar a
+    # conversa no meio seria pior; o portão segue resolvível pela tela.
+    assumida_por_pessoa = conversa.atribuida_a is not None
+    religou_portao = (
+        conversa.estado == "humano_assumiu"
+        and aprovacao_pendente
+        and not assumida_por_pessoa
+    )
+    if religou_portao:
+        conversa.estado = "aguardando_resposta"
+        registrar_evento(
+            categoria="mensageria", acao="conversa.religada_por_portao", nivel="warning",
+            persistir=True, recurso_tipo="conversa", recurso_id=conversa.id,
+            detalhe={
+                "canal": conversa.canal,
+                "execucao_id": str(conversa.execucao_id) if conversa.execucao_id else None,
+                "efeito": "havia aprovação pendente deste contato; a resposta voltou a ser lida",
+            },
+        )
+
     deve_processar = conversa.estado not in ("humano_assumiu", "fechada") and (
         aprovacao_pendente
         or (conversa.destino_tipo == "agente" and conversa.destino_id is not None)
@@ -304,16 +351,41 @@ def _custo_do_turno(uso: list | None) -> float:
     return sum(precos.custo_de_entrada(e) for e in (uso or []))
 
 
-def _passar_para_humano(sessao: Session, conversa: Conversa, nota: str) -> None:
-    """Tira o bot do comando: a conversa cai na inbox para um operador assumir."""
+def _custo_de_conversa(uso: list | None) -> float:
+    """A parte do turno que é IA DE CONVERSA: o raciocínio do agente e a transcrição
+    de áudio — NÃO o trabalho que ele mandou fazer (gerar imagem, vídeo, PDF).
+
+    É esta conta que o `teto_usd` ("teto de custo da conversa") vigia. A distinção
+    nasceu do incidente de 2026-09-14: um carrossel legítimo (3 imagens × US$ 0,167 =
+    US$ 0,50) estourava sozinho o teto da conversa inteira na PRIMEIRA reprovação, e o
+    canal emudecia. Trabalho de instrumento é do FLUXO e tem a régua dele
+    (`teto_usd_execucao`, que soma a execução toda) — uma régua por propósito, sem
+    dupla contagem. O TOTAL honesto continua em `Conversa.custo_acumulado_usd`."""
+    return sum(
+        precos.custo_de_entrada(e)
+        for e in (uso or [])
+        if (e or {}).get("categoria") != "instrumento"
+    )
+
+
+def _passar_para_humano(
+    sessao: Session, conversa: Conversa, nota: str, *, detalhe: dict | None = None
+) -> None:
+    """Tira o bot do comando: a conversa cai na inbox para um operador assumir.
+
+    NUNCA é o fim da linha: a transferência automática (sem operador atribuído) é
+    varrida por `sweeper.varrer_transferidas` e um portão novo a religa
+    (`aprovacao.vincular_pausa`). Antes, `humano_assumiu` era um buraco sem fundo —
+    nenhum vigia olhava para esse estado e toda mensagem de entrada era engolida em
+    silêncio, inclusive respostas a aprovações pendentes (incidente de 2026-09-14)."""
     conversa.estado = "humano_assumiu"
     sessao.add(
         MensagemConversa(conversa_id=conversa.id, papel="sistema", conteudo=nota)
     )
     registrar_evento(
         categoria="mensageria", acao="conversa.transferida_humano", nivel="warning",
-        recurso_tipo="conversa", recurso_id=conversa.id,
-        detalhe={"nota": nota, "canal": conversa.canal},
+        persistir=True, recurso_tipo="conversa", recurso_id=conversa.id,
+        detalhe={"nota": nota, "canal": conversa.canal, **(detalhe or {})},
     )
 
 
@@ -850,7 +922,11 @@ def medir_conversa(sessao: Session, conversa: Conversa) -> tuple[int, float]:
     espelhando EXATAMENTE a regra do contador de hoje: um turno sem produto e um turno
     de erro rodam o agente mas NÃO contam turno nem custo. O turno de PORTÃO fica de
     fora (não é gravado na sombra da conversa — pertence ao rastro do fluxo); ele só
-    entra nesta timeline na Fatia 4. Sem sombra ainda (1º turno) → (0, 0.0)."""
+    entra nesta timeline na Fatia 4. Sem sombra ainda (1º turno) → (0, 0.0).
+
+    O custo devolvido é o de CONVERSA (`_custo_de_conversa`) — é ele que o `teto_usd`
+    vigia, e esta função existe para o teto. O trabalho de instrumento (imagem, vídeo)
+    é do fluxo e tem a régua dele; o total honesto vive em `custo_acumulado_usd`."""
     sombra_id = sessao.scalars(
         select(Execucao.id).where(
             Execucao.conversa_id == conversa.id, Execucao.modo == "conversa"
@@ -868,7 +944,7 @@ def medir_conversa(sessao: Session, conversa: Conversa) -> tuple[int, float]:
         if not (saida.get("texto") or saida.get("saida_escolhida")):
             continue  # turno sem produto / de erro → não conta (igual ao contador)
         turnos += 1
-        custo += sum(precos.custo_de_entrada(e) for e in (saida.get("uso") or []))
+        custo += _custo_de_conversa(saida.get("uso"))
     return turnos, custo
 
 
@@ -1067,6 +1143,82 @@ def _rodar_turno(
     return resultado
 
 
+def _limite_do_portao(
+    sessao: Session, conversa: Conversa, execucao: Execucao, no_id: str, conf: dict
+) -> dict | None:
+    """Qual limite (se algum) impede CONDUZIR mais uma rodada desta aprovação.
+
+    Devolve `{qual, valor, teto}` ou None. Três réguas, todas configuráveis e todas
+    visíveis no painel do fluxo (lei do maestro: não existe teto secreto):
+    - `portao_max_rodadas` — idas-e-vindas DESTE portão. É a régua principal e a mesma
+      que a tela usa (`retoma.rodadas_no_gate`), para não haver duas verdades.
+    - `teto_usd` — custo de IA DE CONVERSA acumulado (sem o trabalho de instrumento,
+      que é do fluxo e tem o `teto_usd_execucao`).
+    - `max_turnos` — mensagens da conversa.
+
+    Atingir um limite NÃO mata o canal: quem chama cai no caminho mecânico."""
+    rodadas = retoma.rodadas_no_gate(sessao, execucao.id, no_id)
+    max_rodadas = int(conf.get("portao_max_rodadas") or retoma.MAX_RODADAS_GATE)
+    if rodadas >= max_rodadas:
+        return {"qual": "rodadas", "valor": rodadas, "teto": f"{max_rodadas} rodadas"}
+
+    _, custo_conversa = medir_conversa(sessao, conversa)
+    teto_usd = float(conf.get("teto_usd") or 0)
+    if teto_usd and custo_conversa >= teto_usd:
+        return {
+            "qual": "custo",
+            "valor": round(custo_conversa, 4),
+            "teto": f"US$ {teto_usd:.2f}",
+        }
+
+    max_turnos = int(conf.get("max_turnos") or 0)
+    if max_turnos and (conversa.turnos or 0) >= max_turnos:
+        return {
+            "qual": "mensagens",
+            "valor": int(conversa.turnos or 0),
+            "teto": f"{max_turnos} mensagens",
+        }
+    return None
+
+
+def _explicar_limite_do_portao(
+    sessao: Session, conversa: Conversa, token: str, execucao: Execucao,
+    conf: dict, limite: dict,
+) -> None:
+    """Conta à pessoa, e ao rastro, que um limite interrompeu a condução da aprovação.
+
+    §12-A nas três pernas, porque a versão anterior falhava nas três: (a) EVENTO no
+    banco de logs em nível `error` — antes só um `warning` com a frase 'Limite do portão
+    atingido', que não dizia QUAL limite nem quanto valia; (b) o recado vai para a
+    THREAD também, para o agente enxergar nas próximas rodadas o que aconteceu (antes o
+    texto ia direto ao Telegram e sumia — nem o consultor nem o agente viam); (c) recado
+    HONESTO à pessoa que estava esperando, com o que fazer e onde mudar o número."""
+    texto = explicacao_limite_portao(
+        limite["qual"], conf, valor_atual=str(limite["teto"])
+    )
+    _enviar_e_registrar(sessao, conversa, token, texto)
+    registrar_evento(
+        categoria="mensageria",
+        acao="portao.limite_atingido",
+        nivel="error",
+        resultado="falha",
+        persistir=True,
+        recurso_tipo="conversa",
+        recurso_id=conversa.id,
+        detalhe={
+            "limite": limite["qual"],
+            "valor": limite["valor"],
+            "teto": limite["teto"],
+            "execucao_id": str(execucao.id),
+            "canal": conversa.canal,
+            "efeito": (
+                "a resposta segue pelo caminho mecânico; o canal continua vivo e a "
+                "aprovação continua resolvível na tela"
+            ),
+        },
+    )
+
+
 def _turno_de_portao(
     sessao: Session, conversa: Conversa, instrumento: Instrumento,
     token: str, execucao: Execucao,
@@ -1101,20 +1253,22 @@ def _turno_de_portao(
     auto = sessao.get(Automacao, execucao.automacao_id)
     chaves, origens = resolver_chaves_por_time(sessao, auto.time_id if auto else None)
 
-    # Teto/turnos = anti-loop UNIFORME do portão por canal (não há rodada infinita).
-    if (conversa.turnos or 0) >= conf["max_turnos"] or float(
-        conversa.custo_acumulado_usd or 0
-    ) >= conf["teto_usd"]:
-        try:
-            if token:
-                telegram.enviar(token, conversa.contato_chave, conf["mensagem_limite"])
-        except Exception:
-            pass
-        _passar_para_humano(
-            sessao, conversa, "Limite do portão atingido — transferido para um humano."
-        )
-        _resolver_execucao_abandonada(conversa, execucao, conf["portao_acao_abandono"])
-        sessao.commit()
+    # Anti-loop do portão: a MESMA régua da tela — idas-e-vindas DESTE portão
+    # (`portao_max_rodadas`), não o teto da conversa inteira. Eram duas fontes de
+    # verdade para a mesma regra (a tela contava rodadas do nó; o canal contava turnos
+    # e custo da conversa), e a do canal estourava com trabalho legítimo: em 2026-09-14
+    # três imagens de um carrossel (US$ 0,50) bateram o teto da conversa na PRIMEIRA
+    # reprovação. E o desfecho era pior que o limite: o canal ia para `humano_assumiu`
+    # e ficava SURDO para sempre — o Batuta seguia mandando pedidos de aprovação por um
+    # canal que não lia mais nenhuma resposta.
+    #
+    # Agora, atingido o limite: o agente EXPLICA (o quê, quanto, onde muda, que nada se
+    # perdeu) e a resposta segue pelo caminho MECÂNICO — exatamente como na tela. O
+    # fluxo anda, o canal continua vivo, e o limite deixa rastro em vez de silêncio.
+    limite = _limite_do_portao(sessao, conversa, execucao, no_id, conf)
+    if limite:
+        _explicar_limite_do_portao(sessao, conversa, token, execucao, conf, limite)
+        _processar_aprovacao(sessao, conversa, execucao, token, conf)
         return
 
     agente = sessao.get(Agente, uuid.UUID(str(no["ref"])))
@@ -1190,11 +1344,18 @@ def _turno_de_portao(
     sessao.flush()
 
     if escolhidas:
-        # O agente DECIDIU → o fluxo anda; leva o histórico da conversa como contexto.
-        # A partir do passo de portão recém-gravado (ordem+1), como na tela.
+        # O agente DECIDIU → o fluxo anda. O que desce ao próximo nó é EXATAMENTE o que
+        # a tela manda: o material apresentado + a decisão da pessoa, rotulada como já
+        # tomada (`retoma.entrada_retomada`). Antes o canal mandava o transcript inteiro
+        # da conversa e a tela mandava o apresentado — duas verdades para a mesma
+        # passagem, e o nó seguinte se comportava diferente conforme ONDE a aprovação
+        # tinha sido dada. Foi assim que o "Gerar Posts Instagram" rodou inteiro em
+        # 07/09 (tudo pelo Telegram) e quebrou em 14/09 (aprovações pela tela).
         retoma.avancar_apos_gate(
             sessao, execucao, idx=idx, cadeia=cadeia, escolhidas=escolhidas,
-            entrada_proxima=_historico_texto(sessao, conversa),
+            entrada_proxima=retoma.entrada_retomada(
+                (ultimo.saida or {}).get("texto", ""), resposta_humano, proximo_no=True
+            ),
             ordem_inicial=ultimo.ordem + 1, chaves=chaves, origens=origens,
         )
         sessao.refresh(execucao)
@@ -1303,14 +1464,25 @@ def _processar_turno(conversa_id: uuid.UUID) -> None:
         # Fatia 2: a medição vem da TIMELINE-sombra (`medir_conversa`), a fonte única;
         # os contadores `conversa.turnos`/`custo_acumulado_usd` viram só cache.
         turnos_ate_agora, custo_ate_agora = medir_conversa(sessao, conversa)
-        if turnos_ate_agora >= conf["max_turnos"] or custo_ate_agora >= conf["teto_usd"]:
-            try:
-                if token:
-                    telegram.enviar(token, conversa.contato_chave, conf["mensagem_limite"])
-            except Exception:
-                pass
+        estourou = (
+            ("mensagens", turnos_ate_agora, f"{int(conf['max_turnos'])} mensagens")
+            if turnos_ate_agora >= conf["max_turnos"]
+            else ("custo", round(custo_ate_agora, 4), f"US$ {float(conf['teto_usd']):.2f}")
+            if custo_ate_agora >= conf["teto_usd"]
+            else None
+        )
+        if estourou:
+            qual, valor, teto = estourou
+            # A pessoa merece saber O QUE acabou e o que acontece agora — não o antigo
+            # "Vou te encaminhar para um atendente humano. Um instante.", que some com o
+            # motivo. E o rastro passa a dizer QUAL limite foi (era um `warning` mudo).
+            _enviar_e_registrar(sessao, conversa, token, conf["mensagem_limite"])
             _passar_para_humano(
-                sessao, conversa, "Limite da conversa atingido — transferida para um humano."
+                sessao,
+                conversa,
+                f"Limite de {LIMITES_DO_PORTAO.get(qual, (qual,))[0]} atingido "
+                f"({teto}) — transferida para um humano.",
+                detalhe={"limite": qual, "valor": valor, "teto": teto},
             )
             sessao.commit()
             return

@@ -22,6 +22,7 @@ from esquemas import (
     AgendamentoEditar,
     AutomacaoCriar,
     AutomacaoEditar,
+    ConfiguracaoFluxoEntrada,
     AutomacaoLer,
     DispararAutomacao,
     DuplicarAutomacao,
@@ -61,7 +62,14 @@ from chaves import (
 )
 from consultoria import exigir_admin_consultoria
 from mensageria import aprovacao, config, retoma
-from mensageria.config import painel_config
+from mensageria.config import (
+    GLOBAL,
+    ONDE_MUDAR,
+    PERFIS,
+    _mesclar as _mesclar_config,
+    painel_config,
+    resumo_dos_limites,
+)
 from orquestracao import circuito, grafo
 from orquestracao.cadeia import validar_cadeia
 from orquestracao.disparo import criar_execucao
@@ -153,9 +161,27 @@ def criar(
 @rotas.get("/config/fluxo")
 def config_fluxo(usuario: Usuario = Depends(usuario_atual)):
     """Metadados para a UI montar as 'Configurações do fluxo': os perfis (com os
-    defaults de cada um), os grupos de botões e o padrão global. Fonte única — o
-    front renderiza a partir daqui, sem duplicar rótulos/valores."""
+    defaults e os LIMITES de cada um), os grupos de botões e o padrão global. Fonte
+    única — o front renderiza a partir daqui, sem duplicar rótulos/valores."""
     return painel_config()
+
+
+@rotas.post("/config/fluxo/limites")
+def limites_do_fluxo(
+    dados: ConfiguracaoFluxoEntrada, usuario: Usuario = Depends(usuario_atual)
+):
+    """Os limites EFETIVOS de uma configuração de fluxo (perfil + ajustes), em
+    português. Existe para a tela mostrar o que o fluxo realmente faz sem ter de
+    reescrever as frases no front — se a redação vivesse nos dois lados, elas
+    divergiriam, que é a origem clássica de bug recorrente aqui.
+
+    Endpoint puro (não lê nem escreve banco): recebe a config que está na tela,
+    devolve as frases."""
+    cfg = dict(GLOBAL)
+    if dados.perfil in PERFIS:
+        cfg = _mesclar_config(cfg, PERFIS[dados.perfil])
+    cfg = _mesclar_config(cfg, dados.ajustes or {})
+    return {"limites": resumo_dos_limites(cfg), "onde_mudar": ONDE_MUDAR}
 
 
 @rotas.get("/automacoes/{automacao_id}", response_model=AutomacaoLer)
