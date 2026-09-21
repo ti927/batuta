@@ -316,7 +316,9 @@ function CanvasInterno({
           sourceHandle: sa.id,
           target: sa.destino,
           type: "estudio",
-          zIndex: ativo ? 5 : 0,
+          // SEM zIndex de propósito: dar um a uma aresta joga ela para um SVG próprio,
+          // que sobe ACIMA da camada dos balões de condição — e o fio passava riscando
+          // o texto. Destaque do fio ativo é cor e espessura, não altura.
           data: {
             condicao,
             rotulo: sa.rotulo,

@@ -56,6 +56,8 @@ const RAIO = 14;
 const STUB = 28;
 /** Distância da "pista" por onde um laço volta, acima ou abaixo dos cartões. */
 const PISTA = 116;
+/** Quanto o balão da condição desencosta do fio, para um não atrapalhar o outro. */
+const AFASTA = 15;
 
 type Ponto = [number, number];
 
@@ -126,8 +128,11 @@ export function ArestaEstudio({
       [entrada, targetY],
       [targetX, targetY],
     ]);
+    // O balão sai de CIMA do fio: um texto deitado em cima de um trecho reto e longo
+    // é exatamente o que fica ilegível. Ele desencosta para o lado de fora da pista
+    // (longe dos cartões), e o fio corre livre por baixo.
     labelX = (saida + entrada) / 2;
-    labelY = pistaY;
+    labelY = pistaY + (d.lane === "above" ? -AFASTA : AFASTA);
   } else {
     // Ortogonal com cantos arredondados: é como um fluxo se lê — trechos retos e
     // curvas de 90°, não uma curva livre que passa perto de tudo.
@@ -144,7 +149,10 @@ export function ArestaEstudio({
     });
     path = p;
     labelX = lx;
-    labelY = ly;
+    // Fio perfeitamente horizontal: o balão também desencosta, senão o texto fica
+    // deitado em cima da linha. Quando há desnível, o balão cai sobre o trecho
+    // vertical e o fio passa por trás dele — aí centrado lê bem.
+    labelY = Math.abs(targetY - sourceY) < 2 ? ly - AFASTA : ly;
   }
 
   const texto = d.condicao?.trim() || "";
