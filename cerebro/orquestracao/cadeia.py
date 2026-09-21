@@ -579,7 +579,15 @@ def executar_cadeia(
             extra = dict(item.get("extra") or {})
             no = idx.no(no_atual)
             if no is None:
-                raise ValueError(f"Nó da cadeia não encontrado: {no_atual}")
+                # Uma seta aponta para um nó que não existe mais. Salvar pelo construtor
+                # já barra isto (`validar_cadeia`), mas um desenho antigo — ou escrito
+                # por fora — chega aqui. A mensagem diz o que fazer em vez de despejar
+                # um id: quem lê não sabe o que é "nó da cadeia".
+                raise ValueError(
+                    f"O fluxo tem uma seta apontando para um passo que não existe mais "
+                    f"(id '{no_atual}'). Abra a automação no construtor e religue essa "
+                    "seta a um passo válido."
+                )
             tipo = no.get("tipo", "agente")
 
             # A ficha que ESTE ramo enxerga: a da execução, coberta pelos valores
@@ -824,8 +832,19 @@ def executar_cadeia(
             # Teto POR EXECUÇÃO: `ordem_inicial` traz o que já rodou antes da
             # retomada, então um laço que atravessa portões também é contido.
             if ordem > max_passos:
+                # A mensagem NOMEIA o nó e diz quantas vezes ele rodou. "Possível laço
+                # infinito" sozinho não dizia onde olhar, e quem lê isto está justamente
+                # tentando entender por que o fluxo não acabou — um teto de passos é
+                # quase sempre uma seta que volta para trás (um `reprovado` que aponta
+                # para o próprio nó, por exemplo) sem condição de saída que feche o ciclo.
+                voltas = sum(1 for p in passos if p.get("no_id") == no_atual)
+                nome_laco = no.get("nome") or _identidade_do_no(sessao, no, tipo)[1]
                 raise RuntimeError(
-                    f"Máximo de passos ({max_passos}) excedido — possível laço infinito."
+                    f"A execução passou do máximo de {max_passos} passos. O passo "
+                    f"'{nome_laco}' rodou {voltas} vez(es) — provavelmente há uma seta "
+                    "voltando para ele sem condição que feche o ciclo. Os passos já "
+                    "feitos ficam no rastro. Se o fluxo é longo por natureza, aumente o "
+                    "limite em Fluxo › Limites da execução."
                 )
 
             entrada_atual = (
@@ -990,6 +1009,28 @@ def executar_cadeia(
                         f"caminho: {porque}"
                     )
                     avisos.append(aviso)
+
+            # §12-A — "falha devolvida como dado também é falha". Um instrumento que
+            # responde `ok: false` não levanta exceção: o agente decide sozinho como
+            # seguir e com frequência NARRA SUCESSO, e o fluxo anda como se nada tivesse
+            # acontecido. O rastro já guardava `erros_instrumentos`, mas só quem abrisse
+            # o diagnóstico veria — na timeline e no resultado da execução isso era mudo.
+            # Não mudamos o CAMINHO (o agente pode ter tentado de novo e conseguido; virar
+            # à força para a saída de erro inventaria uma falha que talvez não exista) —
+            # mudamos a VISIBILIDADE, que é o que faltava.
+            erros_inst = executado.get("erros_instrumentos") or []
+            if erros_inst:
+                quais = ", ".join(
+                    sorted({str(e.get("ferramenta") or "instrumento") for e in erros_inst})
+                )
+                aviso_inst = (
+                    f"No passo '{nome_do_no}', um instrumento respondeu FALHA e o fluxo "
+                    f"seguiu assim mesmo ({quais}). Confira se o efeito esperado "
+                    "aconteceu de verdade — o texto do agente não é prova de que a ação "
+                    "foi feita."
+                )
+                avisos.append(aviso_inst)
+                aviso = f"{aviso} {aviso_inst}" if aviso else aviso_inst
 
             passo = _montar_passo(
                 no_atual, tipo, espera=bool(pausa), aprovacao=pausa or None,

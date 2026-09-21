@@ -114,7 +114,7 @@ próximo — foi exatamente o que aconteceu nas correções anteriores.
 | B3 | pool de workers morto | `/saude` reporta | 🟢 | — |
 | B4 | um vigia periódico passa a levantar exceção | batimento dos vigias + sonda + `/status` | 🟢 | — |
 | B5 | banco/rede congelados | `tcp_user_timeout` + keepalive + elos + `/status` | 🟢 | — |
-| B6 | **mais de uma réplica no Railway**: o boot de uma marca `falhou` as execuções em andamento da outra | a recuperação de órfãs não filtra por host | 🔴 | filtrar por host/instância, ou usar dono com prazo em vez de "tudo que está em andamento é órfão". **A confirmar se hoje roda 1 réplica** |
+| B6 | mais de uma réplica no Railway: o boot de uma marcaria `falhou` as execuções em andamento da outra | **CONFIRMADO: hoje roda 1 réplica só** (um `host` e um `pid` em 3 dias de `evento_log`), então não é falha ativa — é uma trava para escalar | 🟡 | antes de subir para 2 réplicas: carimbar a instância na execução e filtrar a recuperação de órfãs por ela. Não construído agora, para não inventar defesa contra um cenário que não existe |
 | B7 | execução fica em `aguardando` e nunca é reivindicada | nenhum vigia por tempo de fila | 🟡 | vigia de fila parada: `aguardando` há mais de N min com pool vivo = evento de erro |
 
 ### C. Execução de um nó (agente + instrumentos)
@@ -125,7 +125,7 @@ próximo — foi exatamente o que aconteceu nas correções anteriores.
 | C2 | **instrumento responde `ok: false` e o agente narra sucesso** | vai para `erros_instrumentos` no rastro e o diagnóstico acusa — **mas o fluxo segue como se tivesse dado certo** | 🔴 | falha de instrumento deveria poder acionar a saída de erro do nó, como uma exceção aciona |
 | C3 | instrumento demora demais | prazo do passo + limite de rede por chamada + sinal de vida | 🟢 | — |
 | C4 | teto de custo / tempo / passos estourado | exceção com mensagem explicativa e "o que fazer" | 🟢 | — |
-| C5 | provedor de IA devolve 429/500 | vira exceção → C1 | 🟡 | retentativa com espera para 429/5xx, que é transitório; hoje morre na primeira |
+| C5 | provedor de IA devolve 429/500 | ~~morre na primeira~~ **já coberto**: 6 retentativas com espera progressiva no fundo, 1 no atendimento (`llm.py`) | 🟢 | — (eu tinha catalogado errado; conferido no código em 21/09) |
 | C6 | provedor de IA devolve **400 de histórico inválido** | vira exceção → a execução inteira morre | 🔴 | 400 de protocolo é **defeito de estado**, não do fluxo: não pode matar a execução. Deve recusar a entrada e manter a espera de pé |
 | C7 | modelo não chama o instrumento que o markdown manda | o rastro mostra `instrumentos_acionados` vazio | 🟢 | — (é adesão do modelo; o rastro prova) |
 
@@ -174,7 +174,7 @@ próximo — foi exatamente o que aconteceu nas correções anteriores.
 |---|---|---|---|---|
 | G1 | nó "Esperar" sem tempo configurado | segue direto + aviso | 🟢 | — |
 | G2 | servidor reinicia durante a espera | o estado está no banco; o vigia solta assim mesmo | 🟢 | — |
-| G3 | automação-alvo do "Chamar" nunca termina | o chamador fica preso | 🟡 | teto de espera do chamador (a filha tem tetos; o chamador não tem prazo próprio) |
+| G3 | automação-alvo do "Chamar" nunca termina | ~~o chamador fica preso~~ **já coberto**: a filha tem tetos e o vigia de presas; ao morrer ela solta o chamador. O único furo era a filha parada numa aprovação eterna — que o §4.2 fechou | 🟢 | — (eu tinha catalogado errado; conferido no código em 21/09) |
 | G4 | filha falha | saída de erro do nó "Chamar", se desenhada | 🟢 | — |
 
 ### H. Visibilidade — o que o usuário vê
@@ -242,7 +242,34 @@ Quando existe conversa amarrada respondendo, a tela de execução mostra *"respo
 Telegram…"* e desabilita os botões. É a correção mais barata do lote e a que teria evitado o
 incidente inteiro — porque o clique fatal foi uma reação racional a uma tela que mentia.
 
-### 4.7 — Depois, na ordem: C2, C5, B6, B7, D6, D7, G3
+### 4.7 — Os menores, todos do mesmo tipo: fazia certo, mas calado
+
+- **C2** — instrumento que responde `ok: false` agora deixa **aviso no passo e na
+  execução** ("um instrumento respondeu FALHA e o fluxo seguiu assim mesmo — o texto do
+  agente não é prova de que a ação foi feita"). O **caminho** não muda de propósito: o
+  agente pode ter tentado de novo e conseguido, e virar à força para a saída de erro
+  inventaria uma falha que talvez não exista. Mudou a visibilidade, que era o que faltava.
+- **D6** — o teto de passos agora **nomeia o nó** que está girando e quantas voltas deu.
+- **D7** — seta para um passo inexistente vira frase em português dizendo o que fazer
+  (a defesa de verdade já existia no salvamento; isto é para o desenho antigo ou escrito
+  por fora, pelo MCP).
+- **B7** — execução `aguardando` que ninguém pegou em 30 min vira evento de erro (e uma
+  cutucada na fila, que resolve sozinha se foi só um sinal perdido). Não muda estado.
+
+---
+
+## 4-bis. O que ficou construído (21/09)
+
+Tudo o que está marcado 🔴 nas tabelas acima foi implementado nesta sessão, em quatro
+commits, com 36 testes novos (a suíte foi de 1187 para 1223 e segue toda verde). O que
+NÃO foi feito, e por quê:
+
+| item | decisão | por quê |
+|---|---|---|
+| **C2 — rotear para a saída de erro** | feito só metade: a falha ficou **visível**, o caminho não mudou | o agente pode ter tentado de novo e conseguido; virar à força para a saída de erro inventaria uma falha que talvez não exista. Mudar quando o ramo de erro dispara altera o comportamento de automações que já rodam — é decisão do maestro, não minha |
+| **B6 — carimbar a instância** | não feito | confirmado que hoje roda 1 réplica; construir defesa contra um cenário que não existe é inventar complexidade |
+| **A2 — disparo duplicado** | não feito | mesma razão: é o cérebro LOCAL esquecido rodando contra o banco de produção, um problema de disciplina de ambiente, não do motor |
+| **E8, E9, E10, H3** | não feitos | 🟡, todos de visibilidade na tela; entram numa passada de UI, não nesta de motor |
 
 ---
 
@@ -250,8 +277,9 @@ incidente inteiro — porque o clique fatal foi uma reação racional a uma tela
 
 Honestidade sobre o alcance deste estudo:
 
-1. **Quantas réplicas o cérebro roda no Railway.** Se for mais de uma, B6 é falha ativa hoje,
-   não teórica.
+1. ~~Quantas réplicas o cérebro roda no Railway.~~ **Verificado em 21/09: uma só.**
+   Três dias de `evento_log` mostram um único `host` e um único `pid`. B6 é trava para
+   escalar, não falha ativa.
 2. **Se o debounce da mensageria protege contra duas mensagens do mesmo contato em rajada
    durante um turno de portão.** Li o caminho principal, não o de rajada.
 3. **O caminho do "Para cada item" combinado com aprovação.** O código guarda as pendências,

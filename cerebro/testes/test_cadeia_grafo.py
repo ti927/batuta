@@ -202,7 +202,7 @@ def test_loop_com_guarda_de_passos(sessao, dados, ag, monkeypatch):
             {"id": "fim", "tipo": "fim", "saidas": []},
         ],
     }
-    with pytest.raises(RuntimeError, match="Máximo de passos"):
+    with pytest.raises(RuntimeError, match=r"passou do máximo de \d+ passos"):
         motor.executar_cadeia(sessao, cadeia, "vai", max_passos=3)
 
 
@@ -638,7 +638,7 @@ def test_teto_de_passos_vale_por_execucao(sessao, dados, ag, monkeypatch):
             {"id": "fim", "tipo": "fim", "saidas": []},
         ],
     }
-    with pytest.raises(RuntimeError, match="Máximo de passos"):
+    with pytest.raises(RuntimeError, match=r"passou do máximo de \d+ passos"):
         motor.executar_cadeia(sessao, cadeia, "vai", max_passos=5, ordem_inicial=4)
 
 

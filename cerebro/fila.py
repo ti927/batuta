@@ -34,6 +34,13 @@ INTERVALO_OCIOSO_S = 1.0
 # que o boot já recuperaria). Generoso de propósito: um passo lento (geração de
 # imagem ~2min + rodadas do agente) jamais é morto; só o que travou de verdade.
 TETO_INATIVIDADE_EXEC_MIN = 15
+# Teto de ESPERA NA FILA: execução `aguardando` que ninguém reivindicou em tanto tempo.
+# Não é o mesmo problema do teto acima (lá o worker travou COM a execução; aqui ninguém
+# a pegou). A fila normalmente escoa em segundos, mas com os N trabalhadores ocupados em
+# trabalho legitimamente longo (gerar vídeo ~25 min) uma execução pode esperar bastante
+# sem que nada esteja errado — por isso o corte é folgado. Só deixa RASTRO: enfileirada
+# demais não é motivo para matar trabalho que ainda vai rodar.
+TETO_ESPERA_NA_FILA_MIN = 30
 
 logger = logging.getLogger("batuta.fila")
 
@@ -211,6 +218,52 @@ def recuperar_execucoes_presas(sessao) -> int:
     return len(presas)
 
 
+def alertar_fila_parada(sessao) -> int:
+    """Avisa sobre execuções que estão `aguardando` na fila há tempo demais. Devolve
+    quantas.
+
+    O buraco que isto fecha: `aguardando` não era varrido por ninguém. Se o pool de
+    trabalhadores morrer, o `/saude` acusa (`fila.esta_saudavel`) — mas se ele estiver
+    VIVO e mesmo assim ninguém pegar a execução (uma falha na reivindicação que se
+    repete, um trabalhador que morreu sozinho e não derrubou o pool), o disparo
+    simplesmente não acontece e ninguém fica sabendo. É o disparo que não aconteceu, de
+    novo, por outra porta.
+
+    Não muda estado: o trabalho ainda pode rodar, e matá-lo aqui seria pior que o
+    atraso. Só deixa rastro, que é o que faltava."""
+    corte = datetime.now(timezone.utc) - timedelta(minutes=TETO_ESPERA_NA_FILA_MIN)
+    paradas = sessao.scalars(
+        select(Execucao).where(
+            Execucao.estado == "aguardando",
+            Execucao.criado_em < corte,
+            # A retomada de portão espera na mesma fila, mas o relógio dela começa no
+            # clique, não na criação — uma execução criada ontem e aprovada agora não é
+            # uma fila parada.
+            Execucao.retomada_resposta.is_(None),
+        )
+    ).all()
+    if not paradas:
+        return 0  # sem rollback: a sessão pode não ser nossa (ver `soltar_esperas_vencidas`)
+    registrar_evento(
+        categoria="fila", acao="fila.parada", nivel="error", resultado="falha",
+        persistir=True,
+        detalhe={
+            "quantidade": len(paradas),
+            "parada_min": TETO_ESPERA_NA_FILA_MIN,
+            "pool_vivo": esta_saudavel(),
+            "execucoes": [str(e.id) for e in paradas[:10]],
+            "efeito": "estas execuções foram enfileiradas e ninguém as pegou",
+        },
+    )
+    logger.error(
+        "%d execução(ões) esperando na fila há mais de %d min.",
+        len(paradas), TETO_ESPERA_NA_FILA_MIN,
+    )
+    # Cutuca: se foi um sinal perdido, isto sozinho resolve.
+    enfileirar()
+    return len(paradas)
+
+
 def soltar_esperas_vencidas(sessao) -> int:
     """Devolve à fila as execuções paradas num nó "Esperar" cujo tempo venceu.
 
@@ -267,6 +320,8 @@ def varrer_presas_job() -> None:
     sessao = CriadorDeSessao()
     try:
         recuperar_execucoes_presas(sessao)
+        # Mesmo job, outro buraco: a execução que ninguém chegou a PEGAR (§B7).
+        alertar_fila_parada(sessao)
         vigias.bateu("presas")
     finally:
         sessao.close()
