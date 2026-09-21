@@ -24,6 +24,7 @@ import {
 import { IlustracaoProporcao } from "@/components/ilustracao-proporcao";
 import { SeletorIcone } from "@/components/seletor-icone";
 import { Aviso } from "@/components/ui/aviso";
+import { SeletorFerramentasMCP } from "@/components/ferramentas-mcp";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -191,6 +192,7 @@ function opcoesAtivas(
 function CampoConfigInput({
   campo,
   valor,
+  instrumentoId,
   jaGuardado,
   disponiveis,
   automacoes,
@@ -199,6 +201,9 @@ function CampoConfigInput({
 }: {
   campo: CampoConfig;
   valor: string;
+  // O instrumento JÁ SALVO (null enquanto é criação): o seletor de ferramentas MCP
+  // precisa dele para perguntar ao servidor o que ele publica.
+  instrumentoId: string | null;
   jaGuardado: string | undefined; // 4 últimos dígitos, se já há segredo guardado
   disponiveis: ProvedoresDisponiveis | undefined; // p/ o seletor de modelo de IA
   automacoes: AutomacaoOrg[]; // p/ o seletor de automação-alvo (agendar_automacao)
@@ -255,6 +260,17 @@ function CampoConfigInput({
           </optgroup>
         ))}
       </Select>
+    );
+  } else if (campo.ui === "ferramentas_mcp") {
+    // Quais ferramentas de um servidor MCP entram no cinto, e quais pedem aprovação.
+    // O formulário genérico desenharia este `array` como uma caixa pedindo JSON — o
+    // que é a mesma coisa que não ter escolha nenhuma.
+    entrada = (
+      <SeletorFerramentasMCP
+        valor={valor}
+        instrumentoId={instrumentoId}
+        onChange={onChange}
+      />
     );
   } else if (campo.ui === "canal_mensageria" && !campo.secreto) {
     // Seletor do canal por onde o pedido de aprovação é apresentado: os canais de
@@ -675,6 +691,7 @@ export function FormularioInstrumento({
             key={campo.nome}
             campo={{ ...campo, opcoes: opcoesAtivas(campo, deps, valores) }}
             valor={valores[campo.nome] ?? ""}
+            instrumentoId={instrumento?.id ?? null}
             jaGuardado={instrumento?.segredos?.[campo.nome]}
             disponiveis={disponiveis}
             automacoes={automacoesOrg}

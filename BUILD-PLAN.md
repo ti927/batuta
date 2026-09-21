@@ -2475,6 +2475,24 @@ E o agente passou a **ver o que acontece na própria conversa**: no modo memóri
 
 ---
 
+## FASE — MCP para os AGENTES (o Batuta como CLIENTE de servidor MCP)  ▶️ EM CURSO (2026-09-21)
+
+**Documento-fonte:** [`docs/MCP-AGENTES.md`](docs/MCP-AGENTES.md). Sentido OPOSTO ao da fase "Batuta-MCP profissional": lá o Batuta é servidor que o claude.ai aciona; aqui ele é **cliente**, e o agente do time ganha no cinto as ferramentas de um servidor MCP de terceiro (Zapier, Composio, MCP nativo).
+
+**Origem (2026-09-21):** o Search Console do blog passou dois meses em HTTP 401. Consertar a conta é um minuto; **publicar o app OAuth do Batuta no Google não é** — os escopos que ele pede (Gmail, Drive) são *restritos*, o que exige verificação completa e avaliação de segurança anual, e em *Testing* o token de renovação morre a cada 7 dias. Decisão do maestro: **não ser o intermediário** — o Zapier já é verificado pelo Google e publica um servidor MCP.
+
+**O que já existia:** o instrumento `conectar_mcp` desde 2026-06-06 (`instrumentos/mcp.py`) — e **zero instâncias em produção**. Quatro buracos o inviabilizavam: (1) traz TODAS as ferramentas do servidor (o cinto entope); (2) `acao_irreversivel = True` fixo (até uma consulta para e pede aprovação; desligar libera tudo); (3) lista as ferramentas na rede a cada passo, sem proteção (servidor fora do ar derruba o passo inteiro); (4) a URL do Zapier carrega a chave, e URL é campo aberto.
+
+**Decisões travadas:** (a) as 4 fatias saem juntas; (b) o instrumento é do **time**, como todos — org-wide é frente separada, para todos os tipos de uma vez, com migração (a decisão de 12/08 para o `conector` nunca foi construída: `instrumentos.time_id` é NOT NULL e não há `organizacao_id`); (c) o **segredo mora na central de credenciais** (org) e o instrumento no time — a chave rotaciona num lugar só; (d) **a URL é segredo** quando embute a chave; (e) toda ferramenta **nasce pedindo aprovação** — liberar é ato consciente, por ferramenta.
+
+**Fatias:** 1 — escolher quais ferramentas entram no cinto. 2 — parede POR FERRAMENTA (`metadata={"irreversivel": …}` na ferramenta expandida; `irreversivel_para` derivado das escolhidas). 3 — cache da lista + isolamento do cinto (§12-A: instrumento que falha vira aviso no rastro e evento, sem derrubar o passo). 4 — tela dedicada no lugar do formulário cru.
+
+**Fora do escopo:** OAuth para servidor MCP (linha 969 deste plano), instrumentos org-wide, marketplace.
+
+**Risco assumido e dito:** a dependência muda de lugar, não some — conta Zapier por cliente (cota e custo), descrição de ferramenta que não é nossa, nem todo serviço existe lá, e mais um elo para fora do processo (por isso a Fatia 3 não é opcional).
+
+---
+
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.

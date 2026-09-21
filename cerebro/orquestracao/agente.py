@@ -299,6 +299,66 @@ def _ferramenta_unica(
     )
 
 
+def _cinto_sem(inst, erro: Exception, erros: list[dict], falhas: list[str]) -> None:
+    """Um instrumento não conseguiu entrar no cinto — e o passo segue sem ele.
+
+    Existe por causa do MCP, mas vale para todos: montar o cinto de um instrumento
+    MULTI-FERRAMENTA exige FALAR COM O SERVIDOR (o MCP pergunta quais ferramentas ele
+    publica). Antes, um servidor de terceiro lento ou fora do ar derrubava o passo
+    INTEIRO — inclusive os outros instrumentos, que estavam sãos, e inclusive um passo
+    cujo trabalho nem dependia dele.
+
+    Seguir sem o instrumento é a escolha certa, mas só com as três pernas da §12-A:
+    o rastro registra (o diagnóstico mostra), o banco de logs recebe o evento, e a IA
+    é avisada por `falhas` — para ela dizer o que não deu, em vez de inventar que deu.
+    """
+    texto = f"o instrumento “{inst.nome}” não pôde ser preparado: {erro}"
+    erros.append({
+        "ferramenta": None,
+        "tipo": inst.tipo,
+        "instrumento_id": str(inst.id),
+        "erro": texto[:500],
+        "retentavel": None,
+        "irreversivel": None,
+        "origem": "cinto",
+    })
+    falhas.append(texto)
+    try:
+        from observabilidade.escritor import registrar_evento
+
+        registrar_evento(
+            categoria="instrumento",
+            acao="instrumento.cinto_falhou",
+            nivel="error",
+            resultado="falha",
+            erro=erro,
+            recurso_tipo="instrumento",
+            recurso_id=str(inst.id),
+            detalhe={
+                "instrumento": inst.nome,
+                "tipo": inst.tipo,
+                "o_que_fazer": (
+                    "O agente rodou SEM este instrumento. Abra-o e use “Acionar” para "
+                    "testar a conexão — se for um servidor MCP, confira se o endereço "
+                    "e a chave continuam valendo."
+                ),
+            },
+        )
+    except Exception:  # noqa: BLE001 — avisar nunca derruba o turno
+        pass
+
+
+def _irreversivel_da_ferramenta(ferramenta, padrao: bool) -> bool:
+    """A ferramenta diz se ELA é irreversível? Senão, vale o do instrumento.
+
+    Instrumentos multi-ferramenta (MCP) carimbam isto no `metadata` de cada ferramenta:
+    um mesmo servidor publica consulta e escrita, e tratá-las igual foi o que tornou o
+    MCP inutilizável (ou tudo parava para pedir aprovação, ou nada parava)."""
+    meta = getattr(ferramenta, "metadata", None) or {}
+    valor = meta.get("irreversivel")
+    return padrao if valor is None else bool(valor)
+
+
 def _ferramentas_de_instrumento(
     inst: Instrumento, falhas: list[str], mensagens_enviadas: dict[str, list[str]],
     erros: list[dict], pedido: dict,
@@ -318,9 +378,15 @@ def _ferramentas_de_instrumento(
     )
     expandidas = tipo.expandir_ferramentas(config)
     if expandidas is not None:
+        # Baseline do instrumento; uma ferramenta EXPANDIDA pode dizer o seu próprio
+        # (`metadata={"irreversivel": …}`) — é assim que um servidor MCP tem ferramenta
+        # de leitura e de escrita no mesmo instrumento, sem tratar as duas igual.
         irrev = acao_irreversivel(inst.tipo, inst.configuracao or {})
         return [
-            _com_rastro_de_resposta(f, inst, tipo.tipo, irrev, erros, falhas, pedido)
+            _com_rastro_de_resposta(
+                f, inst, tipo.tipo, _irreversivel_da_ferramenta(f, irrev),
+                erros, falhas, pedido,
+            )
             for f in expandidas
         ]
     return [
@@ -759,13 +825,17 @@ def executar_agente(
     ferramentas: list = []
     irreversivel_por_ferramenta: dict[str, bool] = {}
     for i in cinto:
-        fs = _ferramentas_de_instrumento(
-            i, falhas, mensagens_enviadas, erros_instrumentos, pedido_aprovacao
-        )
         irrev = acao_irreversivel(i.tipo, i.configuracao or {})
+        try:
+            fs = _ferramentas_de_instrumento(
+                i, falhas, mensagens_enviadas, erros_instrumentos, pedido_aprovacao
+            )
+        except Exception as e:  # noqa: BLE001 — ver docstring de `_cinto_sem`
+            _cinto_sem(i, e, erros_instrumentos, falhas)
+            continue
         for f in fs:
             ferramentas.append(f)
-            irreversivel_por_ferramenta[f.name] = irrev
+            irreversivel_por_ferramenta[f.name] = _irreversivel_da_ferramenta(f, irrev)
     saidas = saidas or []
     instrucoes = montar_instrucoes(agente)
     # Enquadramento do transporte (P2a): a mensageria passa o "você atende X pelo Telegram…

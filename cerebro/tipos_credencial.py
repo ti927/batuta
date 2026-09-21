@@ -112,6 +112,17 @@ registrar(
         (CampoCredencial("token_bearer", "Token"),),
     )
 )
+# Servidor MCP. O ENDEREÇO é o segredo: servidores como o do Zapier embutem a chave
+# no caminho (`.../mcp/s/<chave>/mcp`), então quem tem a URL tem a conta. Guardá-la
+# aqui, e não no instrumento, é o que permite o instrumento ser do TIME e a chave ser
+# uma só na organização — rotacionou, troca num lugar. Ver `docs/MCP-AGENTES.md`.
+registrar(
+    TipoCredencial(
+        "mcp",
+        "Servidor MCP (endereço com chave)",
+        (CampoCredencial("url", "Endereço do servidor MCP"),),
+    )
+)
 # Instagram (API com login do Instagram). O maestro cola o token de longa duração
 # gerado no painel da Meta (Instagram → API setup → Gerar token); a borda valida,
 # descobre o `ig_user_id` sozinho (via /me) e o agendador o renova antes dos 60
