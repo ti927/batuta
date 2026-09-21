@@ -116,6 +116,10 @@ export function AgentesCliente({
           meuPapel={meuPapel}
           tipos={tipos}
           conversaId={conversaId}
+          // Clicar no card é intenção de EDITAR (a própria página diz isso): abre
+          // direto o editor amplo, sem parar no drawer de leitura. Observador cai na
+          // leitura sozinho — o DrawerAgente confere o papel.
+          abrirEditando
           onFechar={() => setAbertoId(null)}
         />
       )}
