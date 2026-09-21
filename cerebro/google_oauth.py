@@ -241,6 +241,41 @@ def renovar(refresh_token: str) -> dict:
     return {"access_token": novo, "expira_em": _expira_em(dados)}
 
 
+def avisar_renovacao_falhou(credencial, motivo: str) -> None:
+    """A renovação desta conta Google falhou — e isso NÃO pode ficar em silêncio.
+
+    Em 2026-09-21 descobrimos que a conta do Search Console tinha parado de renovar em
+    20/07 e ninguém soube por DOIS MESES: o `except` abaixo devolvia o token vencido, o
+    instrumento tomava 401, o agente contornava e narrava, e a execução terminava
+    VERDE — 26 rodadas seguidas. Um `logger.exception` não conta: ninguém abre o log do
+    servidor (§12-A). O evento no banco de logs é o que faz alguém descobrir.
+
+    Best-effort por definição: avisar nunca pode derrubar quem estava trabalhando."""
+    try:
+        from observabilidade.escritor import registrar_evento
+
+        registrar_evento(
+            categoria="credencial",
+            acao="google.renovacao_falhou",
+            nivel="error",
+            resultado="falha",
+            erro=motivo,
+            recurso_tipo="credencial",
+            recurso_id=str(getattr(credencial, "id", "")),
+            organizacao_id=getattr(credencial, "organizacao_id", None),
+            detalhe={
+                "conta": getattr(credencial, "nome", ""),
+                "o_que_fazer": (
+                    "Abra Organização → Chaves → cofre de credenciais e conecte esta "
+                    "conta Google de novo. Enquanto isso, todo instrumento que depende "
+                    "dela (Search Console, Gmail, Agenda, Drive) responde HTTP 401."
+                ),
+            },
+        )
+    except Exception:  # noqa: BLE001 — avisar nunca derruba o trabalho
+        pass
+
+
 def garantir_token(credencial) -> str:
     """Devolve um access_token VÁLIDO da credencial `google`, renovando sob demanda.
 
@@ -250,7 +285,9 @@ def garantir_token(credencial) -> str:
     independente da transação da execução — como faz o job de refresh do Instagram).
 
     Nunca levanta: numa falha de renovação, devolve o token atual (o instrumento
-    trata o 401 com recado claro), para não derrubar o carregamento do cinto."""
+    trata o 401 com recado claro), para não derrubar o carregamento do cinto — MAS
+    grita no banco de logs antes de seguir. Devolver um token vencido calado foi o que
+    escondeu uma conta quebrada por dois meses."""
     import credenciais_cofre
 
     dados = credenciais_cofre.decifrar(credencial)
@@ -261,10 +298,16 @@ def garantir_token(credencial) -> str:
         return access
     refresh = dados.get("refresh_token", "")
     if not refresh:
+        avisar_renovacao_falhou(
+            credencial,
+            "esta conta não tem token de renovação guardado — ela precisa ser "
+            "conectada de novo para voltar a funcionar",
+        )
         return access
     try:
         res = renovar(refresh)
-    except FalhaInstrumento:
+    except FalhaInstrumento as e:
+        avisar_renovacao_falhou(credencial, str(e))
         return access
     _persistir_token(credencial.id, res["access_token"], res["expira_em"])
     return res["access_token"]

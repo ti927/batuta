@@ -130,11 +130,26 @@ class SearchConsoleConsultar(TipoInstrumento):
                 f"não foi possível falar com o Search Console: {e}", retentavel=True
             )
         status = r.status_code
-        if status in (401, 403):
+        if status == 401:
+            # 401 é quase sempre AUTORIZAÇÃO VENCIDA, não falta de acesso à
+            # propriedade. A mensagem antiga mandava conferir acesso e escopo — e foi
+            # exatamente o que deixou uma conta quebrada por dois meses: quem lia
+            # procurava no Search Console, e o problema estava no cofre do Batuta.
             raise FalhaInstrumento(
-                f"o Google recusou a consulta (HTTP {status}): {_detalhe_erro(r)}. "
-                "Verifique se a conta conectada tem acesso a esta propriedade no Search "
-                "Console e se o Google foi conectado incluindo o Search Console.",
+                f"o Google não aceitou mais a autorização desta conta (HTTP 401): "
+                f"{_detalhe_erro(r)}. A conexão com o Google venceu ou foi revogada — "
+                "ela precisa ser CONECTADA DE NOVO em Organização → Chaves → cofre de "
+                "credenciais. Enquanto isso não for feito, não há leitura nova: diga "
+                "isso a quem espera, em vez de seguir com número velho como se fosse "
+                "do dia.",
+                retentavel=False,
+            )
+        if status == 403:
+            raise FalhaInstrumento(
+                f"o Google recusou a consulta (HTTP 403): {_detalhe_erro(r)}. "
+                "A conta está conectada, mas não tem acesso a esta propriedade no "
+                "Search Console — ou o Google foi conectado sem incluir o Search "
+                "Console.",
                 retentavel=False,
             )
         if status == 429 or 500 <= status < 600:

@@ -190,6 +190,60 @@ def test_garantir_token_renovacao_falha_devolve_atual(monkeypatch):
     assert go.garantir_token(cred) == "VELHO"
 
 
+def _espiar_eventos(monkeypatch) -> list[dict]:
+    """Captura o que iria para o banco de logs, sem tocar no banco."""
+    vistos: list[dict] = []
+    monkeypatch.setattr(
+        "observabilidade.escritor.registrar_evento",
+        lambda **kw: vistos.append(kw),
+    )
+    return vistos
+
+
+def test_renovacao_que_falha_NAO_e_muda(monkeypatch):
+    """A regressão de 2026-09-21: a renovação quebrou em 20/07 e o `except` devolveu o
+    token vencido CALADO. Resultado: 26 execuções verdes, dois meses sem ninguém saber.
+    Agora toda falha de renovação deixa evento `error` no banco de logs, com a conta e
+    o que fazer."""
+    monkeypatch.setattr(
+        "google_oauth.renovar",
+        lambda r: (_ for _ in ()).throw(
+            FalhaInstrumento("invalid_grant: Token has been expired or revoked.")
+        ),
+    )
+    monkeypatch.setattr("google_oauth._persistir_token", lambda *a, **k: None)
+    eventos = _espiar_eventos(monkeypatch)
+
+    cred = _cred_google(access="VELHO", expira=datetime.now(timezone.utc) - timedelta(minutes=1))
+    assert go.garantir_token(cred) == "VELHO"  # segue sem derrubar o cinto…
+
+    assert len(eventos) == 1, "a falha de renovação voltou a ser muda"
+    ev = eventos[0]
+    assert ev["nivel"] == "error"
+    assert ev["acao"] == "google.renovacao_falhou"
+    assert "invalid_grant" in str(ev["erro"])
+    # o recado tem que dizer O QUE FAZER, não só que quebrou
+    assert "Chaves" in ev["detalhe"]["o_que_fazer"]
+    assert ev["detalhe"]["conta"] == "Google: dono@empresa.com"
+
+
+def test_sem_refresh_token_tambem_avisa(monkeypatch):
+    """Credencial sem token de renovação nunca mais volta sozinha — e antes saía
+    calada pelo mesmo caminho."""
+    eventos = _espiar_eventos(monkeypatch)
+    cred = _cred_google(access="VELHO", refresh="", expira=None)
+    go.garantir_token(cred)
+    assert [e["acao"] for e in eventos] == ["google.renovacao_falhou"]
+
+
+def test_token_com_folga_nao_alarma(monkeypatch):
+    """O alarme só vale se ficar quieto quando está tudo bem."""
+    eventos = _espiar_eventos(monkeypatch)
+    cred = _cred_google(expira=datetime.now(timezone.utc) + timedelta(hours=1))
+    assert go.garantir_token(cred) == "ACCESS_ATUAL"
+    assert eventos == []
+
+
 # ───────────────────────── rota: iniciar ────────────────────────────────────
 
 

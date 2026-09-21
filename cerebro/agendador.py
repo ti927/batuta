@@ -181,12 +181,86 @@ def renovar_tokens_instagram(sessao) -> int:
             )
             sessao.commit()
             renovadas += 1
-        except Exception:
+        except Exception as e:
             sessao.rollback()
             logger.exception(
                 "Falha ao renovar token Instagram da credencial %s", cred.id
             )
+            # `logger.exception` sozinho é falha muda: ninguém abre o log do servidor
+            # (§12-A). Sem o evento, uma conta do Instagram pode morrer e só se
+            # descobrir quando uma publicação falhar — foi assim que a conta do Google
+            # ficou dois meses quebrada sem ninguém saber.
+            registrar_evento(
+                categoria="credencial",
+                acao="instagram.renovacao_falhou",
+                nivel="error",
+                resultado="falha",
+                erro=e,
+                recurso_tipo="credencial",
+                recurso_id=str(cred.id),
+                organizacao_id=cred.organizacao_id,
+                detalhe={
+                    "conta": cred.nome,
+                    "o_que_fazer": (
+                        "Abra Organização → Chaves e reconecte esta conta do Instagram. "
+                        "Com o token vencido, publicar e ler comentários param de funcionar."
+                    ),
+                },
+            )
     return renovadas
+
+
+# De quanto em quanto tempo conferimos se as contas Google ainda renovam. O
+# access_token do Google dura ~1h e é renovado sob demanda — então o que este job
+# persegue não é o token, é a CONTA: um refresh_token revogado só aparecia quando
+# uma execução tropeçava nele, e podia levar meses. 6 h dá o alarme no mesmo dia.
+PERIODO_CHECAGEM_GOOGLE_H = 6
+
+
+def renovar_tokens_google(sessao) -> int:
+    """Renova (e assim CONFERE) todas as contas Google do cofre. Devolve quantas
+    renovaram.
+
+    O valor aqui não é a renovação em si — é o alarme: `google_oauth.garantir_token`
+    avisa quando quebra, mas só quando alguém tropeça. Este job tropeça de propósito,
+    de 6 em 6 horas, para a descoberta não depender de uma execução azarada.
+
+    Commit por credencial: uma conta quebrada não derruba as outras."""
+    import credenciais_cofre
+    import google_oauth
+
+    alvos = sessao.scalars(
+        select(Credencial).where(Credencial.tipo == "google")
+    ).all()
+    renovadas = 0
+    for cred in alvos:
+        try:
+            refresh = credenciais_cofre.decifrar(cred).get("refresh_token", "")
+            if not refresh:
+                google_oauth.avisar_renovacao_falhou(
+                    cred,
+                    "esta conta não tem token de renovação guardado — ela precisa ser "
+                    "conectada de novo para voltar a funcionar",
+                )
+                continue
+            res = google_oauth.renovar(refresh)
+            credenciais_cofre.gravar(cred, {"access_token": res["access_token"]})
+            cred.expira_em = res["expira_em"]
+            sessao.commit()
+            renovadas += 1
+        except Exception as e:  # noqa: BLE001 — uma conta não derruba as outras
+            sessao.rollback()
+            google_oauth.avisar_renovacao_falhou(cred, str(e))
+    return renovadas
+
+
+def _refresh_google_job() -> None:
+    """Entrada do agendador: abre a própria sessão e confere as contas Google."""
+    sessao = CriadorDeSessao()
+    try:
+        renovar_tokens_google(sessao)
+    finally:
+        sessao.close()
 
 
 def _refresh_instagram_job() -> None:
@@ -371,6 +445,15 @@ def iniciar() -> None:
         _refresh_instagram_job,
         trigger=CronTrigger(hour=3, minute=30, timezone=FUSO),
         id="instagram_token_refresh",
+        replace_existing=True,
+    )
+    # Conferência periódica das contas Google. Não é sobre o access_token (que se
+    # renova sob demanda): é sobre descobrir NO MESMO DIA que uma conta parou de
+    # renovar, em vez de dois meses depois, pela boca de um agente.
+    _scheduler.add_job(
+        _refresh_google_job,
+        trigger=IntervalTrigger(hours=PERIODO_CHECAGEM_GOOGLE_H),
+        id="google_token_refresh",
         replace_existing=True,
     )
     # Recuperação periódica de execuções presas em `em_andamento` (worker travado
