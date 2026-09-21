@@ -85,8 +85,9 @@ function cadeiaInicial(tipo: ConfigGatilho["tipo"]): Cadeia {
 }
 
 // ───────────────────── editor de UMA automação ─────────────────────
-// Remontado por `key={selId}` no pai: o estado editável é inicializado dos props,
-// sem efeito de sincronização (padrão recomendado pelo React).
+// Remontado pelo pai (`key` = automação selecionada + versão do dado salvo): o estado
+// editável é inicializado dos props, sem efeito de sincronização (padrão recomendado
+// pelo React).
 
 function EditorAutomacao({
   time,
@@ -573,6 +574,7 @@ function EditorAutomacao({
 // ───────────────────── lista + seleção ─────────────────────
 
 export function AutomacoesCliente({
+  versao,
   time,
   inicial,
   agentes,
@@ -582,6 +584,11 @@ export function AutomacoesCliente({
   tipos,
   meuPapel,
 }: {
+  // Assinatura do dado PERSISTIDO (vem da página). Antes ela era a `key` deste
+  // componente — e por isso, a cada salvamento, a tela inteira remontava e a
+  // automação selecionada voltava para a PRIMEIRA da lista. Agora ela é prop: quem
+  // remonta é só o editor (logo abaixo), e a seleção fica onde a pessoa deixou.
+  versao: string;
   time: Time;
   inicial: Automacao[];
   agentes: Agente[];
@@ -598,6 +605,15 @@ export function AutomacoesCliente({
   // o router.refresh sincroniza os contadores do servidor).
   const [automacoes, setAutomacoes] = useState<Automacao[]>(inicial);
   const [selId, setSelId] = useState<string | null>(inicial[0]?.id ?? null);
+
+  // Dado novo do servidor (salvamento, ou a IA criadora mexendo por fora): recarrega
+  // a lista, SEM mexer na seleção. É o padrão oficial de "resetar estado quando a
+  // prop muda" — `setState` no corpo do render, com guarda de igualdade.
+  const [versaoVista, setVersaoVista] = useState(versao);
+  if (versao !== versaoVista) {
+    setVersaoVista(versao);
+    setAutomacoes(inicial);
+  }
 
   if (agentes.length === 0) {
     return (
@@ -626,11 +642,19 @@ export function AutomacoesCliente({
     );
   }
 
-  const automacao = selId === NOVA ? null : automacoes.find((a) => a.id === selId) ?? null;
+  // A selecionada sumiu (apagada aqui ou por fora)? Cai na primeira, em vez de abrir
+  // um editor vazio que parece uma automação nova.
+  const existe = selId === NOVA || automacoes.some((a) => a.id === selId);
+  const selEfetivo = existe ? selId : (automacoes[0]?.id ?? NOVA);
+  const automacao =
+    selEfetivo === NOVA ? null : (automacoes.find((a) => a.id === selEfetivo) ?? null);
 
   return (
     <EditorAutomacao
-      key={selId}
+      // Remonta quando a pessoa TROCA de automação ou quando o dado salvo muda — que
+      // era o motivo original da `key` na página. O que não remonta mais é quem
+      // guarda a seleção.
+      key={`${selEfetivo}::${versao}`}
       time={time}
       automacao={automacao}
       automacoes={automacoes}

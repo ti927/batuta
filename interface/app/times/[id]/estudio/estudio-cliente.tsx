@@ -77,6 +77,7 @@ function gatilhoDe(a: Automacao | null): ConfigGatilho {
 }
 
 export function EstudioCliente({
+  versao,
   time,
   inicial,
   agentes,
@@ -86,6 +87,10 @@ export function EstudioCliente({
   tipos,
   meuPapel,
 }: {
+  // Assinatura do dado PERSISTIDO. Era a `key` deste componente — e por isso todo
+  // salvamento remontava a tela e jogava a seleção de volta na PRIMEIRA automação.
+  // Virou prop: quem remonta é só o editor, e a escolha da pessoa fica de pé.
+  versao: string;
   time: Time;
   inicial: Automacao[];
   agentes: Agente[];
@@ -98,7 +103,32 @@ export function EstudioCliente({
   const souOperador = podeOperar(meuPapel);
   const [automacoes, setAutomacoes] = useState(inicial);
   const [selId, setSelId] = useState<string | null>(inicial[0]?.id ?? null);
-  const automacao = automacoes.find((a) => a.id === selId) ?? null;
+
+  // Dado novo do servidor: recarrega a lista, sem mexer na seleção (padrão oficial de
+  // "resetar estado quando a prop muda": setState no render, com guarda).
+  const [versaoVista, setVersaoVista] = useState(versao);
+  if (versao !== versaoVista) {
+    setVersaoVista(versao);
+    setAutomacoes(inicial);
+  }
+
+  // A selecionada sumiu? cai na primeira, em vez de abrir um editor vazio.
+  const selEfetivo = automacoes.some((a) => a.id === selId)
+    ? selId
+    : (automacoes[0]?.id ?? null);
+  const automacao = automacoes.find((a) => a.id === selEfetivo) ?? null;
+
+  // O passo aberto no painel também vive AQUI, pelo mesmo motivo: o editor remonta a
+  // cada salvamento, e perder de vista o passo que você acabou de mexer é a mesma
+  // chateação, só menor. Trocar de automação limpa (o id seria de outro desenho).
+  const [noSel, setNoSel] = useState<string | null>(null);
+  const [saidaSel, setSaidaSel] = useState<string | null>(null);
+  const [autVista, setAutVista] = useState(selEfetivo);
+  if (selEfetivo !== autVista) {
+    setAutVista(selEfetivo);
+    setNoSel(null);
+    setSaidaSel(null);
+  }
 
   if (!automacoes.length) {
     return (
@@ -122,7 +152,9 @@ export function EstudioCliente({
 
   return (
     <EditorEstudio
-      key={selId ?? "nenhuma"}
+      // Remonta ao TROCAR de automação ou quando o dado salvo muda — que era o motivo
+      // da `key` na página. Quem guarda a seleção não remonta mais.
+      key={`${selEfetivo ?? "nenhuma"}::${versao}`}
       time={time}
       automacao={automacao}
       automacoes={automacoes}
@@ -133,6 +165,10 @@ export function EstudioCliente({
       tipos={tipos}
       meuPapel={meuPapel}
       souOperador={souOperador}
+      noSel={noSel}
+      setNoSel={setNoSel}
+      saidaSel={saidaSel}
+      setSaidaSel={setSaidaSel}
       onSelecionar={setSelId}
       onAtualizou={(a) => setAutomacoes((l) => l.map((x) => (x.id === a.id ? a : x)))}
     />
@@ -150,6 +186,10 @@ function EditorEstudio({
   tipos,
   meuPapel,
   souOperador,
+  noSel,
+  setNoSel,
+  saidaSel,
+  setSaidaSel,
   onSelecionar,
   onAtualizou,
 }: {
@@ -163,6 +203,10 @@ function EditorEstudio({
   tipos: TipoInstrumento[];
   meuPapel: PapelAcesso | null;
   souOperador: boolean;
+  noSel: string | null;
+  setNoSel: (id: string | null) => void;
+  saidaSel: string | null;
+  setSaidaSel: (id: string | null) => void;
   onSelecionar: (id: string) => void;
   onAtualizou: (a: Automacao) => void;
 }) {
@@ -170,8 +214,6 @@ function EditorEstudio({
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [problemas, setProblemas] = useState<Problema[]>([]);
-  const [noSel, setNoSel] = useState<string | null>(null);
-  const [saidaSel, setSaidaSel] = useState<string | null>(null);
   const [editAgenteId, setEditAgenteId] = useState<string | null>(null);
   const [editInstrumentoId, setEditInstrumentoId] = useState<string | null>(null);
 
@@ -285,9 +327,9 @@ function EditorEstudio({
           n.id === id ? { ...n, saidas: (n.saidas ?? []).filter((s) => s.id !== sid) } : n,
         ),
       }));
-      setSaidaSel((s) => (s === sid ? null : s));
+      if (saidaSel === sid) setSaidaSel(null);
     },
-    [setCadeiaNorm],
+    [setCadeiaNorm, saidaSel, setSaidaSel],
   );
 
   const deleteNode = useCallback(
@@ -302,7 +344,7 @@ function EditorEstudio({
       setNoSel(null);
       setSaidaSel(null);
     },
-    [setCadeiaNorm],
+    [setCadeiaNorm, setNoSel, setSaidaSel],
   );
 
   const definirInicial = useCallback(

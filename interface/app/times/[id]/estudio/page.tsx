@@ -90,7 +90,7 @@ export default async function EstudioPage({
 
   return (
     <EstudioCliente
-      key={versao}
+      versao={versao}
       time={dados.time}
       inicial={dados.automacoes}
       agentes={dados.agentes}

@@ -87,7 +87,7 @@ export default async function AutomacoesPage({
     dados.agentes.map((a) => a.id).join(",");
   return (
     <AutomacoesCliente
-      key={versao}
+      versao={versao}
       time={dados.time}
       inicial={dados.automacoes}
       agentes={dados.agentes}
