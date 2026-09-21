@@ -98,6 +98,76 @@ def rodadas_no_gate(sessao: Session, execucao_id, no_id: str) -> int:
     )
 
 
+def rodadas_sem_decidir(sessao: Session, execucao_id, no_id: str) -> int:
+    """Quantas rodadas SEGUIDAS este portão teve em que o agente não escolheu caminho
+    nem pediu aprovação — ou seja, só conversou. A contagem anda de trás para frente e
+    PARA no primeiro passo que decidiu algo (escolheu ramo) ou que pediu aprovação; é
+    por isso que a apresentação inicial (que traz o bloco `aprovacao`) nunca entra."""
+    passos = sessao.scalars(
+        select(PassoExecucao)
+        .where(PassoExecucao.execucao_id == execucao_id)
+        .where(PassoExecucao.no_id == no_id)
+        .order_by(PassoExecucao.ordem.desc())
+    ).all()
+    n = 0
+    for p in passos:
+        saida = p.saida or {}
+        if saida.get("saida_escolhida") or saida.get("saidas_escolhidas") or saida.get("aprovacao"):
+            break
+        n += 1
+    return n
+
+
+def alertar_portao_indeciso(
+    sessao: Session,
+    execucao: Execucao,
+    *,
+    no_id: str,
+    agente_nome: str,
+    saidas: list[dict],
+    minimo: int = 2,
+) -> int:
+    """§12-A — um turno de portão que termina SEM escolher caminho e SEM pedir aprovação
+    é hoje indistinguível de "ele perguntou de propósito": silêncio total, e a execução
+    fica parada esperando uma decisão que ninguém vai tomar.
+
+    Quando o nó TEM caminhos a escolher (2+ saídas condicionais) e isso se REPETE, a
+    causa é quase sempre markdown que não conhece os rótulos do nó — o agente trabalha
+    por dentro da conversa e nunca declara o ramo, então o fluxo não anda. Foi o que
+    prendeu a execução e76224a6 (2026-09-21): o nó tinha `aprovado`/`reprovado`, o
+    markdown do agente não citava nenhum dos dois, e ele regenerou o material rodada
+    após rodada sem nunca liberar o caminho.
+
+    Uma rodada isolada sem decisão é LEGÍTIMA (pedir um esclarecimento). O que denuncia
+    o defeito é a repetição — daí o `minimo`. Só deixa rastro; não muda o fluxo.
+    Devolve o número de rodadas seguidas sem decisão."""
+    if len(saidas) < 2:
+        return 0
+    n = rodadas_sem_decidir(sessao, execucao.id, no_id)
+    if n < minimo:
+        return n
+    registrar_evento(
+        categoria="execucao",
+        acao="portao.indeciso",
+        nivel="error",
+        resultado="falha",
+        persistir=True,
+        recurso_tipo="execucao",
+        recurso_id=execucao.id,
+        detalhe={
+            "agente": agente_nome,
+            "no": no_id,
+            "rodadas_sem_decidir": n,
+            "saidas": [s.get("rotulo") for s in saidas if s.get("rotulo")],
+            "efeito": (
+                "o fluxo não anda: o agente conversa mas não declara por qual caminho "
+                "seguir — confira se o markdown dele cita os rótulos das saídas"
+            ),
+        },
+    )
+    return n
+
+
 def avancar_apos_gate(
     sessao: Session,
     execucao: Execucao,
@@ -373,6 +443,13 @@ def _retomar_conversando_tela(
     if pausa or not escolhidas:
         execucao.estado = "aguardando_humano"
         sessao.commit()
+        if not pausa:
+            # Só conversou: se o nó tinha caminhos e isso já se repetiu, vira alarme
+            # em vez de silêncio (§12-A). Mesma régua no canal (`servico`).
+            alertar_portao_indeciso(
+                sessao, execucao, no_id=no_id or "",
+                agente_nome=agente.nome, saidas=saidas,
+            )
         from mensageria import aprovacao
         aprovacao.vincular_pausa(sessao, execucao)
         sessao.commit()

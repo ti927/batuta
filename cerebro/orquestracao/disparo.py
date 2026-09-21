@@ -392,6 +392,55 @@ def criar_execucao(
     return execucao
 
 
+RECUSA_MSG = (
+    "⚠️ Não consegui processar essa resposta — o histórico desta aprovação chegou "
+    "incompleto ao provedor de IA (costuma acontecer quando a mesma aprovação é "
+    "respondida por dois lugares ao mesmo tempo).\n\n"
+    "Nada se perdeu e o fluxo NÃO foi encerrado: a aprovação continua aberta. "
+    "Responda de novo, por aqui ou pelo batuta.team."
+)
+
+
+def _entrada_recusada(sessao: Session, execucao: Execucao, erro: Exception) -> bool:
+    """A retomada morreu porque a ENTRADA não podia ser aceita — histórico de conversa
+    mal formado (§4.5 de `docs/FALHAS-DO-MOTOR.md`). Devolve a execução à espera em vez
+    de matá-la, e avisa quem estava esperando.
+
+    Por que não é `falhou`: o fluxo não errou nada. Quem chegou quebrado foi o estado
+    salvo, e encerrar a execução por isso perde todo o trabalho já feito, dispara o
+    aviso de falha para o time e ainda conta para o disjuntor da automação — três
+    punições por um defeito que não é dela. Foi exatamente o estrago de 2026-09-21: um
+    400 de protocolo matou uma execução de quase 4 horas.
+
+    Só devolve à espera quando o último passo AINDA é a pausa — se a cadeia já andou
+    para outro nó, `aguardando_humano` seria mentira, e aí vale o caminho normal de
+    falha. Devolve True se tratou."""
+    from orquestracao import llm as _llm
+
+    if not _llm.historico_invalido(erro):
+        return False
+    ultimo = sessao.scalars(
+        select(PassoExecucao)
+        .where(PassoExecucao.execucao_id == execucao.id)
+        .order_by(PassoExecucao.ordem.desc())
+    ).first()
+    if ultimo is None or ultimo.tipo != "espera_humano":
+        return False
+    execucao.estado = "aguardando_humano"
+    registrar_evento(
+        categoria="execucao", acao="retomada.entrada_recusada", nivel="error",
+        resultado="falha", erro=erro, recurso_tipo="execucao", recurso_id=execucao.id,
+        detalhe={
+            "efeito": "a espera foi mantida; a execução NÃO foi encerrada",
+            "causa_provavel": "duas superfícies responderam a mesma aprovação",
+        },
+    )
+    from mensageria import aprovacao as _aprovacao
+
+    _aprovacao.avisar_quem_espera(sessao, execucao, RECUSA_MSG)
+    return True
+
+
 def rodar_retomada(sessao: Session, execucao: Execucao) -> Execucao:
     """Roda em SEGUNDO PLANO a retomada de um portão aprovado (§12-A). O worker da fila
     já reivindicou a execução (`em_andamento`) e detectou `retomada_resposta` preenchida.
@@ -436,16 +485,27 @@ def rodar_retomada(sessao: Session, execucao: Execucao) -> Execucao:
             if execucao.estado != "aguardando_humano":
                 aprovacao.desvincular(sessao, execucao.id)
         except Exception as e:  # falha na re-rodada do agente do portão — visível, não muda
-            execucao.estado = "falhou"
-            execucao.resultado = {"erro": str(e)}
-            execucao.finalizada_em = datetime.now(timezone.utc)
             execucao.atividade = None
             execucao.atividade_em = None
-            registrar_evento(
-                categoria="execucao", acao="retomada.falhou", nivel="error",
-                resultado="falha", erro=e, recurso_tipo="execucao", recurso_id=execucao.id,
-            )
-            circuito.apos_falha(sessao, execucao, str(e))
+            if _entrada_recusada(sessao, execucao, e):
+                # A ENTRADA não pôde ser aceita (histórico mal formado) — o fluxo não
+                # errou nada. A espera continua de pé e a pessoa pode responder de novo;
+                # matar a execução aqui seria punir o trabalho pelo defeito do estado.
+                pass
+            else:
+                execucao.estado = "falhou"
+                execucao.resultado = {"erro": str(e)}
+                execucao.finalizada_em = datetime.now(timezone.utc)
+                registrar_evento(
+                    categoria="execucao", acao="retomada.falhou", nivel="error",
+                    resultado="falha", erro=e, recurso_tipo="execucao",
+                    recurso_id=execucao.id,
+                )
+                circuito.apos_falha(sessao, execucao, str(e))
+                # §12-A: execução morta não pode deixar uma conversa viva apontando para
+                # ela. Era assim que o agente seguia conversando (e trabalhando) por um
+                # canal cujo fluxo já tinha morrido — o caos de 2026-09-21.
+                aprovacao.desvincular(sessao, execucao.id)
         sessao.commit()
         sessao.refresh(execucao)
         # A filha pode ter parado numa aprovação e só agora terminado: quem espera por

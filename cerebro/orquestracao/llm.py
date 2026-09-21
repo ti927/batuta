@@ -218,6 +218,32 @@ def texto_da_resposta(resposta: AIMessage) -> str:
     return "".join(partes)
 
 
+# Marcas de um 400 de PROTOCOLO: o histórico de conversa enviado ao provedor estava
+# mal formado — tipicamente um pedido de ferramenta sem o resultado correspondente. Não
+# é defeito do fluxo nem do modelo: é o ESTADO salvo que chegou pela metade. A da
+# Anthropic é a confirmada em produção (execução e76224a6, 2026-09-21: dois processos
+# escrevendo o mesmo thread do LangGraph bifurcaram o checkpoint e a tela leu o estado
+# no meio de três chamadas de ferramenta em voo). As outras duas seguem o mesmo padrão
+# nos respectivos provedores e estão aqui para o defeito não voltar mudo noutro motor.
+_MARCAS_HISTORICO_INVALIDO = (
+    ("tool_use", "tool_result"),  # Anthropic — confirmada
+    ("tool_call", "tool"),  # OpenAI
+    ("function_call", "function_response"),  # Google
+)
+
+
+def historico_invalido(erro: BaseException | str) -> bool:
+    """Se este erro é um 400 de protocolo (histórico mal formado), e não uma falha do
+    trabalho em si. A distinção importa porque o tratamento é OPOSTO: uma falha do fluxo
+    encerra a execução e conta para o disjuntor; um histórico inválido significa que a
+    ENTRADA não podia ser aceita — a execução não fez nada de errado e não pode morrer
+    por causa disso (§12-A: a queda tem de ter endereço, não vítima)."""
+    texto = str(erro).lower()
+    if "400" not in texto and "invalid_request" not in texto:
+        return False
+    return any(a in texto and b in texto for a, b in _MARCAS_HISTORICO_INVALIDO)
+
+
 def chamar(texto: str, modelo_ia: str | None = None) -> str:
     """Chamada simples: manda um texto, devolve a resposta em texto.
     É a peça mínima da Fase 4; a orquestração completa cresce a partir daqui."""

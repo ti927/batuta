@@ -341,6 +341,48 @@ def _registrar_apresentado(
     sessao.flush()
 
 
+def avisar_quem_espera(sessao: Session, execucao: Execucao, mensagem: str) -> bool:
+    """Manda um recado à pessoa que está esperando ESTA execução, pelo mesmo canal por
+    onde a aprovação foi pedida, e grava na thread da conversa. Devolve se entregou.
+
+    §12-A — "recado honesto a quem estava esperando". `avisar_falha` (`mensageria/aviso`)
+    fala com o canal do TIME, que é quem opera; este fala com o APROVADOR, que é quem
+    está com o celular na mão esperando uma resposta que não veio. São públicos
+    diferentes e os dois precisam saber.
+
+    NUNCA levanta: é chamada de dentro de caminhos de erro, que não podem quebrar por
+    causa do aviso."""
+    try:
+        conversa = sessao.scalars(
+            select(Conversa)
+            .where(Conversa.execucao_id == execucao.id)
+            .where(Conversa.estado != "fechada")
+        ).first()
+        if conversa is None:
+            return False
+        inst = sessao.get(Instrumento, conversa.instrumento_id)
+        if inst is None:
+            return False
+        token = segredos_instrumento.decifrar(sessao, inst.id).get("token_bot")
+        entregue = bool(
+            token and telegram.enviar(token, conversa.contato_chave, mensagem).get("ok")
+        )
+        sessao.add(
+            MensagemConversa(
+                conversa_id=conversa.id, papel="agente",
+                conteudo=mensagem, entregue=entregue,
+            )
+        )
+        sessao.flush()
+        return entregue
+    except Exception as e:  # o aviso nunca derruba quem o chamou — mas também não some
+        registrar_evento(
+            categoria="mensageria", acao="aviso_ao_aprovador.quebrou", nivel="error",
+            resultado="falha", erro=e, recurso_tipo="execucao", recurso_id=execucao.id,
+        )
+        return False
+
+
 def desvincular(sessao: Session, execucao_id: uuid.UUID) -> None:
     """Desfaz o vínculo de qualquer conversa que apontava para esta execução (ex.:
     a aprovação foi resolvida pela tela). Seguro chamar mesmo sem vínculo."""

@@ -1300,12 +1300,24 @@ def _turno_de_portao(
 
     falou = bool((resultado.get("saida") or "").strip())
     por_rotulo = {s["rotulo"]: s for s in saidas if s.get("rotulo")}
+    # Ele pediu aprovação DE NOVO, de dentro do próprio turno de portão (regenerou o
+    # material e chamou `pedir_aprovacao`). O caminho da TELA já tratava isso
+    # (`retoma._retomar_conversando_tela`); aqui o `pausado` era ENGOLIDO e o pedido novo
+    # virava um "ele perguntou" qualquer — com duas consequências: o passo saía sem o
+    # bloco `aprovacao`, que é justamente o que `aprovacao.config_aprovacao` lê para
+    # saber POR ONDE a aprovação foi pedida (a execução ficava sem endereço, impossível
+    # de re-amarrar a um canal), e o rastro não distinguia "pediu de novo" de
+    # "conversou". Foi o que aconteceu na execução e76224a6 (2026-09-21).
+    pausa = (resultado.get("aprovacao") or None) if resultado.get("pausado") else None
     # Fan-out: o agente do portão pode liberar VÁRIOS caminhos de uma vez (aprovar a
     # capa alimenta o Carrossel E o Story). `ramo_escolhido` fica de retrocompat.
     ramos = list(resultado.get("ramos_escolhidos") or [])
     if not ramos and resultado.get("ramo_escolhido"):
         ramos = [resultado["ramo_escolhido"]]
-    escolhidas = [por_rotulo[r] for r in ramos if r in por_rotulo]
+    # Pediu aprovação = está esperando, não trabalhando: nenhum ramo anda nesta rodada.
+    # (`executar_agente` já devolve a lista vazia ao pausar; a guarda é defensiva e
+    # deixa a regra explícita em vez de depender do contrato do outro módulo.)
+    escolhidas = [] if pausa else [por_rotulo[r] for r in ramos if r in por_rotulo]
 
     # Fatia 4.2 (unificação do rastro): o portão pelo CANAL passa a deixar um passo
     # `espera_humano` na timeline do fluxo — como a tela (`retoma._retomar_conversando_tela`)
@@ -1334,6 +1346,9 @@ def _turno_de_portao(
                 "saida_escolhida": escolhidas[0]["rotulo"] if escolhidas else None,
                 "saidas_escolhidas": [s["rotulo"] for s in escolhidas],
                 **({"anotou": sorted(anotou)} if anotou else {}),
+                # Por onde ele pediu a aprovação NOVA — mesmo campo que o caminho da
+                # tela grava (`disparo._fazer_registrador`) e que `config_aprovacao` lê.
+                **({"aprovacao": pausa} if pausa else {}),
                 "uso": [],
             },
             estado="concluido",
@@ -1365,6 +1380,12 @@ def _turno_de_portao(
         # curto à pessoa (mesma regra do portão mecânico), p/ ela não ficar no vácuo.
         if not falou and not _agente_falou_por_ultimo(sessao, conversa.id):
             _enviar_e_registrar(sessao, conversa, token, _ack_aprovacao(execucao))
+    elif not pausa:
+        # Só conversou: se o nó tinha caminhos e isso já se repetiu, vira alarme em vez
+        # de silêncio (§12-A). Mesma régua da tela (`retoma._retomar_conversando_tela`).
+        retoma.alertar_portao_indeciso(
+            sessao, execucao, no_id=no_id, agente_nome=agente.nome, saidas=saidas,
+        )
     # Senão: o agente perguntou (ou não produziu nada) → segue aguardando; o sweeper
     # governa o silêncio — a conversa NUNCA fica aberta para sempre.
     # Guarda do turno ATRASADO: o avanço do FLUXO acima é verdade e fica; mas o estado
