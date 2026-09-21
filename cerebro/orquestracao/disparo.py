@@ -474,6 +474,26 @@ def rodar_retomada(sessao: Session, execucao: Execucao) -> Execucao:
     `retomar_execucao` gerencia os próprios commits/estados (concluida/aguardando_humano/
     falhou). Aqui envolvemos com chaves+atividade+contexto e tratamos a falha da re-rodada
     do agente (que ele pode levantar) de forma visível, sem deixar a execução pendurada."""
+    # A posse é da TELA desde o clique em "responder", mas ela tem PRAZO: se esta
+    # retomada ficou na fila mais tempo que o prazo (os três trabalhadores ocupados com
+    # trabalho longo), a posse venceu e o canal pode tê-la assumido no intervalo. Aqui é
+    # o último ponto onde dá para conferir — e se a posse não for nossa, não rodamos:
+    # rodar assim seria recriar exatamente a concorrência que este mecanismo existe para
+    # impedir. A resposta do humano NÃO é consumida (só se consome o que se vai usar), a
+    # execução volta para a fila, e o próximo giro tenta de novo — quando o turno do
+    # canal terminar, a posse estará livre.
+    if not dono.tomar(sessao, execucao.id, dono.TELA):
+        execucao.estado = "aguardando"
+        sessao.commit()
+        registrar_evento(
+            categoria="fila", acao="retomada.adiada", nivel="warning",
+            recurso_tipo="execucao", recurso_id=execucao.id,
+            detalhe={
+                "dono": dono.quem_tem(sessao, execucao.id),
+                "efeito": "a resposta do humano foi preservada; a retomada tenta de novo",
+            },
+        )
+        return execucao
     resposta = execucao.retomada_resposta or ""
     execucao.retomada_resposta = None
     sessao.commit()
@@ -489,12 +509,6 @@ def rodar_retomada(sessao: Session, execucao: Execucao) -> Execucao:
     ):
         chaves, origens = resolver_chaves_por_time(sessao, time_id)
         from mensageria import aprovacao, retoma
-        # A posse já é da TELA desde o clique em "responder" (a rota a tomou antes de
-        # enfileirar, para o canal não entrar no intervalo entre o clique e este momento).
-        # Aqui ela é RENOVADA — o relógio conta de agora, que é quando o trabalho começa —
-        # e devolvida no fim, aconteça o que acontecer.
-        dono.tomar(sessao, execucao.id, dono.TELA)
-        sessao.commit()
         try:
             with usar_chaves(chaves), atividade.usar_atividade(
                 lambda t: _escrever_atividade(execucao.id, t)

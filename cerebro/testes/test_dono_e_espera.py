@@ -377,3 +377,27 @@ def test_o_vigia_da_espera_carimba_o_batimento(sessao, dados, monkeypatch):
     espera.varrer_esquecidas_job()
 
     assert vigias.atraso_s("esperas_humanas") is not None
+
+
+def test_retomada_adia_quando_a_posse_venceu_e_o_canal_assumiu(sessao, dados, monkeypatch):
+    """O furo estreito: a posse da tela tem prazo, e uma retomada que ficou na fila mais
+    tempo que o prazo poderia rodar em cima de um turno do canal — recriando exatamente
+    a concorrencia que este mecanismo existe para impedir. A resposta do humano NAO e
+    consumida: so se consome o que se vai usar."""
+    from orquestracao import disparo
+
+    canal, ag, auto = _monta(sessao, dados)
+    execucao = _exec_pausada(sessao, auto, ag, canal)
+    execucao.retomada_resposta = "aprovado"
+    execucao.estado = "em_andamento"
+    sessao.flush()
+    dono.tomar(sessao, execucao.id, dono.CANAL)  # o canal assumiu no intervalo
+    rodou = []
+    monkeypatch.setattr(retoma, "executar_agente", lambda *a, **k: rodou.append(1) or {})
+
+    disparo.rodar_retomada(sessao, execucao)
+
+    assert not rodou
+    sessao.refresh(execucao)
+    assert execucao.estado == "aguardando"            # volta para a fila
+    assert execucao.retomada_resposta == "aprovado"   # e a resposta esta intacta
