@@ -285,7 +285,8 @@ function CanvasInterno({
   const edges = useMemo<Edge[]>(() => {
     const out: Edge[] = [];
     for (const no of cadeia.nos ?? []) {
-      for (const sa of no.saidas ?? []) {
+      const nSaidas = (no.saidas ?? []).length;
+      for (const [iSaida, sa] of (no.saidas ?? []).entries()) {
         if (!porIdNo.has(sa.destino) || !sa.id) continue;
         const c = corDaSaida(sa);
         const pp = papel(sa);
@@ -326,6 +327,12 @@ function CanvasInterno({
             apagado,
             comErro,
             comRegra: !!sa.regra?.campo,
+            // Cada saída dobra num ponto diferente: dois fios do mesmo passo indo
+            // para a mesma coluna deixam de andar colados um sobre o outro.
+            curva: Math.min(
+              0.78,
+              Math.max(0.22, 0.5 + (iSaida - (nSaidas - 1) / 2) * 0.09),
+            ),
             noId: no.id,
             saidaId: sa.id,
             onPick: selecionarSaida,
