@@ -1397,6 +1397,7 @@ export function InspecaoExecucao({
           meuPapel={meuPapel}
           tipos={tipos}
           conversaId={conversaId ?? null}
+          abrirEditando
           onFechar={() => setEditAgenteId(null)}
         />
       )}

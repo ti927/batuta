@@ -507,6 +507,7 @@ function EditorEstudio({
           agente={agenteEdit}
           indice={agentes.findIndex((a) => a.id === agenteEdit.id)}
           cinto={cintos[agenteEdit.id] ?? []}
+          abrirEditando
           instrumentosTime={instrumentos}
           time={time}
           meuPapel={meuPapel}

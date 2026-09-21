@@ -775,6 +775,7 @@ function BuilderInterno({
           agente={agenteEdit}
           indice={agentes.findIndex((a) => a.id === agenteEdit.id)}
           cinto={cintos[agenteEdit.id] ?? []}
+          abrirEditando
           instrumentosTime={instrumentosTime}
           time={time}
           meuPapel={meuPapel}

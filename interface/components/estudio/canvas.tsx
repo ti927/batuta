@@ -9,8 +9,11 @@
 // paralela e não pode arrastar a que está no ar.
 //
 // O que é novo aqui: o desenho se confere sozinho (painel de problemas), o foco
-// desbota o que não interessa, o mapa mostra onde você está num fluxo grande, e
-// "organizar" arruma tudo em colunas.
+// desbota o que não interessa e o mapa mostra onde você está num fluxo grande.
+//
+// NÃO tem "organizar sozinho": existiu, e o maestro cortou — bagunçava o desenho que
+// ele já tinha arrumado à mão, e não havia como desfazer. Um arrumador só volta aqui
+// se for reversível; enquanto não for, a mão da pessoa manda.
 
 import "@xyflow/react/dist/style.css";
 
@@ -40,7 +43,6 @@ import {
   ChevronUp,
   Hourglass,
   Layers,
-  LayoutGrid,
   Plus,
   Repeat2,
   ShieldAlert,
@@ -56,7 +58,6 @@ import type {
 } from "@/lib/api";
 import { RobotFace } from "@/components/robot-face";
 
-import { arrumar } from "./arrumar";
 import { corDaSaida, tracejado } from "./cores";
 import { tiposDeArestaEstudio } from "./aresta";
 import { tiposDeNoEstudio, type DadosNoEstudio } from "./nos";
@@ -468,20 +469,6 @@ function CanvasInterno({
     [setCadeia, setSelId, setSaidaSel],
   );
 
-  const organizar = useCallback(() => {
-    const alturas: Record<string, number> = {};
-    for (const n of rfNodes) {
-      const h = n.measured?.height ?? n.height;
-      if (h) alturas[n.id] = h;
-    }
-    const pos = arrumar(cadeia, alturas);
-    setCadeia((c) => ({
-      ...c,
-      nos: (c.nos ?? []).map((n) => (pos[n.id] ? { ...n, ...pos[n.id] } : n)),
-    }));
-    setTimeout(() => fitView({ duration: 320, padding: 0.16 }), 60);
-  }, [rfNodes, cadeia, setCadeia, fitView]);
-
   const irPara = useCallback(
     (p: Problema) => {
       if (!p.noId) return;
@@ -545,15 +532,6 @@ function CanvasInterno({
       {/* ── barra de ferramentas ── */}
       <Panel position="top-right">
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={organizar}
-            disabled={!podeEditar}
-            title="Arruma os cartões em colunas, seguindo a ordem do fluxo"
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#E8E6F0] bg-white px-3 text-[13px] font-medium text-[#1A1730] shadow-sm hover:bg-[#FAFAF7] disabled:opacity-50"
-          >
-            <LayoutGrid size={15} color="#6D4AFF" /> Organizar
-          </button>
           {podeEditar && (
             <div className="relative">
               <button

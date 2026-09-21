@@ -29,11 +29,11 @@ import type { Agente, Instrumento, NoCadeia, SaidaCadeia } from "@/lib/api";
 import { IconeInstrumento } from "@/components/icone-instrumento";
 import { RobotFace } from "@/components/robot-face";
 
-import { LARGURA_NO } from "./arrumar";
 import { papel, type Problema } from "./problemas";
 import { corDaSaida } from "./cores";
 
-const MAX_BADGES = 3;
+/** Largura de todo cartão. Mora aqui porque é uma medida DO cartão, não do canvas. */
+export const LARGURA_NO = 268;
 
 export type DadosNoEstudio = {
   no: NoCadeia;
@@ -432,10 +432,11 @@ export function AgenteNode({ data, selected }: NodeProps) {
   const d = data as DadosNoEstudio;
   const ag = d.agente;
   const modelo = (ag?.modelo_ia ?? "").replace("claude-", "");
+  // O CINTO INTEIRO no cartão. Antes o excedente virava "+3 mais…", e esconder
+  // instrumento no cartão é esconder o que o agente sabe fazer — justamente o que se
+  // vem ver aqui. Cartão mais alto é o preço, e é barato.
   const cinto = d.cinto ?? [];
   const esperaPessoa = cinto.some((i) => i.tipo === "pedir_aprovacao");
-  const mostrados = cinto.length <= MAX_BADGES ? cinto : cinto.slice(0, MAX_BADGES - 1);
-  const resto = cinto.length - mostrados.length;
 
   return (
     <Cartao d={d} selected={selected}>
@@ -494,7 +495,7 @@ export function AgenteNode({ data, selected }: NodeProps) {
           </div>
           {cinto.length > 0 && (
             <div className="mt-0.5 flex flex-col gap-1">
-              {mostrados.map((inst) => (
+              {cinto.map((inst) => (
                 <button
                   key={inst.id}
                   type="button"
@@ -512,18 +513,6 @@ export function AgenteNode({ data, selected }: NodeProps) {
                   <span className="truncate text-[11px] text-[#4A4860]">{inst.nome}</span>
                 </button>
               ))}
-              {resto > 0 && ag && (
-                <button
-                  type="button"
-                  className="nodrag rounded-md px-1.5 py-0.5 text-left text-[11px] font-medium text-[#6D4AFF] hover:underline"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    d.onEditarAgente?.(ag.id);
-                  }}
-                >
-                  +{resto} mais…
-                </button>
-              )}
             </div>
           )}
         </div>

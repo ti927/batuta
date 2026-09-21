@@ -47,6 +47,7 @@ export function DrawerAgente({
   meuPapel,
   tipos,
   conversaId,
+  abrirEditando,
   onFechar,
 }: {
   agente: Agente | null;
@@ -59,6 +60,10 @@ export function DrawerAgente({
   // editar a config do instrumento (no popup e na leitura). Opcional (degradação).
   tipos?: TipoInstrumento[];
   conversaId: string | null;
+  // Abriu pelo LÁPIS (intenção de editar), não por clique no cartão (intenção de
+  // ler)? Então já nasce no popup amplo, em edição. Quem clicou no lápis não quer
+  // ver a ficha e depois procurar como editá-la — quer escrever.
+  abrirEditando?: boolean;
   onFechar: () => void;
 }) {
   const router = useRouter();
@@ -68,11 +73,13 @@ export function DrawerAgente({
   const souAdmin = podeAdmin(meuPapel);
   const criando = agente === null;
 
-  const [editando, setEditando] = useState(criando);
+  // Criando sempre edita. Vindo do lápis, também — desde que a pessoa possa editar
+  // (o observador cai na leitura, e não numa tela de edição que ele não salva).
+  const [editando, setEditando] = useState(criando || (!!abrirEditando && souOperador));
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   // Só a edição/criação pode virar popup amplo (90%×90%); a leitura fica no drawer.
-  const [amplo, setAmplo] = useState(false);
+  const [amplo, setAmplo] = useState(!!abrirEditando && (criando || souOperador));
   const ampliado = amplo && (editando || criando);
   // Um drawer de instrumento aberto POR CIMA (via PainelCinto). Enquanto isso, o Esc
   // e o clique no fundo do popup ficam suspensos — o de cima fecha primeiro.
