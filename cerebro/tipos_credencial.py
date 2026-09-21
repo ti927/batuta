@@ -112,15 +112,23 @@ registrar(
         (CampoCredencial("token_bearer", "Token"),),
     )
 )
-# Servidor MCP. O ENDEREÇO é o segredo: servidores como o do Zapier embutem a chave
-# no caminho (`.../mcp/s/<chave>/mcp`), então quem tem a URL tem a conta. Guardá-la
-# aqui, e não no instrumento, é o que permite o instrumento ser do TIME e a chave ser
-# uma só na organização — rotacionou, troca num lugar. Ver `docs/MCP-AGENTES.md`.
+# Servidor MCP. UMA credencial carrega a conexão INTEIRA — endereço e token —, porque
+# um instrumento aponta para uma credencial só: separá-los em duas obrigaria a colar
+# metade da conexão no instrumento, e aí o time volta a ter cópia do segredo.
+#
+# Os dois são secretos e os dois podem faltar, porque os servidores autenticam de
+# jeitos diferentes: o Zapier (caminho não-interativo) dá endereço genérico
+# + token Bearer; outros embutem a chave no próprio caminho
+# (`.../mcp/s/<chave>/mcp`) e não têm token. Preencha o que o seu servidor usar.
+# Ver `docs/MCP-AGENTES.md`.
 registrar(
     TipoCredencial(
         "mcp",
-        "Servidor MCP (endereço com chave)",
-        (CampoCredencial("url", "Endereço do servidor MCP"),),
+        "Servidor MCP (endereço e token)",
+        (
+            CampoCredencial("url", "Endereço do servidor MCP"),
+            CampoCredencial("token_bearer", "Token de autenticação (se o servidor pedir)"),
+        ),
     )
 )
 # Instagram (API com login do Instagram). O maestro cola o token de longa duração

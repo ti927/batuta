@@ -235,6 +235,27 @@ def test_lista_de_ferramentas_fica_em_cache(monkeypatch):
     mcp_mod._CACHE.clear()
 
 
+def test_credencial_mcp_carrega_a_conexao_inteira():
+    """Um instrumento aponta para UMA credencial (`credencial_id` é um só). Se a
+    credencial do MCP tivesse só o endereço, o token teria de ser colado no
+    instrumento — e aí cada time voltaria a ter uma cópia do segredo, que é
+    exatamente o que tirá-lo do instrumento resolveu."""
+    import tipos_credencial
+
+    tc = tipos_credencial.obter_tipo("mcp")
+    assert tc is not None
+    assert tc.nomes_campos == ("url", "token_bearer")
+    # os dois campos do instrumento ficam cobertos por ESTA credencial sozinha —
+    # senão a tela marcaria o instrumento como incompleto para sempre
+    from segredos_instrumento import pendentes
+
+    assert pendentes(
+        "conectar_mcp",
+        guardados=set(),
+        cobertos_por_credencial=frozenset(tc.nomes_campos),
+    ) == []
+
+
 def test_servidor_fora_do_ar_nao_derruba_o_passo():
     """Defeito 4 (§12-A): montar o cinto de um MCP fala com o servidor. Antes, um
     servidor de terceiro fora do ar derrubava o passo INTEIRO — inclusive os outros

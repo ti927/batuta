@@ -138,3 +138,37 @@ Trocar o OAuth próprio pelo Zapier **move** a dependência:
   ser confirmado.
 - **Mais um elo que cai.** Um servidor MCP de terceiro é mais uma saída para fora do
   processo. Por isso a Fatia 3 não é opcional.
+
+
+---
+
+## 8. O caminho concreto do Zapier (2026-09-21)
+
+O Zapier tem **três** formas de autenticar, e a primeira tentativa foi na errada. O
+server que aparece como *"Claude MCP Server"* é amarrado ao cliente Claude e só oferece
+OAuth — por isso ele não mostra token nenhum. Para um backend como o Batuta, o caminho
+é o **connection token**:
+
+1. `mcp.zapier.com` → **+ Add MCP Server**
+2. Em *"Choose your AI agent"* → **See all** → **Other**
+3. No server novo, aba **Connect** → **Generate token**
+
+No Batuta, uma credencial `mcp` na central da organização com:
+
+| Campo | Valor |
+|---|---|
+| Endereço do servidor MCP | `https://mcp.zapier.com/api/v1/connect` |
+| Token de autenticação | o connection token |
+
+A URL pronta que o Zapier oferece (`...?token=...`) **também** funciona, e é a pior das
+duas: põe o segredo dentro do endereço, e endereço vaza em log com muito mais facilidade
+que um campo cifrado. A própria documentação do Zapier prefere o cabeçalho.
+
+**O token aparece uma vez só, e regerar invalida o anterior na hora** — o instrumento
+para de funcionar até alguém colar o novo.
+
+**Por que a credencial `mcp` tem DOIS campos:** um instrumento aponta para uma
+credencial só. Com só o endereço nela, o token teria de ser colado no instrumento — e
+aí cada time voltaria a ter uma cópia do segredo, que é exatamente o que tirá-lo do
+instrumento resolveu. Os dois campos são opcionais porque os servidores diferem: o
+Zapier usa endereço genérico + token; outros embutem a chave no caminho e não têm token.
