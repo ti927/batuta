@@ -348,9 +348,11 @@ export function analisar({
               nivel: "aviso",
               noId: no.id,
               saidaId: sa.id,
-              titulo: `O texto de “${quem}” nunca menciona o caminho “${sa.rotulo}”.`,
+              // Dizer "o texto do agente" não ajuda ninguém: o agente tem QUATRO
+              // textos. A frase precisa dizer onde se procurou e onde escrever.
+              titulo: `A palavra “${sa.rotulo}” não aparece em nenhum dos quatro textos de “${quem}”.`,
               comoResolver:
-                "É pelo nome exato que ele declara por onde seguiu. Escreva o nome nas Habilidades dele, ou renomeie o caminho para o nome que o texto usa (repare em erros de digitação).",
+                `Para seguir por um caminho, o agente escreve o nome dele letra por letra. Abra “${quem}” (o lápis no canto do cartão) e, em “Habilidades”, diga quando ele deve declarar “${sa.rotulo}”. Se lá já houver uma palavra parecida, então é o nome do caminho que está errado — compare as duas.`,
             });
           }
         }
