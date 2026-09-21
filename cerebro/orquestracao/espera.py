@@ -24,10 +24,10 @@ resolver. Depois disso a execução continua exatamente onde estava, respondíve
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from modelos import Automacao, Execucao
+from modelos import Automacao, Execucao, PassoExecucao
 from observabilidade.escritor import registrar_evento
 
 logger = logging.getLogger("batuta.espera")
@@ -65,8 +65,12 @@ def marcar(sessao: Session, execucao: Execucao) -> None:
 
 
 def _texto(execucao: Execucao, automacao: Automacao | None, parada_min: int) -> str:
-    horas = parada_min / 60
-    ha_quanto = f"{horas:.0f} h" if horas >= 1 else f"{parada_min} min"
+    dias, horas = parada_min / 1440, parada_min / 60
+    ha_quanto = (
+        f"{dias:.0f} dias" if dias >= 2
+        else f"{horas:.0f} h" if horas >= 1
+        else f"{parada_min} min"
+    )
     return (
         f"⏳ A automação *{(automacao.nome if automacao else 'sem nome')}* está parada há "
         f"{ha_quanto} esperando uma aprovação que ninguém respondeu.\n\n"
@@ -74,6 +78,27 @@ def _texto(execucao: Execucao, automacao: Automacao | None, parada_min: int) -> 
         "fluxo continua de onde parou assim que alguém responder.\n\n"
         f"Abra a execução no batuta.team para aprovar, reprovar ou cancelar."
     )
+
+
+def _parada_min(sessao: Session, execucao: Execucao, agora: datetime) -> int:
+    """Há quantos minutos esta execução está parada, contado do FIM DO PASSO que a
+    pausou — a única fonte que não mente.
+
+    Derivar isto de `espera_ate` (subtraindo o prazo configurado) parecia equivalente e
+    não é: `espera_ate` pode ter sido recarimbado depois, e aí a conta vira o prazo em
+    vez do tempo real. Foi o que aconteceu no primeiro uso em produção, 2026-09-21: nove
+    execuções paradas há semanas receberam a marcação naquele momento e o aviso saiu
+    dizendo "parada há 24 h" para uma que estava parada havia 90 dias. Aviso que erra o
+    tamanho do problema faz a pessoa tratá-lo como o problema errado."""
+    ultimo = sessao.scalar(
+        select(func.max(PassoExecucao.finalizado_em)).where(
+            PassoExecucao.execucao_id == execucao.id
+        )
+    )
+    desde = ultimo or execucao.iniciada_em or execucao.criado_em
+    if desde is None:
+        return 0
+    return max(0, int((agora - desde).total_seconds() // 60))
 
 
 def varrer_esquecidas(sessao: Session) -> int:
@@ -99,8 +124,7 @@ def varrer_esquecidas(sessao: Session) -> int:
 
     for ex in esquecidas:
         auto = sessao.get(Automacao, ex.automacao_id)
-        desde = ex.espera_ate - timedelta(minutes=prazo_min(auto) or 0)
-        parada_min = max(0, int((agora - desde).total_seconds() // 60))
+        parada_min = _parada_min(sessao, ex, agora)
         registrar_evento(
             categoria="execucao",
             acao="espera.esquecida",

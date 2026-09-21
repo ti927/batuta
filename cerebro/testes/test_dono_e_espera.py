@@ -401,3 +401,45 @@ def test_retomada_adia_quando_a_posse_venceu_e_o_canal_assumiu(sessao, dados, mo
     sessao.refresh(execucao)
     assert execucao.estado == "aguardando"            # volta para a fila
     assert execucao.retomada_resposta == "aprovado"   # e a resposta esta intacta
+
+
+def test_o_aviso_conta_o_tempo_REAL_de_parada(sessao, dados, monkeypatch):
+    """Primeiro uso em producao (2026-09-21): nove execucoes paradas ha semanas
+    receberam a marcacao naquele momento, e o aviso saiu dizendo "parada ha 24 h" para
+    uma que estava parada havia 90 dias — porque a conta derivava de `espera_ate` menos
+    o prazo, e nao do tempo real. Aviso que erra o TAMANHO do problema faz a pessoa
+    trata-lo como o problema errado. A fonte da verdade e o fim do passo que pausou."""
+    canal, ag, auto = _monta(sessao, dados)
+    execucao = _exec_pausada(sessao, auto, ag, canal)
+    parado_em = datetime.now(timezone.utc) - timedelta(days=90)
+    for p in _passos(sessao, execucao.id):
+        p.finalizado_em = parado_em
+    execucao.espera_ate = datetime.now(timezone.utc) - timedelta(minutes=1)
+    sessao.flush()
+    avisos = []
+    monkeypatch.setattr(espera, "registrar_evento", lambda **kw: None)
+    monkeypatch.setattr(
+        aviso, "avisar_time", lambda s, ex, t, **k: avisos.append(t) or True
+    )
+
+    espera.varrer_esquecidas(sessao)
+
+    assert "90 dias" in avisos[0]   # o tempo real, nao o prazo configurado
+    assert "24 h" not in avisos[0]
+
+
+def test_o_aviso_usa_a_unidade_que_cabe_no_tamanho(sessao, dados, monkeypatch):
+    """Dizer "2160 h" e tecnicamente certo e humanamente inutil."""
+    canal, ag, auto = _monta(sessao, dados)
+    execucao = _exec_pausada(sessao, auto, ag, canal)
+    for p in _passos(sessao, execucao.id):
+        p.finalizado_em = datetime.now(timezone.utc) - timedelta(hours=3)
+    execucao.espera_ate = datetime.now(timezone.utc) - timedelta(minutes=1)
+    sessao.flush()
+    avisos = []
+    monkeypatch.setattr(espera, "registrar_evento", lambda **kw: None)
+    monkeypatch.setattr(
+        aviso, "avisar_time", lambda s, ex, t, **k: avisos.append(t) or True
+    )
+    espera.varrer_esquecidas(sessao)
+    assert "3 h" in avisos[0]
