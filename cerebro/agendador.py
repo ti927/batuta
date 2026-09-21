@@ -455,6 +455,10 @@ def iniciar() -> None:
         trigger=IntervalTrigger(hours=PERIODO_CHECAGEM_GOOGLE_H),
         id="google_token_refresh",
         replace_existing=True,
+        # E uma volta logo após o boot. Sem isto, o `IntervalTrigger` só dispararia
+        # daqui a 6 h: cada deploy abriria uma janela cega — e deploy é exatamente
+        # quando as coisas quebram. Os 45 s deixam o app assentar primeiro.
+        next_run_time=datetime.now(timezone.utc) + timedelta(seconds=45),
     )
     # Recuperação periódica de execuções presas em `em_andamento` (worker travado
     # sem reinício do processo — que o boot já recuperaria). Complementa o
