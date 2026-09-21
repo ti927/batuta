@@ -4,7 +4,7 @@ area: "automacoes"
 slug: "execucoes-e-inspecao"
 tags: ["execucao", "inspecao", "rodar", "ao-vivo", "diagnostico", "passo-a-passo",
        "testar", "teste", "um passo"]
-revisado_em: "2026-09-03"
+revisado_em: "2026-09-21"
 fontes: ["PRODUTO.md §15", "cerebro/orquestracao/disparo.py", "cerebro/orquestracao/grafo.py (desenho_que_roda)", "cerebro/diagnostico_execucao.py", "project_navegacao-time-centrica", "feedback_feedback-constante-ao-usuario"]
 ---
 
@@ -77,6 +77,13 @@ você confirmar.
 - Um fluxo pode ficar **parado esperando uma pessoa** (o agente pediu aprovação) — isso é normal, não é falha.
 - Uma execução pode **falhar** e, dependendo do erro, ser **retentada** automaticamente — veja
   [[operacao/falhas-e-retentativa]].
+- **Se a aprovação está sendo respondida pelo Telegram, a tela diz isso e trava os
+  botões.** A mesma aprovação tem duas portas, e clicar aqui enquanto o outro lado
+  processa atropelaria um trabalho em voo. A página se atualiza sozinha e os botões voltam
+  quando aquele turno terminar. Nada se perde. Ver [[automacoes/pedir-aprovacao]].
+- **Um passo pode trazer um aviso mesmo tendo dado certo** — o mais comum é "um instrumento
+  respondeu falha e o fluxo seguiu assim mesmo". Vale conferir o efeito no sistema de
+  destino antes de considerar o passo bem-sucedido.
 - **Execução "concluída" não garante que tudo deu certo.** Uma ferramenta pode ter respondido "não deu" sem
   derrubar o fluxo; o passo guarda essa falha crua e o diagnóstico a levanta como aviso, mesmo quando o
   agente escreveu que deu certo.

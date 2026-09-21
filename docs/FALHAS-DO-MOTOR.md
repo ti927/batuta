@@ -273,6 +273,23 @@ NÃO foi feito, e por quê:
 
 ---
 
+## 4-ter. Onde isto foi documentado (2026-09-21)
+
+A lição não podia ficar só aqui. Foi espalhada para os quatro leitores do Batuta:
+
+| leitor | onde |
+|---|---|
+| **a pessoa** (dentro do app, /ajuda) | Central: `automacoes/pedir-aprovacao` (a seção nova "Depois que a pessoa responde, o agente precisa DIZER por onde seguir"), `automacoes/condicoes-e-ramos`, `automacoes/erros-no-fluxo`, `automacoes/execucoes-e-inspecao`, `operacao/sinais-e-diagnostico` |
+| **a IA criadora** (monta o time) | `criacao/prompt.py` (como escrever a regra, com exemplo) e `criacao/ferramentas.py::montar_cadeia` (rótulo que existe no desenho e não no markdown é caminho que nunca é tomado) |
+| **a IA externa** (Claude pelo MCP) | instruções do servidor + docstrings de `editar_agente`, `ativar_automacao` e `diagnosticar_execucao` |
+| **quem constrói o Batuta** | `PRODUTO.md §14/§19`, `docs/ARQUITETURA.md §4/§5`, `docs/UNIFICACAO-ESTADO.md §2`, `CLAUDE.md §9` |
+
+No caminho saiu **vocabulário morto**: a "parede de ativação" (removida em 2026-08-31) ainda era
+prometida em `docs/MCP-BATUTA.md` e nos docstrings de `criacao/{__init__,servicos,ferramentas}.py`.
+Corrigido — era exatamente o tipo de texto que faz a IA orientar o consultor pela regra errada.
+
+---
+
 ## 5. O que eu ainda NÃO verifiquei
 
 Honestidade sobre o alcance deste estudo:

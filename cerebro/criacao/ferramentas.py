@@ -5,8 +5,11 @@ Mesmo encaixe de tool-use do motor (`orquestracao.agente`): cada operação é u
 rascunho JSON — escrevem direto nas tabelas reais, pela porta única e validada de
 `criacao.servicos`. O time é criado preguiçosamente no primeiro `definir_time` e
 fica vinculado à conversa (`conversa.time_id`). Tudo nasce inativo e DORME até o
-consultor `ativar_time` — a parede de ativação recusa ligar uma ação irreversível
-sem portão humano antes. Erros de regra viram texto de volta para a IA corrigir.
+consultor `ativar_time`. NÃO há mais parede de ativação nem portão no desenho (ambos
+removidos em 2026-08-31): quem segura uma ação até alguém confirmar é o AGENTE, com
+`pedir_aprovacao` no cinto e a regra no markdown dele — e, se o nó tem 2+ saídas, com os
+RÓTULOS dessas saídas citados no markdown, senão o fluxo para aprovado. Erros de regra
+viram texto de volta para a IA corrigir.
 
 `montar_ferramentas(ctx)` constrói as ferramentas fechadas sobre um
 `ContextoCriacao` (sessão + conversa + usuário + chips), sempre TODAS disponíveis
@@ -713,6 +716,12 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         dê o instrumento ao agente e escreva a regra no skill_md dele. Um nó pode
         trazer "config": {...} para ajustar SÓ nele regras do Tipo de fluxo (ex.:
         {"timeout_min": 30}); opcional, sem isso valem os padrões.
+        E SE ESSE NÓ TEM 2+ SAÍDAS, o skill_md do agente precisa citar os RÓTULOS que
+        você acabou de escrever aqui e mandar declará-los depois da decisão. O agente é
+        quem declara o caminho quando a resposta chega; sem isso ele conversa, refaz,
+        publica e NUNCA declara — a execução fica parada para sempre, com tudo aprovado
+        (incidente de 2026-09-21). Rótulo que você inventa no desenho e não escreve no
+        markdown é um caminho que nunca vai ser tomado.
 
         Se o time tem MAIS DE UMA automação, informe `automacao_id` (pegue no retrato,
         em `automacoes`); com uma só, pode omitir. NÃO adivinhe qual — se estiver na

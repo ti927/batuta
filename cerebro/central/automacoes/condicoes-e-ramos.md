@@ -3,7 +3,7 @@ titulo: "Condições e ramos (como o fluxo escolhe o caminho)"
 area: "automacoes"
 slug: "condicoes-e-ramos"
 tags: ["condicao", "quando", "bifurcacao", "ramo", "fan-out", "grafo", "saida", "seta"]
-revisado_em: "2026-08-31"
+revisado_em: "2026-09-21"
 fontes: ["PRODUTO.md §14", "cerebro/orquestracao/cadeia.py", "cerebro/orquestracao/grafo.py"]
 ---
 
@@ -45,6 +45,11 @@ tempo (a mesma capa aprovada indo para o carrossel **e** para o story).
   juntá-los.
 - Escreva a condição do ponto de vista do **resultado daquele passo**, não do passo
   seguinte: "o texto foi aprovado", não "publicar no blog".
+- **Quando o passo PEDE APROVAÇÃO, o markdown do agente precisa conhecer as saídas.**
+  Nesse caso quem declara o caminho é ele, depois que a pessoa responde — e se a
+  documentação dele não disser o que declarar, ele conversa, refaz, publica… e nunca
+  declara. O fluxo fica parado ali para sempre, com tudo aprovado. Escreva no `skill.md`
+  o nome exato de cada saída e quando usá-la. Ver [[automacoes/pedir-aprovacao]].
 - **Decisão numérica não é caso para frase.** Quando o caminho depende de um número ou de
   uma correspondência exata (faixa de valor, campo preenchido), use a **regra exata** da
   saída: quem confere é o sistema, e a borda fica certa. Ver
@@ -67,6 +72,18 @@ nenhuma, e nesse caso vale a saída "senão", ou o ramo termina com aviso no ras
 Ao propor uma cadeia, escreva sempre a condição de cada seta em português direto. Ao
 diagnosticar "o fluxo só seguiu um caminho", confira primeiro se as condições estão
 preenchidas: automações criadas antes de 2026-08-31 têm todas vazias.
+
+**Ao montar (ou revisar) um nó que pede aprovação e tem 2+ saídas, confira SEMPRE se o
+`skill.md`/`tools.md` do agente cita os rótulos daquele nó.** Os rótulos chegam ao agente
+em tempo de execução (o motor os passa na ferramenta), mas o markdown é quem diz *o que
+fazer com eles* — e uma instrução como "se reprovado, peça feedback e refaça" faz o agente
+trabalhar dentro da conversa e nunca declarar caminho nenhum. Sintoma: a execução fica em
+`aguardando_humano` rodada após rodada; o alarme `portao.indeciso` nomeia o agente e os
+rótulos ignorados. Foi a causa do incidente de 2026-09-21 (`docs/FALHAS-DO-MOTOR.md`).
+
+Quando há **fan-out depois de uma aprovação** (dois destinos com a mesma condição), o
+markdown precisa mandar declarar **os dois** rótulos — declarar um só deixa metade do
+trabalho sem rodar, em silêncio.
 
 ## Relacionado
 - [[automacoes/cadeia-e-grafo]]

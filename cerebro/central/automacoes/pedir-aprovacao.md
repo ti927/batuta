@@ -3,8 +3,8 @@ titulo: "Pedir aprovação e aguardar"
 area: "automacoes"
 slug: "pedir-aprovacao"
 tags: ["aprovacao", "aprovar", "esperar", "humano", "instrumento", "pausa", "confirmar"]
-revisado_em: "2026-09-02"
-fontes: ["cerebro/instrumentos/pedir_aprovacao.py", "cerebro/mensageria/retoma.py", "PRODUTO.md §19"]
+revisado_em: "2026-09-21"
+fontes: ["cerebro/instrumentos/pedir_aprovacao.py", "cerebro/mensageria/retoma.py", "cerebro/orquestracao/dono.py", "cerebro/orquestracao/espera.py", "PRODUTO.md §19", "docs/FALHAS-DO-MOTOR.md"]
 ---
 
 # Pedir aprovação e aguardar
@@ -63,6 +63,29 @@ Checklist da conversão: (1) instrumento de aprovação criado e **no cinto** do
 (4) sem instrumento de aprovação duplicado no cinto — dois com o mesmo papel confundem
 a escolha.
 
+## Depois que a pessoa responde, o agente precisa DIZER por onde seguir
+Esta é a parte que mais dá problema, e vale ler com calma.
+
+Quando a aprovação chega, o Batuta religa o **mesmo agente**. Ele continua de onde parou —
+mas o fluxo **só anda** se ele declarar por qual caminho seguir. Se ele conversar, refizer
+o material, publicar e não declarar nada, a execução fica **parada naquele ponto para
+sempre**, mesmo com tudo aprovado e feito.
+
+Por isso, no `skill.md` do agente que pede aprovação, escreva o que ele faz **depois da
+decisão**, citando os **nomes exatos das saídas** daquele passo. Por exemplo:
+
+> *"Quando a pessoa APROVAR, a última coisa que você faz é declarar o caminho `aprovado`.
+> Sem isso o fluxo não anda."*
+
+Se o passo alimenta **dois** caminhos ao mesmo tempo (a capa aprovada indo para o carrossel
+**e** para o story), diga para declarar **os dois** — declarar só um deixa metade do
+trabalho sem acontecer.
+
+**Como o Batuta te avisa quando isso está errado:** se o passo tem caminhos a escolher e o
+agente conversa duas vezes seguidas sem decidir nada, entra um alarme nos registros
+(`portao.indeciso`) dizendo o nome do agente e os nomes das saídas que ele ignorou. É quase
+sempre o mesmo diagnóstico: **o markdown dele não conhece as saídas do passo.**
+
 ## Exemplos
 - Redator escreve → **pede aprovação** com o texto completo → aprovado → publica.
 - Atendente monta um lançamento no sistema do cliente → **pede aprovação** com os valores
@@ -98,6 +121,19 @@ a escolha.
   é do fluxo e responde ao *Teto de custo por execução*. Sem essa separação, um carrossel
   de três imagens estourava sozinho o teto de uma conversa inteira na primeira
   reprovação.
+- **Uma porta de cada vez.** A mesma aprovação pode ser respondida na **tela** ou pelo
+  **canal**, e as duas conversam com a mesma execução. Enquanto uma está processando, a
+  outra é recusada com um aviso claro ("esta aprovação está sendo respondida pelo Telegram
+  neste momento") — na tela os botões ficam travados até o outro turno terminar, e a página
+  se atualiza sozinha. **Nada se perde:** a mensagem recusada continua na conversa e pode
+  ser reenviada. Isso existe porque responder pelos dois lugares ao mesmo tempo corrompia
+  a memória do agente e derrubava a execução inteira (21/09/2026).
+- **Uma espera esquecida deixa de ser invisível.** Toda espera por aprovação tem prazo
+  próprio (*Tempo parada até avisar que ninguém aprovou*, 24 h por padrão, 0 = nunca
+  avisar). Ao vencer, o time recebe **um** aviso dizendo há quanto tempo aquilo está
+  parado. Ele **não encerra nada** — esperar dias por uma aprovação é legítimo; o que não
+  era legítimo é ninguém ficar sabendo. Antes disso, uma aprovação pedida só pela tela
+  (sem canal) não era varrida por vigia nenhum e podia ficar parada meses em silêncio.
 - **Um pedido de aprovação novo devolve a conversa ao bot.** Se o canal tinha sido
   passado para uma pessoa automaticamente e ninguém assumiu, o Batuta volta a ler as
   respostas — em vez de continuar pedindo aprovação por um canal em que não escuta.
@@ -113,9 +149,21 @@ gravado como `espera_humano`, carregando o canal e o destinatário. A resposta r
 MESMO agente, que continua de onde parou (memória por `execucao:nó`) e então declara os
 caminhos com `seguir_para`.
 
+A execução tem **dono** enquanto alguém mexe nela (`execucoes.dono` = `tela` | `canal` |
+`fila`, com `dono_ate` como prazo). Quem chega segundo recebe recusa honesta: a rota
+`POST /execucoes/{id}/responder` devolve 409 com a frase pronta, e o turno por canal manda
+um recado e não processa. É o que impede dois processos de abrirem o mesmo fio de memória
+do agente (`{execucao}:{nó}` no checkpointer) e bifurcarem o checkpoint.
+
+A espera carrega `espera_ate`; o vigia `esperas_humanas` avisa uma vez e zera o campo, sem
+mudar o estado. Reprovação que vem **com** o feedback não deve gerar uma pergunta de volta:
+oriente o agente a usar o que a pessoa já disse.
+
 Ao montar um time: **não desenhe portão** (não existe mais) e **não exija aprovação para
 leitura** — só para o que muda o mundo. Ponha o instrumento no cinto de quem apresenta,
-não no de quem publica, e escreva a regra no markdown do agente.
+não no de quem publica, e escreva a regra no markdown do agente — **inclusive o que ele
+declara depois da decisão, com os rótulos exatos das saídas daquele nó**. Markdown que não
+cita os rótulos é a causa nº 1 de fluxo que para depois de aprovado.
 
 ## Relacionado
 - [[automacoes/condicoes-e-ramos]]

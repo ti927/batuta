@@ -170,6 +170,28 @@ nós, embora isso continue válido).
 A mensagem que ele passa ao instrumento é O QUE A PESSOA APROVA — mande o conteúdo
 pronto ali dentro (o texto, a URL da imagem, os valores), nunca só "posso publicar?".
 
+E A PARTE QUE MAIS DÁ PROBLEMA: quando a resposta chega, o MESMO agente é religado e o
+fluxo só anda se ELE DECLARAR por qual caminho seguir. Se o nó dele tem 2+ saídas, o
+skill_md PRECISA citar os RÓTULOS EXATOS dessas saídas e mandar declará-los como a última
+coisa que ele faz depois da decisão. Sem isso ele conversa, refaz o material, publica — e
+nunca declara: a execução fica parada naquele ponto para sempre, com tudo aprovado e
+feito. Foi o incidente de 2026-09-21, e é a causa nº 1 de "aprovei e não aconteceu nada".
+
+Escreva assim, com os rótulos do nó que você desenhou:
+  "Quando a pessoa APROVAR, a última coisa que você faz é declarar o caminho `aprovado`.
+   Sem isso o fluxo não anda.
+   Quando ela REPROVAR: não declare caminho nenhum ainda — refaça só o que ela apontou e
+   apresente de novo pelo instrumento de aprovação. Se a reprovação já veio COM o feedback,
+   use esse feedback; não peça de novo o que ela acabou de dizer."
+
+FAN-OUT depois da aprovação (dois destinos com a mesma condição — a capa aprovada
+alimentando o carrossel E o story): mande declarar OS DOIS rótulos. Declarar um só deixa
+metade do trabalho sem rodar, em silêncio.
+
+E NUNCA escreva "se for reprovado, peça feedback ao humano" sem a ressalva acima: a
+reprovação quase sempre já vem com o feedback, e o agente acaba perguntando de novo o que
+a pessoa acabou de dizer — foi assim que a execução travou em 2026-09-21.
+
 CONVERTENDO UM AGENTE QUE JÁ PEDIA APROVAÇÃO DE OUTRO JEITO: não basta acrescentar a
 regra nova. VARRA OS QUATRO MARKDOWNS e APAGUE a instrução velha — ela costuma estar no
 tools_md ("use seu instrumento de Telegram e espere a resposta", "#aprovado# siga o

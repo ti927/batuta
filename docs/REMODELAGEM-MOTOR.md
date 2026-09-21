@@ -169,7 +169,7 @@ Aba Conversa lê a timeline; `MensagemConversa` vira view.
 
 **Carga essencial disfarçada de burocracia (NÃO remover):**
 - Heartbeat + sweeper de presos + recuperação de órfãos (`fila.py`, `disparo._escrever_atividade`, `recuperar_execucoes_presas`): é lei (CLAUDE.md §12-A) e é ouro. Unificar **para cima** (a versão da conversa é mais fraca — a conversa herda a do motor).
-- HITL antes de ação irreversível (parede de ativação, `gate`): produto + lei. Simplificar a mecânica, **nunca** remover a garantia.
+- HITL antes de ação irreversível: produto + lei. Simplificar a mecânica, **nunca** remover a garantia. (A mecânica MUDOU depois deste documento: a parede de ativação e o `gate` do nó foram removidos em 2026-08-31 — hoje quem para é o agente, com `pedir_aprovacao`. A garantia continua.)
 - Bifurcação A/B via `seguir_para`: é o produto. Intocável.
 - "Apresentado vs. narrado" (o que a pessoa viu, não o status que o agente narra depois): parece barroco, é correção de bug real. Preservar a semântica.
 

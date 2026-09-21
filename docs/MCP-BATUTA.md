@@ -44,7 +44,9 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
   `listar_agentes`, `ver_agente`, `ver_memoria_agente`, `listar_instrumentos`/
   `ver_instrumento` (o que é cada id do cinto: nome, tipo, config pública, segredos que
   faltam — nunca o valor de um segredo), `listar_automacoes`, `ver_automacao`,
-  `listar_execucoes`, `diagnosticar_execucao` (avisos + ação sugerida),
+  `listar_execucoes`, `diagnosticar_execucao` (avisos + ação sugerida; sabe distinguir
+  pausa legítima de travamento, e desde 21/09 lê os eventos `espera.esquecida`,
+  `portao.indeciso` e `*.entrada_recusada`),
   `listar_conversas`, `ler_conversa`, `ver_uso`, `listar_tipos_instrumento`,
   `consultar_conhecimento` (a Central).
 - **Criação núcleo:** `criar_time`/`editar_time`, `criar_agente`/`editar_agente`/
@@ -83,8 +85,16 @@ erros de domínio/acesso em texto humano (nunca stack trace — §12-A).
   nenhum caminho do MCP pode depender de decifrar. Foi assim que a criação de instrumento
   quebrou por semanas (o cálculo de segredos pendentes decifrava as chaves do pool só para
   ler o NOME do serviço) — hoje `chaves.servicos_com_chave` responde por existência.
-- **A parede de aprovação** continua valendo: `ativar_automacao` recusa automação com ação
-  irreversível sem portão humano.
+- **A aprovação é do AGENTE, e a docstring é a única defesa.** A antiga *parede de
+  ativação* (que recusava ativar automação com ação irreversível sem portão) **não existe
+  mais** — foi removida junto com o portão em 2026-08-31, e o texto que prometia isso aqui
+  ficou obsoleto por três semanas. Hoje `ativar_automacao` **ativa**, e quem segura uma
+  ação até uma pessoa confirmar é o agente, com `pedir_aprovacao` no cinto e a regra no
+  markdown dele. A docstring da ferramenta manda o Claude conferir **duas** coisas antes de
+  sugerir ativar: (1) o instrumento está no cinto e a regra está escrita; (2) se o nó tem
+  2+ saídas, o markdown **cita os rótulos** e manda declará-los depois da decisão — sem
+  isso o fluxo para aprovado, que é a causa nº 1 de "aprovei e não aconteceu nada"
+  (`docs/FALHAS-DO-MOTOR.md`).
 - **Ações irreversíveis** (`excluir_*`) têm docstring que orienta o Claude a confirmar
   antes.
 - **Auditoria:** as escritas passam `usuario=` real; os eventos levam `origem="mcp"`.

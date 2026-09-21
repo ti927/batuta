@@ -3,7 +3,7 @@ titulo: "Quando um passo dá erro"
 area: "automacoes"
 slug: "erros-no-fluxo"
 tags: ["erro", "falha", "senao", "fallback", "aviso", "resiliencia", "saida"]
-revisado_em: "2026-08-31"
+revisado_em: "2026-09-21"
 fontes: ["cerebro/orquestracao/cadeia.py", "cerebro/mensageria/aviso.py", "PRODUTO.md §16"]
 ---
 
@@ -36,9 +36,21 @@ tentar por outro caminho, registrar o ocorrido.
   **avisa** pelo canal do time (Telegram) dizendo o que quebrou, em qual passo e o que
   fazer. Se o time não tem canal com destinatário configurado, isso vira um alerta no
   registro de eventos.
-- **Falha devolvida como resposta também é falha.** Um instrumento que publica e responde
-  "não deu certo" (sem erro de conexão) derruba o passo do mesmo jeito, e nada mais roda
-  naquele passo. O texto do agente nunca é prova de que a ação aconteceu.
+- **Falha devolvida como resposta também é falha** — mas o que acontece depois depende do
+  instrumento. Se ele faz algo **irreversível** (publicar, lançar, enviar) e responde "não
+  deu certo", o turno para ali: nada mais roda naquele passo, porque a ação não aconteceu
+  e seguir em frente seria trabalhar sobre um resultado que não existe. Se ele é de
+  **leitura ou geração**, o fluxo segue — o agente recebe a falha como dado e decide —, e
+  desde 2026-09-21 o passo carrega um **aviso** dizendo que um instrumento respondeu falha
+  e nomeando qual. Nos dois casos vale a mesma regra: **o texto do agente nunca é prova de
+  que a ação aconteceu.**
+- **O fluxo não desvia sozinho para a saída de erro por causa de um `ok: false` de
+  leitura.** É de propósito: o agente pode ter tentado de novo e conseguido, e desviar à
+  força inventaria uma falha que talvez não exista. O que mudou foi a **visibilidade**, não
+  o caminho.
+- **Estourar o máximo de passos diz onde.** A mensagem nomeia o passo que está girando e
+  quantas voltas deu — é quase sempre uma seta voltando para ele sem condição que feche o
+  ciclo. Antes dizia só "possível laço infinito", que não ajudava a achar o nó.
 - **A saída de erro não repete o passo.** Ela é um caminho, não uma retentativa; para
   tentar de novo, aponte-a para um passo que tente por outro meio.
 - **Falhar sozinha 3 vezes seguidas desliga a automação.** Quando ela dispara por conta

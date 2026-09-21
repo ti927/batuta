@@ -56,7 +56,10 @@ mcp = FastMCP(
         "Batuta pela tela. (2) APROVAÇÃO é do AGENTE: não há trava de ativação nem portão no "
         "desenho — quem segura uma ação até uma pessoa confirmar é o agente, com o instrumento "
         "`pedir_aprovacao` no cinto e a regra escrita no markdown dele. Ao montar um time com "
-        "ação irreversível, confira isso ANTES de sugerir ativar. (3) Ações IRREVERSÍVEIS (`excluir_*`) apagam de verdade — confirme "
+        "ação irreversível, confira isso ANTES de sugerir ativar. E o markdown desse agente "
+        "precisa dizer o que ele DECLARA depois da decisão, com os rótulos exatos das saídas "
+        "do nó: sem isso o fluxo fica parado para sempre mesmo com tudo aprovado — é a causa "
+        "nº 1 de 'aprovei e não aconteceu nada'. (3) Ações IRREVERSÍVEIS (`excluir_*`) apagam de verdade — confirme "
         "com o consultor antes de chamar; `ativar_automacao`/`desativar_automacao` mexem "
         "numa AUTOMAÇÃO (nunca no time), então diga o nome dela ao confirmar.\n"
         "ERRO: se uma ferramenta devolver falha com um CÓDIGO, repasse o código ao consultor "
@@ -221,6 +224,16 @@ async def diagnosticar_execucao(execucao_id: str) -> str:
       chamada (quem rodou foi o chamador).
     Nas duas últimas, não diga ao consultor que travou nem mande reiniciar nada.
 
+    SOBRE `aguardando_humano`: desde 2026-09-21 ela tem PRAZO PRÓPRIO (`espera_ate`). Ao
+    vencer, um vigia avisa o time UMA vez (evento `espera.esquecida`) e NÃO encerra nada —
+    esperar dias por uma aprovação é legítimo. Se o consultor diz "aprovei e não aconteceu
+    nada" e a execução segue em `aguardando_humano` rodada após rodada, procure o evento
+    `portao.indeciso`: significa que o agente conversou sem declarar caminho nenhum, e a
+    causa quase sempre é o markdown dele não citar os rótulos das saídas daquele nó — o
+    conserto é no agente, não no motor. E se o evento for `retomada.entrada_recusada` ou
+    `portao.entrada_recusada`, a mesma aprovação foi respondida por dois lugares ao mesmo
+    tempo: não é falha, a espera continua de pé e basta responder de novo.
+
     A EXCEÇÃO: se a data de `retomar_em` já passou faz tempo, ou se a automação chamada
     já terminou e mesmo assim o chamador segue parado, aí sim há problema — e ele NÃO
     está na automação: é o vigia que solta essas execuções que morreu. Mande o consultor
@@ -375,7 +388,15 @@ async def editar_agente(
     (outro instrumento, outro caminho), leia todos antes e APAGUE a instrução antiga no
     mesmo movimento — regra nova num campo com a velha em outro faz o agente seguir a
     velha, em silêncio. Foi assim que um time voltou a pedir aprovação pelo canal cru em
-    vez do instrumento `pedir_aprovacao`, e a execução terminou sem ninguém aprovar."""
+    vez do instrumento `pedir_aprovacao`, e a execução terminou sem ninguém aprovar.
+
+    SE ESTE AGENTE PEDE APROVAÇÃO e o nó dele tem 2+ saídas, o markdown PRECISA citar os
+    rótulos exatos dessas saídas e dizer que declará-los é a última coisa que ele faz
+    depois da decisão. Use `ver_automacao` para ler os rótulos do nó antes de escrever —
+    não invente nomes. Sem isso o agente conversa, refaz o material, publica e nunca
+    declara caminho: a execução fica parada para sempre com tudo aprovado (incidente de
+    2026-09-21). Se o nó faz fan-out (dois destinos com a mesma condição), mande declarar
+    OS DOIS rótulos — declarar um só deixa metade do trabalho sem rodar, em silêncio."""
     return await anyio.to_thread.run_sync(
         escrita.editar_agente, _sub(), agente_id, nome, papel,
         agent_md, skill_md, tools_md, soul_md, modelo_ia,
@@ -550,6 +571,10 @@ async def ativar_automacao(automacao_id: str) -> str:
     irreversível sem aprovação humana. A responsabilidade é sua: antes de ativar um time
     que publica/envia/lança, confira se o agente que faz isso tem o instrumento
     `pedir_aprovacao` no cinto e a regra escrita no markdown — e diga isso ao consultor.
+    Confira JUNTO uma segunda coisa, que é a causa nº 1 de "aprovei e não aconteceu nada":
+    se o nó desse agente tem 2+ saídas, o markdown dele precisa citar os rótulos exatos
+    delas e mandar declará-los depois da decisão. Ativar um time com esse buraco entrega
+    um fluxo que para no meio, aprovado e parado.
 
     Se a automação estiver inativa com `desligada_por_falhas_em` preenchido, quem a
     desligou foi o DISJUNTOR: ela falhou 3 vezes seguidas rodando sozinha. Não religue de

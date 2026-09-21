@@ -80,6 +80,23 @@ E a ironia que fecha o argumento: **o Batuta já usa LangGraph**, que entrega is
 `interrupt()` para o portão. O Batuta roda `create_react_agent` **sem** checkpointer e **reimplementou à
 mão, na borda,** o que a estante já tinha. A cura não é exótica; é **ligar a peça que já existe.**
 
+### O que a cura trouxe junto, e que este documento não previa (2026-09-21)
+
+Ligar o estado persistente resolveu o "renasce" — e criou um problema novo, que só apareceu em produção:
+**estado compartilhado precisa de dono.** O `thread_id` do portão (`{execucao}:{nó}`) é montado igual
+pelas **duas** superfícies que retomam uma aprovação (a tela e o canal). Em 21/09 as duas entraram no
+mesmo thread com 1m45s de diferença, o checkpoint **bifurcou** (dois filhos do mesmo pai, o mesmo `step`)
+e a Anthropic recusou o histórico pela metade — matando uma execução de quase 4 h.
+
+Isso é a **mesma doença deste documento, vista pelo outro lado**: aqui ela foi enunciada como *"estado que
+devia ser persistente vivia só no texto"*; lá ela é *"estado que pertence à EXECUÇÃO vivia só na borda"* —
+a trava na `conversas.estado`, o relógio na `conversas.aguardando_ate`, o endereço no passo, e o dono do
+fio em lugar nenhum. A cura tem a mesma forma: **trazer para a execução o que é da execução.**
+
+O catálogo completo (51 modos de falha) e o que foi construído estão em
+[`FALHAS-DO-MOTOR.md`](FALHAS-DO-MOTOR.md). A lição para as fatias que ainda vierem: **toda peça de estado
+persistente nasce com um dono e um prazo** — senão a economia de tokens vira corrupção de estado.
+
 ---
 
 ## 3. As duas frentes do programa

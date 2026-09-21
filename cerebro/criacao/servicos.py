@@ -11,8 +11,10 @@ leituras seguintes enxergarem. Quem chama controla a transação (a rota commita
 requisição; o laço da IA commita ao fim do turno). Erros de regra de negócio viram
 `ConflitoDominio` (o chamador traduz para 409/texto).
 
-Segurança (parede de ativação): `ativar` exige portão humano antes de agente com
-ação irreversível — ver `portao_ativacao`.
+Segurança: `ativar` NÃO tem mais trava (a parede de ativação foi removida em
+2026-08-31, junto com o portão). A garantia contra ação irreversível é o instrumento
+`pedir_aprovacao` no cinto do agente + a regra escrita no markdown dele; quem monta o
+time é responsável por conferir isso antes de ativar.
 """
 
 import uuid

@@ -2,7 +2,7 @@
 titulo: "Sinais e diagnóstico (quando algo trava ou degrada)"
 area: "operacao"
 slug: "sinais-e-diagnostico"
-tags: ["diagnostico", "log", "evento", "travou", "preso", "degradado", "silencio", "observabilidade", "turno", "status", "elo", "rede", "congelou", "reconectar"]
+tags: ["diagnostico", "log", "evento", "travou", "preso", "degradado", "silencio", "observabilidade", "turno", "status", "elo", "rede", "congelou", "reconectar", "aprovacao", "esquecida", "dono", "fila"]
 revisado_em: "2026-09-02"
 fontes: ["cerebro/observabilidade/escritor.py", "cerebro/mensageria/sweeper.py", "cerebro/orquestracao/memoria_conversa.py", "cerebro/diagnostico_execucao.py", "cerebro/saude_elos.py", "CLAUDE.md §12-A"]
 ---
@@ -52,12 +52,31 @@ degradado silencioso é considerado defeito, não proteção.
     funcionando. O evento diz qual limite foi e quanto valia, e a pessoa recebe isso em texto.
   - **conversa devolvida ao bot** — ela tinha sido passada para uma pessoa automaticamente, ninguém
     assumiu dentro do prazo, e o vigia devolveu o atendimento, avisando quem esperava.
+  - **aprovação esquecida** (`espera.esquecida`) — uma execução está parada esperando alguém aprovar há
+    mais tempo que o configurado. **Nada foi encerrado**: o trabalho está guardado e o fluxo continua
+    assim que alguém responder. O aviso sai **uma vez** e diz há quanto tempo aquilo está parado. Era o
+    único estado do sistema sem vigia: uma aprovação pedida só pela tela podia ficar parada meses em
+    silêncio (a mais velha encontrada tinha 90 dias).
+  - **aprovação indecisa** (`portao.indeciso`) — o agente conversou duas vezes seguidas sem escolher
+    caminho **nem** pedir aprovação de novo, num passo que tem caminhos. O fluxo não anda. O evento nomeia
+    o agente e os rótulos que ele ignorou; a causa é quase sempre o markdown dele não citar as saídas do
+    passo. Ver [[automacoes/pedir-aprovacao]].
+  - **entrada recusada** (`portao.entrada_recusada` na tela, `retomada.entrada_recusada` no fluxo) — a
+    mesma aprovação foi respondida por dois lugares ao mesmo tempo. **Não é falha do fluxo:** a espera
+    continua de pé e a resposta pode ser reenviada. Quem estava esperando recebe o recado.
+  - **retomada adiada** (`retomada.adiada`) — a retomada esperou na fila mais que o prazo de posse e o
+    canal assumiu no intervalo; ela volta para a fila **com a resposta intacta** e roda no giro seguinte.
+  - **fila parada** (`fila.parada`) — execuções foram enfileiradas e ninguém as pegou. Nada foi encerrado,
+    mas é sinal de que o disparo não está acontecendo.
   - **falha de ferramenta pelo MCP** — vem com um **código** que aparece também na resposta ao Claude; cite
     esse código ao pedir ajuda.
-- **Falha que a ferramenta devolve como resposta também entra no rastro.** Quando um sistema externo
-  responde "não deu" (por exemplo, arquivo grande demais), o agente recebe isso como dado e decide como
-  seguir — e é comum ele narrar sucesso mesmo assim. O registro guarda a falha crua, então **o que o agente
-  escreveu não é prova de que a ação aconteceu**: confira o rastro.
+- **Falha que a ferramenta devolve como resposta também entra no rastro** — e, desde 2026-09-21, também
+  vira **aviso na linha do tempo e no resultado da execução**. Quando um sistema externo responde "não deu"
+  (por exemplo, arquivo grande demais), o agente recebe isso como dado e decide como seguir — e é comum ele
+  narrar sucesso mesmo assim. O passo passa a dizer, em português, que um instrumento respondeu falha e o
+  fluxo seguiu assim mesmo, nomeando qual. **O caminho do fluxo não muda** de propósito: o agente pode ter
+  tentado de novo e conseguido, e desviar à força inventaria uma falha que talvez não exista. Regra que
+  fica: **o que o agente escreveu não é prova de que a ação aconteceu** — confira o rastro.
 - O tempo de espera do vigia tem **duas medidas**, cada uma pelo pior caso real: **~8 min no atendimento**
   (ali a IA roda com limites curtos — quem escreveu está esperando do outro lado) e **~30 min numa aprovação**
   (a resposta religa o fluxo inteiro, que pode demorar de verdade). Ele destrava o que está preso, não
