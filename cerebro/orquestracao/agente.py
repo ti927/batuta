@@ -681,6 +681,31 @@ def _middlewares_de_memoria() -> list:
         return []
 
 
+def _espera_uma_pessoa(cinto: list[Instrumento]) -> bool:
+    """Este passo PARA para alguém? A resposta está no CINTO: basta ter um instrumento
+    com `pausa_para_humano` (hoje, `pedir_aprovacao`).
+
+    Por que DERIVADO, e não um parâmetro. Era um parâmetro (`gate`), herdado do portão —
+    e quando o portão saiu do desenho (2026-08-31) o fio ficou cortado: nenhum dos TRÊS
+    chamadores de produção passava `gate`, então o bloco de instrução da aprovação, que
+    está escrito logo abaixo em `_instrucao_de_fluxo`, NUNCA rodou uma vez. E havia teste
+    verde para ele, porque o teste chamava `executar_agente` direto com `gate=True` à mão
+    — provava que a peça sabia fazer, não que alguém mandava fazer. O efeito em produção
+    foi o agente receber, ao retomar uma aprovação, o texto de um passo qualquer; pela
+    tela ele não recebia nada sobre estar esperando uma pessoa, e pelo Telegram recebia
+    por outro caminho (o preâmbulo da conversa) — o mesmo agente se comportando diferente
+    conforme onde a pessoa respondia.
+
+    Derivar do cinto fecha a classe inteira do buraco: não há o que alguém esquecer de
+    passar. É a regra do maestro — **o instrumento se basta**: quem carrega o instrumento
+    de esperar uma pessoa é, por definição, um passo que espera uma pessoa."""
+    for inst in cinto:
+        tipo = encaixe.obter_tipo(inst.tipo)
+        if tipo is not None and getattr(tipo, "pausa_para_humano", False):
+            return True
+    return False
+
+
 def executar_agente(
     agente: Agente,
     cinto: list[Instrumento],
@@ -688,7 +713,7 @@ def executar_agente(
     *,
     saidas: list[dict] | None = None,
     ficha: dict | None = None,
-    gate: bool = False,
+    gate: bool | None = None,
     texto_portao: str | None = None,
     checkpointer=None,
     thread_id: str | None = None,
@@ -765,7 +790,11 @@ def executar_agente(
         ferramentas.append(_ferramenta_anotar(anotacoes))
     if len(saidas) >= 2:
         ferramentas.append(_ferramenta_seguir_para(saidas, escolha))
-        instrucoes += "\n\n" + _instrucao_de_fluxo(saidas, gate, texto_portao)
+        # `gate` explícito ainda manda (teste/caso especial); o normal é DERIVAR do
+        # cinto, para não depender de ninguém lembrar de passá-lo — ver
+        # `_espera_uma_pessoa`, que explica por que isto deixou de ser um parâmetro.
+        espera_pessoa = _espera_uma_pessoa(cinto) if gate is None else gate
+        instrucoes += "\n\n" + _instrucao_de_fluxo(saidas, espera_pessoa, texto_portao)
     # Cache de prompt (Anthropic): o prompt e as ferramentas são reenviados a cada passo
     # do laço/turno; marcar o cache corta o custo desses reenvios (economia de tokens).
     prompt_sistema = _prompt_de_sistema(instrucoes, agente.modelo_ia or MODELO_PADRAO)
