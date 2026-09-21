@@ -507,6 +507,14 @@ class ExecucaoComPassos(ExecucaoLer):
     # na tela do construtor já não é o que rodou aqui. `False` também quando não há foto
     # (execução anterior a esta onda): aí não há como afirmar nada, e afirmar seria pior.
     desenho_editado_depois: bool = False
+    # QUEM esta mexendo nesta execucao agora (`tela` | `canal` | `fila`), ou nulo se
+    # ninguem esta (§4.1 de docs/FALHAS-DO-MOTOR.md). A tela PRECISA disto: em
+    # 2026-09-21 ela mostrou os botoes de aprovacao enquanto o Telegram conduzia a mesma
+    # aprovacao, e o clique — uma reacao perfeitamente racional a uma tela que mentia —
+    # entrou por cima de um turno em voo e matou a execucao. Derivado (nao le a coluna
+    # crua): dono com prazo vencido vale como livre, senao a tela travaria botao por
+    # causa de um processo que ja morreu.
+    dono: str | None = None
 
 
 # ───────────────── Identidade e acesso (Etapa 2, Fase 6) ─────────────────

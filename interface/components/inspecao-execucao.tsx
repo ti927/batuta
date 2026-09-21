@@ -864,6 +864,20 @@ function PainelAprovacao({
   const saidasPausa = noPausado
     ? (indexarCadeia(automacao.cadeia)[noPausado]?.saidas ?? [])
     : [];
+  // A MESMA aprovação tem duas portas: esta tela e o canal por onde o agente pediu.
+  // Enquanto a outra porta está respondendo, os botões daqui ficam travados. Em
+  // 2026-09-21 eles ficaram ativos durante um turno do Telegram que já rodava havia
+  // 1m45s; o clique entrou por cima, os dois abriram o mesmo fio de memória do agente e
+  // a execução morreu. O backend recusa de qualquer jeito (§4.1) — mas deixar o botão
+  // aceso convidando para uma recusa é mentir para quem está olhando.
+  const ocupadaPor = aberta.dono ?? null;
+  const ondeEsta =
+    ocupadaPor === "canal"
+      ? "pelo Telegram"
+      : ocupadaPor === "fila"
+        ? "em segundo plano"
+        : "em outro lugar";
+  const travada = !!ocupadaPor;
   return (
     <div className="mt-4">
       <div
@@ -876,7 +890,15 @@ function PainelAprovacao({
         <p className="whitespace-pre-wrap rounded-lg border border-[#EFE4C8] bg-white/70 p-3 text-sm text-foreground">
           {ultimo?.saida?.texto}
         </p>
+        {travada && (
+          <Aviso variant="info">
+            Esta aprovação está sendo respondida <strong>{ondeEsta}</strong> neste
+            momento. Os botões voltam assim que aquele turno terminar — a página atualiza
+            sozinha. Nada se perdeu.
+          </Aviso>
+        )}
         <Textarea
+          disabled={travada}
           className="min-h-16 bg-white/70"
           placeholder={
             saidasPausa.length > 0
@@ -890,7 +912,11 @@ function PainelAprovacao({
           <div className="flex flex-col gap-1.5">
             {saidasPausa.map((s) => (
               <div key={s.rotulo} className="flex items-center gap-2">
-                <Button size="sm" disabled={respondendo} onClick={() => onResponder(s.rotulo)}>
+                <Button
+                  size="sm"
+                  disabled={respondendo || travada}
+                  onClick={() => onResponder(s.rotulo)}
+                >
                   {s.rotulo}
                 </Button>
                 <span className="text-xs text-muted-foreground">{s.quando}</span>
@@ -901,7 +927,7 @@ function PainelAprovacao({
           <Button
             className="self-start"
             onClick={() => onResponder()}
-            disabled={respondendo}
+            disabled={respondendo || travada}
           >
             {respondendo ? "Retomando…" : "Responder e retomar"}
           </Button>

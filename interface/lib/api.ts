@@ -804,6 +804,12 @@ export type ExecucaoComPassos = Execucao & {
   // aberto no construtor já não é o que rodou aqui. Falso também quando não há foto
   // (execução anterior a esta onda): aí não há como afirmar nada.
   desenho_editado_depois?: boolean;
+  // QUEM está mexendo nesta execução agora ("tela" | "canal" | "fila"), ou nulo se
+  // ninguém está. A tela precisa disto para NÃO MENTIR: em 2026-09-21 ela mostrou os
+  // botões de aprovação enquanto o Telegram conduzia a mesma aprovação, e o clique —
+  // uma reação perfeitamente racional a uma tela que mentia — entrou por cima de um
+  // turno em voo e matou a execução.
+  dono?: string | null;
 };
 
 // Execução na visão consolidada (gestão de execuções), com o nome da automação

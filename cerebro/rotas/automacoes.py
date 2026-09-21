@@ -330,6 +330,9 @@ def _montar_com_passos(sessao: Session, execucao: Execucao) -> ExecucaoComPassos
         # preenchia aqui — o painel "A ficha desta execução" nunca aparecia.
         dados=execucao.dados or None,
         desenho_editado_depois=editada_depois,
+        # Quem esta mexendo nesta execucao agora — derivado, para dono vencido valer
+        # como livre (§4.1). E o que permite a tela nao mentir sobre a aprovacao.
+        dono=dono.quem_tem(sessao, execucao.id),  # noqa: F811 (modulo homonimo do campo)
     )
 
 
