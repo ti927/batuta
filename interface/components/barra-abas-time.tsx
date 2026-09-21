@@ -7,6 +7,7 @@ import {
   Bot,
   Home,
   Inbox,
+  Workflow,
   Wrench,
   Zap,
   type LucideIcon,
@@ -29,6 +30,7 @@ type Aba = {
   segmento: string; // "" = Início; senão o sufixo da rota
   contador?: number;
   alerta?: boolean;
+  etiqueta?: string; // pílula fixa ao lado do rótulo (ex.: "novo")
 };
 
 /**
@@ -74,6 +76,17 @@ export function BarraAbasTime({
       rotulo: "Automações",
       Icone: Zap,
       segmento: "/automacoes",
+    },
+    // Estúdio: a tela do fluxo em desenvolvimento PARALELO — mesmo dado, mesmo
+    // salvamento, desenho legível (condição no fio, saídas no cartão, o desenho se
+    // confere). Convive com Automações até ser exaurida em teste; então uma das duas
+    // sai. A pílula "novo" existe para ninguém confundir as duas por acidente.
+    {
+      chave: "estudio",
+      rotulo: "Estúdio",
+      Icone: Workflow,
+      segmento: "/estudio",
+      etiqueta: "novo",
     },
     {
       chave: "execucoes",
@@ -124,6 +137,11 @@ export function BarraAbasTime({
                 )}
               >
                 {aba.contador}
+              </span>
+            )}
+            {aba.etiqueta && (
+              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[0.65rem] font-medium leading-none text-primary">
+                {aba.etiqueta}
               </span>
             )}
             {aba.alerta && (
