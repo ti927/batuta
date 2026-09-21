@@ -23,7 +23,7 @@ import fila
 import fila_turnos
 from modelos import Agendamento, Automacao, Credencial, EventoLog
 from observabilidade.escritor import registrar_evento
-from orquestracao import sub_fluxo
+from orquestracao import espera, sub_fluxo
 from orquestracao.disparo import criar_execucao
 from sessao import CriadorDeSessao
 
@@ -380,6 +380,17 @@ def iniciar() -> None:
         fila.varrer_presas_job,
         trigger=IntervalTrigger(seconds=120),
         id="execucao_sweeper",
+        replace_existing=True,
+    )
+    # A espera por HUMANO era o único estado "em andamento" do sistema sem vigia nenhum
+    # (§4.2 de docs/FALHAS-DO-MOTOR.md): o relógio dela morava na CONVERSA, então uma
+    # aprovação pedida só pela tela ficava parada para sempre, em silêncio. Este não
+    # encerra nada — esperar dias por uma aprovação é legítimo; ele só acaba com o
+    # silêncio. De 5 em 5 min: o prazo padrão é de 24 h, não há pressa nenhuma aqui.
+    _scheduler.add_job(
+        espera.varrer_esquecidas_job,
+        trigger=IntervalTrigger(seconds=300),
+        id="espera_humana_sweeper",
         replace_existing=True,
     )
     # Nó "Esperar" (Onda 3): devolve à fila as execuções cuja espera venceu. Intervalo

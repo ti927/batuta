@@ -23,7 +23,7 @@ from mensageria.config import com_ajuste_do_no, config_da_automacao
 from modelos import Agente, Automacao, Execucao, PassoExecucao
 from observabilidade.escritor import registrar_evento
 from orquestracao import ficha as ficha_mod
-from orquestracao import grafo, memoria_conversa
+from orquestracao import espera, grafo, memoria_conversa
 from orquestracao.agente import executar_agente
 from orquestracao.cadeia import _carregar_cinto, _escolher_saida, executar_cadeia
 from orquestracao.disparo import (
@@ -252,7 +252,7 @@ def avancar_apos_gate(
                 # "cancelar" (e ele é justamente o trecho que publica).
                 cancelado=lambda: _esta_cancelada(sessao, execucao.id),
             )
-        _aplicar_resultado(execucao, r)
+        _aplicar_resultado(execucao, r, sessao)
         if execucao.estado == "aguardando_humano":
             from mensageria import aprovacao
             aprovacao.vincular_pausa(sessao, execucao)
@@ -442,6 +442,9 @@ def _retomar_conversando_tela(
 
     if pausa or not escolhidas:
         execucao.estado = "aguardando_humano"
+        # Rodada nova do portão = relógio novo da espera (§4.2). Quem acabou de conversar
+        # não pode ser contado como quem sumiu.
+        espera.marcar(sessao, execucao)
         sessao.commit()
         if not pausa:
             # Só conversou: se o nó tinha caminhos e isso já se repetiu, vira alarme

@@ -157,6 +157,54 @@ def avisar_desligada(
         )
 
 
+def avisar_time(sessao: Session, execucao: Execucao, texto: str, *, acao: str) -> bool:
+    """Manda um recado pelo canal do TIME sobre esta execução. Best-effort e SEMPRE com
+    rastro — sem canal, envio recusado ou exceção viram evento no banco de logs.
+
+    É o irmão genérico de `avisar_falha`/`avisar_desligada`, para os avisos que não são
+    falha: a espera esquecida, por exemplo, em que nada quebrou e mesmo assim alguém
+    precisa saber. Devolve se entregou.
+
+    O público aqui é o time, que OPERA. Quem está com o celular na mão esperando uma
+    aprovação é outro público, e fala com `aprovacao.avisar_quem_espera`."""
+    try:
+        if execucao is None or execucao.modo == "conversa":
+            return False  # o rastro-sombra de uma conversa não é uma automação
+        automacao = sessao.get(Automacao, execucao.automacao_id)
+        if automacao is None:
+            return False
+        alvo = _canal_do_time(sessao, automacao.time_id)
+        if alvo is None:
+            registrar_evento(
+                categoria="execucao", acao=f"{acao}.sem_canal", nivel="warning",
+                recurso_tipo="execucao", recurso_id=execucao.id,
+                detalhe={
+                    "automacao": automacao.nome,
+                    "porque": "o time não tem canal de mensageria com destinatário "
+                    "configurado — o aviso não pôde chegar a ninguém",
+                },
+            )
+            return False
+        inst, destino = alvo
+        token = (segredos_instrumento.decifrar(sessao, inst.id) or {}).get("token_bot")
+        entregue = bool(token) and bool(telegram.enviar(token, destino, texto).get("ok"))
+        registrar_evento(
+            categoria="execucao",
+            acao=f"{acao}.avisada" if entregue else f"{acao}.aviso_nao_entregue",
+            nivel="info" if entregue else "warning",
+            recurso_tipo="execucao", recurso_id=execucao.id,
+            detalhe={"automacao": automacao.nome, "instrumento": inst.nome},
+        )
+        return entregue
+    except Exception as e:  # o aviso NUNCA derruba quem o chamou
+        registrar_evento(
+            categoria="execucao", acao=f"{acao}.aviso_quebrou", nivel="error",
+            resultado="falha", erro=e, recurso_tipo="execucao",
+            recurso_id=getattr(execucao, "id", None),
+        )
+        return False
+
+
 def avisar_falha(sessao: Session, execucao: Execucao, erro: str) -> None:
     """Avisa pelo canal do time que esta execução falhou. Best-effort e SEMPRE com
     rastro: sem canal, envio recusado ou exceção viram evento no banco de logs."""

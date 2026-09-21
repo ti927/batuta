@@ -70,7 +70,7 @@ from mensageria.config import (
     painel_config,
     resumo_dos_limites,
 )
-from orquestracao import circuito, grafo
+from orquestracao import circuito, dono, grafo
 from orquestracao.cadeia import validar_cadeia
 from orquestracao.disparo import criar_execucao
 from rotas._comum import (
@@ -365,6 +365,21 @@ def responder(
     if execucao.estado != "aguardando_humano":
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Esta execução não está aguardando resposta."
+        )
+
+    # §4.1 — A TRAVA. Uma espera por humano tem duas portas (esta tela e o canal), e até
+    # 2026-09-21 nenhuma enxergava a outra: o maestro respondeu pelo Telegram, o turno
+    # levou 184 s gerando três imagens, e um clique AQUI entrou na mesma execução no meio
+    # do caminho. As duas abriram o mesmo thread do LangGraph, o checkpoint bifurcou, a
+    # Anthropic recusou o histórico pela metade com um 400 e quase quatro horas de
+    # trabalho morreram. Agora quem chega segundo é recusado — com uma frase que diz o
+    # que está acontecendo, não um "409" seco (§12-A).
+    if not dono.tomar(sessao, execucao.id, dono.TELA):
+        sessao.commit()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Esta aprovação está sendo respondida {dono.em_portugues(dono.quem_tem(sessao, execucao.id))} "
+            "neste momento. Aguarde alguns instantes e atualize a página.",
         )
 
     # Pré-condição da retomada: tem que haver um passo de pausa. Checamos AQUI (barato)

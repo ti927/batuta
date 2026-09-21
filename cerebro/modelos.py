@@ -261,6 +261,23 @@ class Execucao(IdData, Base):
     atividade_em: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # QUEM está mexendo nesta execução agora (`tela`, `canal`, `fila`…) e até quando esse
+    # direito vale (`orquestracao/dono.py`). A trava que faltava: até 2026-09-21 a única
+    # trava de uma espera por humano era `conversas.estado`, que a tela não enxerga — duas
+    # superfícies entravam na mesma execução ao mesmo tempo, abriam o mesmo thread do
+    # LangGraph e o checkpoint bifurcava. `dono_ate` é o prazo: dono nenhum trava para
+    # sempre, nem que o processo morra segurando.
+    dono: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    dono_ate: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Quando esta espera por humano vira motivo de ALARME. O relógio da espera morava só
+    # em `conversas.aguardando_ate`, então aprovação pedida sem canal amarrado não era
+    # varrida por ninguém — ficava parada para sempre, em silêncio. Não mata a execução:
+    # esperar dias por uma aprovação é legítimo; o que não é legítimo é o silêncio.
+    espera_ate: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Retomada de portão em SEGUNDO PLANO (§12-A): quando um humano aprova pela tela, a
     # resposta dele fica AQUI e a execução volta a `aguardando`; um trabalhador da fila a
     # reivindica e roda a retomada (que pode ser pesada: publicar, gerar mídia) fora do

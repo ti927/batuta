@@ -42,6 +42,7 @@ VIGIAS: dict[str, tuple[str, int, int]] = {
     "esperas": ("as esperas do passo Esperar", 30, 300),
     "sub_fluxos": ("os sub-fluxos do passo Chamar outra automação", 30, 300),
     "presas": ("as execuções travadas", 120, 600),
+    "esperas_humanas": ("as aprovações esquecidas", 300, 1800),
 }
 
 

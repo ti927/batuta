@@ -8,7 +8,7 @@ fato roda a cadeia é o pool de trabalhadores da fila (`fila.py`), que chama
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
@@ -21,6 +21,8 @@ from observabilidade import contexto
 from observabilidade.escritor import registrar_evento
 from orquestracao import atividade
 from orquestracao import circuito
+from orquestracao import dono
+from orquestracao import espera
 from orquestracao import ficha as ficha_mod
 from orquestracao import grafo
 from orquestracao.cadeia import MAX_PASSOS, executar_cadeia
@@ -244,9 +246,13 @@ def custo_ja_gasto(sessao: Session, execucao_id: uuid.UUID) -> float:
     return sum(precos.custo_de_entrada(e) for e in precos.entradas_dos_passos(passos))
 
 
-def _aplicar_resultado(execucao: Execucao, r: dict) -> None:
+def _aplicar_resultado(execucao: Execucao, r: dict, sessao: Session | None = None) -> None:
     """Aplica à execução o que a cadeia devolveu: pausa, cancelamento ou
-    conclusão."""
+    conclusão.
+
+    `sessao` só é preciso para carimbar o prazo da espera por humano (§4.2): o prazo
+    vem da configuração do fluxo, que mora no banco. Opcional para não quebrar quem
+    chama só para aplicar um desfecho já resolvido."""
     # A ficha como ficou (Onda 2). Vale para os TRÊS desfechos: numa pausa ela precisa
     # sobreviver à espera (que pode durar horas), e num cancelamento ela é o registro
     # do que já tinha sido apurado.
@@ -271,6 +277,10 @@ def _aplicar_resultado(execucao: Execucao, r: dict) -> None:
         # guardá-los, a retomada seguiria só o caminho do portão e o trabalho dos
         # outros ramos sumiria em silêncio.
         execucao.pendencias = r.get("pendentes") or None
+        # E o RELÓGIO desta espera (§4.2): até 2026-09-21 uma aprovação sem canal
+        # amarrado não era varrida por vigia nenhum — ficava parada para sempre, muda.
+        if sessao is not None:
+            espera.marcar(sessao, execucao)
     elif r["estado"] == "cancelada":
         execucao.estado = "cancelada"
         if not execucao.resultado:
@@ -296,13 +306,24 @@ def _escrever_atividade(execucao_id: uuid.UUID, texto: str) -> None:
     """Publica a atividade ao vivo numa transação PRÓPRIA e curta (como um heartbeat),
     sem tocar a sessão da cadeia. Só grava se a execução ainda está `em_andamento` —
     não ressuscita atividade de execução já pausada/finalizada. Best-effort (o chamador
-    em `atividade.registrar` engole erros)."""
+    em `atividade.registrar` engole erros).
+
+    O mesmo batimento RENOVA a posse da execução (`orquestracao/dono`): um passo
+    legitimamente longo — gerar um vídeo leva 12 min — não pode perder a trava no meio só
+    porque demorou. É o mesmo princípio do vigia de execuções presas, que já conta este
+    sinal como prova de vida; usar outro critério aqui criaria duas respostas para a
+    pergunta "quem ainda está trabalhando?"."""
+    agora = datetime.now(timezone.utc)
     s = CriadorDeSessao()
     try:
         s.execute(
             update(Execucao)
             .where(Execucao.id == execucao_id, Execucao.estado == "em_andamento")
-            .values(atividade=(texto or "")[:200], atividade_em=datetime.now(timezone.utc))
+            .values(
+                atividade=(texto or "")[:200],
+                atividade_em=agora,
+                dono_ate=agora + timedelta(minutes=dono.MINUTOS_PADRAO),
+            )
         )
         s.commit()
     finally:
@@ -427,6 +448,7 @@ def _entrada_recusada(sessao: Session, execucao: Execucao, erro: Exception) -> b
     if ultimo is None or ultimo.tipo != "espera_humano":
         return False
     execucao.estado = "aguardando_humano"
+    espera.marcar(sessao, execucao)
     registrar_evento(
         categoria="execucao", acao="retomada.entrada_recusada", nivel="error",
         resultado="falha", erro=erro, recurso_tipo="execucao", recurso_id=execucao.id,
@@ -467,6 +489,12 @@ def rodar_retomada(sessao: Session, execucao: Execucao) -> Execucao:
     ):
         chaves, origens = resolver_chaves_por_time(sessao, time_id)
         from mensageria import aprovacao, retoma
+        # A posse já é da TELA desde o clique em "responder" (a rota a tomou antes de
+        # enfileirar, para o canal não entrar no intervalo entre o clique e este momento).
+        # Aqui ela é RENOVADA — o relógio conta de agora, que é quando o trabalho começa —
+        # e devolvida no fim, aconteça o que acontecer.
+        dono.tomar(sessao, execucao.id, dono.TELA)
+        sessao.commit()
         try:
             with usar_chaves(chaves), atividade.usar_atividade(
                 lambda t: _escrever_atividade(execucao.id, t)
@@ -506,6 +534,7 @@ def rodar_retomada(sessao: Session, execucao: Execucao) -> Execucao:
                 # ela. Era assim que o agente seguia conversando (e trabalhando) por um
                 # canal cujo fluxo já tinha morrido — o caos de 2026-09-21.
                 aprovacao.desvincular(sessao, execucao.id)
+        dono.devolver(sessao, execucao.id, dono.TELA)
         sessao.commit()
         sessao.refresh(execucao)
         # A filha pode ter parado numa aprovação e só agora terminado: quem espera por
@@ -539,6 +568,12 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
         # toda a cadeia, sem tocar no motor de grafo.
         chaves, origens = resolver_chaves_por_time(sessao, time_id)
         min_passo, min_execucao = _tetos_de_tempo(automacao)
+        # A fila é dona enquanto roda (§4.1). Aqui não há disputa — o worker já
+        # reivindicou a execução com trava de linha —, mas a posse fica registrada para
+        # a tela poder dizer o que está acontecendo, e é ela que o sinal de vida renova
+        # quando um passo demora de verdade.
+        dono.tomar(sessao, execucao.id, dono.FILA)
+        sessao.commit()
         try:
             # `usar_atividade`: publica "o que está acontecendo agora" (feedback ao vivo)
             # numa sessão própria, para a tela mostrar progresso mesmo quando um instrumento
@@ -589,7 +624,7 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
                     registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
                     cancelado=lambda: _esta_cancelada(sessao, execucao.id),
                 )
-            _aplicar_resultado(execucao, r)
+            _aplicar_resultado(execucao, r, sessao)
             if execucao.estado == "aguardando_humano":
                 # Pausou: se a automação tem canal de aprovação, amarra a conversa do
                 # aprovador a esta execução (a resposta dele religa o fluxo). Borda.
@@ -622,7 +657,16 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
             circuito.apos_falha(
                 sessao, execucao, str((execucao.resultado or {}).get("erro") or "")
             )
+            # E nenhuma conversa pode continuar viva apontando para uma execução morta
+            # (§4.5): era assim que o agente seguia conversando — e trabalhando — por um
+            # canal cujo fluxo já tinha morrido.
+            from mensageria import aprovacao as _aprovacao
+            _aprovacao.desvincular(sessao, execucao.id)
             sessao.commit()
+        # Rodou até parar (pausou, concluiu ou falhou): a execução volta a ficar livre
+        # para a próxima superfície — principalmente para o humano que vai aprovar.
+        dono.devolver(sessao, execucao.id, dono.FILA)
+        sessao.commit()
         _devolver_ao_chamador(sessao, execucao)
         return execucao
 

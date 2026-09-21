@@ -47,7 +47,7 @@ from modelos import (
 )
 from observabilidade.escritor import registrar_evento
 from orquestracao import ficha as ficha_mod
-from orquestracao import grafo, memoria_conversa
+from orquestracao import dono, grafo, memoria_conversa
 from orquestracao.agente import executar_agente
 from orquestracao.llm import MODELO_PADRAO, usar_chaves
 from orquestracao.modelos_ia import provedor_do_modelo_seguro
@@ -1233,6 +1233,46 @@ def _turno_de_portao(
     if _eh_comando_cancelar(_ultima_msg_contato(sessao, conversa.id)):
         _cancelar_por_canal(sessao, conversa, token, execucao)
         return
+    # §4.1 — A TRAVA. Esta é a segunda porta da mesma espera; a outra é o botão da tela.
+    # Até 2026-09-21 nenhuma das duas via a outra: o `bot_respondendo` da conversa
+    # serializa turnos DESTA conversa e é invisível para a tela, e o estado da execução
+    # não mudava enquanto este turno rodava. As duas entraram juntas, abriram o mesmo
+    # thread do LangGraph e o checkpoint bifurcou. Quem chega segundo agora é recusado —
+    # e com recado honesto, porque a pessoa está com o celular na mão (§12-A). Nada se
+    # perde: a mensagem dela já está gravada na thread e ela pode reenviar, que é barato
+    # e seguro (o mesmo critério do vigia de turno preso — não reprocessar sozinho algo
+    # que pode ter efeito externo).
+    if not dono.tomar(sessao, execucao.id, dono.CANAL):
+        quem = dono.quem_tem(sessao, execucao.id)
+        _enviar_e_registrar(
+            sessao, conversa, token,
+            f"⏳ Esta aprovação está sendo respondida {dono.em_portugues(quem)} neste "
+            "momento — para não atropelar o que já está rodando, não processei sua "
+            "mensagem agora. Se ela ainda valer, reenvie em instantes.",
+        )
+        if _estado_fresco(sessao, conversa.id) == "bot_respondendo":
+            conversa.estado = "aguardando_resposta"
+        registrar_evento(
+            categoria="mensageria", acao="portao.entrada_recusada", nivel="warning",
+            persistir=True, recurso_tipo="execucao", recurso_id=execucao.id,
+            detalhe={"dono": quem, "conversa_id": str(conversa.id)},
+        )
+        sessao.commit()
+        return
+    try:
+        _turno_de_portao_com_posse(
+            sessao, conversa, instrumento, token, execucao
+        )
+    finally:
+        dono.devolver(sessao, execucao.id, dono.CANAL)
+        sessao.commit()
+
+
+def _turno_de_portao_com_posse(
+    sessao: Session, conversa: Conversa, instrumento: Instrumento,
+    token: str, execucao: Execucao,
+) -> None:
+    """O miolo do turno de portão, já com a posse da execução garantida pelo chamador."""
     try:
         ultimo, no, no_id, cadeia, idx = retoma.localizar_no_pausado(sessao, execucao)
     except ValueError:

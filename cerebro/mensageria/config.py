@@ -156,6 +156,12 @@ GLOBAL: dict = {
     # da conversa inteira): duas fontes de verdade para a mesma regra, que é a receita
     # de bug recorrente — e foi o que estourou em 2026-09-14.
     "portao_max_rodadas": 8,
+    # Quanto tempo uma espera por aprovação pode ficar parada antes de virar ALARME.
+    # NÃO encerra nada: esperar dias por uma aprovação é legítimo (quem aprova viaja,
+    # dorme, tem segunda-feira). O que não é legítimo é o SILÊNCIO — e até 2026-09-21
+    # uma aprovação pedida só pela tela, sem canal amarrado, não era varrida por vigia
+    # nenhum: ficava parada para sempre sem ninguém saber. 24 h por padrão.
+    "teto_espera_humano_min": 1440,
     # E. Vigia de turno preso (§12-A). Eram fixos no `sweeper`: quanto tempo um turno
     # pode ficar "rodando" antes de o vigia declarar que morreu, avisar a pessoa e
     # destravar a conversa. Dois valores porque os casos legítimos são diferentes —
@@ -267,6 +273,9 @@ CAMPOS = [
         {"chave": "portao_forma", "rotulo": "Como o agente conduz a aprovação", "tipo": "escolha"},
         {"chave": "portao_acao_abandono", "rotulo": "Se o aprovador abandona a conversa", "tipo": "escolha"},
         {"chave": "portao_max_rodadas", "rotulo": "Máx. de idas-e-vindas na aprovação", "tipo": "int"},
+        {"chave": "teto_espera_humano_min",
+         "rotulo": "Tempo parada até avisar que ninguém aprovou (0 = nunca avisar)",
+         "tipo": "int", "sufixo": "min"},
     ]},
 ]
 
