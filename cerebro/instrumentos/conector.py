@@ -252,6 +252,34 @@ def _chamar_http(
     return {"ok": resposta.is_success, "status": status, "corpo": corpo_resp}
 
 
+def _valor_json(v: Any) -> Any:
+    """O valor de um campo do CORPO, no tipo que o JSON pede.
+
+    Todo campo do Construtor é digitado como TEXTO, e no corpo isso nem sempre serve:
+    o `searchAnalytics/query` do Google quer `"dimensions": ["query"]`, uma LISTA — com
+    `"query"` em texto ele recusa a chamada. Sem esta conversão, o Construtor só
+    serviria para API cujo corpo é todo de strings.
+
+    Convertemos só o que é INEQUÍVOCO: o que começa com `[` ou `{` (e é JSON válido) e
+    os literais `true`/`false`/`null`. **Número não entra de propósito** — "0055" e
+    "17841400000000000" são identificadores que viram outra coisa ao virar número, e as
+    APIs do Google aceitam número em texto. Trocar um id em silêncio seria pior que o
+    incômodo que isto resolve."""
+    if not isinstance(v, str):
+        return v
+    t = v.strip()
+    if not t:
+        return v
+    if t in ("true", "false", "null"):
+        return {"true": True, "false": False, "null": None}[t]
+    if t[0] in "[{":
+        try:
+            return json.loads(t)
+        except ValueError:
+            return v  # texto que só PARECE JSON segue texto; o serviço dirá o que houve
+    return v
+
+
 def _erro_legivel(resultado: dict) -> str:
     """A frase que explica uma resposta 4xx, tirada do CORPO que o serviço mandou.
 
@@ -296,7 +324,7 @@ def _executar_operacao(
         if c.destino == "url":
             url = url.replace(f"[{c.nome}]", str(v))
         elif c.destino == "corpo":
-            corpo[c.nome] = v
+            corpo[c.nome] = _valor_json(v)
         else:  # query
             params[c.nome] = v
 

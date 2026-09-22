@@ -84,3 +84,43 @@ def test_testar_operacao_devolve_o_erro_em_resposta_4xx(monkeypatch):
     assert "403" in r["erro"] and "permission" in r["erro"]
     # e o corpo continua vindo, para a tela poder mostrá-lo inteiro
     assert r["corpo"]["error"]["message"]
+
+
+# ── O corpo JSON precisa dos TIPOS certos ───────────────────────────────────────
+# 2026-09-22: o `searchAnalytics/query` do Google quer `"dimensions": ["query"]` —
+# uma LISTA. Todo campo do Construtor é digitado como texto, e com `"query"` em texto
+# o Google recusa. Sem isto, o Construtor só serviria para API de corpo todo-string.
+
+
+def test_lista_digitada_vira_lista_de_verdade():
+    from instrumentos.conector import _valor_json
+
+    assert _valor_json('["query","page"]') == ["query", "page"]
+    assert _valor_json('{"a": 1}') == {"a": 1}
+
+
+def test_booleanos_e_nulo():
+    from instrumentos.conector import _valor_json
+
+    assert _valor_json("true") is True
+    assert _valor_json("false") is False
+    assert _valor_json("null") is None
+
+
+def test_numero_NAO_e_convertido():
+    """De propósito. "0055" e "17841400000000000" são identificadores que viram outra
+    coisa ao virar número — e as APIs do Google aceitam número em texto. Trocar um id
+    em silêncio seria pior que o incômodo que a conversão resolve."""
+    from instrumentos.conector import _valor_json
+
+    assert _valor_json("20") == "20"
+    assert _valor_json("0055") == "0055"
+    assert _valor_json("17841400000000000") == "17841400000000000"
+
+
+def test_texto_que_so_PARECE_json_segue_texto():
+    from instrumentos.conector import _valor_json
+
+    assert _valor_json("[isso nao fecha") == "[isso nao fecha"
+    assert _valor_json("2026-09-22") == "2026-09-22"
+    assert _valor_json("") == ""
