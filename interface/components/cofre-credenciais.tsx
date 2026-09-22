@@ -49,6 +49,33 @@ function lerArquivoBase64(arquivo: File): Promise<string> {
   });
 }
 
+// Os serviços do Google que a conexão pode pedir — espelha `ESCOPOS_POR_SERVICO`
+// em `cerebro/google_oauth.py`. A ajuda diz o que o Google vai MOSTRAR na tela de
+// consentimento, porque é ali que a pessoa se assusta: "ver suas mensagens de e-mail"
+// aparece mesmo quando o agente só queria ler o Search Console.
+const SERVICOS_GOOGLE: { id: string; rotulo: string; ajuda: string }[] = [
+  {
+    id: "search_console",
+    rotulo: "Search Console",
+    ajuda: "Ler o desempenho dos seus sites no Google. Só leitura.",
+  },
+  {
+    id: "agenda",
+    rotulo: "Agenda",
+    ajuda: "Ver e criar eventos nas suas agendas.",
+  },
+  {
+    id: "drive",
+    rotulo: "Drive",
+    ajuda: "Ver e baixar seus arquivos. O Google avisa que é acesso a TODOS eles.",
+  },
+  {
+    id: "gmail",
+    rotulo: "Gmail",
+    ajuda: "Ler suas mensagens e enviar e-mail em seu nome. É o acesso mais amplo da lista.",
+  },
+];
+
 export function CofreCredenciais({
   credenciais,
   tipos,
@@ -275,6 +302,13 @@ function FormularioCredencial({
     }
   }
 
+  // QUAIS serviços a conexão pede. Pedir tudo de uma vez era o padrão e custou caro:
+  // basta UM escopo não aprovado na verificação do Google para ele mostrar "app não
+  // verificado" e reaplicar o limite de 100 usuários — mesmo com o app publicado. E é
+  // a regra certa por si: ninguém deve dar acesso ao Gmail para o Batuta ler o Search
+  // Console. Começa só no Search Console, que é o caso mais comum aqui.
+  const [servicosGoogle, setServicosGoogle] = useState<string[]>(["search_console"]);
+
   // Conectar Google por OAuth (Gmail/Agenda/Drive/Search Console): pede a URL de
   // consentimento e manda o navegador para lá. No retorno, a credencial vem
   // preenchida. Não há colar token à mão (o token do Google vence em ~1h e precisa
@@ -285,7 +319,7 @@ function FormularioCredencial({
     try {
       const { url } = await api.post<{ url: string }>(
         `/organizacoes/${organizacaoId}/google/iniciar`,
-        {},
+        { servicos: servicosGoogle },
       );
       window.location.href = url;
     } catch (e) {
@@ -453,19 +487,54 @@ function FormularioCredencial({
       )}
 
       {tipoSel === "google" && !ehConsultoria && organizacaoId && (
-        <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3">
+        <div className="flex flex-col gap-3 rounded-md border border-border bg-muted/40 p-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              O que esta conexão pode acessar
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Marque só o que os agentes vão usar. Pedir a mais faz o Google exibir um
+              aviso de app não verificado — e dá acesso que ninguém precisa.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            {SERVICOS_GOOGLE.map((s) => (
+              <label key={s.id} className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-3.5 flex-none accent-primary"
+                  checked={servicosGoogle.includes(s.id)}
+                  onChange={(e) =>
+                    setServicosGoogle((atual) =>
+                      e.target.checked
+                        ? [...atual, s.id]
+                        : atual.filter((x) => x !== s.id),
+                    )
+                  }
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm text-foreground">{s.rotulo}</span>
+                  <span className="block text-xs leading-snug text-muted-foreground">
+                    {s.ajuda}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+
           <Button
             type="button"
             className="self-start"
-            disabled={conectando}
+            disabled={conectando || servicosGoogle.length === 0}
             onClick={conectarGoogle}
           >
             {conectando ? "Abrindo o Google…" : "Conectar Google"}
           </Button>
           <p className="text-xs text-muted-foreground">
-            Você faz login na conta na própria tela do Google e autoriza os serviços
-            (Gmail, Agenda, Drive, Search Console). O Batuta guarda o acesso e o
-            renova sozinho — sem colar token.
+            Você faz login na própria tela do Google e autoriza só o que marcou. O
+            Batuta guarda o acesso e o renova sozinho — sem colar token. Para incluir
+            um serviço depois, conecte de novo marcando-o.
           </p>
         </div>
       )}

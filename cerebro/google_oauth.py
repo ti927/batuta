@@ -43,21 +43,41 @@ VALIDADE_PADRAO_S = 3600
 # ── Escopos por serviço (os MAIS ESTREITOS — nível "sensível", evitando "restrito").
 # Adicionar um serviço = uma entrada aqui. `openid`+`email` sempre (descobrir a conta).
 ESCOPOS_IDENTIDADE = ("openid", "https://www.googleapis.com/auth/userinfo.email")
+# **NENHUM escopo RESTRITO aqui, e isso é decisão, não esquecimento.** O Google divide
+# os escopos em três: não-sensível (sem revisão), sensível (verificação do app) e
+# RESTRITO — que além da verificação exige uma auditoria de segurança externa (CASA),
+# anual e paga (~US$ 3.000). Dois escopos nos punham nessa faixa e NENHUM instrumento
+# do Batuta os usava: `gmail.readonly` (ler a caixa de entrada) e `drive.readonly`
+# (baixar o Drive inteiro). Pedidos por antecipação, eles faziam o Google mostrar
+# "app não verificado" e reaplicar o limite de 100 usuários — travando também o que
+# JÁ estava aprovado.
+#
+# O que ficou cobre o uso real: ler o Search Console, ver e criar eventos na Agenda,
+# ENVIAR e-mail pelo Gmail, e mexer nos arquivos do Drive que o próprio Batuta cria
+# (`drive.file` é não-sensível).
+#
+# Se um dia um instrumento precisar MESMO ler a caixa de entrada ou o Drive inteiro,
+# o escopo volta aqui — e junto vem a conta da auditoria. É decisão de negócio, não
+# de código: não readicione sem essa conversa.
 ESCOPOS_POR_SERVICO: dict[str, tuple[str, ...]] = {
     "search_console": ("https://www.googleapis.com/auth/webmasters.readonly",),
-    "gmail": (
-        "https://www.googleapis.com/auth/gmail.readonly",
-        "https://www.googleapis.com/auth/gmail.send",
-    ),
+    "gmail": ("https://www.googleapis.com/auth/gmail.send",),
     "agenda": (
         "https://www.googleapis.com/auth/calendar.readonly",
         "https://www.googleapis.com/auth/calendar.events",
     ),
-    "drive": (
-        "https://www.googleapis.com/auth/drive.readonly",
-        "https://www.googleapis.com/auth/drive.file",
-    ),
+    "drive": ("https://www.googleapis.com/auth/drive.file",),
 }
+
+# Escopos RESTRITOS: proibidos aqui enquanto não houver auditoria CASA. A lista existe
+# para o teste poder cobrar — um escopo restrito readicionado por engano quebra a
+# conexão de TODA a organização, e o sintoma ("app não verificado") não diz a causa.
+ESCOPOS_RESTRITOS = (
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/drive",
+)
 
 
 def escopos_padrao() -> list[str]:
@@ -67,6 +87,22 @@ def escopos_padrao() -> list[str]:
     vistos: list[str] = list(ESCOPOS_IDENTIDADE)
     for escopos in ESCOPOS_POR_SERVICO.values():
         for e in escopos:
+            if e not in vistos:
+                vistos.append(e)
+    return vistos
+
+
+def escopos_dos_servicos(servicos: list[str]) -> list[str]:
+    """Só os escopos dos serviços PEDIDOS (+ identidade, sempre).
+
+    Existe porque pedir tudo de uma vez tem um custo que só aparece depois: um único
+    escopo não aprovado na verificação faz o Google mostrar "app não verificado" e
+    reaplicar o limite de usuários — mesmo com o app publicado e verificado. Pedir o
+    mínimo também é a regra certa por si: ninguém deve dar acesso ao Gmail para o
+    Batuta ler o Search Console."""
+    vistos: list[str] = list(ESCOPOS_IDENTIDADE)
+    for servico in servicos:
+        for e in ESCOPOS_POR_SERVICO.get(servico, ()):
             if e not in vistos:
                 vistos.append(e)
     return vistos

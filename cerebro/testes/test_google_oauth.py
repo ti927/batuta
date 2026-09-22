@@ -41,14 +41,17 @@ def test_url_autorizacao_carrega_params_e_escopos():
 
 
 def test_escopos_padrao_cobre_os_servicos_do_lote():
+    """2026-09-22: `gmail.readonly` saiu daqui. Ele é RESTRITO (auditoria CASA, anual e
+    paga) e nenhum instrumento o usava — e derrubava a verificação do app inteiro.
+    Enviar e-mail (`gmail.send`) continua."""
     escopos = go.escopos_padrao()
     assert "https://www.googleapis.com/auth/webmasters.readonly" in escopos
-    assert "https://www.googleapis.com/auth/gmail.readonly" in escopos
     assert "https://www.googleapis.com/auth/gmail.send" in escopos
     assert "https://www.googleapis.com/auth/calendar.events" in escopos
     assert "https://www.googleapis.com/auth/drive.file" in escopos
-    # escopo restrito (drive full) NÃO entra — preferimos os estreitos
+    # os restritos NÃO entram — preferimos os estreitos
     assert "https://www.googleapis.com/auth/drive" not in escopos
+    assert "https://www.googleapis.com/auth/gmail.readonly" not in escopos
 
 
 def test_configurado_reflete_ambiente(monkeypatch):
@@ -383,3 +386,39 @@ def test_callback_erro_do_google_redireciona_com_motivo(cliente, dados, monkeypa
     )
     assert r.status_code == 303
     assert "google=erro" in r.headers["location"]
+
+
+# ── Nenhum escopo RESTRITO (2026-09-22) ────────────────────────────────────────
+# Escopo restrito exige auditoria de segurança externa (CASA), anual e paga. Dois
+# deles eram pedidos por antecipação — `gmail.readonly` e `drive.readonly` — sem
+# nenhum instrumento usá-los, e faziam o Google mostrar "app não verificado" e
+# reaplicar o limite de 100 usuários, travando junto o que JÁ estava aprovado.
+
+
+def test_nenhum_escopo_restrito_e_pedido():
+    """Se este teste cair, alguém readicionou um escopo restrito — e a conexão de
+    TODA organização vai quebrar com um sintoma que não diz a causa."""
+    pedidos = set(go.escopos_padrao())
+    proibidos = pedidos & set(go.ESCOPOS_RESTRITOS)
+    assert not proibidos, (
+        f"escopo restrito pedido: {proibidos}. Ele exige auditoria CASA (anual, paga) "
+        "e derruba a verificação do app inteiro."
+    )
+
+
+def test_o_que_sobrou_cobre_o_uso_real():
+    pedidos = set(go.escopos_padrao())
+    assert "https://www.googleapis.com/auth/webmasters.readonly" in pedidos
+    assert "https://www.googleapis.com/auth/calendar.events" in pedidos
+    assert "https://www.googleapis.com/auth/gmail.send" in pedidos
+    assert "https://www.googleapis.com/auth/drive.file" in pedidos
+
+
+def test_escopos_por_servico_pede_so_o_escolhido():
+    """Pedir tudo de uma vez é o que faz a pessoa ver 'ler suas mensagens de e-mail'
+    quando ela só queria o Search Console."""
+    so_sc = go.escopos_dos_servicos(["search_console"])
+    assert "https://www.googleapis.com/auth/webmasters.readonly" in so_sc
+    assert not any("gmail" in e or "drive" in e for e in so_sc)
+    # a identidade vem sempre (é como se descobre a conta conectada)
+    assert "openid" in so_sc

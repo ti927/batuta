@@ -308,6 +308,14 @@ class TestarOperacaoConector(BaseModel):
     valores: dict = Field(default_factory=dict)
 
 
+class ConectarGoogle(BaseModel):
+    """Quais serviços do Google a conexão vai pedir. Vazio/ausente = todos (o
+    comportamento antigo). Pedir só o necessário evita a tela "app não verificado":
+    basta UM escopo não aprovado para o Google reaplicar o limite de usuários."""
+
+    servicos: list[str] = Field(default_factory=list)
+
+
 class TestarOperacaoInterno(BaseModel):
     """O mesmo teste, pedido pela porta INTERNA (serviço-a-serviço) — usado pelo MCP
     para a IA poder testar um conector sem nunca ver o segredo dele. Aqui o usuário

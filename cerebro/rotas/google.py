@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 import auditoria
 import cofre
+from esquemas import ConectarGoogle
 import credenciais_cofre as cofre_cred
 import google_oauth
 from auth import usuario_atual
@@ -45,11 +46,17 @@ TTL_STATE_S = 600
 @rotas.post("/organizacoes/{organizacao_id}/google/iniciar")
 def iniciar(
     organizacao_id: uuid.UUID,
+    dados: ConectarGoogle | None = None,
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
     """Monta a URL de consentimento do Google para esta organização (operador+).
-    Devolve `{url}`; a interface faz o navegador navegar até lá."""
+    Devolve `{url}`; a interface faz o navegador navegar até lá.
+
+    `servicos` escolhe O QUE se pede. Pedir tudo de uma vez era o padrão e custou caro:
+    basta UM escopo não aprovado na verificação para o Google mostrar a tela "app não
+    verificado" e reaplicar o limite de 100 usuários — mesmo com o app publicado e
+    verificado. Quem só usa o Search Console não deve carregar Gmail e Drive junto."""
     organizacao_acessivel(sessao, usuario, organizacao_id, minimo="operador")
     if not google_oauth.configurado():
         raise HTTPException(
@@ -60,7 +67,15 @@ def iniciar(
     state = cofre.cifrar(
         json.dumps({"org": str(organizacao_id), "usuario": str(usuario.id)})
     )
-    return {"url": google_oauth.montar_url_autorizacao(state)}
+    servicos = list((dados.servicos if dados else None) or [])
+    desconhecidos = [s for s in servicos if s not in google_oauth.ESCOPOS_POR_SERVICO]
+    if desconhecidos:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Serviço do Google desconhecido: " + ", ".join(desconhecidos),
+        )
+    escopos = google_oauth.escopos_dos_servicos(servicos) if servicos else None
+    return {"url": google_oauth.montar_url_autorizacao(state, escopos)}
 
 
 # ─────────────────────────── Callback (público) ─────────────────────────────
