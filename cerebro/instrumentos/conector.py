@@ -252,6 +252,30 @@ def _chamar_http(
     return {"ok": resposta.is_success, "status": status, "corpo": corpo_resp}
 
 
+def _erro_legivel(resultado: dict) -> str:
+    """A frase que explica uma resposta 4xx, tirada do CORPO que o serviço mandou.
+
+    APIs sérias dizem no corpo o que houve ("Invalid JSON payload", "User does not
+    have sufficient permission for site X"). Essa frase é a diferença entre consertar
+    em trinta segundos e passar a noite adivinhando."""
+    status = resultado.get("status")
+    corpo = resultado.get("corpo")
+    detalhe = ""
+    if isinstance(corpo, dict):
+        erro = corpo.get("error")
+        if isinstance(erro, dict):
+            detalhe = str(erro.get("message") or "")
+        elif isinstance(erro, str):
+            detalhe = erro
+        if not detalhe:
+            detalhe = str(corpo.get("message") or corpo.get("erro") or "")
+    if not detalhe and corpo:
+        detalhe = str(corpo)
+    detalhe = detalhe.strip()[:400]
+    inicio = f"o serviço respondeu HTTP {status}" if status else "a chamada falhou"
+    return f"{inicio}: {detalhe}" if detalhe else f"{inicio} (sem detalhe no corpo)."
+
+
 def _executar_operacao(
     config: ConfigConector, op: OperacaoConector, valores_ia: dict
 ) -> dict:
@@ -493,6 +517,12 @@ class Conector(TipoInstrumento):
         except FalhaInstrumento as e:
             return {"ok": False, "erro": str(e), "status": None, "corpo": None,
                     "campos_detectados": []}
+        if not resultado.get("ok") and not resultado.get("erro"):
+            # Resposta 4xx: `_executar_operacao` devolve `ok:false` + status + corpo,
+            # SEM a chave `erro` — e quem só olhava `erro` mostrava "a chamada falhou"
+            # e jogava fora a explicação que o serviço tinha acabado de dar. Era a
+            # falha muda de novo, na tela feita para não deixar ninguém no escuro.
+            resultado = {**resultado, "erro": _erro_legivel(resultado)}
         return {**resultado, "campos_detectados": _detectar_campos(resultado.get("corpo"))}
 
     def _ferramenta_de_operacao(

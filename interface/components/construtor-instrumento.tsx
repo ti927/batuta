@@ -343,8 +343,13 @@ export function ConstrutorInstrumento({
         });
         setResultadoBruto(JSON.stringify(r.corpo, null, 2));
       } else {
+        // Falhou: mostrar o MOTIVO e o corpo que o serviço devolveu. Esconder o corpo
+        // aqui foi o que fez a tela dizer só "a chamada falhou" — com a explicação do
+        // Google já na mão, a um clique de distância de quem precisava dela.
         setTestMsg({ ok: false, texto: r.erro ?? "A chamada falhou." });
-        setResultadoBruto(null);
+        setResultadoBruto(
+          r.corpo != null ? JSON.stringify(r.corpo, null, 2) : null,
+        );
       }
       return r;
     } catch (e) {
@@ -457,6 +462,7 @@ export function ConstrutorInstrumento({
                 exemplos={exemplos}
                 testando={testando}
                 testMsg={testMsg}
+                resultadoBruto={resultadoBruto}
                 onSelecionar={setOpSel}
                 onAdicionar={adicionarOperacao}
                 onRemover={removerOperacao}
@@ -565,6 +571,7 @@ function SecaoOperacoes({
   exemplos,
   testando,
   testMsg,
+  resultadoBruto,
   onSelecionar,
   onAdicionar,
   onRemover,
@@ -585,6 +592,7 @@ function SecaoOperacoes({
   exemplos: Record<string, string>;
   testando: boolean;
   testMsg: { ok: boolean; texto: string } | null;
+  resultadoBruto: string | null;
   onSelecionar: (i: number) => void;
   onAdicionar: () => void;
   onRemover: (i: number) => void;
@@ -857,8 +865,20 @@ function SecaoOperacoes({
               )}
 
               {testMsg && (
-                <div className="p-3">
+                <div className="flex flex-col gap-2 p-3">
                   <Aviso variant={testMsg.ok ? "sucesso" : "erro"}>{testMsg.texto}</Aviso>
+                  {/* Falhou: o corpo que o serviço devolveu fica à vista. É nele que
+                      está a explicação — esconder foi o que deixou a tela muda. */}
+                  {!testMsg.ok && resultadoBruto && (
+                    <div>
+                      <div className="mb-1 text-xs text-muted-foreground">
+                        O que o serviço respondeu:
+                      </div>
+                      <pre className="max-h-60 overflow-auto rounded-md border border-border bg-muted/40 p-2 font-mono text-[11px] leading-snug text-foreground">
+                        {resultadoBruto}
+                      </pre>
+                    </div>
+                  )}
                 </div>
               )}
 
