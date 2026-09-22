@@ -83,6 +83,7 @@ function opVazia(n: number): OperacaoConector {
   return {
     nome: `Operação ${n}`,
     descricao: "",
+    somente_leitura: false,
     metodo: "GET",
     url: "",
     cabecalhos: {},
@@ -361,7 +362,9 @@ export function ConstrutorInstrumento({
   }
 
   const op = operacoes[opSel];
-  const opEscreve = op ? !SO_LEITURA.has(op.metodo) : false;
+  // "Escreve" sai do método, MAS quem montou pode dizer que aquele POST só consulta
+  // (o `searchAnalytics/query` do Google é POST porque o filtro não cabe na URL).
+  const opEscreve = op ? !SO_LEITURA.has(op.metodo) && !op.somente_leitura : false;
 
   // ─────────────────────────── UI ───────────────────────────
 
@@ -821,9 +824,38 @@ function SecaoOperacoes({
               </Aviso>
             ) : (
               <Aviso variant="sucesso">
-                Esta operação <strong>só lê</strong> ({op.metodo}) — não muda nada no
-                sistema externo e corre livre.
+                Esta operação <strong>só lê</strong>
+                {SO_LEITURA.has(op.metodo)
+                  ? ` (${op.metodo})`
+                  : ` (${op.metodo}, marcada por você)`}{" "}
+                — não muda nada no sistema externo e corre livre.
               </Aviso>
+            )}
+            {/* Nem todo POST escreve: há API que CONSULTA por POST porque o filtro não
+                cabe na URL. Sem esta declaração, cada consulta dessas pararia para
+                pedir aprovação — e o instrumento fica inutilizável. É declaração
+                consciente: o Batuta não tem como conferir se um POST escreve. */}
+            {!SO_LEITURA.has(op.metodo) && (
+              <label className="mt-2.5 flex items-start gap-2 rounded-md border border-border p-2.5">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-3.5 flex-none accent-primary"
+                  checked={!!op.somente_leitura}
+                  onChange={(e) => onAtualizar({ somente_leitura: e.target.checked })}
+                />
+                <span className="min-w-0">
+                  <span className="block text-[13px] text-foreground">
+                    Este {op.metodo} só consulta — não muda nada lá fora
+                  </span>
+                  <span className="block text-xs leading-snug text-muted-foreground">
+                    Algumas APIs consultam por POST porque o filtro não cabe no
+                    endereço (é o caso do Google Search Console). Marcando, a operação
+                    corre livre em vez de parar e pedir aprovação a cada uso.{" "}
+                    <strong>Só marque se tiver certeza</strong> — o Batuta não tem como
+                    conferir isso por você.
+                  </span>
+                </span>
+              </label>
             )}
           </div>
 

@@ -85,6 +85,16 @@ class OperacaoConector(BaseModel):
         default_factory=list,
         description="Opcional. Traga só estes campos de cada registro da resposta (corta custo).",
     )
+    # Nem todo POST escreve. A consulta do Google Search Console
+    # (`searchAnalytics/query`) é POST porque o filtro não cabe na URL — e só LÊ.
+    # Derivar do método fazia cada consulta parar para pedir aprovação, o que torna o
+    # instrumento inutilizável. Marcar é ato CONSCIENTE de quem montou, nunca o padrão:
+    # o Batuta não tem como conferir se um POST escreve ou não.
+    somente_leitura: bool = Field(
+        default=False,
+        description="Este POST/PUT só CONSULTA (não muda nada lá fora) — então não "
+        "pede aprovação. Só marque se tiver certeza.",
+    )
 
 
 class ConfigConector(BaseModel):
@@ -250,6 +260,25 @@ def _chamar_http(
     if campos_resposta:
         corpo_resp = _projetar_registros(corpo_resp, campos_resposta)
     return {"ok": resposta.is_success, "status": status, "corpo": corpo_resp}
+
+
+def _operacao_escreve(op: Any) -> bool:
+    """Esta operação muda algo lá fora?
+
+    O método é o sinal (GET lê, POST/PUT/DELETE escrevem), mas ele erra num caso comum
+    e importante: APIs que consultam por POST porque o filtro não cabe na URL — o
+    `searchAnalytics/query` do Google é exatamente isso. Quem montou pode dizer que
+    aquela operação só lê; o Batuta não tem como conferir, então isso é declaração
+    consciente, nunca padrão."""
+    if isinstance(op, dict):
+        metodo = str(op.get("metodo", "GET")).upper()
+        so_le = bool(op.get("somente_leitura"))
+    else:
+        metodo = str(getattr(op, "metodo", "GET")).upper()
+        so_le = bool(getattr(op, "somente_leitura", False))
+    if metodo in _METODOS_LEITURA:
+        return False
+    return not so_le
 
 
 def _valor_json(v: Any) -> Any:
@@ -502,14 +531,16 @@ class Conector(TipoInstrumento):
         return {**limpa, "certificado": cert_pem, "chave_privada": chave_pem}
 
     def irreversivel_para(self, configuracao: dict) -> bool:
-        """Conservador POR INSTRUMENTO nesta fatia: irreversível se QUALQUER operação
-        escreve. Assim nenhuma ação de escrita passa sem a parede; o refino
-        operação-a-operação vem numa fatia com toque aditivo no motor."""
+        """O instrumento é irreversível se QUALQUER operação escreve — e "escreve"
+        agora respeita o `somente_leitura` de cada uma (ver `_operacao_escreve`).
+
+        Isto é o baseline do INSTRUMENTO (parede de ativação). O que decide ferramenta
+        a ferramenta é o `metadata` que cada operação carrega — o refino que a versão
+        anterior deste método dizia estar pendente por falta de "toque aditivo no
+        motor". O toque existe desde 2026-09-21 (`agente.py::_irreversivel_da_ferramenta`,
+        feito para o MCP), então o refino entra aqui sem motor novo."""
         ops = (configuracao or {}).get("operacoes") or []
-        return any(
-            str((o or {}).get("metodo", "GET")).upper() not in _METODOS_LEITURA
-            for o in ops
-        )
+        return any(_operacao_escreve(o or {}) for o in ops)
 
     def executar(self, config: ConfigConector, args: ArgsConector) -> dict:
         """Acionamento isolado: descreve as operações (cada uma é uma ferramenta
@@ -578,6 +609,10 @@ class Conector(TipoInstrumento):
             name=_nome_ferramenta(op.nome),
             description=op.descricao or f"Operação {op.nome} do conector.",
             args_schema=ArgsOp,
+            # A irreversibilidade DESTA operação, para o motor gatear só o que escreve
+            # (o mesmo mecanismo do MCP). Sem isto, um conector com uma escrita fazia
+            # TODAS as suas consultas pararem para pedir aprovação.
+            metadata={"irreversivel": _operacao_escreve(op)},
         )
 
 

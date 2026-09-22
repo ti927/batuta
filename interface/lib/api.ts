@@ -305,6 +305,10 @@ export type OperacaoConector = {
   cabecalhos: Record<string, string>;
   campos: CampoConector[];
   campos_resposta: string[]; // só estes campos de cada registro (corta custo)
+  // Nem todo POST escreve: há API que CONSULTA por POST porque o filtro não cabe na
+  // URL (Google Search Console). Declaração CONSCIENTE de quem monta — sem ela, cada
+  // consulta dessas pararia para pedir aprovação.
+  somente_leitura?: boolean;
 };
 
 export type ConfigConector = {
