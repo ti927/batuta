@@ -14,6 +14,11 @@ import httpx
 from pydantic import BaseModel, Field
 
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
+# Os textos-padrão vivem numa fonte só (`mensageria/config.py`), e o canal os importa
+# em vez de recopiá-los: duas cópias derivam com o tempo, e `test_dono_da_regra.py`
+# trava justamente isso. `mensageria.config` é folha aqui (só depende de `modelos`),
+# então não há ciclo — verificado.
+from mensageria.config import DESPEDIDA_MSG, MSG_LIMITE, NUDGE_MSG
 
 API_BASE = "https://api.telegram.org"
 TIMEOUT_S = 15.0
@@ -77,6 +82,28 @@ class ConfigTelegram(BaseModel):
         "Assim que possível retornaremos sua mensagem.",
         title="Mensagem fora do horário",
         description="Resposta automática enviada fora do horário comercial.",
+    )
+
+    # Estas três o Batuta já enviava — e não havia tela nenhuma para mudá-las. Eram
+    # lidas em produção (`mensageria/servico.py`, `sweeper.py`) direto do padrão do
+    # código: para trocar uma palavra era preciso mexer no código ou chamar a API na
+    # mão. São a VOZ do bot, então moram onde o bot mora.
+    mensagem_limite: str = Field(
+        default=MSG_LIMITE,
+        title="Mensagem ao atingir o limite da conversa",
+        description="Enviada quando a conversa bate o teto de mensagens ou de custo e "
+        "passa para uma pessoa da equipe. Diga o que houve e o que acontece agora.",
+    )
+    mensagem_nudge: str = Field(
+        default=NUDGE_MSG,
+        title="Mensagem de cutucada",
+        description="Enviada quando a pessoa some por um tempo, para saber se ela "
+        "ainda está por aí. O prazo está nas regras do fluxo.",
+    )
+    mensagem_despedida: str = Field(
+        default=DESPEDIDA_MSG,
+        title="Mensagem de despedida",
+        description="Enviada ao encerrar uma conversa parada, depois da cutucada.",
     )
 
 

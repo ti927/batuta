@@ -63,6 +63,7 @@ from chaves import (
 from consultoria import exigir_admin_consultoria
 from mensageria import aprovacao, config, retoma
 from mensageria.config import (
+    CHAVES_DA_AUTOMACAO,
     GLOBAL,
     ONDE_MUDAR,
     PERFIS,
@@ -179,8 +180,8 @@ def limites_do_fluxo(
     devolve as frases."""
     cfg = dict(GLOBAL)
     if dados.perfil in PERFIS:
-        cfg = _mesclar_config(cfg, PERFIS[dados.perfil])
-    cfg = _mesclar_config(cfg, dados.ajustes or {})
+        cfg = _mesclar_config(cfg, PERFIS[dados.perfil], CHAVES_DA_AUTOMACAO)
+    cfg = _mesclar_config(cfg, dados.ajustes or {}, CHAVES_DA_AUTOMACAO)
     return {"limites": resumo_dos_limites(cfg), "onde_mudar": ONDE_MUDAR}
 
 

@@ -7,7 +7,31 @@ ao mais específico —
     padrão GLOBAL  <  canal (instrumento.configuracao)  <  PERFIL do fluxo  <
     ajustes do fluxo (automacao.configuracao.ajustes)  <  ajustes do NÓ (portão)
 
-O mais específico vence. Atendimento puro (conversa sem automação) usa só
+CADA REGRA TEM UM DONO — e não é convenção de tela, é lei de código. Até 2026-09-22
+qualquer camada podia escrever qualquer chave, e o resultado era que quem vencia
+mudava campo a campo: `PERFIS["interno"]` fixava `saudacao_abertura: ""`, e como
+`_mesclar` só ignora `None`, esse vazio explícito apagava a saudação que a pessoa
+tinha escrito no bot — enquanto `PERFIS["atendimento"]`, que não declara horário,
+deixava o canal vencer nessas outras. Ninguém conseguia prever. Agora as chaves são
+particionadas por DONO, e cada camada só escreve as suas:
+
+    CHAVES_DO_CANAL   — a VOZ de quem fala: saudação, horário, mensagens automáticas.
+                        Só o instrumento de canal escreve. O mesmo fluxo atendendo por
+                        dois bots deve saudar diferente.
+    CHAVES_DO_AGENTE  — propriedade de UM ATO: quanto este trabalhador pode trabalhar
+                        num passo, e quanto/como ele espera uma pessoa. O fluxo guarda
+                        o PADRÃO que os agentes herdam; o agente sobrepõe quando é
+                        diferente. (Um fluxo com duas aprovações — uma confirmação
+                        rápida e um diretor financeiro que viaja — precisa dos dois.)
+    CHAVES_DO_FLUXO   — CONTADOR QUE ACUMULA, que só pode ter um teto: mensagens e
+                        custo da conversa, passos e custo da execução, os vigias.
+                        Um teto por passo sobre um contador que não zera no passo não
+                        significa nada.
+
+Efeito colateral deliberado: ajustes legados que caírem fora do seu dono viram
+INERTES por código, sem precisar tocar o banco.
+
+Atendimento puro (conversa sem automação) usa só
 `global < canal` — idêntico ao de hoje (sem regressão). `resolver_config` é o
 ÚNICO lugar que monta esse efetivo; a borda (servico/sweeper) e o portão leem dele,
 NUNCA de `instrumento.configuracao` direto. Assim a regra é geral e por-fluxo ao
@@ -178,15 +202,55 @@ GLOBAL: dict = {
 # Só estas chaves podem vir do canal/ajustes (ignora token, destinatario_padrao, etc.).
 CHAVES = frozenset(GLOBAL)
 
+# ── O DONO de cada regra (ver a docstring do topo). A partição é exaustiva e
+# disjunta, e `test_dono_da_regra.py` trava isso: uma chave nova em `GLOBAL` que
+# ninguém classificar faz a suíte falhar, em vez de ficar órfã sem dono. ──
+
+# A VOZ de quem fala com a pessoa. Mora no instrumento de canal, e só lá.
+CHAVES_DO_CANAL = frozenset({
+    "saudacao_abertura",
+    "horario_comercial_ativo",
+    "horario_inicio",
+    "horario_fim",
+    "dias_uteis_apenas",
+    "mensagem_fora_horario",
+    "mensagem_limite",
+    "mensagem_nudge",
+    "mensagem_despedida",
+})
+
+# Propriedade de UM ATO — uma espera, um trabalho. O fluxo guarda o padrão; o agente
+# que faz o passo sobrepõe. São as únicas que variam legitimamente de passo para passo.
+CHAVES_DO_AGENTE = frozenset({
+    "teto_min_passo",
+    "timeout_min",
+    "nudge_timeout_min",
+    "encerrar_por_inatividade",
+    "portao_forma",
+    "portao_acao_abandono",
+    "portao_max_rodadas",
+    "teto_espera_humano_min",
+})
+
+# Contador que ACUMULA ao longo de uma conversa/execução — só pode ter um teto — mais
+# os vigias, que são política de operação do fluxo inteiro.
+CHAVES_DO_FLUXO = CHAVES - CHAVES_DO_CANAL - CHAVES_DO_AGENTE
+
+# O que a automação pode guardar em `configuracao.ajustes`: o que é dela MAIS o padrão
+# que os agentes herdam. O canal fica de fora — é o dono das chaves dele.
+CHAVES_DA_AUTOMACAO = CHAVES_DO_FLUXO | CHAVES_DO_AGENTE
+
 # ── PERFIS de fluxo: presets que sobrepõem o global. O usuário escolhe um "tipo de
 # fluxo". FONTE ÚNICA — o frontend lê estes valores por endpoint, não os duplica.
 # (Fatia 3) De 4 presets → 2 honestos: caíram "disparo" (é um GATILHO, não um tipo de
 # fluxo — vira `origem` na Fatia 4) e "personalizado" (é apenas "sem tipo + ajustes",
 # já é como a tela trata a ausência de perfil). Nenhuma automação de produção os usava. ──
 PERFIS: dict[str, dict] = {
+    # Saudação e horário SAÍRAM daqui (2026-09-22): são do canal. O `""` explícito do
+    # "interno" apagava a saudação escrita no bot, e o "atendimento" — que nunca
+    # declarou horário — deixava o canal vencer nessas outras. Duas regras opostas
+    # para o mesmo assunto, no mesmo lugar.
     "interno": {
-        "saudacao_abertura": "",
-        "horario_comercial_ativo": False,
         "timeout_min": 30,
         "nudge_timeout_min": 15,
         "max_turnos": 20,
@@ -195,7 +259,6 @@ PERFIS: dict[str, dict] = {
         "portao_acao_abandono": "estacionar",
     },
     "atendimento": {
-        "saudacao_abertura": SAUDACAO_PADRAO,
         "timeout_min": 60,
         "nudge_timeout_min": 30,
         "max_turnos": 40,
@@ -229,52 +292,58 @@ ESCOLHAS = {
 
 # Botões EXPOSTOS na UI, agrupados (fonte única — o front renderiza a partir daqui,
 # sem duplicar rótulos/opções). O que não está aqui fica interno (trilho de segurança).
+# Grupos pelo SUJEITO, não pela categoria: cada título diz de QUEM é a regra. Os
+# antigos ("Espera e encerramento", "Limites da conversa", "Limites da execução") não
+# diziam — e era por isso que os dois tetos de custo, que medem coisas diferentes,
+# pareciam o mesmo botão repetido. O grupo "Atendimento ao cliente" SAIU: saudação e
+# horário são do canal, e ficar nos dois lugares era a origem da confusão.
+#
+# `nivel` diz o que a tela precisa dizer à pessoa: "fluxo" é regra do fluxo e ponto;
+# "agente" é o PADRÃO que cada agente herda e pode sobrepor no popup dele.
 CAMPOS = [
-    {"grupo": "Espera e encerramento", "campos": [
+    {"grupo": "Enquanto espera uma pessoa", "nivel": "agente", "campos": [
         {"chave": "timeout_min", "rotulo": "Tempo até cutucar quem some", "tipo": "int", "sufixo": "min"},
         {"chave": "nudge_timeout_min", "rotulo": "Tempo após cutucar até encerrar", "tipo": "int", "sufixo": "min"},
         {"chave": "encerrar_por_inatividade", "rotulo": "Encerrar conversas paradas", "tipo": "bool"},
-    ]},
-    {"grupo": "Limites da conversa", "campos": [
-        {"chave": "max_turnos", "rotulo": "Máx. de mensagens por conversa", "tipo": "int"},
-        {"chave": "teto_usd",
-         "rotulo": "Teto de custo da conversa — só a IA que conversa",
-         "tipo": "valor", "sufixo": "US$"},
-        {"chave": "teto_turno_preso_min",
-         "rotulo": "Tempo até declarar um turno travado (atendimento)",
-         "tipo": "int", "sufixo": "min"},
-        {"chave": "teto_turno_preso_portao_min",
-         "rotulo": "Tempo até declarar um turno travado (aprovação)",
-         "tipo": "int", "sufixo": "min"},
-    ]},
-    {"grupo": "Limites da execução", "campos": [
-        {"chave": "max_passos",
-         "rotulo": "Máx. de passos de uma execução",
-         "tipo": "int"},
-        {"chave": "teto_usd_execucao",
-         "rotulo": "Teto de custo por execução — inclui imagem/vídeo (0 = sem teto)",
-         "tipo": "valor", "sufixo": "US$"},
-        {"chave": "teto_min_passo",
-         "rotulo": "Tempo máximo de um passo (0 = sem teto)",
-         "tipo": "int", "sufixo": "min"},
-        {"chave": "teto_min_execucao",
-         "rotulo": "Tempo máximo da execução inteira (0 = sem teto)",
-         "tipo": "int", "sufixo": "min"},
-    ]},
-    {"grupo": "Atendimento ao cliente", "campos": [
-        {"chave": "saudacao_abertura", "rotulo": "Saudação no 1º contato (vazio = desligada)", "tipo": "texto"},
-        {"chave": "horario_comercial_ativo", "rotulo": "Atender só em horário comercial", "tipo": "bool"},
-        {"chave": "horario_inicio", "rotulo": "Abre às", "tipo": "hora"},
-        {"chave": "horario_fim", "rotulo": "Fecha às", "tipo": "hora"},
-        {"chave": "dias_uteis_apenas", "rotulo": "Só em dias úteis", "tipo": "bool"},
-        {"chave": "mensagem_fora_horario", "rotulo": "Mensagem fora do horário", "tipo": "texto"},
-    ]},
-    {"grupo": "Aprovação humana", "campos": [
         {"chave": "portao_forma", "rotulo": "Como o agente conduz a aprovação", "tipo": "escolha"},
         {"chave": "portao_acao_abandono", "rotulo": "Se o aprovador abandona a conversa", "tipo": "escolha"},
         {"chave": "portao_max_rodadas", "rotulo": "Máx. de idas-e-vindas na aprovação", "tipo": "int"},
         {"chave": "teto_espera_humano_min",
          "rotulo": "Tempo parada até avisar que ninguém aprovou (0 = nunca avisar)",
+         "tipo": "int", "sufixo": "min"},
+    ]},
+    {"grupo": "Quanto uma conversa pode custar", "nivel": "fluxo", "campos": [
+        {"chave": "max_turnos", "rotulo": "Máx. de mensagens por conversa", "tipo": "int"},
+        {"chave": "teto_usd",
+         "rotulo": "Teto de custo da conversa — só a IA que conversa "
+                   "(imagem e vídeo contam na execução)",
+         "tipo": "valor", "sufixo": "US$"},
+    ]},
+    {"grupo": "Quanto uma execução pode custar e durar", "nivel": "fluxo", "campos": [
+        {"chave": "max_passos",
+         "rotulo": "Máx. de passos de uma execução",
+         "tipo": "int"},
+        {"chave": "teto_usd_execucao",
+         "rotulo": "Teto de custo por execução — inclui imagem e vídeo (0 = sem teto)",
+         "tipo": "valor", "sufixo": "US$"},
+        {"chave": "teto_min_execucao",
+         "rotulo": "Tempo máximo da execução inteira (0 = sem teto)",
+         "tipo": "int", "sufixo": "min"},
+    ]},
+    # O teto de tempo de UM passo é do trabalhador, não da execução: um passo que
+    # escreve uma frase e um que gera vídeo de 25 min não cabem no mesmo número. Aqui
+    # fica só o PADRÃO; cada agente sobrepõe no popup dele.
+    {"grupo": "Quanto um passo pode trabalhar", "nivel": "agente", "campos": [
+        {"chave": "teto_min_passo",
+         "rotulo": "Tempo máximo de um passo (0 = sem teto)",
+         "tipo": "int", "sufixo": "min"},
+    ]},
+    {"grupo": "Vigias — quando o Batuta destrava sozinho", "nivel": "fluxo", "campos": [
+        {"chave": "teto_turno_preso_min",
+         "rotulo": "Tempo até declarar um turno travado (atendimento)",
+         "tipo": "int", "sufixo": "min"},
+        {"chave": "teto_turno_preso_portao_min",
+         "rotulo": "Tempo até declarar um turno travado (aprovação)",
          "tipo": "int", "sufixo": "min"},
     ]},
 ]
@@ -305,7 +374,7 @@ def painel_config() -> dict:
                 c["opcoes"] = [{"valor": v, "rotulo": r} for v, r in ESCOLHAS[c["chave"]]]
             c["padrao"] = GLOBAL.get(c["chave"])
             campos.append(c)
-        grupos.append({"grupo": g["grupo"], "campos": campos})
+        grupos.append({"grupo": g["grupo"], "nivel": g["nivel"], "campos": campos})
     return {
         "perfis": perfis,
         "grupos": grupos,
@@ -315,12 +384,16 @@ def painel_config() -> dict:
     }
 
 
-def _mesclar(base: dict, extra: dict | None) -> dict:
-    """Sobrepõe `base` com as chaves conhecidas de `extra` (ignora nulos e chaves
-    estranhas). Não muta `base`."""
+def _mesclar(base: dict, extra: dict | None, permitidas: frozenset = CHAVES) -> dict:
+    """Sobrepõe `base` com as chaves de `extra` QUE ESTA CAMADA PODE ESCREVER (ignora
+    nulos, chaves estranhas e chaves de outro dono). Não muta `base`.
+
+    `permitidas` é o que torna o dono lei de código: uma camada que receba uma chave
+    fora do seu domínio simplesmente não a aplica — nem avisa, nem quebra. É por isso
+    que os ajustes legados de atendimento ficam inertes sem migração nenhuma."""
     out = dict(base)
     for k, v in (extra or {}).items():
-        if k in CHAVES and v is not None:
+        if k in permitidas and v is not None:
             out[k] = v
     return out
 
@@ -333,8 +406,8 @@ def config_da_automacao(auto: Automacao | None) -> dict:
     bruto = (auto.configuracao or {}) if auto else {}
     perfil = bruto.get("perfil")
     if perfil in PERFIS:
-        cfg = _mesclar(cfg, PERFIS[perfil])
-    return _mesclar(cfg, bruto.get("ajustes"))
+        cfg = _mesclar(cfg, PERFIS[perfil], CHAVES_DA_AUTOMACAO)
+    return _mesclar(cfg, bruto.get("ajustes"), CHAVES_DA_AUTOMACAO)
 
 
 def resolver_config(sessao: Session, conversa) -> dict:
@@ -360,15 +433,18 @@ def resolver_config(sessao: Session, conversa) -> dict:
         bruto = auto.configuracao or {}
         perfil = bruto.get("perfil")
         if perfil in PERFIS:
-            cfg = _mesclar(cfg, PERFIS[perfil])
-        cfg = _mesclar(cfg, bruto.get("ajustes"))
+            cfg = _mesclar(cfg, PERFIS[perfil], CHAVES_DA_AUTOMACAO)
+        cfg = _mesclar(cfg, bruto.get("ajustes"), CHAVES_DA_AUTOMACAO)
     return cfg
 
 
 def com_ajuste_do_no(cfg: dict, no: dict | None) -> dict:
-    """Sobrepõe a config efetiva com ajustes específicos do NÓ do portão
-    (`no.config`), o nível mais específico da cascata."""
-    return _mesclar(cfg, (no or {}).get("config"))
+    """Sobrepõe a config efetiva com ajustes específicos do NÓ (`no.config`), o nível
+    mais específico da cascata. Só as chaves de UM ATO (`CHAVES_DO_AGENTE`): um teto de
+    conversa por nó não significava nada — `max_turnos` e `teto_usd` são medidos sobre
+    a conversa INTEIRA (`servico.py::_limite_do_portao`), então um valor por passo
+    trocava a régua com a contagem correndo."""
+    return _mesclar(cfg, (no or {}).get("config"), CHAVES_DO_AGENTE)
 
 
 # ── Mensagens de portão DERIVADAS dos parâmetros do Tipo de fluxo ──────────────

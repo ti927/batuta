@@ -66,10 +66,42 @@ def test_perfil_interno_sobrepoe_o_canal(sessao, dados):
     auto = _auto(sessao, dados, {"perfil": "interno"})
     conv = _conversa(sessao, inst, _exec(sessao, auto))
     r = cfg.resolver_config(sessao, conv)
-    assert r["saudacao_abertura"] == ""  # interno desliga a saudação
     assert r["timeout_min"] == 30
     assert r["portao_acao_abandono"] == "estacionar"  # parada e retomável (padrão)
     assert r["max_turnos"] == 20
+    # A saudação NÃO entra mais nesta conta: ela é do canal (2026-09-22). O perfil
+    # "interno" fixava `""` aqui e apagava em silêncio a saudação escrita no bot.
+    assert r["saudacao_abertura"] == cfg.SAUDACAO_PADRAO  # o canal é que manda
+
+
+def test_o_fluxo_nao_apaga_mais_a_saudacao_do_bot(sessao, dados):
+    """A regressão que originou a arrumação de 2026-09-22.
+
+    O bot tinha uma saudação escrita à mão ("Sou o assistente de reembolsos…"); o
+    perfil "interno" — padrão de toda automação nova — fixava `saudacao_abertura: ""`,
+    e como `_mesclar` só ignora `None`, esse vazio explícito vencia. A pessoa
+    configurava o bot e o texto dela sumia sem aviso. Agora a saudação é do CANAL, e
+    nenhuma camada de fluxo alcança essa chave.
+    """
+    minha = "Olá! Sou o assistente de reembolsos da Lure."
+    inst = _inst(sessao, dados, {"saudacao_abertura": minha})
+    # Pior caso: o perfil manda apagar E alguém deixou o mesmo ajuste no fluxo.
+    auto = _auto(
+        sessao, dados,
+        {"perfil": "interno", "ajustes": {"saudacao_abertura": "", "max_turnos": 7}},
+    )
+    r = cfg.resolver_config(sessao, _conversa(sessao, inst, _exec(sessao, auto)))
+    assert r["saudacao_abertura"] == minha
+    assert r["max_turnos"] == 7  # o que é do fluxo continua valendo normalmente
+
+
+def test_ajuste_de_canal_no_fluxo_fica_inerte_sem_migracao(sessao, dados):
+    """Duas automações em produção tinham chaves de atendimento nos `ajustes`. Elas
+    ficam INERTES por código — não foi preciso tocar o banco."""
+    inst = _inst(sessao, dados, {"dias_uteis_apenas": True})
+    auto = _auto(sessao, dados, {"ajustes": {"dias_uteis_apenas": False}})
+    r = cfg.resolver_config(sessao, _conversa(sessao, inst, _exec(sessao, auto)))
+    assert r["dias_uteis_apenas"] is True  # o canal é o dono
 
 
 def test_ajustes_do_fluxo_vencem_o_perfil(sessao, dados):
@@ -108,7 +140,10 @@ def test_painel_config_tem_perfis_grupos_e_opcoes():
     ids = {x["id"] for x in p["perfis"]}
     assert ids == {"interno", "atendimento"}  # (Fatia 3) de 4 presets → 2 honestos
     interno = next(x for x in p["perfis"] if x["id"] == "interno")
-    assert interno["defaults"]["saudacao_abertura"] == ""  # perfil aplica o default
+    assert interno["defaults"]["timeout_min"] == 30  # perfil aplica o default
+    # Cada grupo diz de QUEM é a regra — sem isso a tela volta a mostrar dois níveis
+    # sem distinguir um do outro, que foi a origem desta arrumação.
+    assert {g["nivel"] for g in p["grupos"]} <= {"fluxo", "agente"}
     # campos de escolha trazem as opções (fonte única, sem duplicar no front)
     forma = next(
         c for g in p["grupos"] for c in g["campos"] if c["chave"] == "portao_forma"
