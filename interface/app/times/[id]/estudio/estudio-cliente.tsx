@@ -392,6 +392,18 @@ function EditorEstudio({
       setErro("No agendamento, escreva a mensagem que o gatilho entrega ao fluxo.");
       return;
     }
+    // Gatilho de comentário ATIVO sem conta escolhida não dispara nunca — e falha
+    // calado, que é o pior desfecho: a automação parece ligada e não é. A tela
+    // clássica já barrava isto; sem a mesma trava aqui, alternar entre as duas telas
+    // decidiria se o fluxo nasce quebrado.
+    if (
+      gatilho.tipo === "comentario_instagram" &&
+      automacao.ativa &&
+      !gatilho.credencialId
+    ) {
+      setErro("Escolha a conta do Instagram antes de ativar o gatilho de comentário.");
+      return;
+    }
     setSalvando(true);
     try {
       const atual = await api.put<Automacao>(`/automacoes/${automacao.id}`, {
@@ -417,13 +429,18 @@ function EditorEstudio({
 
   const erros = problemas.filter((p) => p.nivel === "erro");
   const avisos = problemas.filter((p) => p.nivel === "aviso");
+  // Há edição pendente? Compara o gatilho INTEIRO, não só o tipo. Comparar só o tipo
+  // parecia bastar e não bastava: o botão Salvar é `disabled={!naoSalvo}`, então mudar
+  // o horário, a frequência, a palavra-chave ou o teto deixava o botão morto em
+  // "Salvo" — a pessoa ajustava, saía da tela e o trabalho sumia sem um aviso sequer.
+  // Comparar demais só faz o botão acender à toa; comparar de menos perde trabalho.
   const naoSalvo =
     !!automacao &&
-    JSON.stringify([nome, normalizarCadeia(cadeia), gatilho.tipo]) !==
+    JSON.stringify([nome, normalizarCadeia(cadeia), gatilho]) !==
       JSON.stringify([
         automacao.nome,
         normalizarCadeia(automacao.cadeia ?? { nos: [] }),
-        gatilhoDe(automacao).tipo,
+        gatilhoDe(automacao),
       ]);
 
   return (

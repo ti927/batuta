@@ -822,7 +822,7 @@ function ConfigGatilhoBloco({
             <input
               type="number"
               min={1}
-              max={28}
+              max={31}
               className={`${campo} w-24`}
               value={gatilho.diaMes}
               disabled={!podeEditar}
@@ -870,6 +870,50 @@ function ConfigGatilhoBloco({
               ))}
             </select>
           </div>
+          {/* QUAIS posts disparam. Sem isto, um fluxo montado na tela clássica com
+              posts específicos não tinha como ser editado aqui — o valor ia e voltava
+              intacto, mas ficava invisível, que é a pior forma de configuração. */}
+          <div>
+            <label className={rotuloCls}>Quais posts</label>
+            <div className="flex flex-col gap-1">
+              {(
+                [
+                  ["todas", "Todos os posts do perfil"],
+                  ["especificas", "Posts específicos"],
+                ] as const
+              ).map(([valor, rotulo]) => (
+                <label
+                  key={valor}
+                  className="flex items-center gap-1.5 text-[11.5px] text-[#4A4860]"
+                >
+                  <input
+                    type="radio"
+                    className="accent-[#6D4AFF]"
+                    checked={gatilho.midiasModo === valor}
+                    disabled={!podeEditar}
+                    onChange={() => setGatilho({ midiasModo: valor })}
+                  />
+                  {rotulo}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {gatilho.midiasModo === "especificas" && (
+            <div>
+              <label className={rotuloCls}>
+                IDs dos posts (media_id), separados por vírgula
+              </label>
+              <textarea
+                className={`${campo} resize-none leading-snug`}
+                rows={2}
+                value={gatilho.midiasIds}
+                disabled={!podeEditar}
+                onChange={(e) => setGatilho({ midiasIds: e.target.value })}
+              />
+            </div>
+          )}
+
           <div>
             <label className={rotuloCls}>Só comentários que contenham (opcional)</label>
             <input
@@ -883,12 +927,15 @@ function ConfigGatilhoBloco({
             <label className={rotuloCls}>Teto de disparos por hora</label>
             <input
               type="number"
-              min={1}
+              min={0}
               className={`${campo} w-24`}
               value={gatilho.tetoPorHora}
               disabled={!podeEditar}
               onChange={(e) => setGatilho({ tetoPorHora: Number(e.target.value) })}
             />
+            <p className="mt-1 text-[11px] leading-snug text-[#6B6880]">
+              Protege seu custo se um post viralizar. <strong>0 = sem limite.</strong>
+            </p>
           </div>
         </>
       )}
