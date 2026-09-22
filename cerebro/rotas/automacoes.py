@@ -190,7 +190,16 @@ def limites_do_fluxo(
     if dados.perfil in PRESETS:
         cfg = _mesclar_config(cfg, PRESETS[dados.perfil], CHAVES_DA_AUTOMACAO)
     cfg = _mesclar_config(cfg, dados.ajustes or {}, CHAVES_DA_AUTOMACAO)
-    return {"limites": resumo_dos_limites(cfg), "onde_mudar": ONDE_MUDAR}
+    contexto = {
+        "tipo_gatilho": dados.tipo_gatilho,
+        "configuracao_gatilho": dados.configuracao_gatilho,
+        "tem_no_cada": dados.tem_no_cada,
+        "tem_agendar_automacao": dados.tem_agendar_automacao,
+    }
+    return {
+        "limites": resumo_dos_limites(cfg, contexto),
+        "onde_mudar": ONDE_MUDAR,
+    }
 
 
 @rotas.get("/automacoes/{automacao_id}", response_model=AutomacaoLer)

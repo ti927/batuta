@@ -126,3 +126,15 @@ def test_o_canal_e_dono_do_que_diz_ao_contato(tipo_nome):
     campos = set(obter_tipo(tipo_nome).Config.model_fields)
     for chave in ("mensagem_limite", "mensagem_nudge", "mensagem_despedida"):
         assert chave in campos, f"{tipo_nome}: {chave} voltou a não ter tela nenhuma"
+
+
+def test_o_teto_de_agendamentos_nao_diverge_do_instrumento():
+    """`config.py` espelha o `TETO_PENDENTES` do instrumento para citá-lo no resumo.
+
+    Duas cópias do mesmo número derivam com o tempo, e aí a tela promete um limite e o
+    Batuta aplica outro — pior que não mostrar.
+    """
+    from instrumentos.agendar_automacao import TETO_PENDENTES
+    from mensageria.config import TETO_PENDENTES_AGENDAMENTO
+
+    assert TETO_PENDENTES_AGENDAMENTO == TETO_PENDENTES

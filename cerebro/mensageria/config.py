@@ -165,6 +165,11 @@ GLOBAL: dict = {
     # ENTRE ações; o da EXECUÇÃO é conferido entre passos.
     "teto_min_passo": 0,
     "teto_min_execucao": 0,
+    # Quantos itens o nó "Para cada item" processa de uma vez. Era o fixo
+    # `cadeia.MAX_ITENS_CADA` — um limite real, que CORTA fila, e que nenhuma tela
+    # mostrava. O excedente já virava aviso no rastro; agora o teto também é visível e
+    # ajustável, como manda a lei do maestro.
+    "max_itens_cada": 20,
     # C. Atendimento (cliente externo)
     "saudacao_abertura": SAUDACAO_PADRAO,  # "" = desligada
     "horario_comercial_ativo": False,
@@ -348,6 +353,9 @@ CAMPOS = [
         {"chave": "teto_min_execucao",
          "rotulo": "Tempo máximo da execução inteira (0 = sem teto)",
          "tipo": "int", "sufixo": "min"},
+        {"chave": "max_itens_cada",
+         "rotulo": "Máx. de itens por vez no “Para cada item”",
+         "tipo": "int"},
     ]},
     # O teto de tempo de UM passo é do trabalhador, não da execução: um passo que
     # escreve uma frase e um que gera vídeo de 25 min não cabem no mesmo número. Aqui
@@ -561,12 +569,24 @@ ONDE_MUDAR = (
 )
 
 
-def resumo_dos_limites(conf: dict) -> list[str]:
+# Espelho de `instrumentos.agendar_automacao.TETO_PENDENTES`. Não importamos para não
+# criar dependência de `config` (folha) para `instrumentos`; `test_dono_da_regra.py`
+# trava a igualdade, então divergir quebra a suíte em vez de mentir na tela.
+TETO_PENDENTES_AGENDAMENTO = 50
+
+
+def resumo_dos_limites(conf: dict, contexto: dict | None = None) -> list[str]:
     """Os limites EFETIVOS deste fluxo, em português claro — um item por limite.
 
     Serve ao painel (o consultor lê sem abrir o 'Avançado') e ao recado honesto. Zero
     em teto de custo/tempo significa DESLIGADO, e isso é dito com todas as letras em
-    vez de mostrar um "0" que ninguém interpreta."""
+    vez de mostrar um "0" que ninguém interpreta.
+
+    `contexto` traz o que o DESENHO tem e a cascata não sabe: o gatilho e se há nó
+    "Para cada item" ou instrumento de agendar. Esses limites existem, cortam trabalho
+    de verdade, e até 2026-09-22 não apareciam em lugar nenhum. Um deles é FIXO
+    (agendamentos pendentes) e isso é dito, em vez de fingir que dá para ajustar."""
+    ctx = contexto or {}
 
     def _n(chave: str, padrao=0):
         try:
@@ -599,8 +619,40 @@ def resumo_dos_limites(conf: dict) -> list[str]:
         "Execução: " + ", ".join(execucao) + ".",
         f"Turno travado: o vigia destrava e avisa em {int(_n('teto_turno_preso_min', 8))} min "
         f"(atendimento) ou {int(_n('teto_turno_preso_portao_min', 30))} min (aprovação).",
-    ]
+    ] + _limites_do_desenho(conf, ctx)
 
+
+
+def _limites_do_desenho(conf: dict, ctx: dict) -> list[str]:
+    """Os limites que NÃO vêm da cascata — moram no gatilho, no desenho ou num
+    instrumento. Só aparecem quando o desenho os tem: listar um teto de Instagram num
+    fluxo manual seria ruído, e ruído esconde tanto quanto o silêncio."""
+    fora: list[str] = []
+    if ctx.get("tipo_gatilho") == "comentario_instagram":
+        try:
+            teto = int((ctx.get("configuracao_gatilho") or {}).get("teto_por_hora", 50))
+        except (TypeError, ValueError):
+            teto = 50
+        fora.append(
+            f"Instagram: até {teto} disparos por hora — no cartão do gatilho."
+            if teto
+            else "Instagram: sem teto de disparos por hora — no cartão do gatilho."
+        )
+    if ctx.get("tem_no_cada"):
+        try:
+            itens = int(conf.get("max_itens_cada") or 20)
+        except (TypeError, ValueError):
+            itens = 20
+        fora.append(
+            f"Para cada item: até {itens} itens por vez; o que passar disso não roda, "
+            "e o rastro diz quantos ficaram de fora."
+        )
+    if ctx.get("tem_agendar_automacao"):
+        fora.append(
+            f"Agendamentos: até {TETO_PENDENTES_AGENDAMENTO} pendentes por automação "
+            "— limite fixo do Batuta, não ajustável."
+        )
+    return fora
 
 # Os limites que podem interromper uma aprovação em andamento, com o nome que a
 # pessoa entende e a chave que ela procura na tela. Fonte única do recado e do rastro.

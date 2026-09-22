@@ -31,6 +31,7 @@ from orquestracao.disparo import (
     _esta_cancelada,
     _fazer_registrador,
     _teto_de_custo,
+    _teto_de_itens,
     _teto_de_passos,
     _tetos_de_tempo,
     custo_ja_gasto,
@@ -245,6 +246,7 @@ def avancar_apos_gate(
                 # punir isso mataria o fluxo no instante da retomada.
                 teto_min_passo=min_passo,
                 teto_min_execucao=min_execucao,
+                max_itens_cada=_teto_de_itens(auto_da_execucao),
                 tempo_inicial_s=tempo_ja_trabalhado_s(sessao, execucao.id),
                 registrar_passo=_fazer_registrador(sessao, execucao.id, origens),
                 # Cancelar voltou a valer DEPOIS do portão: sem este callback, o

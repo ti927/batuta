@@ -520,6 +520,8 @@ export function PainelEstudio({
           onChange={setConfigFluxo}
           podeEditar={podeEditar}
           onEditarInstrumento={onEditarInstrumento}
+          gatilhoTipo={gatilho.tipo}
+          configGatilho={{ teto_por_hora: gatilho.tetoPorHora }}
         />
       </div>
     );

@@ -363,6 +363,15 @@ class ConfiguracaoFluxoEntrada(BaseModel):
 
     perfil: str | None = None
     ajustes: dict = Field(default_factory=dict)
+    # CONTEXTO do desenho que está na tela. Nem todo limite vem da cascata: o teto de
+    # disparos do Instagram mora no gatilho, e o teto de itens só importa se houver um
+    # nó "Para cada item". Sem isto, o resumo mentiria por omissão — e limite que
+    # ninguém vê é exatamente o que a lei do maestro proíbe. Opcionais para o endpoint
+    # continuar puro e servir a quem só quer os limites da cascata.
+    tipo_gatilho: str | None = None
+    configuracao_gatilho: dict | None = None
+    tem_no_cada: bool = False
+    tem_agendar_automacao: bool = False
 
 
 class AutomacaoEditar(BaseModel):

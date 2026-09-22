@@ -25,7 +25,7 @@ from orquestracao import dono
 from orquestracao import espera
 from orquestracao import ficha as ficha_mod
 from orquestracao import grafo
-from orquestracao.cadeia import MAX_PASSOS, executar_cadeia
+from orquestracao.cadeia import MAX_ITENS_CADA, MAX_PASSOS, executar_cadeia
 from orquestracao.llm import usar_chaves
 from orquestracao.modelos_ia import provedor_do_modelo_seguro
 from sessao import CriadorDeSessao
@@ -187,6 +187,21 @@ def _tetos_de_tempo(automacao: Automacao | None) -> tuple[int, int]:
         except (TypeError, ValueError):
             return 0  # valor estragado na config não pode derrubar a execução
     return _int("teto_min_passo"), _int("teto_min_execucao")
+
+
+def _teto_de_itens(automacao: Automacao | None) -> int:
+    """Quantos itens o "Para cada item" processa de uma vez neste fluxo.
+
+    Era o fixo `cadeia.MAX_ITENS_CADA` (20): um limite que CORTA fila — o excedente
+    não roda — e que nenhuma tela mostrava. O aviso no rastro já existia; faltava
+    poder mudar o número."""
+    from mensageria.config import config_da_automacao
+
+    try:
+        valor = int(config_da_automacao(automacao).get("max_itens_cada") or 0)
+    except (TypeError, ValueError):
+        return MAX_ITENS_CADA  # config estragada não pode derrubar a execução
+    return valor if valor > 0 else MAX_ITENS_CADA
 
 
 def _ordem_ja_gravada(sessao: Session, execucao_id: uuid.UUID) -> int:
@@ -627,6 +642,7 @@ def rodar_execucao(sessao: Session, execucao: Execucao) -> Execucao:
                     # Tetos de TEMPO do fluxo (Onda 3, fatia 2). Zero = sem teto.
                     teto_min_passo=min_passo,
                     teto_min_execucao=min_execucao,
+                    max_itens_cada=_teto_de_itens(automacao),
                     tempo_inicial_s=tempo_ja_trabalhado_s(sessao, execucao.id),
                     # "Testar este nó" (fatia 5): roda o nó do `no_inicial` e para,
                     # sem seguir as setas. Falso = o caso de sempre.

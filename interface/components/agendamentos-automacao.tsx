@@ -36,6 +36,11 @@ const FMT = new Intl.DateTimeFormat("pt-BR", {
   timeStyle: "short",
 });
 
+// Espelha `TETO_PENDENTES` em `cerebro/instrumentos/agendar_automacao.py` (travado
+// por teste lá). Limite FIXO do Batuta: anti-loop, não é ajustável — e a tela diz
+// isso em vez de fingir que dá para mudar.
+const TETO_PENDENTES = 50;
+
 export function AgendamentosAutomacao({
   automacaoId,
   podeOperar,
@@ -79,10 +84,16 @@ export function AgendamentosAutomacao({
 
   if (carregando || itens.length === 0) return null;
 
+
   return (
     <section className="mt-3 rounded-xl border border-border bg-card p-4">
       <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-foreground">
         <CalendarClock className="size-4" /> Próximas execuções agendadas
+        {/* O teto de pendentes é FIXO e ninguém o via até chegar no limite. Mostrá-lo
+            aqui é de graça — e é onde a pessoa está quando ele importa. */}
+        <span className="text-xs font-normal text-muted-foreground">
+          {itens.length} de {TETO_PENDENTES} pendentes
+        </span>
       </h3>
       <ul className="flex flex-col gap-1.5">
         {itens.map((a) => (

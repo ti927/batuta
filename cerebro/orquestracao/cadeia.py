@@ -372,7 +372,7 @@ def _decidir_por_regra(
 def _abrir_repeticoes(
     no: dict, no_id: str, idx, proxima: dict, ficha_do_ramo: dict, ramo: str,
     extra: dict, *, entrada: str, avisos: list[str], acumuladores: dict[str, str],
-    ao_terminar,
+    ao_terminar, max_itens: int = MAX_ITENS_CADA,
 ) -> int:
     """O nó "Para cada item": lê uma lista da ficha e abre UM RAMO POR ITEM.
 
@@ -414,14 +414,14 @@ def _abrir_repeticoes(
             "nada a repetir."
         )
         return 0
-    if len(itens) > MAX_ITENS_CADA:
+    if len(itens) > max_itens:
         # NUNCA cortar em silêncio: quem lê o rastro precisa saber que sobrou fila.
         avisos.append(
             f"O passo '{nome}' recebeu {len(itens)} itens em '{campo_lista}' e o "
-            f"limite é {MAX_ITENS_CADA}. Os {len(itens) - MAX_ITENS_CADA} últimos NÃO "
+            f"limite é {max_itens}. Os {len(itens) - max_itens} últimos NÃO "
             "foram processados."
         )
-        itens = itens[:MAX_ITENS_CADA]
+        itens = itens[:max_itens]
 
     if destino is None or idx.eh_fim(destino):
         # Não há trecho a repetir: cada item vira, ele mesmo, um resultado.
@@ -492,6 +492,7 @@ def executar_cadeia(
     custo_inicial: float = 0.0,
     teto_min_passo: int = 0,
     teto_min_execucao: int = 0,
+    max_itens_cada: int = MAX_ITENS_CADA,
     tempo_inicial_s: float = 0.0,
     so_um_passo: bool = False,
     execucao_id: uuid.UUID | None = None,
@@ -824,7 +825,7 @@ def executar_cadeia(
                 max_passos += _abrir_repeticoes(
                     no, no_atual, idx, proxima, ficha_do_ramo, ramo, extra,
                     entrada=entrada_cada, avisos=avisos, acumuladores=acumuladores,
-                    ao_terminar=_terminou,
+                    ao_terminar=_terminou, max_itens=max_itens_cada,
                 )
                 continue
 

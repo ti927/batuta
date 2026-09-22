@@ -80,6 +80,8 @@ export function PainelDoFluxo({
   onChange,
   podeEditar,
   onEditarInstrumento,
+  gatilhoTipo,
+  configGatilho,
 }: {
   cadeia: Cadeia;
   agentes: Agente[];
@@ -88,6 +90,9 @@ export function PainelDoFluxo({
   onChange: (v: ConfiguracaoFluxo) => void;
   podeEditar: boolean;
   onEditarInstrumento: (instrumentoId: string) => void;
+  /** O gatilho COMO ESTÁ NA TELA (mesmo não salvo) — alguns limites moram nele. */
+  gatilhoTipo: string;
+  configGatilho: Record<string, unknown>;
 }) {
   const [painel, setPainel] = useState<PainelConfigFluxo | null>(null);
   const [limites, setLimites] = useState<string[]>([]);
@@ -100,7 +105,18 @@ export function PainelDoFluxo({
   // A redação dos limites vive no cérebro (`resumo_dos_limites`). Reescrevê-la aqui
   // faria as duas versões divergirem com o tempo — a origem clássica de bug recorrente
   // neste projeto.
-  const serializado = JSON.stringify({ ajustes });
+  // Junto dos ajustes vai o CONTEXTO do desenho: há limites reais que não moram na
+  // cascata (o teto de disparos do Instagram, o de itens do "Para cada item", o de
+  // agendamentos pendentes). Sem mandá-los, o resumo mentiria por omissão.
+  const serializado = JSON.stringify({
+    ajustes,
+    tipo_gatilho: gatilhoTipo,
+    configuracao_gatilho: configGatilho,
+    tem_no_cada: (cadeia.nos ?? []).some((n) => n.tipo === "cada"),
+    tem_agendar_automacao: Object.values(cintos).some((c) =>
+      c.some((i) => i.tipo === "agendar_automacao"),
+    ),
+  });
   useEffect(() => {
     let vivo = true;
     api

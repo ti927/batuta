@@ -345,10 +345,10 @@ export function DialogoConfigFluxo({
                     ))}
                   </ul>
                   <p className="text-[11px] text-muted-foreground">
-                    Todos são ajustáveis no “Avançado” abaixo
-                    {ondeMudar ? ` (${ondeMudar})` : ""}. Quando um deles é atingido, o
-                    agente avisa quem está esperando e o fluxo segue — nada fica parado
-                    em silêncio.
+                    Quase todos são ajustáveis no “Avançado” abaixo
+                    {ondeMudar ? ` (${ondeMudar})` : ""} — os que não forem dizem isso
+                    na própria linha. Quando um deles é atingido, o agente avisa quem
+                    está esperando e o fluxo segue: nada fica parado em silêncio.
                   </p>
                 </div>
               )}
