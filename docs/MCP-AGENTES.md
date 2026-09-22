@@ -1,6 +1,8 @@
 # MCP para os AGENTES — o Batuta como cliente de servidores MCP
 
-> **Documento-fonte** desta frente. Aprovado pelo maestro em 2026-09-21.
+> **Documento-fonte** desta frente. Aprovado pelo maestro em 2026-09-21; **as quatro fatias
+> estão no ar desde 2026-09-22** (ver §9). Leia o §10 antes de concluir que o MCP é a resposta
+> para um caso de API do Google — muitas vezes não é.
 > Não confundir com [`MCP-BATUTA.md`](MCP-BATUTA.md), que é o **sentido oposto**: lá o
 > Batuta é um **servidor** MCP que o claude.ai do consultor aciona. Aqui o Batuta é
 > **cliente**: o agente do time ganha, no cinto, as ferramentas de um servidor MCP de
@@ -172,3 +174,49 @@ credencial só. Com só o endereço nela, o token teria de ser colado no instrum
 aí cada time voltaria a ter uma cópia do segredo, que é exatamente o que tirá-lo do
 instrumento resolveu. Os dois campos são opcionais porque os servidores diferem: o
 Zapier usa endereço genérico + token; outros embutem a chave no caminho e não têm token.
+
+
+---
+
+## 9. O que ficou no ar (2026-09-22)
+
+As quatro fatias, mais o que apareceu ao usar de verdade:
+
+| Commit | O quê |
+|---|---|
+| `8480f71` | As 4 fatias: escolher ferramentas · irreversibilidade por ferramenta · URL secreta · cache + isolamento do cinto · tela de escolha |
+| `f706230` | A credencial `mcp` carrega a conexão INTEIRA (endereço **e** token) — um instrumento aponta para uma credencial só |
+| `ba3d150` → `a3d17d5` | A IA passou a poder **testar** um conector sem ver o segredo (porta interna; ver `docs/ARQUITETURA.md §9-bis`) |
+| `6dbeaad` | Central e docstrings — inclusive um buraco **de agosto**: `basic` e `oauth2` existiam e as IAs nunca os ofereceram |
+
+**Provado ao vivo** contra o Zapier: credencial, conexão, autenticação e listagem. O caminho do
+Zapier está no §8.
+
+**O `get_configuration_url` solitário.** Um server recém-criado publica UMA ferramenta só, com esse
+nome. Parece falha de conexão e **não é**: é o servidor dizendo que ainda não tem ações
+configuradas. Não a ponha no cinto — ela não faz trabalho nenhum.
+
+---
+
+## 10. E a lição que custou a noite: às vezes o MCP não é a resposta
+
+Esta frente nasceu para fugir da verificação de app do Google. No meio do caminho o maestro trouxe
+um repositório de MCP do Search Console — que não servia (roda por *stdio*, não por rede), mas
+apontou a resposta real: **conta de serviço**.
+
+O problema nunca foi o Search Console. Era o **tipo de credencial**. Com uma identidade de máquina
+não há tela de consentimento, nem app verificado, nem token morrendo em 7 dias — e não é preciso
+intermediário nenhum. Isso virou `auth_tipo: "google_conta_servico"` no **Construtor de
+Instrumentos** (decisão do maestro sobre onde construir: *"não quero ficar criando essas coisas por
+debaixo dos panos e o usuário fica sem entender nada"*), servindo qualquer API do Google.
+
+**A regra que fica:** antes de pôr um agregador no meio, pergunte se o serviço de destino não tem
+uma identidade de máquina própria. Se tiver, ela é melhor — menos um elo, menos uma conta, menos uma
+cota. O MCP continua certo para o que **não** tem: é catálogo de milhares de ações que ninguém vai
+manter aqui dentro.
+
+**Pendente, do mesmo tipo:** o **Usuário do Sistema** da Meta é o equivalente para Instagram. Resolve
+as contas próprias sem App Review (o Acesso Padrão é aprovado automaticamente); para conta de
+cliente, falta testar se compartilhar o ativo com o nosso Business basta, ou se cai num app do
+próprio cliente. Quando entrar, marcar a credencial como "não expira" — senão o job noturno que
+renova o token do Instagram tenta renovar à toa e, desde `50c0525`, isso **vira alarme**.

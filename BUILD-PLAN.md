@@ -2475,7 +2475,7 @@ E o agente passou a **ver o que acontece na própria conversa**: no modo memóri
 
 ---
 
-## FASE — MCP para os AGENTES (o Batuta como CLIENTE de servidor MCP)  ▶️ EM CURSO (2026-09-21)
+## FASE — MCP para os AGENTES + a saída do OAuth do Google  ✅ NO AR (2026-09-21/22)
 
 **Documento-fonte:** [`docs/MCP-AGENTES.md`](docs/MCP-AGENTES.md). Sentido OPOSTO ao da fase "Batuta-MCP profissional": lá o Batuta é servidor que o claude.ai aciona; aqui ele é **cliente**, e o agente do time ganha no cinto as ferramentas de um servidor MCP de terceiro (Zapier, Composio, MCP nativo).
 
@@ -2490,6 +2490,57 @@ E o agente passou a **ver o que acontece na própria conversa**: no modo memóri
 **Fora do escopo:** OAuth para servidor MCP (linha 969 deste plano), instrumentos org-wide, marketplace.
 
 **Risco assumido e dito:** a dependência muda de lugar, não some — conta Zapier por cliente (cota e custo), descrição de ferramenta que não é nossa, nem todo serviço existe lá, e mais um elo para fora do processo (por isso a Fatia 3 não é opcional).
+
+**ENTREGUE (as 4 fatias, `8480f71`+`f706230`):** escolher quais ferramentas entram no cinto; irreversibilidade **por ferramenta** (`metadata={"irreversivel": …}`, lida por `agente.py::_irreversivel_da_ferramenta`) — um MCP só de consulta deixa de exigir parede; **URL secreta** + tipo de credencial `mcp` (endereço E token juntos: um instrumento aponta para UMA credencial, e separá-los devolveria a cópia do segredo por time); cache de 10 min e **isolamento do cinto** (servidor fora do ar não derruba o passo — rastro `origem:"cinto"`, evento `instrumento.cinto_falhou`, aviso à IA); tela dedicada de escolha. Provado ao vivo contra o Zapier: conexão, autenticação e listagem OK. Caminho do Zapier: server **"Other"** → *connection token* → `https://mcp.zapier.com/api/v1/connect` + Bearer (o server "Claude MCP Server" é amarrado ao cliente Claude e só oferece OAuth).
+
+### A virada: o problema não era o Search Console, era o TIPO DE CREDENCIAL
+
+O MCP nasceu para fugir da verificação do Google — e no meio do caminho o maestro trouxe um repositório de MCP do Search Console que apontou a resposta real: **conta de serviço**. Identidade de MÁQUINA: sem tela de consentimento, sem app verificado, sem token morrendo em 7 dias.
+
+**Decisão dele sobre ONDE construir** (`d6aec78`): *"não quero ficar criando essas coisas por debaixo dos panos e o usuário fica sem entender nada"* → virou um **tipo de autenticação do CONSTRUTOR** (`auth_tipo: "google_conta_servico"`), e não um instrumento nativo novo. Assim serve QUALQUER API do Google — Search Console, Drive, Sheets, Agenda — montada em formulário, por ele ou pela IA criadora. A única parte que exigiu código é a que nenhuma tela expressa: assinar o JWT (RS256) com a chave privada. Escopo é obrigatório de propósito (pedir acesso amplo seria pior).
+
+**O que caiu junto, cada um achado ao montar de verdade:**
+- **"A chamada falhou." e nada mais** (`e31f951`) — resposta 4xx volta com `ok:false` + status + corpo e SEM a chave `erro`; a tela lia só `erro` e descartava a explicação que o Google tinha acabado de dar. §12-A na tela feita justamente para ninguém ficar no escuro.
+- **Corpo JSON com TIPOS** (`4eecdf4`) — `dimensions` precisa ser `["query"]`, e tudo era texto. Número NÃO converte, de propósito (ids viram outra coisa).
+- **Nem todo POST escreve** (`d8be361`) — `somente_leitura` por operação. Fecha o "refino operação-a-operação" que o próprio `irreversivel_para` dizia estar pendente por falta de toque aditivo no motor; o toque tinha vindo do MCP no dia anterior. As duas frentes da noite se encontraram.
+- **`campos_resposta` não reconhecia `rows`** (`d8bd28c`) — o corte de custo não fazia nada em API do Google, e em silêncio.
+- **Barra lateral do Construtor** (`7c14412`) — Identidade → Autenticação → Operações, que é a ordem em que se monta.
+
+### A IA passou a poder TESTAR sem nunca ver o segredo  (`a3d17d5`)
+
+O serviço MCP roda sem a chave-mestra do cofre, de propósito. A consequência nunca tinha sido dita: a IA montava a integração e **não podia testá-la** — entregava no escuro, ou o consultor virava revisor manual de cada chamada.
+
+A saída não foi dar a chave ao MCP: foi **inverter o pedido**. Porta interna `POST /interno/conector/testar-operacao` — o cérebro decifra, chama a API e devolve só a resposta. Três camadas: **segredo compartilhado** comparado em tempo constante (**ausente = 404: a porta não existe**, nada aberto por omissão); **autorização pelos guardas de sempre** (teste dedicado prova que o segredo NÃO burla o papel — com ele na mão, um pedido em nome de observador é recusado); **escopo mínimo** (uma coisa só, sem devolver config nem segredo). Evento `conector.testado_pela_ia` em toda chamada. **Exige `BATUTA_INTERNO_SECRET` nos DOIS serviços** — sem ela, a ferramenta recusa dizendo o caminho manual.
+
+### E o que a Central e o MCP aprenderam  (`6dbeaad`)
+
+A varredura pedida pelo maestro achou um buraco **de agosto**: em TRÊS lugares o formato dizia `auth_tipo: 'nenhuma|bearer|cabecalho|query'` — `basic` e `oauth2` existiam desde então e as IAs **nunca os ofereceram**, porque quem elas leem ao decidir é a **docstring da ferramenta**, não o capítulo. Corrigido nas duas docstrings (criadora + MCP) e no capítulo, junto com `somente_leitura`, a aprovação por operação, os tipos no corpo e "leia o motivo em vez de adivinhar". Capítulos reescritos: `instrumentos/mcp` (era de julho, ensinava "traz TODAS as ferramentas"), `segredos/conectar-google` (a alternativa que não expira e quando usar cada uma) e `instrumentos/search-console` (401 ≠ 403). 59 capítulos, 0 links `[[..]]` quebrados.
+
+**Em aberto:** (a) o **teste ao vivo** das 3 operações do Search Console (o maestro clica — o conector já está montado no time COF Post Blog); (b) **`BATUTA_INTERNO_SECRET`** a configurar nos dois serviços; (c) **Usuário do Sistema da Meta** — o equivalente da conta de serviço para Instagram, pesquisado e adiado: resolve as contas próprias sem App Review (Acesso Padrão é automático); para conta de CLIENTE, falta testar se "ativo gerenciado" basta ou se cai no app do próprio cliente. Quando entrar, marcar a credencial como "não expira" para o job noturno do Instagram não alarmar à toa.
+
+---
+
+## FASE — ESTÚDIO: o canvas do fluxo, em desenvolvimento PARALELO  ▶️ EM TESTE (2026-09-21)
+
+**Origem:** *"eu estou perdido pq eu nao sei como a ferramente funciona… o usuário não consegue visualizar essas possibilidades de causa e efeito; a coisa toda precisa ser visual"*. E a ordem: **desenvolver a tela inteira em paralelo, sem mexer na página que já está pronta**, para testar até exaurir.
+
+**Onde:** rota `/times/[id]/estudio` (aba "Estúdio", pílula *novo*) + `interface/components/estudio/`. A aba Automações segue **intacta**; o estúdio importa só `normalizarCadeia` e o tipo `ConfigGatilho` (puros) e salva pela MESMA porta — se as duas telas escrevessem diferente, alternar entre elas viraria a pior categoria de bug.
+
+**O achado que a motivou:** o construtor clássico desenha na aresta `{d.rotulo}` — o NOME interno do caminho (`aprovado1`), não a CONDIÇÃO (`quando você aprovar`). O desenho não respondia à pergunta que se faz ao olhá-lo.
+
+**Entregue** (`6e3d380` … `b6ecd82`): condição no fio; cada cartão lista as próprias saídas, com porta alinhada e destino; fio **ortogonal com cantos arredondados** (fios irmãos dobram em pontos diferentes para não andarem colados); laço por pista tracejada; **o desenho se confere** (`components/estudio/problemas.ts` — erros espelhando `cadeia.py::validar_cadeia` mais avisos de causa-e-efeito: passo que para e pergunta com um caminho só, fio cujo nome o texto do agente nunca menciona, beco sem saída, passo ilhado, laço sem escape); minimapa e foco. Verificado com **27 cenários** e **rodado contra o desenho REAL de uma automação ATIVA, que acusou o defeito de verdade** (o passo que para e pergunta com um caminho só).
+
+**Cortado pelo maestro em uso:** o botão "Organizar" (reposicionava tudo e apagava o arranjo feito à mão, sem desfazer) e o "+X mais" do cinto (escondia o que se vai ver no cartão). **Consertado junto, e vale para as DUAS telas:** salvar deixou de jogar a seleção na primeira automação — era a `key={versao}` na página, que remontava quem guardava a seleção; a chave desceu para o editor.
+
+---
+
+## FASE — O FAIL-SAFE MUDO, DE NOVO: a conta Google que morreu calada  ✅ NO AR (2026-09-21, `50c0525`+`cbb63d2`)
+
+O Search Console do blog ficou **dois meses** em HTTP 401. Não foi o Google que escondeu: `google_oauth.garantir_token` engolia a falha da renovação e devolvia o token vencido; o instrumento tomava 401, devolvia a falha como DADO, o agente contornava e narrava, e a execução terminava **VERDE**. Vinte e seis rodadas, zero eventos no banco de logs. Quem avisou foi o próprio agente, no meio de uma entrega — e só porque ele é honesto.
+
+As três pernas da §12-A: **evento** `google.renovacao_falhou` (nível error, com a conta e o que fazer); **vigia** de 6 em 6 horas — e também **45 s após o boot**, porque `IntervalTrigger` só dispara a primeira volta depois do intervalo e cada deploy abria uma janela cega de 6 h; **recado honesto** — 401 (a autorização venceu, reconecte) e 403 (conectado, mas sem acesso à propriedade) viraram mensagens diferentes, porque são problemas diferentes. De quebra, o mesmo `logger.exception` mudo no refresh do Instagram virou evento.
+
+**Provado ao vivo:** o vigia renovou a conta às 22:29:01, 45 s depois do boot, **sem emitir alarme** — as duas metades de um alarme que presta (grita quando quebra, cala quando não quebra).
 
 ---
 

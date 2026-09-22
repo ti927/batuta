@@ -335,6 +335,38 @@ existindo como política de falha e selo do catálogo.
 
 ---
 
+## 9-bis. A porta INTERNA serviço-a-serviço (2026-09-22)
+
+Até aqui o Batuta tinha duas portas: a **pública** do cérebro (`api.batuta.team`, autenticada por
+JWT do Supabase) e a do **serviço MCP** (OAuth 2.1 próprio). Nasceu uma terceira, estreita:
+`POST /interno/conector/testar-operacao` (`cerebro/rotas/interno.py`).
+
+**Por que existe.** O serviço MCP roda **sem** a `COFRE_CHAVE_MESTRA`, de propósito (least-privilege:
+a IA nunca recebe segredo). Consequência: a IA monta um conector e não consegue testá-lo. Em vez de
+dar a chave ao MCP, o pedido se **inverte** — o MCP pede ao cérebro que rode o teste. O segredo é
+decifrado, usado e descartado do lado de cá; o que atravessa a fronteira é só a resposta da API.
+
+**Como se protege — três camadas, porque numa porta serviço-a-serviço uma só não basta:**
+
+1. **`BATUTA_INTERNO_SECRET`**, comparado em tempo constante (`hmac.compare_digest`). Prova que quem
+   chama é um serviço nosso. **Ausente = a porta não existe** (404, não 403: um ambiente que não usa
+   a ponte não anuncia que ela poderia existir). Nada fica aberto por omissão.
+2. **Autorização por USUÁRIO, pelos guardas de sempre.** O segredo não autoriza nada sozinho: o corpo
+   diz em nome de quem se age e o pedido passa por `instrumento_acessivel(..., "operador")` — o mesmo
+   guarda da tela. Há teste dedicado a isso; se ele cair, a porta virou atalho de permissão.
+3. **Escopo mínimo.** Faz UMA coisa (testar uma operação de conector), não é proxy genérico, e devolve
+   só `{ok, status, corpo, erro, campos_detectados}` — sem configuração e sem segredo.
+
+Toda chamada deixa evento `conector.testado_pela_ia` (origem `mcp`) com quem agiu. **Risco residual,
+dito na cara:** quem tiver o segredo interno pode testar operações de conector em nome de qualquer
+usuário — limitado ao que aquele usuário já poderia fazer. É por isso que o escopo é mínimo e o
+rastro existe.
+
+**Variáveis novas:** `BATUTA_INTERNO_SECRET` (nos DOIS serviços) e, no serviço MCP, `CEREBRO_URL`
+(padrão `https://api.batuta.team` na Railway).
+
+---
+
 ## 10. Implantação (produção)
 
 - **Railway**, projeto com **2 serviços** do mesmo repo, cada um com Dockerfile próprio: `cerebro/` (python:3.13 + uv; no start roda `alembic upgrade head` + uvicorn) e `interface/` (Node 22, Next `output:"standalone"`; as `NEXT_PUBLIC_*` entram como **build args**, congeladas no build). Região **US East**, **1 réplica**.
@@ -348,8 +380,10 @@ existindo como política de falha e selo do catálogo.
 
 - **Etapa 1 (núcleo)** validada: orquestração ponta a ponta (times, agentes, instrumentos, cadeia com bifurcação, espera-por-humano, gatilhos, fila, medição).
 - **Etapa 2**: papéis/identidade, cofre de chaves e de segredos, identidade visual, IA criadora (conversa eterna), memória de longo prazo, refinos (modelo da conversa selecionável, painel de uso), logo da organização, e a **implantação em produção** (acima) — tudo concluído.
-- **Frente "O motor vira um grafo de verdade" (2026-08-31 → 09-04):** Ondas **1** (fan-out por ondas, condição na seta, saída de erro/senão), **2** (a ficha da execução), **Parte III** (portão e parede morrem; aprovação = instrumento) e **4** (operação: desenho guardado, rodar de novo daqui, disjuntor, teto de custo, testar um passo) ✅ **completas e no ar**. **Onda 3** (tempo e composição) em **3 de 4**: sinal de vida no vigia, tetos de tempo, e o nó **"Esperar"**. Falta a última fatia — nó **"Chamar outra automação"** (sub-fluxo síncrono).
-- **Falta:** (a) a **fatia final da Onda 3** (acima); (b) **Mensageria (WhatsApp)** — o canal do Líder (provedor decidido: Evolution API por QR); (c) **a Biblioteca** — objeto desta análise.
+- **Frente "O motor vira um grafo de verdade" (2026-08-31 → 09-04):** Ondas **1**, **2**, **Parte III**, **3** e **4** ✅ completas e no ar (inclusive o nó "Chamar outra automação").
+- **Integrações sem código (2026-09-21/22):** o **MCP como cliente** (o agente ganha as ferramentas que se escolher de um servidor MCP, com aprovação POR FERRAMENTA) e a **conta de serviço do Google** como tipo de autenticação do Construtor — a saída da verificação de app do Google, que tinha deixado o Search Console dois meses em 401. A IA passou a poder **testar** um conector sem ver o segredo (§9-bis).
+- **Estúdio** — segunda tela do fluxo, em desenvolvimento paralelo à aba Automações, com a condição no fio e o desenho se conferindo sozinho. **Em teste; as duas convivem** até uma sair.
+- **Falta:** (a) **Mensageria (WhatsApp)** — o canal do Líder (provedor decidido: Evolution API por QR); (b) **a Biblioteca** — objeto desta análise; (c) instrumentos **org-wide** (hoje `instrumentos.time_id` é obrigatório e nenhum tipo é da organização — decidido em 12/08, nunca construído; exige migração).
 
 ---
 
