@@ -29,7 +29,8 @@ def _projetar_registros(corpo: Any, campos: list[str]) -> Any:
     """Mantém só `campos` em cada REGISTRO de uma resposta em lista — corta o custo
     de respostas grandes (ex.: uma busca no Bubble que traz 14 registros × 30 campos,
     quando o agente usa 6). Reconhece os formatos comuns: o `response.results` do
-    Bubble, uma lista no topo, ou `results` no topo. Formato não reconhecido (ou item
+    Bubble, uma lista no topo, e as chaves de lista usadas pelas APIs conhecidas
+    (`results`, `rows`, `items`, `data`, `records`). Formato não reconhecido (ou item
     que não é dict) → devolve INTACTO: nunca quebra e nunca descarta dado por engano
     (o pior caso é não economizar). Campo ausente num registro simplesmente não vem."""
     conjunto = set(campos)
@@ -46,8 +47,13 @@ def _projetar_registros(corpo: Any, campos: list[str]) -> Any:
         resp = corpo.get("response")
         if isinstance(resp, dict) and isinstance(resp.get("results"), list):
             return {**corpo, "response": {**resp, "results": enxuga_lista(resp["results"])}}
-        if isinstance(corpo.get("results"), list):
-            return {**corpo, "results": enxuga_lista(corpo["results"])}
+        # `rows` é o formato das APIs do Google (Search Console, BigQuery, Sheets);
+        # `items`/`data`/`records` cobrem o resto do que se vê por aí. Antes só
+        # `results` era reconhecido, então `campos_resposta` num conector do Google
+        # não economizava NADA — e em silêncio, que é o pior jeito de não funcionar.
+        for chave in ("results", "rows", "items", "data", "records"):
+            if isinstance(corpo.get(chave), list):
+                return {**corpo, chave: enxuga_lista(corpo[chave])}
     if isinstance(corpo, list):
         return enxuga_lista(corpo)
     return corpo

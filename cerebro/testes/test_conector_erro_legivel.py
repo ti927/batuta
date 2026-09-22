@@ -193,3 +193,35 @@ def test_instrumento_so_de_consulta_nao_exige_parede():
         {"nome": "p", "metodo": "POST", "url": "https://x"},
     ]}
     assert Conector().irreversivel_para(com_escrita) is True
+
+
+# ── `campos_resposta` precisa reconhecer o formato do Google ────────────────────
+# As APIs do Google devolvem `{"rows": [...]}`. Só `results` era reconhecido, então o
+# corte de custo não fazia nada num conector do Google — e em silêncio.
+
+
+def test_corta_campos_em_rows_do_google():
+    from instrumentos.rest import _projetar_registros
+
+    corpo = {"rows": [
+        {"keys": ["controladoria"], "clicks": 5, "impressions": 900,
+         "ctr": 0.005, "position": 8.2},
+    ]}
+    r = _projetar_registros(corpo, ["keys", "clicks", "impressions", "position"])
+    assert r["rows"][0] == {"keys": ["controladoria"], "clicks": 5,
+                            "impressions": 900, "position": 8.2}
+
+
+def test_results_do_bubble_continua_funcionando():
+    from instrumentos.rest import _projetar_registros
+
+    corpo = {"response": {"results": [{"_id": "1", "lixo": "x"}]}}
+    assert _projetar_registros(corpo, ["_id"]) == {"response": {"results": [{"_id": "1"}]}}
+
+
+def test_formato_desconhecido_volta_intacto():
+    """Nunca descartar dado por engano: o pior caso é não economizar."""
+    from instrumentos.rest import _projetar_registros
+
+    corpo = {"algo": {"estranho": 1}}
+    assert _projetar_registros(corpo, ["x"]) == corpo
