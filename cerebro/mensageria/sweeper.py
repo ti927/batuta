@@ -25,7 +25,7 @@ from mensageria.config import (  # noqa: F401 (compat sweeper.X)
     TETO_TURNO_PRESO_PORTAO_MIN,
     TURNO_PRESO_MSG,
     TURNO_PRESO_PORTAO_MSG,
-    com_ajuste_do_no,
+    com_ajuste_do_agente,
     complemento_nudge_portao,
     resolver_config,
 )
@@ -76,7 +76,9 @@ def varrer(sessao: Session) -> int:
             sessao.get(Execucao, conversa.execucao_id) if conversa.execucao_id else None
         )
         if execucao is not None:
-            conf = com_ajuste_do_no(conf, aprovacao.no_pausado(sessao, execucao))
+            conf = com_ajuste_do_agente(
+                conf, sessao, aprovacao.no_pausado(sessao, execucao)
+            )
         if not conf["encerrar_por_inatividade"]:
             continue  # este fluxo não encerra por silêncio (ex.: deixa vivo de propósito)
         if not conversa.nudge_enviado:
@@ -261,7 +263,9 @@ def varrer_transferidas(sessao: Session) -> int:
             sessao.get(Execucao, conversa.execucao_id) if conversa.execucao_id else None
         )
         if execucao is not None:
-            conf = com_ajuste_do_no(conf, aprovacao.no_pausado(sessao, execucao))
+            conf = com_ajuste_do_agente(
+                conf, sessao, aprovacao.no_pausado(sessao, execucao)
+            )
         # O prazo é o mesmo "tempo até cutucar quem some" do fluxo: se um operador não
         # apareceu nesse tempo, ninguém vai aparecer. Configurável como todo limite.
         prazo = timedelta(minutes=int(conf["timeout_min"]))

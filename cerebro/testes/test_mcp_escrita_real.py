@@ -117,6 +117,54 @@ def test_criar_agente_segue_funcionando(mcp, dados):
     assert escrita.ERRO_INESPERADO not in r, f"ferramenta quebrada: {r}"
 
 
+def _agente_novo(dados, sessao, nome="Ritmo"):
+    from modelos import Agente
+
+    ag = Agente(time_id=dados["timeA"].id, nome=nome, papel="agente")
+    sessao.add(ag)
+    sessao.flush()
+    return ag
+
+
+def test_configurar_ritmo_agente_grava_o_que_e_dele(mcp, dados, sessao):
+    """A IA precisa conseguir montar o fluxo com duas esperas diferentes — era o caso
+    que não existia antes de o ritmo ser do agente."""
+    ag = _agente_novo(dados, sessao)
+    r = escrita.configurar_ritmo_agente(
+        _sub(dados), str(ag.id), {"timeout_min": 1440, "portao_acao_abandono": "estacionar"}
+    )
+    assert escrita.ERRO_INESPERADO not in r, f"ferramenta quebrada: {r}"
+    sessao.refresh(ag)
+    assert ag.configuracao["timeout_min"] == 1440
+    assert "herda do fluxo" in r
+
+
+def test_configurar_ritmo_agente_RECUSA_o_que_nao_e_dele(mcp, dados, sessao):
+    """`max_turnos` e `teto_usd` são contadores da conversa INTEIRA — só podem ter um
+    teto, e é do fluxo.
+
+    O ponto aqui não é a recusa, é ela ser DITA: ignorar a chave em silêncio faria a IA
+    relatar sucesso sobre um ajuste que nunca valeu. `ok` mudo é falha (CLAUDE.md §12-A).
+    """
+    ag = _agente_novo(dados, sessao, "Recusa")
+    r = escrita.configurar_ritmo_agente(
+        _sub(dados), str(ag.id), {"max_turnos": 2, "timeout_min": 5}
+    )
+    assert "max_turnos" in r and "fluxo" in r
+    sessao.refresh(ag)
+    assert ag.configuracao is None  # não gravou NADA — nem a chave que era válida
+
+
+def test_configurar_ritmo_agente_vazio_volta_a_herdar(mcp, dados, sessao):
+    ag = _agente_novo(dados, sessao, "Volta")
+    ag.configuracao = {"timeout_min": 5}
+    sessao.flush()
+    r = escrita.configurar_ritmo_agente(_sub(dados), str(ag.id), {})
+    assert "herdar tudo do fluxo" in r
+    sessao.refresh(ag)
+    assert ag.configuracao is None
+
+
 # ── A condição REAL de produção: organização COM chave no cofre, serviço SEM a
 # chave-mestra (o MCP roda assim de propósito). É o que os testes não cobriam. ──
 

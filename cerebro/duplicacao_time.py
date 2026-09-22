@@ -116,6 +116,10 @@ def duplicar_time(
             # para não agir com o aprendizado do contexto do time original.
             memoria_ativa=ag.memoria_ativa,
             memoria_recall=ag.memoria_recall,
+            # Ritmo e espera são CONFIGURAÇÃO (como os markdowns), não runtime: uma
+            # cópia que esquecesse isto herdaria os prazos do fluxo em silêncio, e o
+            # time duplicado se comportaria diferente do original sem ninguém ver.
+            configuracao=dict(ag.configuracao) if ag.configuracao else None,
         )
         sessao.add(copia)
         map_ag_obj[ag.id] = copia

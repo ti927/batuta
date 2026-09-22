@@ -30,6 +30,7 @@ import mcp_escopo
 import segredos_instrumento as segredos
 import tipos_credencial as tc
 from criacao import servicos
+from mensageria.config import CHAVES_DO_AGENTE
 from criacao.ferramentas import _validar_gatilho
 from criacao.servicos import ConflitoDominio
 from instrumentos.base import FalhaInstrumento
@@ -511,6 +512,40 @@ def remover_credencial(sessao, usuario, credencial_id) -> str:
 
 
 # ───────────────────────── Fatia 3b: config, referência, exclusão, duplicação, org ─────────────────────────
+
+@_ferramenta_escrita
+def configurar_ritmo_agente(sessao, usuario, agente_id, ajustes) -> str:
+    aid = _uuid(agente_id)
+    if aid is None:
+        return f"Id de agente inválido: {agente_id}."
+    agente = mcp_escopo.agente_acessivel(sessao, usuario, aid, "operador")
+    ajustes = ajustes or {}
+    if not isinstance(ajustes, dict):
+        return "ajustes deve ser um objeto {chave: valor}."
+    # Chave fora do dono é RECUSADA, não ignorada: ignorar em silêncio faria a IA
+    # relatar sucesso sobre um ajuste que nunca valeu — o tipo de mentira que esta
+    # frente inteira veio matar.
+    intrusas = sorted(set(ajustes) - CHAVES_DO_AGENTE)
+    if intrusas:
+        return (
+            f"Estas não são regras do agente: {', '.join(intrusas)}. "
+            f"O agente decide o que é de UM ATO dele (quanto trabalha num passo, quanto "
+            f"e como espera uma pessoa): {', '.join(sorted(CHAVES_DO_AGENTE))}. "
+            "Teto de mensagens e de custo são contadores da conversa inteira e ficam no "
+            "fluxo."
+        )
+    agente.configuracao = dict(ajustes) or None
+    sessao.flush()
+    auditoria.registrar(
+        sessao, usuario=usuario, acao="agente.ritmo_configurado", recurso_tipo="agente",
+        recurso_id=agente.id, organizacao_id=auditoria.org_do_time(sessao, agente.time_id),
+        detalhe={"ajustes": dict(ajustes), "origem": "mcp"},
+    )
+    if not ajustes:
+        return f"Agente '{agente.nome}' volta a herdar tudo do fluxo."
+    itens = ", ".join(f"{k}={v}" for k, v in sorted(ajustes.items()))
+    return f"Ritmo e espera do agente '{agente.nome}': {itens} (o resto herda do fluxo)."
+
 
 @_ferramenta_escrita
 def configurar_memoria_agente(sessao, usuario, agente_id, ativa, recall) -> str:

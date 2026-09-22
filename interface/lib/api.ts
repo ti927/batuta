@@ -207,6 +207,9 @@ export type Agente = {
   modelo_ia: string | null;
   memoria_ativa: boolean;
   memoria_recall: RecallMemoria;
+  // Ritmo e espera DESTE trabalhador — só o que ele sobrepõe do fluxo. Chave ausente
+  // significa "herda"; as chaves válidas são as de `CHAVES_DO_AGENTE` no cérebro.
+  configuracao: Record<string, unknown> | null;
   criado_em: string;
   atualizado_em: string;
 };
@@ -679,7 +682,9 @@ export type PerfilFluxo = {
 };
 export type PainelConfigFluxo = {
   perfis: PerfilFluxo[];
-  grupos: { grupo: string; campos: CampoConfigFluxo[] }[];
+  // `nivel` diz de QUEM é a regra: "fluxo" é do fluxo e ponto; "agente" é o PADRÃO
+  // que cada agente herda e pode sobrepor na aba "Ritmo e espera" do popup dele.
+  grupos: { grupo: string; nivel: "fluxo" | "agente"; campos: CampoConfigFluxo[] }[];
   padrao_global: Record<string, unknown>;
   limites_padrao: string[];
   onde_mudar: string;

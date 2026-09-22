@@ -42,9 +42,11 @@ Este módulo é FOLHA (não importa servico/sweeper) — ele é a origem dos def
 das mensagens-padrão; a borda passa a importar daqui.
 """
 
+import uuid
+
 from sqlalchemy.orm import Session
 
-from modelos import Automacao, Execucao, Instrumento
+from modelos import Agente, Automacao, Execucao, Instrumento
 
 # Endereço público do app (onde a aprovação de um portão também pode ser resolvida pela
 # tela). Fonte única para as mensagens que orientam o humano.
@@ -443,8 +445,35 @@ def com_ajuste_do_no(cfg: dict, no: dict | None) -> dict:
     mais específico da cascata. Só as chaves de UM ATO (`CHAVES_DO_AGENTE`): um teto de
     conversa por nó não significava nada — `max_turnos` e `teto_usd` são medidos sobre
     a conversa INTEIRA (`servico.py::_limite_do_portao`), então um valor por passo
-    trocava a régua com a contagem correndo."""
+    trocava a régua com a contagem correndo.
+
+    Continua valendo para os nós SEM agente (o "Chamar outra automação", que roda uma
+    automação inteira e espera por ela — justamente quem mais precisa de teto de tempo
+    e não tem trabalhador em quem pendurá-lo)."""
     return _mesclar(cfg, (no or {}).get("config"), CHAVES_DO_AGENTE)
+
+
+def com_ajuste_do_agente(cfg: dict, sessao: Session, no: dict | None) -> dict:
+    """O nível mais específico da cascata: o ritmo e a espera de QUEM faz este passo.
+
+    Antes isto morava no nó do desenho, e ficava partido ao meio: o APROVADOR já era do
+    agente (o instrumento `pedir_aprovacao`, no cinto dele), mas o PRAZO da espera era
+    do nó. Duas metades da mesma decisão, em duas telas. Agora quem decide quanto
+    espera é quem espera.
+
+    Nó sem agente cai no ajuste do próprio nó (ver `com_ajuste_do_no`)."""
+    no = no or {}
+    ref = no.get("ref")
+    if not ref:
+        return com_ajuste_do_no(cfg, no)
+    try:
+        agente = sessao.get(Agente, uuid.UUID(str(ref)))
+    except (ValueError, AttributeError, TypeError):
+        # `ref` corrompido ou agente que sumiu: herda tudo do fluxo. Degradar aqui é
+        # correto — `validar_cadeia` já barra o `ref` inválido na porta, e um vigia
+        # não pode morrer por causa de um desenho torto.
+        return cfg
+    return _mesclar(cfg, (agente.configuracao if agente else None), CHAVES_DO_AGENTE)
 
 
 # ── Mensagens de portão DERIVADAS dos parâmetros do Tipo de fluxo ──────────────

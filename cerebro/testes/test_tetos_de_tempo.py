@@ -266,18 +266,24 @@ def test_os_campos_aparecem_no_painel_do_fluxo(cliente, entrar, dados):
     assert "teto_min_execucao" in chaves
 
 
-def test_o_ajuste_do_NO_vence_o_do_fluxo(sessao, dados, monkeypatch):
-    """Lacuna 22: o teto é POR NÓ, com o do fluxo como padrão. Provamos pelo prazo que
-    o motor fixa: o nó pede 7 min, o fluxo diz 3 — vale o do nó."""
+def test_o_teto_do_AGENTE_vence_o_do_fluxo(sessao, dados, monkeypatch):
+    """O teto de tempo é de QUEM TRABALHA, com o do fluxo como padrão: o agente pede
+    7 min, o fluxo diz 3 — vale o do agente.
+
+    Morava no nó até 2026-09-22. Um passo que escreve uma frase e um que gera vídeo de
+    25 min não cabem no mesmo número, e quem sabe disso é o trabalhador — não o
+    desenho, que teria de repetir o ajuste em cada fluxo onde ele aparece."""
     vistos: list[float | None] = []
-    ag = Agente(time_id=dados["timeA"].id, nome="R", papel="agente")
+    ag = Agente(
+        time_id=dados["timeA"].id, nome="R", papel="agente",
+        configuracao={"teto_min_passo": 7},
+    )
     sessao.add(ag)
     sessao.flush()
     cadeia = grafo.normalizar({
         "inicial": NO_1,
         "nos": [
             {"id": NO_1, "tipo": "agente", "ref": str(ag.id),
-             "config": {"teto_min_passo": 7},
              "saidas": [{"rotulo": "ok", "destino": "fim"}]},
             {"id": "fim", "tipo": "fim", "saidas": []},
         ],
@@ -295,4 +301,59 @@ def test_o_ajuste_do_NO_vence_o_do_fluxo(sessao, dados, monkeypatch):
 
     executar_cadeia(sessao, cadeia, "vai", teto_min_passo=3)
 
-    assert vistos and 6 * 60 < vistos[0] <= 7 * 60  # o do nó, não os 3 min do fluxo
+    assert vistos and 6 * 60 < vistos[0] <= 7 * 60  # o do agente, não os 3 min do fluxo
+
+
+def test_passo_SEM_agente_mantem_o_teto_no_proprio_no(sessao, dados):
+    """A perna que quase ficou de fora ao mover o ritmo para o agente.
+
+    `teto_min_passo` vale para TODO tipo de nó (`cadeia.py`), e o nó "Chamar outra
+    automação" — que roda uma automação inteira e espera por ela — é justamente quem
+    mais precisa de teto de tempo e não tem trabalhador em quem pendurá-lo. Num nó sem
+    `ref`, o ajuste continua sendo do próprio nó. Não é duplicata: é outro tipo de
+    passo, outro dono.
+    """
+    from orquestracao.cadeia import _teto_do_passo
+
+    chamar = {"id": "c1", "tipo": "chamar", "config": {"teto_min_passo": 12}}
+    assert _teto_do_passo(sessao, chamar) == 12
+
+    # Sem ajuste nenhum: herda o padrão do fluxo (None = "não opino").
+    assert _teto_do_passo(sessao, {"id": "c2", "tipo": "chamar"}) is None
+
+
+def test_dois_agentes_no_mesmo_fluxo_esperam_diferente(sessao, dados):
+    """O caso que NÃO era construível antes — e o motivo de a regra ser do agente.
+
+    Aprovação de compra: o passo que confirma um detalhe com quem pediu deve cutucar em
+    10 min; o que pede ao diretor financeiro para aprovar R$ 200 mil não pode cutucar em
+    10 min, e abandonar não pode cancelar — tem de estacionar. Mesmo fluxo, mesma
+    conversa, duas esperas com regras opostas.
+    """
+    from mensageria.config import GLOBAL, com_ajuste_do_agente
+
+    rapido = Agente(
+        time_id=dados["timeA"].id, nome="Confere detalhe", papel="agente",
+        configuracao={"timeout_min": 10, "portao_acao_abandono": "cancelar"},
+    )
+    paciente = Agente(
+        time_id=dados["timeA"].id, nome="Diretor financeiro", papel="agente",
+        configuracao={"timeout_min": 1440, "portao_acao_abandono": "estacionar"},
+    )
+    sessao.add_all([rapido, paciente])
+    sessao.flush()
+
+    base = dict(GLOBAL)
+    a = com_ajuste_do_agente(base, sessao, {"tipo": "agente", "ref": str(rapido.id)})
+    b = com_ajuste_do_agente(base, sessao, {"tipo": "agente", "ref": str(paciente.id)})
+
+    assert a["timeout_min"] == 10 and a["portao_acao_abandono"] == "cancelar"
+    assert b["timeout_min"] == 1440 and b["portao_acao_abandono"] == "estacionar"
+    # E o que NÃO é do agente não vaza para cá nem se alguém escrever na mão: um teto
+    # de conversa por passo trocaria a régua com a contagem correndo.
+    rapido.configuracao = {"max_turnos": 2}
+    sessao.flush()
+    intruso = com_ajuste_do_agente(
+        base, sessao, {"tipo": "agente", "ref": str(rapido.id)}
+    )
+    assert intruso["max_turnos"] == GLOBAL["max_turnos"]

@@ -31,7 +31,7 @@ from mensageria.config import (  # MSG_LIMITE: compat servico.X
     FALHA_TURNO_MSG,
     LIMITES_DO_PORTAO,
     MSG_LIMITE,
-    com_ajuste_do_no,
+    com_ajuste_do_agente,
     explicacao_limite_portao,
     resolver_config,
 )
@@ -1281,7 +1281,7 @@ def _turno_de_portao_com_posse(
     # Só as CONDICIONAIS entram na decisão do portão: as saídas de erro e "senão" são
     # do motor (falha do nó / nenhuma condição atendida), não opções de escolha.
     saidas, _, _ = grafo.separar_saidas(no.get("saidas"))
-    conf = com_ajuste_do_no(resolver_config(sessao, conversa), no)
+    conf = com_ajuste_do_agente(resolver_config(sessao, conversa), sessao, no)
 
     eh_conversa = (
         conf["portao_forma"] == "conversa" and no.get("ref") and len(saidas) >= 2

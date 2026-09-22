@@ -116,6 +116,11 @@ class Agente(IdData, Base):
     memoria_recall: Mapped[str] = mapped_column(
         String(20), nullable=False, default="sempre", server_default=text("'sempre'")
     )
+    # Ritmo e espera DESTE trabalhador — só o que ele SOBREPÕE do fluxo. Chave ausente
+    # significa "herda", e é por isso que é JSONB e não colunas com default: a ausência
+    # carrega informação. Só as chaves de `mensageria.config.CHAVES_DO_AGENTE` valem;
+    # o resto é ignorado na leitura (`com_ajuste_do_agente`).
+    configuracao: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     __table_args__ = (
         Index(

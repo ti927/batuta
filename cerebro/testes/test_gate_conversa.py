@@ -238,17 +238,17 @@ def test_tela_teto_de_rodadas_cai_no_roteador(sessao, dados, monkeypatch):
     assert execucao.estado == "concluida"
 
 
-def test_tela_teto_de_rodadas_do_no_vence_o_fluxo(sessao, dados, monkeypatch):
-    """O teto DESTE portão (`no.config.portao_max_rodadas`) sobrepõe o do Tipo de fluxo:
-    com 1 no nó (e o fluxo no default 8), a 1ª resposta já cai no roteador — não re-roda
-    o agente. É o ganho da Onda 1: ajuste por-nó honrado também na retoma pela tela."""
-    from sqlalchemy.orm.attributes import flag_modified
+def test_tela_teto_de_rodadas_do_agente_vence_o_fluxo(sessao, dados, monkeypatch):
+    """O teto de QUEM CONDUZ esta aprovação sobrepõe o do fluxo: com 1 no agente (e o
+    fluxo no default 8), a 1ª resposta já cai no roteador — não re-roda o agente.
 
+    O ajuste morava no NÓ até 2026-09-22; passou para o agente porque o APROVADOR já
+    era dele (o instrumento `pedir_aprovacao`, no cinto) — quem decide quanto espera
+    é quem espera."""
     canal = _canal(sessao, dados)
     ag = _agente(sessao, dados)
     auto = _automacao(sessao, dados, ag, canal)  # fluxo sem teto → default 8
-    auto.cadeia["nos"][0]["config"] = {"portao_max_rodadas": 1}
-    flag_modified(auto, "cadeia")
+    ag.configuracao = {"portao_max_rodadas": 1}
     sessao.flush()
     execucao = _exec_pausada(sessao, auto, ag)
 
@@ -701,11 +701,9 @@ def test_sweeper_cancela_portao_quando_configurado(sessao, dados, monkeypatch):
     assert any("cancelando o fluxo" in t for t in enviados)  # despedida avisa o cancelamento
 
 
-def test_sweeper_respeita_no_config(sessao, dados, monkeypatch):
-    """Ganho da Onda 1: o sweeper honra o ajuste DESTE portão (`no.config`). O fluxo está
-    no default (estacionar), mas o NÓ manda cancelar → a varredura cancela a execução."""
-    from sqlalchemy.orm.attributes import flag_modified
-
+def test_sweeper_respeita_a_config_do_agente(sessao, dados, monkeypatch):
+    """O sweeper honra o ajuste de QUEM conduz esta aprovação. O fluxo está no default
+    (estacionar), mas o AGENTE manda cancelar → a varredura cancela a execução."""
     from mensageria import sweeper
 
     enviados = []
@@ -716,8 +714,7 @@ def test_sweeper_respeita_no_config(sessao, dados, monkeypatch):
     si.salvar_segredos(sessao, canal.id, {"token_bot": "tok"})
     ag = _agente(sessao, dados)
     auto = _automacao(sessao, dados, ag, canal)  # fluxo sem ajuste → estacionar
-    auto.cadeia["nos"][0]["config"] = {"portao_acao_abandono": "cancelar"}
-    flag_modified(auto, "cadeia")
+    ag.configuracao = {"portao_acao_abandono": "cancelar"}
     sessao.flush()
     execucao = _exec_pausada(sessao, auto, ag)
     aprovacao.vincular_pausa(sessao, execucao)
@@ -731,22 +728,23 @@ def test_sweeper_respeita_no_config(sessao, dados, monkeypatch):
     sessao.refresh(conv)
     sessao.refresh(execucao)
     assert conv.estado == "fechada"
-    assert execucao.estado == "cancelada"  # o ajuste do NÓ venceu o default do fluxo
+    assert execucao.estado == "cancelada"  # o ajuste do AGENTE venceu o default do fluxo
     assert any("cancelando o fluxo" in t for t in enviados)
 
 
-def test_vincular_pausa_respeita_no_config_timeout(sessao, dados, monkeypatch):
-    """O relógio de inatividade do portão usa o `timeout_min` DESTE nó quando ajustado
-    (Onda 1). Fluxo no default (60 min); o nó pede 5 → `aguardando_ate` ~= agora + 5 min."""
-    from sqlalchemy.orm.attributes import flag_modified
+def test_vincular_pausa_respeita_o_timeout_do_agente(sessao, dados, monkeypatch):
+    """O relógio de inatividade usa o `timeout_min` de QUEM espera. Fluxo no default
+    (60 min); o agente pede 5 → `aguardando_ate` ~= agora + 5 min.
 
+    É o caso que hoje não era construível: duas aprovações no mesmo fluxo, uma rápida
+    (confirmar um detalhe com quem pediu) e uma lenta (um diretor que viaja), cada uma
+    com o seu relógio."""
     monkeypatch.setattr("mensageria.telegram.enviar", lambda t, c, x: {"ok": True})
     canal = _canal(sessao, dados)
     si.salvar_segredos(sessao, canal.id, {"token_bot": "tok"})
     ag = _agente(sessao, dados)
     auto = _automacao(sessao, dados, ag, canal)  # fluxo default (60 min)
-    auto.cadeia["nos"][0]["config"] = {"timeout_min": 5}
-    flag_modified(auto, "cadeia")
+    ag.configuracao = {"timeout_min": 5}
     sessao.flush()
     execucao = _exec_pausada(sessao, auto, ag)
 
@@ -755,7 +753,7 @@ def test_vincular_pausa_respeita_no_config_timeout(sessao, dados, monkeypatch):
     conv = _conv(sessao, execucao.id)
 
     delta_min = (conv.aguardando_ate - antes).total_seconds() / 60
-    assert 4 <= delta_min <= 6  # ~5 min do nó, não os 60 do default do fluxo
+    assert 4 <= delta_min <= 6  # ~5 min do agente, não os 60 do default do fluxo
 
 
 # ─────── Aviso de expectativa do portão (derivado do Tipo de fluxo) ───────

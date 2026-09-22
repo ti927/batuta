@@ -9,6 +9,7 @@ import {
   IdCard,
   Smile,
   Sparkles,
+  Timer,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
@@ -43,6 +44,7 @@ import { podeOperar } from "@/lib/permissoes";
 import { cn } from "@/lib/utils";
 import { MemoriaAgentePainel } from "@/components/memoria-agente";
 import { PainelCinto } from "@/components/painel-cinto";
+import { PainelRitmoAgente } from "@/components/painel-ritmo-agente";
 import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +67,9 @@ type Campos = {
   soul_md: string;
   memoria_ativa: boolean;
   memoria_recall: RecallMemoria;
+  // Só o que este agente SOBREPÕE do fluxo. Chave ausente = "herda" — por isso é um
+  // mapa e não campos fixos: a ausência carrega informação.
+  configuracao: Record<string, unknown>;
 };
 
 const VAZIO: Campos = {
@@ -77,6 +82,7 @@ const VAZIO: Campos = {
   soul_md: "",
   memoria_ativa: false,
   memoria_recall: "sempre",
+  configuracao: {},
 };
 
 function deAgente(a: Agente): Campos {
@@ -90,6 +96,7 @@ function deAgente(a: Agente): Campos {
     soul_md: a.soul_md ?? "",
     memoria_ativa: a.memoria_ativa,
     memoria_recall: a.memoria_recall ?? "sempre",
+    configuracao: { ...(a.configuracao ?? {}) },
   };
 }
 
@@ -103,7 +110,11 @@ function ehCampos(x: unknown): x is Campos {
     typeof o.skill_md === "string" &&
     typeof o.tools_md === "string" &&
     typeof o.soul_md === "string" &&
-    typeof o.memoria_ativa === "boolean"
+    typeof o.memoria_ativa === "boolean" &&
+    // Rascunho gravado antes da aba "Ritmo e espera" não tem a chave: recusar aqui é
+    // melhor que restaurar um objeto meio-formado e quebrar na hora de salvar.
+    typeof o.configuracao === "object" &&
+    o.configuracao !== null
   );
 }
 
@@ -119,7 +130,7 @@ const MARKDOWNS: [ChaveMd, string][] = [
 // Abas do popup amplo (layout `abas`): uma por markdown + Instrumentos (o cinto real)
 // + Memórias. O rótulo "Uso dos instrumentos" (tools.md, texto) é distinto da aba
 // "Instrumentos" (o cinto) de propósito, para não confundir os dois conceitos.
-type AbaChave = ChaveMd | "instrumentos" | "memorias";
+type AbaChave = ChaveMd | "ritmo" | "instrumentos" | "memorias";
 
 const ABAS_MD: {
   chave: ChaveMd;
@@ -157,6 +168,7 @@ const ABAS_MD: {
 const ABAS: { chave: AbaChave; rotulo: string; Icone: LucideIcon; live?: boolean }[] =
   [
     ...ABAS_MD.map((a) => ({ chave: a.chave, rotulo: a.rotulo, Icone: a.Icone })),
+    { chave: "ritmo", rotulo: "Ritmo e espera", Icone: Timer },
     { chave: "instrumentos", rotulo: "Instrumentos", Icone: Wrench, live: true },
     { chave: "memorias", rotulo: "Memórias", Icone: Brain, live: true },
   ];
@@ -276,6 +288,10 @@ export function FormularioAgente({
       soul_md: form.soul_md || null,
       memoria_ativa: form.memoria_ativa,
       memoria_recall: form.memoria_recall,
+      // Mapa vazio vira null: "não sobrepõe nada" é a ausência, não um objeto vazio.
+      configuracao: Object.keys(form.configuracao).length
+        ? form.configuracao
+        : null,
     };
   }
 
@@ -405,6 +421,20 @@ export function FormularioAgente({
             onChange={(e) => campo(md.chave, e.target.value)}
           />
         </Label>
+      );
+    }
+    // "Ritmo e espera" funciona ANTES de salvar (o tempo de trabalho não depende do
+    // cinto); o bloco da espera é que só aparece quando há com quem falar.
+    if (aba === "ritmo") {
+      return (
+        <PainelRitmoAgente
+          agente={agente ?? null}
+          time={time}
+          cinto={cinto ?? []}
+          valor={form.configuracao}
+          onChange={(v) => campo("configuracao", v)}
+          podeEditar={souOperador}
+        />
       );
     }
     if (!agente) {

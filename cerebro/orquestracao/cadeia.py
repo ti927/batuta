@@ -858,11 +858,16 @@ def executar_cadeia(
             # da falha). Sem isto o passo falho saía anônimo, justo quando importa.
             id_agente, nome_do_no = _identidade_do_no(sessao, no, tipo)
 
-            # Prazo DESTE passo (Onda 3, fatia 2): o ajuste do nó vence o do fluxo —
-            # mesma cascata do resto do comportamento. O agente pergunta por ele antes
-            # de cada ação; o limite de rede de cada instrumento segue valendo por
-            # dentro, para UMA chamada.
-            minutos_do_passo = (no.get("config") or {}).get("teto_min_passo")
+            # Prazo DESTE passo (Onda 3, fatia 2): quem trabalha diz quanto pode
+            # trabalhar, e o fluxo dá o padrão — um passo que escreve uma frase e um
+            # que gera vídeo de 25 min não cabem no mesmo número. O agente pergunta por
+            # ele antes de cada ação; o limite de rede de cada instrumento segue
+            # valendo por dentro, para UMA chamada.
+            #
+            # Nó SEM agente (o "Chamar outra automação", que roda uma automação inteira
+            # e espera por ela) não tem trabalhador em quem pendurar o teto, então usa o
+            # ajuste do próprio nó. Não é duplicata: é outro tipo de passo, outro dono.
+            minutos_do_passo = _teto_do_passo(sessao, no)
             if minutos_do_passo is None:
                 minutos_do_passo = teto_min_passo
             try:
@@ -1149,6 +1154,22 @@ def _seguir(
         ao_terminar(textos, ramo)
     else:
         _empilhar(proxima, destino, textos, ramo=ramo, extra=extra)
+
+
+def _teto_do_passo(sessao: Session, no: dict) -> int | None:
+    """Quantos minutos ESTE passo pode trabalhar, ou None para herdar o padrão do fluxo.
+
+    Nó com agente pergunta ao agente (aba "Ritmo e espera"); nó sem agente usa o ajuste
+    do próprio nó. Um `ref` quebrado herda do fluxo em vez de derrubar a execução — o
+    desenho torto já é barrado por `validar_cadeia` na porta."""
+    ref = no.get("ref")
+    if not ref:
+        return (no.get("config") or {}).get("teto_min_passo")
+    try:
+        agente = sessao.get(Agente, uuid.UUID(str(ref)))
+    except (ValueError, AttributeError, TypeError):
+        return None
+    return ((agente.configuracao if agente else None) or {}).get("teto_min_passo")
 
 
 def _identidade_do_no(sessao: Session, no: dict, tipo: str) -> tuple[str | None, str]:

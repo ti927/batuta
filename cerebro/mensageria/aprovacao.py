@@ -25,7 +25,7 @@ import segredos_instrumento
 from mensageria import telegram
 from mensageria.config import (
     aviso_expectativa_portao,
-    com_ajuste_do_no,
+    com_ajuste_do_agente,
     resolver_config,
 )
 from modelos import (
@@ -237,7 +237,7 @@ def vincular_pausa(sessao: Session, execucao: Execucao) -> None:
     # persistindo o silêncio, encerra (cancelando/estacionando a execução).
     # `com_ajuste_do_no`: o prazo/ação DESTE portão (`no.config`) vence o do Tipo de
     # fluxo — mesma cascata do turno por canal (`servico._turno_de_portao`).
-    conf = com_ajuste_do_no(resolver_config(sessao, conversa), no)
+    conf = com_ajuste_do_agente(resolver_config(sessao, conversa), sessao, no)
     # Ordem natural na thread: primeiro o PEDIDO apresentado, depois o aviso de expectativa.
     _registrar_apresentado(sessao, conversa, execucao)
     if conf["encerrar_por_inatividade"] and conversa.estado not in (

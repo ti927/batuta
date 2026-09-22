@@ -150,6 +150,7 @@ class AgenteCriar(BaseModel):
     modelo_ia: str | None = Field(default=None, max_length=100)
     memoria_ativa: bool = False
     memoria_recall: RecallMemoria = "sempre"
+    configuracao: dict | None = None
 
 
 class AgenteEditar(BaseModel):
@@ -164,6 +165,7 @@ class AgenteEditar(BaseModel):
     modelo_ia: str | None = Field(default=None, max_length=100)
     memoria_ativa: bool = False
     memoria_recall: RecallMemoria = "sempre"
+    configuracao: dict | None = None
 
 
 class AgenteLer(BaseModel):
@@ -182,6 +184,7 @@ class AgenteLer(BaseModel):
     modelo_ia: str | None
     memoria_ativa: bool
     memoria_recall: str
+    configuracao: dict | None
     criado_em: datetime
     atualizado_em: datetime
 

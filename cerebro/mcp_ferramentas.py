@@ -212,6 +212,9 @@ def ver_agente(sessao, usuario, agente_id) -> str:
             "papel": agente.papel,
             "modelo_ia": agente.modelo_ia,
             "memoria_ativa": agente.memoria_ativa,
+            # Ritmo e espera DESTE agente — só o que ele sobrepõe do fluxo. Sem isto,
+            # diagnosticar "por que esperou 24 h?" seria adivinhação.
+            "ritmo_e_espera": agente.configuracao or {},
             "agent_md": agente.agent_md,
             "skill_md": agente.skill_md,
             "tools_md": agente.tools_md,

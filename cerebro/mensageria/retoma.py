@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from mensageria.config import com_ajuste_do_no, config_da_automacao
+from mensageria.config import com_ajuste_do_agente, config_da_automacao
 from modelos import Agente, Automacao, Execucao, PassoExecucao
 from observabilidade.escritor import registrar_evento
 from orquestracao import ficha as ficha_mod
@@ -312,7 +312,7 @@ def retomar_execucao(
     # fluxo < ajuste do nó), com o fixo `MAX_RODADAS_GATE` como default. Sem teto, um
     # agente que pede aprovação a cada rodada conversaria para sempre.
     auto = sessao.get(Automacao, execucao.automacao_id)
-    max_rodadas = com_ajuste_do_no(config_da_automacao(auto), no).get(
+    max_rodadas = com_ajuste_do_agente(config_da_automacao(auto), sessao, no).get(
         "portao_max_rodadas", MAX_RODADAS_GATE
     )
 

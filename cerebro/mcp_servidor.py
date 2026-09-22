@@ -636,6 +636,34 @@ async def configurar_memoria_agente(agente_id: str, ativa: bool, recall: str = "
 
 
 @mcp.tool()
+async def configurar_ritmo_agente(agente_id: str, ajustes: dict | None = None) -> str:
+    """Define o RITMO e a ESPERA de um agente — o que ele sobrepõe das regras do fluxo.
+
+    O fluxo dá o padrão; isto aqui é a exceção DESTE trabalhador, e vale em todos os
+    fluxos onde ele aparece. Chave ausente = herda. Passe `{}` para voltar a herdar tudo.
+
+    Só entram regras que são propriedade de UM ATO dele:
+    - `teto_min_passo` — minutos que ele pode trabalhar num passo (0 = sem teto). Um
+      agente que gera vídeo precisa de muito mais que um que escreve um parágrafo.
+    - `timeout_min`, `nudge_timeout_min`, `encerrar_por_inatividade` — quanto esta espera
+      tolera silêncio.
+    - `portao_forma`, `portao_acao_abandono`, `portao_max_rodadas`,
+      `teto_espera_humano_min` — como ele conduz uma aprovação e o que faz se a pessoa
+      some. Só fazem efeito se ele tiver `pedir_aprovacao` no cinto.
+
+    USE ISTO quando dois passos do mesmo fluxo esperam pessoas diferentes: confirmar um
+    detalhe com quem pediu (cutucar em 10 min) e pedir a um diretor que aprove uma compra
+    (esperar 24 h e NUNCA cancelar) são a mesma automação com réguas opostas. Com uma
+    regra só por fluxo, esse fluxo não é construível.
+
+    NÃO entram aqui `max_turnos` nem `teto_usd`: são contadores da conversa INTEIRA, só
+    podem ter um teto, e ficam no fluxo. Passá-los aqui é recusado."""
+    return await anyio.to_thread.run_sync(
+        escrita.configurar_ritmo_agente, _sub(), agente_id, ajustes
+    )
+
+
+@mcp.tool()
 async def apontar_credencial(instrumento_id: str, credencial_id: str | None = None) -> str:
     """Faz um instrumento USAR uma credencial nomeada (por id) — o jeito de ligar um
     conector/instrumento ao segredo que o consultor colou no cofre. Passe `credencial_id`

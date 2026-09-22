@@ -108,9 +108,13 @@ sempre o mesmo diagnóstico: **o markdown dele não conhece as saídas do passo.
 - **Se o pedido não for entregue, a execução falha** em vez de esperar para sempre.
 - **A pessoa pode cancelar** (botão na tela, ou responder "cancelar" pelo canal). Você não
   desenha uma saída de cancelar.
-- Quem não responde não trava o fluxo para sempre: o **Tipo de fluxo** define quanto
-  esperar e o que fazer no silêncio (estacionar ou cancelar), e dá para ajustar isso só
-  num passo, no construtor.
+- Quem não responde não trava o fluxo para sempre. Quanto esperar e o que fazer no
+  silêncio (estacionar ou cancelar) são do **agente que espera** — aba **Ritmo e espera**
+  no popup dele. O fluxo dá o padrão; o agente sobrepõe quando é diferente.
+  É assim de propósito: quem é perguntado já era do agente (este instrumento, no cinto
+  dele), então quanto se espera é dele também. Um fluxo com duas aprovações — uma
+  confirmação rápida com quem pediu e um diretor que viaja — precisa das duas réguas, e
+  com uma regra só por fluxo esse fluxo não seria construível.
 - **Uma aprovação tem um teto de idas-e-vindas** (*Máx. de idas-e-vindas na aprovação*,
   8 por padrão). Enquanto ele não estoura, reprovar com um pedido de ajuste faz o agente
   refazer o material quantas vezes forem precisas. Ao estourar, o agente **diz o que
