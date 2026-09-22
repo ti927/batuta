@@ -224,7 +224,15 @@ function EditorEstudio({
   );
   // O comportamento do fluxo (perfil, tetos, portão) é editado na tela clássica; aqui
   // ele viaja intacto para o salvamento — nunca zerado por omissão.
-  const configFluxo: ConfiguracaoFluxo = automacao?.configuracao ?? {};
+  // As REGRAS DO FLUXO agora são editáveis aqui (painel da direita, nada selecionado).
+  // Eram só repassadas intactas: quem editava pelo Estúdio não via os ajustes — nem que
+  // eles existiam.
+  // Não precisa de efeito para ressincronizar: o `EditorEstudio` inteiro remonta por
+  // `key` quando a automação troca ou quando o dado salvo muda, então o inicializador
+  // já roda de novo com o valor certo.
+  const [configFluxo, setConfigFluxo] = useState<ConfiguracaoFluxo>(
+    () => automacao?.configuracao ?? {},
+  );
 
   const setGatilho = useCallback(
     (patch: Partial<ConfigGatilho>) => setGatilhoEstado((g) => ({ ...g, ...patch })),
@@ -436,11 +444,12 @@ function EditorEstudio({
   // Comparar demais só faz o botão acender à toa; comparar de menos perde trabalho.
   const naoSalvo =
     !!automacao &&
-    JSON.stringify([nome, normalizarCadeia(cadeia), gatilho]) !==
+    JSON.stringify([nome, normalizarCadeia(cadeia), gatilho, configFluxo]) !==
       JSON.stringify([
         automacao.nome,
         normalizarCadeia(automacao.cadeia ?? { nos: [] }),
         gatilhoDe(automacao),
+        automacao.configuracao ?? {},
       ]);
 
   return (
@@ -539,6 +548,15 @@ function EditorEstudio({
             no={no}
             cadeia={cadeia}
             agentes={agentes}
+            cintos={cintos}
+            configFluxo={configFluxo}
+            setConfigFluxo={setConfigFluxo}
+            nomeDoFluxo={nome || "(sem nome)"}
+            onSubirAoFluxo={() => {
+              setNoSel(null);
+              setSaidaSel(null);
+            }}
+            onEditarInstrumento={setEditInstrumentoId}
             podeEditar={souOperador}
             problemas={problemas}
             saidaSelecionada={saidaSel}

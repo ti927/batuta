@@ -83,10 +83,23 @@ export default async function EstudioPage({
   // Mesma regra da tela clássica: a `key` remonta o editor quando o dado PERSISTIDO
   // muda (a IA criadora editou o time por fora, por exemplo), sem descartar edição
   // manual em andamento.
+  // `configuracao` e `configuracao_gatilho` entram na conta: elas passaram a ser
+  // editáveis aqui, e uma assinatura que as ignore faz o editor não remontar depois de
+  // salvá-las — a tela mostraria o valor antigo como se o salvamento não tivesse
+  // acontecido. Os agentes entram com o `atualizado_em` porque a aba "Ritmo e espera"
+  // mora no popup deles e o painel do fluxo mostra quem já sobrepõe o padrão.
   const versao =
-    JSON.stringify(dados.automacoes.map((a) => [a.id, a.ativa, a.cadeia])) +
+    JSON.stringify(
+      dados.automacoes.map((a) => [
+        a.id,
+        a.ativa,
+        a.cadeia,
+        a.configuracao,
+        a.configuracao_gatilho,
+      ]),
+    ) +
     "::" +
-    dados.agentes.map((a) => a.id).join(",");
+    dados.agentes.map((a) => `${a.id}@${a.atualizado_em}`).join(",");
 
   return (
     <EstudioCliente

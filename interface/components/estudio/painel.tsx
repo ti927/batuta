@@ -27,7 +27,9 @@ import {
   type Agente,
   type AutomacaoDaOrg,
   type Cadeia,
+  type ConfiguracaoFluxo,
   type Credencial,
+  type Instrumento,
   type NoCadeia,
   type OperadorRegra,
   type RegraSaida,
@@ -38,7 +40,47 @@ import {
 import type { ConfigGatilho } from "@/components/automacao-builder/inspector";
 
 import { CORES, corDaSaida } from "./cores";
+import { PainelDoFluxo } from "./painel-fluxo";
 import { nomeDoNo, papel, type Problema } from "./problemas";
+
+/** A migalha do painel: diz sempre em que NÍVEL a pessoa está, e como subir.
+ *
+ *  É ela que torna possível não ter botão "Fluxo". "Clicar no fundo para ver as
+ *  propriedades do documento" é convenção de quem já usou um editor de desenho —
+ *  quem nunca usou não descobre sozinho, e aí só trocaríamos um botão indecifrável
+ *  por uma tela invisível. */
+function Migalha({
+  nomeDoFluxo,
+  passo,
+  onSubirAoFluxo,
+}: {
+  nomeDoFluxo: string;
+  passo?: string;
+  onSubirAoFluxo?: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-1 border-b border-[#E8E6F0] bg-[#FAFAF7] px-3.5 py-2 text-[11px]">
+      {passo ? (
+        <button
+          type="button"
+          onClick={onSubirAoFluxo}
+          className="truncate text-[#6D4AFF] hover:underline"
+          title="Ver as regras do fluxo"
+        >
+          Fluxo: {nomeDoFluxo}
+        </button>
+      ) : (
+        <span className="truncate font-medium text-[#1A1730]">Fluxo: {nomeDoFluxo}</span>
+      )}
+      {passo && (
+        <>
+          <ArrowRight size={11} className="flex-none text-[#A09DB8]" />
+          <span className="truncate font-medium text-[#1A1730]">{passo}</span>
+        </>
+      )}
+    </div>
+  );
+}
 
 const campo =
   "w-full rounded-md border border-[#E8E6F0] bg-white px-2.5 py-1.5 text-[13px] text-[#1A1730] outline-none focus:border-[#6D4AFF]";
@@ -425,6 +467,16 @@ export type PainelProps = {
   onDeleteNode: (id: string) => void;
   onDefinirInicial: (id: string) => void;
   onEditarAgente: (agenteId: string) => void;
+  onEditarInstrumento: (instrumentoId: string) => void;
+  /** Os cintos, por agente — dizem quais canais este desenho usa e quem espera gente. */
+  cintos: Record<string, Instrumento[]>;
+  /** Regras do fluxo (tetos + o padrão que os agentes herdam). */
+  configFluxo: ConfiguracaoFluxo;
+  setConfigFluxo: (v: ConfiguracaoFluxo) => void;
+  /** Nome da automação, para a migalha dizer onde a pessoa está. */
+  nomeDoFluxo: string;
+  /** Sobe ao nível do fluxo (desseleciona o nó). */
+  onSubirAoFluxo: () => void;
 };
 
 export function PainelEstudio({
@@ -446,8 +498,32 @@ export function PainelEstudio({
   onDeleteNode,
   onDefinirInicial,
   onEditarAgente,
+  onEditarInstrumento,
+  cintos,
+  configFluxo,
+  setConfigFluxo,
+  nomeDoFluxo,
+  onSubirAoFluxo,
 }: PainelProps) {
-  if (!no) return <PainelVazio />;
+  // Nada selecionado = o fluxo. É a convenção de um editor de desenho, e é o que
+  // permitiu matar o botão "Fluxo" — mas só funciona porque a migalha abaixo mostra
+  // o caminho de volta sem depender de acertar o fundo do canvas.
+  if (!no) {
+    return (
+      <div className="flex h-full flex-col overflow-y-auto">
+        <Migalha nomeDoFluxo={nomeDoFluxo} />
+        <PainelDoFluxo
+          cadeia={cadeia}
+          agentes={agentes}
+          cintos={cintos}
+          valor={configFluxo}
+          onChange={setConfigFluxo}
+          podeEditar={podeEditar}
+          onEditarInstrumento={onEditarInstrumento}
+        />
+      </div>
+    );
+  }
 
   const doNo = problemas.filter((p) => p.noId === no.id && !p.saidaId);
   const saidas = no.saidas ?? [];
@@ -459,7 +535,12 @@ export function PainelEstudio({
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
-      <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-[#E8E6F0] bg-white px-3.5 py-3">
+      <Migalha
+        nomeDoFluxo={nomeDoFluxo}
+        passo={nomeDoNo(no, agentes)}
+        onSubirAoFluxo={onSubirAoFluxo}
+      />
+      <div className="sticky top-[38px] z-10 flex items-center gap-2 border-b border-[#E8E6F0] bg-white px-3.5 py-3">
         <div className="min-w-0 flex-1">
           <div className="text-[10.5px] font-medium uppercase tracking-wide text-[#A09DB8]">
             {no.tipo === "gatilho"
@@ -519,6 +600,25 @@ export function PainelEstudio({
                 </option>
               ))}
             </select>
+            {/* A outra ponta da regra: o tempo deste passo e a espera dele são do
+                AGENTE, não do desenho. Se a tela não disser isso, a pessoa procura
+                aqui, não acha, e conclui que não dá para mudar. */}
+            {agente && (
+              <p className="mt-1.5 text-[11px] leading-snug text-[#6B6880]">
+                Quanto ele trabalha e quanto espera uma pessoa vêm do próprio agente
+                (aba <strong>Ritmo e espera</strong>), com o padrão do fluxo como base.{" "}
+                <button
+                  type="button"
+                  onClick={() => onEditarAgente(agente.id)}
+                  className="text-[#6D4AFF] hover:underline"
+                >
+                  abrir {agente.nome}
+                </button>
+                {Object.keys(agente.configuracao ?? {}).length > 0
+                  ? " — ele já sobrescreve o padrão."
+                  : ""}
+              </p>
+            )}
           </div>
         )}
 
@@ -956,99 +1056,6 @@ function ConfigGatilhoBloco({
           ))}
         </select>
       </div>
-    </div>
-  );
-}
-
-/** Nada selecionado: em vez de um vazio, a legenda de como ler o desenho. */
-function PainelVazio() {
-  const linhas: { cor: string; tracejado?: boolean; titulo: string; texto: string }[] = [
-    {
-      cor: CORES.normal.dot,
-      titulo: "segue adiante",
-      texto: "o caminho comum, quando a condição escrita nele for atendida.",
-    },
-    {
-      cor: CORES.ok.dot,
-      titulo: "deu certo / aprovaram",
-      texto: "o caminho bom — costuma ser o que sai de um passo que parou para perguntar.",
-    },
-    {
-      cor: CORES.loop.dot,
-      tracejado: true,
-      titulo: "volta atrás",
-      texto: "o passo é refeito. Tracejado porque é desvio, não avanço.",
-    },
-    {
-      cor: CORES.erro.dot,
-      tracejado: true,
-      titulo: "quando falhar",
-      texto: "só é percorrido se o passo der erro — o erro segue por aqui em vez de derrubar tudo.",
-    },
-  ];
-  return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
-      <div>
-        <div className="text-[14px] font-medium text-[#1A1730]">Como ler este desenho</div>
-        <p className="mt-1 text-[12px] leading-snug text-[#6B6880]">
-          Cada cartão é um passo. As linhas dentro do cartão são os caminhos que saem
-          dele — cada uma com a sua própria porta na borda. O que está escrito no fio é
-          a <strong className="font-medium text-[#1A1730]">condição</strong>: quando o
-          fluxo vai por ali.
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        {linhas.map((l) => (
-          <div key={l.titulo} className="flex items-start gap-2.5">
-            <svg width="30" height="14" className="mt-0.5 flex-none" aria-hidden>
-              <line
-                x1="1"
-                y1="7"
-                x2="29"
-                y2="7"
-                stroke={l.cor}
-                strokeWidth="2"
-                strokeDasharray={l.tracejado ? "5 4" : undefined}
-              />
-            </svg>
-            <div className="min-w-0">
-              <div className="text-[12px] font-medium text-[#1A1730]">{l.titulo}</div>
-              <div className="text-[11.5px] leading-snug text-[#6B6880]">{l.texto}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="rounded-[10px] border border-[#E8E6F0] bg-[#FAFAF7] p-3">
-        <div className="text-[12px] font-medium text-[#1A1730]">
-          Quem decide por qual caminho ir
-        </div>
-        <p className="mt-1 text-[11.5px] leading-snug text-[#6B6880]">
-          Em regra, o <strong className="font-medium">agente</strong>: ele lê a condição
-          escrita no fio e declara o nome do caminho que tomou. Quando a comparação
-          precisa ser exata (um número, uma data), marque{" "}
-          <strong className="font-medium">regra</strong> no caminho — aí quem confere é o
-          Batuta, e a IA não opina.
-        </p>
-      </div>
-
-      <div className="rounded-[10px] border border-[#F0D9B4] bg-[#FDF1E3] p-3">
-        <div className="text-[12px] font-medium text-[#8A5A12]">
-          Quando um passo para e pergunta
-        </div>
-        <p className="mt-1 text-[11.5px] leading-snug text-[#8A5A12]">
-          Não existe interruptor para isso no desenho: o passo para porque o agente tem
-          o instrumento <strong className="font-medium">Pedir aprovação</strong> no
-          cinto. O cartão mostra o selo “para e pergunta” quando é o caso — e aí ele
-          precisa de dois caminhos, um para quem aprova, outro para quem pede ajuste.
-        </p>
-      </div>
-
-      <p className="text-[11.5px] leading-snug text-[#6B6880]">
-        Clique num cartão para editar o passo, ou numa linha de caminho para editar só
-        aquele fio.
-      </p>
     </div>
   );
 }
