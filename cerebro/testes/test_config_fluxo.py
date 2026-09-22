@@ -1,7 +1,11 @@
 """Resolução da config EFETIVA de uma conversa (fonte única, cascata).
 
-Cobre a cascata global < canal < perfil do fluxo < ajustes do fluxo < nó. Atendimento
+Cobre a cascata global < canal < ajustes do fluxo < agente do passo. Atendimento
 puro (sem automação) para em global<canal — igual a hoje (sem regressão).
+
+E cobre as duas mudanças de 2026-09-22: a partição por DONO (canal/agente/fluxo) e a
+morte da camada "Tipo de fluxo", que guardava uma etiqueta cujos números moravam no
+código — e por isso o botão que a exibia nunca conseguiu se explicar.
 """
 
 from mensageria import config as cfg
@@ -61,17 +65,31 @@ def test_canal_ignora_chaves_estranhas(sessao, dados):
     assert "token_bot" not in r and "destinatario_padrao" not in r
 
 
-def test_perfil_interno_sobrepoe_o_canal(sessao, dados):
+def test_os_ajustes_do_fluxo_sobrepoem_o_canal(sessao, dados):
+    """O fluxo carrega os PRÓPRIOS números (o preset foi carimbado no nascimento)."""
     inst = _inst(sessao, dados)
-    auto = _auto(sessao, dados, {"perfil": "interno"})
+    auto = _auto(sessao, dados, cfg.configuracao_inicial("interno"))
     conv = _conversa(sessao, inst, _exec(sessao, auto))
     r = cfg.resolver_config(sessao, conv)
     assert r["timeout_min"] == 30
     assert r["portao_acao_abandono"] == "estacionar"  # parada e retomável (padrão)
     assert r["max_turnos"] == 20
-    # A saudação NÃO entra mais nesta conta: ela é do canal (2026-09-22). O perfil
-    # "interno" fixava `""` aqui e apagava em silêncio a saudação escrita no bot.
+    # A saudação NÃO entra nesta conta: ela é do canal (2026-09-22).
     assert r["saudacao_abertura"] == cfg.SAUDACAO_PADRAO  # o canal é que manda
+
+
+def test_a_etiqueta_perfil_virou_historico_inerte(sessao, dados):
+    """Uma linha legada que ainda carregue `perfil` não pode mais mudar nada.
+
+    Era este o defeito de origem: a etiqueta apontava para números que moravam no
+    código, então o efetivo de uma automação nunca estava no dado dela — e o botão
+    "Fluxo" existia para mostrar números que não estavam em lugar nenhum.
+    """
+    inst = _inst(sessao, dados)
+    auto = _auto(sessao, dados, {"perfil": "interno"})  # só a etiqueta, sem ajustes
+    r = cfg.resolver_config(sessao, _conversa(sessao, inst, _exec(sessao, auto)))
+    assert r["timeout_min"] == cfg.GLOBAL["timeout_min"]  # 60, o padrão do Batuta
+    assert r["max_turnos"] == cfg.GLOBAL["max_turnos"]
 
 
 def test_o_fluxo_nao_apaga_mais_a_saudacao_do_bot(sessao, dados):
@@ -85,10 +103,9 @@ def test_o_fluxo_nao_apaga_mais_a_saudacao_do_bot(sessao, dados):
     """
     minha = "Olá! Sou o assistente de reembolsos da Lure."
     inst = _inst(sessao, dados, {"saudacao_abertura": minha})
-    # Pior caso: o perfil manda apagar E alguém deixou o mesmo ajuste no fluxo.
+    # Pior caso: alguém deixou o ajuste de atendimento no fluxo.
     auto = _auto(
-        sessao, dados,
-        {"perfil": "interno", "ajustes": {"saudacao_abertura": "", "max_turnos": 7}},
+        sessao, dados, {"ajustes": {"saudacao_abertura": "", "max_turnos": 7}}
     )
     r = cfg.resolver_config(sessao, _conversa(sessao, inst, _exec(sessao, auto)))
     assert r["saudacao_abertura"] == minha
@@ -104,30 +121,33 @@ def test_ajuste_de_canal_no_fluxo_fica_inerte_sem_migracao(sessao, dados):
     assert r["dias_uteis_apenas"] is True  # o canal é o dono
 
 
-def test_ajustes_do_fluxo_vencem_o_perfil(sessao, dados):
+def test_ajustes_do_fluxo_vencem_o_padrao_do_batuta(sessao, dados):
     inst = _inst(sessao, dados)
-    auto = _auto(sessao, dados, {"perfil": "interno", "ajustes": {"timeout_min": 99}})
+    ajustes = {**cfg.PRESETS["interno"], "timeout_min": 99}
+    auto = _auto(sessao, dados, {"ajustes": ajustes})
     conv = _conversa(sessao, inst, _exec(sessao, auto))
     r = cfg.resolver_config(sessao, conv)
-    assert r["timeout_min"] == 99  # ajuste do fluxo vence o perfil
-    assert r["max_turnos"] == 20  # resto do perfil interno permanece
+    assert r["timeout_min"] == 99
+    assert r["max_turnos"] == 20   # o resto do que o modelo carimbou permanece
+    assert r["teto_usd_execucao"] == cfg.GLOBAL["teto_usd_execucao"]  # não carimbado
 
 
-def test_perfil_desconhecido_cai_no_global(sessao, dados):
+def test_configuracao_vazia_cai_no_padrao_do_batuta(sessao, dados):
     inst = _inst(sessao, dados)
-    auto = _auto(sessao, dados, {"perfil": "fantasma"})
+    auto = _auto(sessao, dados, {})
     conv = _conversa(sessao, inst, _exec(sessao, auto))
     r = cfg.resolver_config(sessao, conv)
     assert r["max_turnos"] == 40  # global
 
 
 def test_config_da_automacao_sem_conversa(sessao, dados):
-    # (Fatia 3) "disparo" saiu dos presets; a forma "direto" continua sendo um VALOR
-    # válido, escolhido por ajuste do fluxo (não mais empacotado num preset).
-    auto = _auto(sessao, dados, {"perfil": "interno", "ajustes": {"portao_forma": "direto"}})
+    auto = _auto(
+        sessao, dados,
+        {"ajustes": {**cfg.PRESETS["interno"], "portao_forma": "direto"}},
+    )
     r = cfg.config_da_automacao(auto)
-    assert r["portao_forma"] == "direto"  # ajuste do fluxo vence o default do perfil
-    assert r["max_turnos"] == 20          # default do perfil interno (global seria 40)
+    assert r["portao_forma"] == "direto"
+    assert r["max_turnos"] == 20          # o modelo carimbou (o padrão seria 40)
 
 
 def test_ajuste_do_no_e_o_mais_especifico():
@@ -135,12 +155,15 @@ def test_ajuste_do_no_e_o_mais_especifico():
     assert r["portao_max_rodadas"] == 3
 
 
-def test_painel_config_tem_perfis_grupos_e_opcoes():
+def test_painel_config_tem_presets_grupos_e_opcoes():
     p = cfg.painel_config()
-    ids = {x["id"] for x in p["perfis"]}
-    assert ids == {"interno", "atendimento"}  # (Fatia 3) de 4 presets → 2 honestos
-    interno = next(x for x in p["perfis"] if x["id"] == "interno")
-    assert interno["defaults"]["timeout_min"] == 30  # perfil aplica o default
+    ids = {x["id"] for x in p["presets"]}
+    assert ids == {"interno", "atendimento"}
+    interno = next(x for x in p["presets"] if x["id"] == "interno")
+    assert interno["defaults"]["timeout_min"] == 30
+    # `ajustes` é o que o botão "partir de um modelo" carimba — a tela precisa dos
+    # números crus, não só do efetivo já mesclado.
+    assert interno["ajustes"]["timeout_min"] == 30
     # Cada grupo diz de QUEM é a regra — sem isso a tela volta a mostrar dois níveis
     # sem distinguir um do outro, que foi a origem desta arrumação.
     assert {g["nivel"] for g in p["grupos"]} <= {"fluxo", "agente"}
@@ -218,9 +241,9 @@ def test_explicacao_do_limite_diz_o_que_onde_e_que_nada_se_perdeu():
     assert "teto_usd" not in msg
 
 
-def test_painel_publica_os_limites_de_cada_perfil():
+def test_painel_publica_os_limites_de_cada_preset():
     painel = cfg.painel_config()
     assert painel["onde_mudar"] == cfg.ONDE_MUDAR
     assert painel["limites_padrao"]
-    for perfil in painel["perfis"]:
-        assert perfil["limites"], f"perfil {perfil['id']} sem resumo de limites"
+    for preset in painel["presets"]:
+        assert preset["limites"], f"preset {preset['id']} sem resumo de limites"

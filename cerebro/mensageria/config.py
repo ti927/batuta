@@ -4,15 +4,21 @@ As regras de comportamento de uma conversa (espera, teto, turnos, saudação,
 horário, portão, encerramento) NÃO são fixas no código: cascateiam, do mais geral
 ao mais específico —
 
-    padrão GLOBAL  <  canal (instrumento.configuracao)  <  PERFIL do fluxo  <
-    ajustes do fluxo (automacao.configuracao.ajustes)  <  ajustes do NÓ (portão)
+    padrão GLOBAL  <  canal (instrumento.configuracao)  <
+    ajustes do fluxo (automacao.configuracao.ajustes)  <  AGENTE do passo
+    (nó, só para passos sem agente)
+
+O "Tipo de fluxo" SAIU da cascata em 2026-09-22 (ver `PRESETS` abaixo): ele guardava
+uma etiqueta cujos números moravam no código, então o efetivo de uma automação nunca
+estava no dado dela — era preciso um endpoint para saber o que o próprio fluxo fazia.
+Virou modelo de partida, que carimba valores e sai de cena.
 
 CADA REGRA TEM UM DONO — e não é convenção de tela, é lei de código. Até 2026-09-22
 qualquer camada podia escrever qualquer chave, e o resultado era que quem vencia
-mudava campo a campo: `PERFIS["interno"]` fixava `saudacao_abertura: ""`, e como
+mudava campo a campo: o preset "interno" fixava `saudacao_abertura: ""`, e como
 `_mesclar` só ignora `None`, esse vazio explícito apagava a saudação que a pessoa
-tinha escrito no bot — enquanto `PERFIS["atendimento"]`, que não declara horário,
-deixava o canal vencer nessas outras. Ninguém conseguia prever. Agora as chaves são
+tinha escrito no bot — enquanto o "atendimento", que não declara horário, deixava o
+canal vencer nessas outras. Ninguém conseguia prever. Agora as chaves são
 particionadas por DONO, e cada camada só escreve as suas:
 
     CHAVES_DO_CANAL   — a VOZ de quem fala: saudação, horário, mensagens automáticas.
@@ -242,12 +248,24 @@ CHAVES_DO_FLUXO = CHAVES - CHAVES_DO_CANAL - CHAVES_DO_AGENTE
 # que os agentes herdam. O canal fica de fora — é o dono das chaves dele.
 CHAVES_DA_AUTOMACAO = CHAVES_DO_FLUXO | CHAVES_DO_AGENTE
 
-# ── PERFIS de fluxo: presets que sobrepõem o global. O usuário escolhe um "tipo de
-# fluxo". FONTE ÚNICA — o frontend lê estes valores por endpoint, não os duplica.
-# (Fatia 3) De 4 presets → 2 honestos: caíram "disparo" (é um GATILHO, não um tipo de
-# fluxo — vira `origem` na Fatia 4) e "personalizado" (é apenas "sem tipo + ajustes",
-# já é como a tela trata a ausência de perfil). Nenhuma automação de produção os usava. ──
-PERFIS: dict[str, dict] = {
+# ── PRESETS: MODELOS DE PARTIDA, não camada da cascata (2026-09-22) ──
+#
+# Isto era o "Tipo de fluxo", e era uma camada: `automacao.configuracao` guardava a
+# ETIQUETA `{"perfil": "interno"}` e estes números eram aplicados a cada leitura, para
+# sempre. Três consequências, todas causa direta de "até hoje não entendi pra que serve
+# o botão FLUXO":
+#
+#   1. O valor efetivo nunca estava no dado do fluxo — morava aqui, no código. O botão
+#      precisou existir para mostrar números que não estavam em lugar nenhum, e por isso
+#      não conseguia se explicar.
+#   2. Trocar o tipo mudava seis números de uma vez, em silêncio.
+#   3. Era mais uma camada para disputar, na cascata que já tinha o problema de dono.
+#
+# Agora um preset é SEMENTE: carimba os valores em `configuracao.ajustes` no nascimento
+# (ou quando alguém escolhe "partir de um modelo") e sai de cena. A automação carrega os
+# próprios números, visíveis e editáveis. `resolver_config` não olha mais para cá.
+# A migração `prs00preset001` materializou os existentes, com diff exigido vazio.
+PRESETS: dict[str, dict] = {
     # Saudação e horário SAÍRAM daqui (2026-09-22): são do canal. O `""` explícito do
     # "interno" apagava a saudação escrita no bot, e o "atendimento" — que nunca
     # declarou horário — deixava o canal vencer nessas outras. Duas regras opostas
@@ -270,15 +288,14 @@ PERFIS: dict[str, dict] = {
     },
 }
 
-# Perfil que uma automação recém-criada assume quando ninguém escolhe um tipo de
-# fluxo. Antes nasciam sem perfil (`configuracao={}`) e caíam no GLOBAL (cutuca em
-# 60 min) sem o usuário perceber — a maioria dos fluxos é interna, então este é o
-# padrão sensato. Aplicado nos pontos de nascimento (IA criadora e create manual);
-# o duplicar copia o perfil da original. Não retroage sobre automações legadas.
-PERFIL_PADRAO = "interno"
+# Modelo com que uma automação nasce. Antes nasciam sem nada e caíam no GLOBAL (cutuca
+# em 60 min) sem o usuário perceber — a maioria dos fluxos é interna, então este é o
+# padrão sensato. A diferença é que agora o preset é COPIADO para os ajustes no
+# nascimento: a automação nasce com os números à vista, não com uma etiqueta.
+PRESET_PADRAO = "interno"
 
-# Rótulos amigáveis dos perfis (para a UI; fonte única).
-PERFIS_ROTULOS = {
+# Rótulos amigáveis dos modelos (para a UI; fonte única).
+PRESETS_ROTULOS = {
     "interno": "Processo interno",
     "atendimento": "Atendimento externo",
 }
@@ -352,20 +369,24 @@ CAMPOS = [
 
 
 def painel_config() -> dict:
-    """Metadados para a UI montar 'Configurações do fluxo' a partir do backend (fonte
-    única): os perfis (com os defaults que cada um aplica), os grupos de botões e o
-    padrão global. O front não duplica rótulos/valores."""
-    perfis = [
+    """Metadados para a UI montar as regras do fluxo (fonte única): os modelos de
+    partida, os grupos de botões e o padrão do Batuta. O front não duplica
+    rótulos/valores.
+
+    `presets` NÃO é uma camada — é o que o botão "partir de um modelo" carimba nos
+    ajustes. Quem lê o efetivo de uma automação lê `configuracao.ajustes`, e ponto."""
+    presets = [
         {
             "id": pid,
-            "rotulo": PERFIS_ROTULOS.get(pid, pid),
-            "defaults": _mesclar(GLOBAL, PERFIS.get(pid)),
-            # Os limites deste perfil em português, para a tela mostrar SEM o usuário
+            "rotulo": PRESETS_ROTULOS.get(pid, pid),
+            "ajustes": dict(PRESETS[pid]),
+            "defaults": _mesclar(GLOBAL, PRESETS.get(pid)),
+            # Os limites deste modelo em português, para a tela mostrar SEM o usuário
             # ter de abrir o "Avançado" e interpretar números soltos. Lei do maestro:
             # nenhum teto pode existir sem a pessoa saber que existe e onde fica.
-            "limites": resumo_dos_limites(_mesclar(GLOBAL, PERFIS.get(pid))),
+            "limites": resumo_dos_limites(_mesclar(GLOBAL, PRESETS.get(pid))),
         }
-        for pid in PERFIS
+        for pid in PRESETS
     ]
     grupos = []
     for g in CAMPOS:
@@ -378,12 +399,21 @@ def painel_config() -> dict:
             campos.append(c)
         grupos.append({"grupo": g["grupo"], "nivel": g["nivel"], "campos": campos})
     return {
-        "perfis": perfis,
+        "presets": presets,
         "grupos": grupos,
         "padrao_global": dict(GLOBAL),
         "limites_padrao": resumo_dos_limites(GLOBAL),
         "onde_mudar": ONDE_MUDAR,
     }
+
+
+def configuracao_inicial(preset: str = None) -> dict:
+    """A `configuracao` com que uma automação nasce: os números do modelo já CARIMBADOS
+    nos ajustes, não uma etiqueta apontando para o código.
+
+    Fonte única dos pontos de nascimento (tela, IA criadora, MCP) — eram quatro lugares
+    escrevendo a mesma coisa à mão, que é como começa toda divergência."""
+    return {"ajustes": dict(PRESETS.get(preset or PRESET_PADRAO, {}))}
 
 
 def _mesclar(base: dict, extra: dict | None, permitidas: frozenset = CHAVES) -> dict:
@@ -404,12 +434,10 @@ def config_da_automacao(auto: Automacao | None) -> dict:
     """O efetivo no nível do FLUXO: global < perfil < ajustes (sem canal, aqui sem
     conversa). Usado quando só se tem a automação (ex.: o portão lendo `portao_max_rodadas`
     na tela, via `retoma`)."""
-    cfg = dict(GLOBAL)
     bruto = (auto.configuracao or {}) if auto else {}
-    perfil = bruto.get("perfil")
-    if perfil in PERFIS:
-        cfg = _mesclar(cfg, PERFIS[perfil], CHAVES_DA_AUTOMACAO)
-    return _mesclar(cfg, bruto.get("ajustes"), CHAVES_DA_AUTOMACAO)
+    # `perfil` não é mais consultado: a migração `prs00preset001` materializou os
+    # números nos ajustes. Uma linha que ainda carregue a etiqueta é histórico inerte.
+    return _mesclar(dict(GLOBAL), bruto.get("ajustes"), CHAVES_DA_AUTOMACAO)
 
 
 def resolver_config(sessao: Session, conversa) -> dict:
@@ -432,11 +460,9 @@ def resolver_config(sessao: Session, conversa) -> dict:
         else None
     )
     if auto is not None:
-        bruto = auto.configuracao or {}
-        perfil = bruto.get("perfil")
-        if perfil in PERFIS:
-            cfg = _mesclar(cfg, PERFIS[perfil], CHAVES_DA_AUTOMACAO)
-        cfg = _mesclar(cfg, bruto.get("ajustes"), CHAVES_DA_AUTOMACAO)
+        cfg = _mesclar(
+            cfg, (auto.configuracao or {}).get("ajustes"), CHAVES_DA_AUTOMACAO
+        )
     return cfg
 
 
@@ -525,8 +551,13 @@ def complemento_nudge_portao(conf: dict) -> str:
 # desses textos: a tela, o recado ao humano e o rastro leem daqui.
 
 # Onde o consultor muda qualquer um destes números (uma frase só, reusada).
+# CUIDADO ao mexer: esta frase vai para o TELEGRAM de pessoas reais, dentro de
+# `explicacao_limite_portao`. Se ela apontar para uma tela que não existe mais, o Batuta
+# passa a mandar gente para o vazio — e quem recebe não tem como saber que o errado é o
+# recado. Mantida NEUTRA de propósito enquanto as duas telas (Automações e Estúdio)
+# convivem: nenhuma das duas chama isso de "Configurações do fluxo" agora.
 ONDE_MUDAR = (
-    "Construtor da automação → Configurações do fluxo → Avançado"
+    "na tela da automação, nas regras do fluxo (em “Avançado”)"
 )
 
 

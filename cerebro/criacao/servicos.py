@@ -26,7 +26,7 @@ from sqlalchemy.orm.attributes import flag_modified
 import auditoria
 import instrumentos as encaixe
 import segredos_instrumento as segredos
-from mensageria.config import PERFIL_PADRAO
+from mensageria.config import configuracao_inicial
 from modelos import Agente, AgenteInstrumento, Automacao, Instrumento, Time, Usuario
 from orquestracao import grafo
 from orquestracao.cadeia import validar_cadeia
@@ -248,7 +248,7 @@ def _obter_ou_criar_automacao(sessao: Session, time: Time) -> Automacao:
         auto = Automacao(
             time_id=time.id, nome=f"Automação de {time.nome}", tipo_gatilho="manual",
             configuracao_gatilho={}, cadeia={}, ativa=False,
-            configuracao={"perfil": PERFIL_PADRAO},  # nasce com um tipo de fluxo sensato
+            configuracao=configuracao_inicial(),  # nasce com números sensatos à vista
         )
         sessao.add(auto)
         sessao.flush()
@@ -303,7 +303,7 @@ def criar_automacao(
     auto = Automacao(
         time_id=time.id, nome=nome, tipo_gatilho="manual",
         configuracao_gatilho={}, cadeia={}, ativa=False,
-        configuracao={"perfil": PERFIL_PADRAO},
+        configuracao=configuracao_inicial(),
     )
     sessao.add(auto)
     sessao.flush()
@@ -393,7 +393,7 @@ def definir_automacao(
         auto = Automacao(
             time_id=time.id, nome=nome, tipo_gatilho=tipo_gatilho,
             configuracao_gatilho=configuracao_gatilho or {}, cadeia=cadeia, ativa=False,
-            configuracao={"perfil": PERFIL_PADRAO},  # nasce com um tipo de fluxo sensato
+            configuracao=configuracao_inicial(),  # nasce com números sensatos à vista
         )
         sessao.add(auto)
     else:

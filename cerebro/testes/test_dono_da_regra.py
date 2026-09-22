@@ -26,7 +26,7 @@ from mensageria.config import (
     CHAVES_DO_CANAL,
     CHAVES_DO_FLUXO,
     GLOBAL,
-    PERFIS,
+    PRESETS,
 )
 
 
@@ -76,15 +76,25 @@ def test_todo_grupo_da_tela_declara_de_quem_e_a_regra():
             )
 
 
-def test_o_perfil_nao_escreve_chave_de_canal():
-    """Um preset de fluxo não pode ter opinião sobre a voz do bot.
+def test_o_preset_nao_escreve_chave_de_canal():
+    """Um modelo de partida não pode ter opinião sobre a voz do bot.
 
-    É a regressão concreta: o `saudacao_abertura: ""` do perfil "interno" apagava a
-    saudação personalizada do canal.
+    É a regressão concreta: o `saudacao_abertura: ""` do preset "interno" apagava a
+    saudação personalizada do canal. Agora o preset só SEMEIA ajustes — mas semear uma
+    chave de canal seria o mesmo estrago, com um passo a mais.
     """
-    for pid, preset in PERFIS.items():
+    for pid, preset in PRESETS.items():
         intrusas = set(preset) & CHAVES_DO_CANAL
-        assert not intrusas, f"perfil '{pid}' escreve chave do canal: {sorted(intrusas)}"
+        assert not intrusas, f"preset '{pid}' escreve chave do canal: {sorted(intrusas)}"
+
+
+def test_o_preset_so_semeia_o_que_a_automacao_pode_guardar():
+    """O que um modelo carimba tem de caber em `configuracao.ajustes` — senão ele
+    escreveria no nascimento algo que a leitura descarta, e a automação nasceria
+    mentindo sobre o que faz."""
+    for pid, preset in PRESETS.items():
+        fora = set(preset) - CHAVES_DA_AUTOMACAO
+        assert not fora, f"preset '{pid}' semeia chave que ninguém lê: {sorted(fora)}"
 
 
 @pytest.mark.parametrize("tipo_nome", CANAIS_TIPOS)

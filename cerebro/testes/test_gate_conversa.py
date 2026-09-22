@@ -571,7 +571,12 @@ def test_canal_limite_de_rodadas_nao_mata_o_canal_e_roteia(sessao, dados, monkey
     # E a pessoa foi informada do QUE aconteceu e de ONDE se muda o número.
     aviso = next(t for t in enviados if "limite" in t.lower())
     assert "idas-e-vindas" in aviso and "batuta.team" in aviso
-    assert "Configurações do fluxo" in aviso
+    # Contra a CONSTANTE, não contra o texto: esta frase vai para o Telegram de
+    # pessoas reais, e duplicá-la aqui faria o teste passar com o recado apontando
+    # para uma tela que não existe mais.
+    from mensageria.config import ONDE_MUDAR
+
+    assert ONDE_MUDAR in aviso
 
 
 def test_canal_teto_de_custo_nao_conta_trabalho_de_instrumento(sessao, dados, monkeypatch):

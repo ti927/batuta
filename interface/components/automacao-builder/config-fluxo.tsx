@@ -1,18 +1,24 @@
 "use client";
 
-// Diálogo "Configurações do fluxo": o usuário escolhe um TIPO DE FLUXO (perfil, que
-// já traz regras sensatas) e, no "Avançado", afina botão a botão. Os perfis, grupos
-// e opções vêm de /config/fluxo (fonte única no backend) — nada é duplicado aqui.
+// Diálogo das REGRAS DO FLUXO. Os grupos, rótulos e opções vêm de /config/fluxo
+// (fonte única no cérebro) — nada é duplicado aqui.
 //
-// A tela é HONESTA sobre o que o fluxo faz: (a) não finge um tipo quando nenhum foi
-// escolhido (mostra "padrão geral" e avisa); (b) resume em português claro o tempo
-// efetivo e o comportamento do portão; (c) no "Avançado", marca cada campo como
-// "herdado do tipo" ou "ajustado" (com um "voltar ao padrão"), para um valor afinado
-// não vencer o tipo em silêncio.
+// O "Tipo de fluxo" morreu em 2026-09-22. Ele era um dropdown que trocava seis números
+// de uma vez, em silêncio, e cujos valores moravam no CÓDIGO, não no dado da automação
+// — era por isso que este botão mostrava números que não estavam em lugar nenhum, e
+// nunca conseguiu se explicar ("até hoje não entendi pra que serve"). Sobrou o que ele
+// tinha de útil: partir de um modelo, uma vez, à vista.
+//
+// A tela continua HONESTA sobre o que o fluxo faz: resume em português o tempo efetivo
+// e o comportamento da aprovação, e marca cada campo como "padrão do Batuta" ou
+// "ajustado" (com um "voltar ao padrão"), para um valor afinado não vencer em silêncio.
+//
+// O que NÃO está aqui, e por quê: saudação, horário e mensagens automáticas são do
+// CANAL (a voz de quem fala); o tempo de espera de cada aprovação é do AGENTE que
+// espera (aba "Ritmo e espera" no popup dele), com estes valores como padrão.
 
 import { useEffect, useState } from "react";
 import {
-  AlertTriangle,
   Clock,
   Gauge,
   RotateCcw,
@@ -41,18 +47,18 @@ function semChave(
   return resto;
 }
 
-// Defaults efetivos do FLUXO (perfil escolhido, ou o padrão geral). Fonte única para
-// quem precisa do "herdado" — o diálogo do fluxo e o drawer do portão.
-export function defaultsDoPerfil(
+// A base de tudo é o PADRÃO DO BATUTA. O "Tipo de fluxo" era uma camada acima disto e
+// morreu em 2026-09-22: ele guardava uma etiqueta cujos números moravam no cérebro, e
+// era por isso que a tela mostrava valores que não estavam no dado da automação. Um
+// modelo agora só CARIMBA os números nos ajustes e sai de cena.
+export function defaultsDoBatuta(
   painel: PainelConfigFluxo,
-  configFluxo: ConfiguracaoFluxo,
 ): Record<string, unknown> {
-  const perfilObj = painel.perfis.find((p) => p.id === configFluxo.perfil);
-  return perfilObj?.defaults ?? painel.padrao_global ?? {};
+  return painel.padrao_global ?? {};
 }
 
-// O valor EFETIVO de uma chave no nível do fluxo (ajuste do fluxo vence o default do
-// perfil). É o "herdado" que um portão sobrepõe com o seu `no.config`.
+// O valor EFETIVO de uma chave no nível do fluxo: o ajuste da automação, ou o padrão do
+// Batuta. É o "herdado" que o agente sobrepõe na aba "Ritmo e espera" dele.
 export function efetivoDoFluxo(
   painel: PainelConfigFluxo,
   configFluxo: ConfiguracaoFluxo,
@@ -60,7 +66,7 @@ export function efetivoDoFluxo(
 ): unknown {
   const ajustes = configFluxo.ajustes ?? {};
   if (chave in ajustes) return ajustes[chave];
-  return defaultsDoPerfil(painel, configFluxo)[chave];
+  return defaultsDoBatuta(painel)[chave];
 }
 
 export function CampoConfig({
@@ -70,7 +76,7 @@ export function CampoConfig({
   podeEditar,
   onChange,
   onReset,
-  rotuloHerdado = "herdado do tipo",
+  rotuloHerdado = "padrão do Batuta",
 }: {
   campo: CampoConfigFluxo;
   valor: unknown;
@@ -199,10 +205,9 @@ export function DialogoConfigFluxo({
       .catch(() => setErro("Não consegui carregar as opções de configuração."));
   }, []);
 
-  const configSerializada = JSON.stringify({
-    perfil: valor.perfil ?? null,
-    ajustes: valor.ajustes ?? {},
-  });
+  // Só os ajustes: o `perfil` não é mais camada, então mandá-lo faria o cérebro
+  // calcular um efetivo que a tela não pratica.
+  const configSerializada = JSON.stringify({ ajustes: valor.ajustes ?? {} });
   useEffect(() => {
     let vivo = true;
     api
@@ -224,11 +229,7 @@ export function DialogoConfigFluxo({
   }, [configSerializada]);
 
   const ajustes = valor.ajustes ?? {};
-  // HONESTO: só considera "tem tipo" um perfil realmente salvo e conhecido. Sem tipo
-  // (automação legada) → os defaults vêm do PADRÃO GERAL, não de um perfil fingido.
-  const perfilObj = painel?.perfis.find((p) => p.id === valor.perfil);
-  const temPerfil = !!perfilObj;
-  const defaults = perfilObj?.defaults ?? painel?.padrao_global ?? {};
+  const defaults = painel?.padrao_global ?? {};
 
   function efetivo(chave: string): unknown {
     return chave in ajustes ? ajustes[chave] : defaults[chave];
@@ -263,40 +264,32 @@ export function DialogoConfigFluxo({
             <p className="text-sm text-muted-foreground">Carregando…</p>
           ) : (
             <>
-              <Label className="flex-col items-start gap-1">
-                Tipo de fluxo
-                <Select
-                  value={temPerfil ? String(valor.perfil) : ""}
-                  disabled={!podeEditar}
-                  onChange={(e) =>
-                    onChange({ ...valor, perfil: e.target.value || undefined })
-                  }
-                  className="w-full"
-                >
-                  {!temPerfil && (
-                    <option value="">
-                      — Padrão geral (nenhum tipo escolhido) —
-                    </option>
-                  )}
-                  {painel.perfis.map((p) => (
-                    <option key={p.id} value={p.id}>
+              {/* O "Tipo de fluxo" morreu aqui. Ele era um dropdown que trocava seis
+                  números de uma vez, em silêncio, e cujos valores não estavam no dado
+                  da automação — daí o "até hoje não entendi pra que serve". Sobrou o
+                  que ele tinha de útil: partir de um modelo, uma vez, à vista. */}
+              {podeEditar && painel.presets.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>Partir de um modelo:</span>
+                  {painel.presets.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() =>
+                        onChange({
+                          ...valor,
+                          perfil: undefined,
+                          ajustes: { ...ajustes, ...p.ajustes },
+                        })
+                      }
+                      className="rounded-md border border-border px-2 py-1 font-medium text-foreground hover:bg-muted"
+                    >
                       {p.rotulo}
-                    </option>
+                    </button>
                   ))}
-                </Select>
-              </Label>
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                Cada tipo já vem com regras sensatas. Use o “Avançado” só se quiser
-                afinar algo.
-              </p>
-
-              {!temPerfil && (
-                <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-[13px] text-amber-900">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                  <span>
-                    Nenhum tipo escolhido: este fluxo está usando o{" "}
-                    <strong>padrão geral</strong>. Escolha um tipo acima para regras
-                    mais adequadas ao seu caso.
+                  <span className="basis-full text-[11px]">
+                    Isto copia os números do modelo para cá. Depois eles são seus — o
+                    modelo não fica mandando por trás.
                   </span>
                 </div>
               )}
@@ -376,7 +369,7 @@ export function DialogoConfigFluxo({
                       onClick={() => onChange({ ...valor, ajustes: {} })}
                       className="flex items-center gap-1.5 self-start text-xs font-medium text-primary hover:underline"
                     >
-                      <RotateCcw className="size-3.5" /> Restaurar os padrões do tipo
+                      <RotateCcw className="size-3.5" /> Limpar todos os ajustes
                     </button>
                   )}
                   {painel.grupos.map((g) => (

@@ -66,7 +66,7 @@ from mensageria.config import (
     CHAVES_DA_AUTOMACAO,
     GLOBAL,
     ONDE_MUDAR,
-    PERFIS,
+    PRESETS,
     _mesclar as _mesclar_config,
     painel_config,
     resumo_dos_limites,
@@ -150,8 +150,13 @@ def criar(
     _validar_cadeia_ou_422(sessao, time_id, dados.cadeia)
     auto = Automacao(time_id=time_id, **dados.model_dump())
     auto.cadeia = grafo.normalizar(auto.cadeia or {})  # grava no formato canônico
-    if not (auto.configuracao or {}).get("perfil"):  # nasce com um tipo de fluxo sensato
-        auto.configuracao = {**(auto.configuracao or {}), "perfil": config.PERFIL_PADRAO}
+    # Nasce com os números à vista, não com uma etiqueta. Um corpo que traga `perfil`
+    # (a tela antiga manda assim) é respeitado como MODELO ESCOLHIDO — descartá-lo
+    # faria a automação nascer diferente do que o formulário pediu, em silêncio.
+    if not (auto.configuracao or {}).get("ajustes"):
+        auto.configuracao = config.configuracao_inicial(
+            (auto.configuracao or {}).get("perfil")
+        )
     sessao.add(auto)
     sessao.commit()
     sessao.refresh(auto)
@@ -178,9 +183,12 @@ def limites_do_fluxo(
 
     Endpoint puro (não lê nem escreve banco): recebe a config que está na tela,
     devolve as frases."""
+    # `perfil` ainda é aceito no corpo por compatibilidade, mas só como MODELO: a tela
+    # nova manda os ajustes prontos. Não é camada — é o que o botão "partir de um
+    # modelo" teria carimbado.
     cfg = dict(GLOBAL)
-    if dados.perfil in PERFIS:
-        cfg = _mesclar_config(cfg, PERFIS[dados.perfil], CHAVES_DA_AUTOMACAO)
+    if dados.perfil in PRESETS:
+        cfg = _mesclar_config(cfg, PRESETS[dados.perfil], CHAVES_DA_AUTOMACAO)
     cfg = _mesclar_config(cfg, dados.ajustes or {}, CHAVES_DA_AUTOMACAO)
     return {"limites": resumo_dos_limites(cfg), "onde_mudar": ONDE_MUDAR}
 

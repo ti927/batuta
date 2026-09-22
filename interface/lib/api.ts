@@ -672,16 +672,22 @@ export type CampoConfigFluxo = {
   opcoes?: { valor: string; rotulo: string }[];
   padrao?: unknown;
 };
-export type PerfilFluxo = {
+// Um MODELO DE PARTIDA, não uma camada. Era o "Tipo de fluxo": guardava uma etiqueta
+// cujos números moravam no cérebro, então o efetivo de uma automação nunca estava no
+// dado dela — e o botão que a exibia nunca conseguiu se explicar. Agora carimba os
+// valores nos ajustes e sai de cena.
+export type PresetFluxo = {
   id: string;
   rotulo: string;
+  /** O que este modelo carimba nos `ajustes` da automação. */
+  ajustes: Record<string, unknown>;
   defaults: Record<string, unknown>;
-  // Os limites deste perfil em português (fonte única no backend). A tela mostra
+  // Os limites deste modelo em português (fonte única no backend). A tela mostra
   // sem o usuário abrir o "Avançado": nenhum teto pode existir sem ele saber.
   limites: string[];
 };
 export type PainelConfigFluxo = {
-  perfis: PerfilFluxo[];
+  presets: PresetFluxo[];
   // `nivel` diz de QUEM é a regra: "fluxo" é do fluxo e ponto; "agente" é o PADRÃO
   // que cada agente herda e pode sobrepor na aba "Ritmo e espera" do popup dele.
   grupos: { grupo: string; nivel: "fluxo" | "agente"; campos: CampoConfigFluxo[] }[];
