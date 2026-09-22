@@ -2,8 +2,8 @@
 titulo: "Construir um Conector (integração com API, sem código)"
 area: "instrumentos"
 slug: "construir-conector"
-tags: ["conector", "api", "http", "integracao", "bubble", "constraints", "rest", "get", "post", "patch", "operacoes", "campos", "montar_conector", "instrumento"]
-revisado_em: "2026-08-26"
+tags: ["conector", "api", "http", "integracao", "bubble", "constraints", "rest", "get", "post", "patch", "operacoes", "campos", "montar_conector", "instrumento", "oauth2", "conta de servico", "google", "somente leitura", "search console"]
+revisado_em: "2026-09-22"
 fontes: ["cerebro/instrumentos/conector.py", "cerebro/criacao/ferramentas.py"]
 ---
 
@@ -28,6 +28,12 @@ tem um `metodo`, uma `url`, os `campos` (o que entra na requisição) e, opciona
 - **`destino`**: `"query"` (vai na URL depois do `?`), `"corpo"` (entra no JSON — para POST/PATCH/PUT)
   ou `"url"` (substitui um `[colchete]` na URL).
 
+No destino `corpo`, o valor pode ser **JSON de verdade**: o que começa com `[` ou `{` (e é JSON
+válido) e os literais `true`/`false`/`null` viram lista, objeto e booleano. É como se declara
+`{"nome": "dimensions", "papel": "fixo", "destino": "corpo", "valor": "[\"query\"]"}` — o Google
+recusa `dimensions` em texto. **Número NÃO é convertido**, de propósito: `"0055"` e ids longos viram
+outra coisa ao virar número, e as APIs aceitam número em texto.
+
 Regra de ouro: **um campo só existe se você o DECLARA**. Para a IA poder mandar um dado (o corpo de
 um POST, o filtro de uma busca), esse campo precisa estar na lista `campos` com o `destino` certo.
 
@@ -45,6 +51,15 @@ tela do instrumento. Nunca ponha token, senha ou certificado no objeto — são 
   Batuta busca e renova esse token sozinho** — não invente uma operação "pegar token" nem peça ao
   agente que carregue o token entre chamadas: não funcionaria (os cabeçalhos são fixos) e já está
   resolvido pela plataforma.
+- **`google_conta_servico`** — para QUALQUER API do Google (Search Console, Drive, Sheets, Agenda).
+  Use este, e não `oauth2`, quando o serviço for do Google: a conta de serviço é uma identidade de
+  **máquina**, então não tem tela de consentimento, não depende de app verificado pelo Google e **não
+  expira**. O segredo é o **JSON inteiro** da chave (o consultor baixa no Google Cloud e cola no
+  cofre). **`escopo` é obrigatório** — declare o mais estreito que a operação usa (Search Console só
+  leitura: `https://www.googleapis.com/auth/webmasters.readonly`); pedir acesso amplo seria pior.
+  Avise o consultor do passo que todo mundo esquece: **dar acesso ao e-mail da conta de serviço** no
+  serviço de destino (no Search Console, como usuário da propriedade). Sem isso o Google responde 403
+  e o erro parece ser da chave.
 
 **Certificado digital (mTLS)** é outra coisa e **combina** com qualquer `auth_tipo`: é o arquivo com
 que o cliente se identifica na conexão. Você não o configura — o consultor sobe o arquivo na tela do
@@ -89,11 +104,20 @@ Depois de montar, use `testar_operacao_conector` para RODAR a operação com val
 resposta real + os campos detectados — é assim que você confere que funciona e escolhe os
 `campos_resposta`, sem envolver o consultor. Se a API pede token e ele ainda não está no cofre, o
 teste volta com `ok=false` (autenticação): peça o token ao consultor e teste de novo.
+Quando a API recusa (4xx), a resposta traz o **motivo que o serviço deu**, não um "falhou" genérico —
+leia o campo `erro` e o `corpo`: é ali que está a explicação (ex.: `"startDate field is required"`,
+`"User does not have sufficient permission for site"`). Não adivinhe a causa; ela está escrita.
 
 ## Limites e cuidados
-- **Escrita pede aprovação.** Se QUALQUER operação escreve (POST/PUT/PATCH/DELETE), o conector inteiro
-  conta como ação irreversível. Para alguém confirmar antes, dê ao agente o instrumento
+- **Escrita pede aprovação — por OPERAÇÃO, não pelo conector inteiro.** O método é o sinal
+  (GET lê; POST/PUT/PATCH/DELETE escrevem), e cada operação que escreve para e pede aprovação; as de
+  leitura correm livres no mesmo instrumento. Para alguém confirmar antes, dê ao agente o instrumento
   **Pedir aprovação e aguardar** e escreva a regra no markdown dele.
+- **Nem todo POST escreve.** Há API que CONSULTA por POST porque o filtro não cabe na URL — o
+  `searchAnalytics/query` do Google Search Console é exatamente isso. Nesses casos marque
+  `somente_leitura: true` na operação: sem isso, **cada consulta** pararia para pedir aprovação e o
+  instrumento fica inutilizável. É declaração consciente de quem monta — o Batuta não tem como
+  conferir se um POST escreve. Nunca marque por conveniência.
 - Respostas legítimas (2xx e até um 404) voltam ao agente como dado; 401/403 e 5xx viram falha do
   instrumento (a de servidor é retentável).
 - Não coloque segredos nos cabeçalhos fixos — use a autenticação (o token vai ao cofre).

@@ -83,9 +83,9 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Busca semântica (Exa) | `instrumentos/busca-exa` | Alternativa semântica | ✅ | ✍️ |
 | **Dados & integração** | | | | |
 | Chamar API REST | `instrumentos/chamar-rest` | GET/POST/…; leitura × escrita | ✅ | ✍️ |
-| Construir um conector | `instrumentos/construir-conector` | Criar instrumento SEM código: testar e detectar, operações, credencial do próprio conector | ✅ | ✍️ |
+| Construir um conector | `instrumentos/construir-conector` | Criar instrumento SEM código: testar e detectar, operações, autenticação (inclusive conta de serviço do Google), POST que só consulta | ✅ | ✍️ |
 | Banco SQL | `instrumentos/banco-sql` | Ler/escrever em SQL; somente-leitura | ✅ | ✍️ |
-| Conectar MCP | `instrumentos/mcp` | Ferramentas de um servidor MCP | ✅ | ✍️ |
+| Conectar MCP | `instrumentos/mcp` | Ferramentas de um servidor MCP (Zapier); ESCOLHER quais entram no cinto e quais pedem aprovação | ✅ | ✍️ |
 | Webhook de saída | `instrumentos/webhook-saida` | Avisar/disparar um sistema externo | ✅ | ✍️ |
 | Agendar automação | `instrumentos/agendar-automacao` | Um agente reprograma um disparo futuro (alvo manual+ativa) | ✅ | ✍️ |
 | **Mensageria** | | | | |

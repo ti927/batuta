@@ -524,8 +524,11 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         Formato de `conector`:
         {"nome": "Gestão Lure", "descricao": "para que serve (referência humana)",
          "categoria": "opcional (só agrupa)",
-         "auth_tipo": "nenhuma|bearer|cabecalho|query",
+         "auth_tipo": "nenhuma|bearer|cabecalho|query|basic|oauth2|google_conta_servico",
          "auth_nome": "nome do cabeçalho/parâmetro (só p/ 'cabecalho'/'query')",
+         "auth_usuario": "usuário (basic) ou Client ID (oauth2)",
+         "url_token": "endereço que emite o token (só oauth2)",
+         "escopo": "permissão pedida (oauth2 se o serviço pedir; OBRIGATÓRIO na conta de serviço)",
          "operacoes": [
            {"nome": "Busca Projetos", "descricao": "o que faz / quando o agente usa",
             "metodo": "GET|POST|PATCH|PUT|DELETE",
@@ -535,7 +538,8 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
                "valor": "(só quando papel='fixo')",
                "descricao": "(ajuda p/ a IA, quando papel='ia')", "obrigatorio": true}
             ],
-            "campos_resposta": ["_id", "cpo.NomeCliente"]}
+            "campos_resposta": ["_id", "cpo.NomeCliente"],
+            "somente_leitura": false}
          ]}
 
         Regras que importam:
@@ -547,10 +551,27 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
           ou "url" (substitui [colchete] na URL).
         - `campos_resposta`: liste só os campos que o agente usa (nome EXATO da API) —
           corta MUITO custo em buscas que voltam listas. Vazio = resposta inteira.
-        - Se QUALQUER operação escreve (POST/PUT/PATCH/DELETE), o conector inteiro conta
-          como AÇÃO IRREVERSÍVEL. Não há portão no desenho: dê ao agente que o usa o
-          instrumento `pedir_aprovacao` e escreva no skill_md dele que ele confirma com
-          uma pessoa antes de escrever no sistema externo.
+        - Operação que ESCREVE (POST/PUT/PATCH/DELETE) para e pede aprovação — POR
+          OPERAÇÃO, não pelo conector inteiro: as de leitura correm livres ao lado.
+          Não há portão no desenho: dê ao agente o instrumento `pedir_aprovacao` e
+          escreva no skill_md dele que confirma com uma pessoa antes de escrever fora.
+        - NEM TODO POST ESCREVE. Há API que CONSULTA por POST porque o filtro não cabe
+          na URL (o `searchAnalytics/query` do Google Search Console é assim). Aí marque
+          `"somente_leitura": true` NAQUELA operação — sem isso, cada consulta pararia
+          para pedir aprovação e o instrumento fica inutilizável. Só marque quando tiver
+          certeza de que a chamada não muda nada lá fora.
+        - APIs DO GOOGLE: use `auth_tipo: "google_conta_servico"` (NÃO `oauth2`). É
+          identidade de máquina: sem tela de consentimento, sem app verificado, sem
+          expirar. O segredo é o JSON da chave (o consultor cola no cofre) e o `escopo`
+          é OBRIGATÓRIO — declare o mais estreito que serve (Search Console só leitura:
+          "https://www.googleapis.com/auth/webmasters.readonly"). Avise o consultor de
+          dar acesso ao E-MAIL da conta de serviço no serviço de destino (no Search
+          Console, como usuário da propriedade) — sem isso vem 403 e parece erro da chave.
+        - No destino "corpo", o valor pode ser JSON de verdade: texto começando com "["
+          ou "{" (JSON válido) e true/false/null viram lista, objeto e booleano. É assim
+          que se declara {"nome":"dimensions","papel":"fixo","destino":"corpo",
+          "valor":"[\"query\"]"}. Número NÃO converte (ids como "0055" viram outra
+          coisa; as APIs aceitam número em texto).
         Depois de montar, TESTE cada operação com testar_operacao_conector — confere se
         funciona e revela os campos da resposta (para escolher `campos_resposta`)."""
         time = _exigir_time()

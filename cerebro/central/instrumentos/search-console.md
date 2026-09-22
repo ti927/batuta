@@ -36,12 +36,29 @@ caiu. É só leitura — bom para relatórios e para decidir a próxima pauta.
 - Métricas: cliques, impressões, CTR e posição média (não são visitas do Analytics).
 - Só leitura → ninguém precisa aprovar nada.
 
+## 401 e 403 são problemas DIFERENTES
+- **401** = a autorização venceu ou foi revogada. Não adianta mexer no Search Console: a conta precisa
+  ser **reconectada** no cofre do Batuta. Foi o que manteve o blog dois meses sem dado novo, com a
+  execução terminando verde e o agente contornando com número velho.
+- **403** = a conta está conectada, mas **não tem acesso àquela propriedade** — ou o Google foi conectado
+  sem incluir o Search Console.
+
+## Sem depender de ninguém reconectar
+Este instrumento usa o OAuth de uma pessoa, e em app não verificado o token de renovação morre a cada 7
+dias. Para automação que roda sozinha, o caminho estável é montar a mesma consulta no **Construtor de
+Instrumentos** com `auth_tipo: "google_conta_servico"` — identidade de máquina, que não expira.
+É um POST (`searchAnalytics/query`) que só CONSULTA: marque `somente_leitura: true` na operação, senão
+cada consulta para e pede aprovação. Ver [[instrumentos/construir-conector]] e [[segredos/conectar-google]].
+
 ## Para a IA
 Parâmetros no catálogo (`search_console`): `dias` (últimos N dias, padrão 28), `dimensoes`
 (`query`/`page`/`country`/`device`/`date`, uma ou mais) e `limite`. O **site** é da configuração do humano,
-não seu. Se der 403, oriente checar o acesso à propriedade e reconectar o Google incluindo o Search Console.
+não seu. Se der **403**, oriente checar o acesso à propriedade; se der **401**, oriente **reconectar a
+conta** — e nunca siga entregando análise com dado antigo sem dizer, em letras claras, que o dado é antigo
+e por quê.
 
 ## Relacionado
 - [[segredos/conectar-google]]
+- [[instrumentos/construir-conector]]
 - [[instrumentos/publicar-wordpress]]
 - [[operacao/uso-e-custos]]

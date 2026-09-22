@@ -37,12 +37,35 @@ instrumentos Google **apontam** para ela.
   contas adicionadas como **testadoras** (até 100) conseguem conectar — como os testadores do Instagram.
 - O segredo **nunca** volta à tela (só o e-mail e as permissões aparecem). A IA nunca toca o token.
 
+## A alternativa que não expira: CONTA DE SERVIÇO
+O OAuth acima é o acesso de uma **pessoa**, e ele tem um custo escondido: enquanto o app do Batuta não
+passa pela verificação do Google (os escopos de Gmail e Drive são *restritos*, com auditoria anual), o
+token de renovação **morre a cada 7 dias**. Em 2026-07 uma conta parou de renovar e o Search Console do
+blog ficou **dois meses** em HTTP 401 — a falha era muda, e só apareceu porque um agente escreveu "401"
+no meio de uma entrega.
+
+A **conta de serviço** é uma identidade de **máquina**: sem tela de consentimento, sem app verificado,
+sem expirar. Ela não se conecta por aqui — é uma opção de autenticação do **Construtor de Instrumentos**
+(`auth_tipo: "google_conta_servico"`), com o JSON da chave no cofre. Ver
+[[instrumentos/construir-conector]].
+
+**Quando usar cada um:**
+- **OAuth (esta tela)** — o agente age *como aquela pessoa* (ler o Gmail dela, a agenda dela).
+- **Conta de serviço** — o agente age *como o sistema*, num recurso que se compartilha com ele
+  (Search Console, uma planilha, uma pasta do Drive). Para automação que roda sozinha, é a melhor.
+
+O passo que todo mundo esquece na conta de serviço: **dar acesso ao e-mail dela** no serviço de destino
+(no Search Console, como usuário da propriedade). Sem isso vem 403 e o erro parece ser da chave.
+
 ## Para a IA
 Ao montar um agente que usa um serviço Google, aponte o instrumento para a credencial `google` e avise que
 falta o humano **conectar a conta** (botão "Conectar Google"), se ainda não conectou — não diga que está
 "pronto" sem isso. Se um instrumento reclamar de permissão, oriente **reconectar incluindo aquele serviço**.
+**Para automação que roda sozinha, prefira a conta de serviço** (não expira e não depende de ninguém
+reconectar): monte um conector com `auth_tipo: "google_conta_servico"` em vez de usar o OAuth.
 
 ## Relacionado
 - [[instrumentos/search-console]]
+- [[instrumentos/construir-conector]]
 - [[segredos/credenciais-nomeadas]]
 - [[segredos/segredos-de-instrumento]]

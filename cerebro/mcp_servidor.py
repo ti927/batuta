@@ -440,9 +440,20 @@ async def montar_conector(
     VÁRIAS operações de uma mesma API (cada operação vira uma ação no cinto), montado a
     partir de uma documentação de API, SEM código. Você declara auth_tipo/auth_nome mas
     NÃO pluga o token (fica pendente no cofre). Formato do `conector`: {nome, descricao,
-    auth_tipo: 'nenhuma|bearer|cabecalho|query', auth_nome, operacoes: [{nome, descricao,
-    metodo, url (use [colchete] p/ trecho variável), campos: [{nome, papel: 'ia|fixo',
-    destino: 'query|corpo|url', valor, descricao, obrigatorio}], campos_resposta: [...]}]}.
+    auth_tipo: 'nenhuma|bearer|cabecalho|query|basic|oauth2|google_conta_servico',
+    auth_nome, auth_usuario (usuário no basic / Client ID no oauth2), url_token (oauth2),
+    escopo (oauth2 se pedir; OBRIGATÓRIO na conta de serviço), operacoes: [{nome,
+    descricao, metodo, url (use [colchete] p/ trecho variável), campos: [{nome,
+    papel: 'ia|fixo', destino: 'query|corpo|url', valor, descricao, obrigatorio}],
+    campos_resposta: [...], somente_leitura: false}]}.
+    APIs do GOOGLE: use 'google_conta_servico', não 'oauth2' — identidade de máquina, sem
+    consentimento, sem app verificado, sem expirar; o segredo é o JSON da chave e o
+    consultor precisa dar acesso ao E-MAIL da conta de serviço no serviço de destino.
+    NEM TODO POST ESCREVE: API que consulta por POST (o searchAnalytics/query do Search
+    Console) leva `somente_leitura: true` NAQUELA operação, senão cada consulta para e
+    pede aprovação. A aprovação é por OPERAÇÃO, não pelo conector inteiro.
+    No destino 'corpo', texto começando com [ ou { (JSON válido) e true/false/null viram
+    lista/objeto/booleano; número NÃO converte (ids viram outra coisa).
     Em dúvida do formato (sobretudo Bubble), chame consultar_conhecimento 'construir
     conector'. Depois teste cada operação com `testar_operacao_conector`."""
     return await anyio.to_thread.run_sync(
@@ -456,7 +467,10 @@ async def testar_operacao_conector(
 ) -> str:
     """Testa UMA operação de um conector com valores de exemplo — roda a chamada REAL e
     devolve a resposta (para você conferir que funciona e escolher os `campos_resposta`).
-    `valores` = {nome_do_campo: valor} para os campos de papel 'ia'."""
+    `valores` = {nome_do_campo: valor} para os campos de papel 'ia'.
+    Quando a API recusa, a resposta traz o MOTIVO que o serviço deu (campos `erro` e
+    `corpo`) — leia-o em vez de adivinhar a causa: é ali que está "startDate field is
+    required" ou "User does not have sufficient permission for site"."""
     return await anyio.to_thread.run_sync(
         escrita.testar_operacao_conector, _sub(), conector_id, operacao, valores
     )
