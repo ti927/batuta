@@ -24,6 +24,19 @@ IA criadora **convivem**: monte com a IA e refine a mão, ou o contrário.
 4. O botão **"Ajustar com a IA"** fica em destaque, para você voltar à conversa quando quiser.
 5. **Salve** — o popup mantém o que você digitou; marcadores mostram o que ainda não foi salvo.
 
+### As abas do popup
+Quem é · Habilidades · Uso dos instrumentos · Personalidade (os quatro markdowns) ·
+**Ritmo e espera** · Instrumentos (o cinto) · Memórias.
+
+**Ritmo e espera** (2026-09-22) é o que este agente faz DIFERENTE do padrão da automação:
+- **quanto ele pode trabalhar num passo** — quem gera vídeo precisa de muito mais tempo que
+  quem escreve um parágrafo;
+- **quanto e como ele espera uma pessoa** — só aparece se ele tiver o instrumento
+  *Pedir aprovação e aguardar* no cinto, porque só aí existe espera a configurar.
+
+Campo em branco = segue o valor da automação. **Vale em TODAS as automações onde o agente
+aparece** — a aba lista quais são, pelo nome.
+
 ## Exemplos
 - Trocar uma palavra no `soul.md` de um agente sem abrir a conversa.
 - Adicionar um instrumento ao cinto e explicá-lo no `tools.md`.
@@ -35,6 +48,16 @@ IA criadora **convivem**: monte com a IA e refine a mão, ou o contrário.
 ## Para a IA
 O consultor pode ter editado a mão entre uma conversa e outra — trabalhe sempre sobre o **estado atual** do
 time (o retrato), não sobre o que você "lembra" de ter montado.
+
+`ver_agente` devolve `ritmo_e_espera` (o que ele sobrepõe do fluxo) e `configurar_ritmo_agente`
+grava. Só entram regras de UM ATO dele: `teto_min_passo`, `timeout_min`, `nudge_timeout_min`,
+`encerrar_por_inatividade`, `portao_forma`, `portao_acao_abandono`, `portao_max_rodadas`,
+`teto_espera_humano_min`. **`max_turnos` e `teto_usd` NÃO** — são contadores da conversa inteira,
+só podem ter um teto e ficam na automação; passá-los aqui é recusado por escrito.
+
+Use quando dois passos do mesmo fluxo esperam pessoas diferentes: confirmar um detalhe com quem
+pediu (cutucar em 10 min) e pedir a um diretor que aprove uma compra (esperar 24 h e nunca
+cancelar) são a mesma automação com réguas opostas.
 
 ## Relacionado
 - [[times-agentes/agente]]

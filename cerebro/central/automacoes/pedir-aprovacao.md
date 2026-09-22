@@ -81,10 +81,27 @@ Se o passo alimenta **dois** caminhos ao mesmo tempo (a capa aprovada indo para 
 **e** para o story), diga para declarar **os dois** — declarar só um deixa metade do
 trabalho sem acontecer.
 
-**Como o Batuta te avisa quando isso está errado:** se o passo tem caminhos a escolher e o
-agente conversa duas vezes seguidas sem decidir nada, entra um alarme nos registros
-(`portao.indeciso`) dizendo o nome do agente e os nomes das saídas que ele ignorou. É quase
-sempre o mesmo diagnóstico: **o markdown dele não conhece as saídas do passo.**
+**O Batuta não deixa mais isso prender a pessoa (2026-09-22).** Duas coisas acontecem:
+
+1. **Alarme nos registros** (`portao.indeciso`, nível erro) com o nome do agente e as saídas
+   que ele ignorou.
+2. **O fluxo anda mesmo assim.** Se a pessoa responder com o **nome exato de um caminho**
+   ("aprovado") e o agente já tiver tido a chance dele, o Batuta segue por essa resposta em
+   vez de reapresentar a mesma aprovação — e registra `portao.destravado`, avisando na
+   execução que quem escolheu foi ele, não o agente.
+
+Isso é **rede de segurança, não substituto**: o caminho escolhido pela palavra da pessoa é o
+óbvio; qualquer lógica mais fina (fan-out para dois caminhos, escolher pelo conteúdo) só
+acontece se o agente declarar. Continue escrevendo a instrução no markdown.
+
+**Antes de culpar o markdown, saiba o seguinte:** o Batuta **já injeta**, em todo passo que
+pede aprovação, a instrução "chame `seguir_para` com os rótulos" **mais a lista dos nomes
+das saídas daquele passo**. O bloco no markdown é **reforço**, não o mecanismo. Quando o
+agente não declara, é adesão dele à instrução — e a armadilha é esta: a instrução injetada
+diz *"se ainda precisar de algo da pessoa, responda normalmente, SEM declarar"*. Um agente
+que TERMINOU escreve uma frase de fechamento ("✅ Tudo pronto!") — que é exatamente o sinal
+de "continue esperando". Escrever no markdown que **declarar é a última coisa que ele faz**
+é o que desfaz essa ambiguidade.
 
 ## Exemplos
 - Redator escreve → **pede aprovação** com o texto completo → aprovado → publica.

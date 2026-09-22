@@ -2520,7 +2520,7 @@ A varredura pedida pelo maestro achou um buraco **de agosto**: em TRÊS lugares 
 
 ---
 
-## FASE — ESTÚDIO: o canvas do fluxo, em desenvolvimento PARALELO  ▶️ EM TESTE (2026-09-21)
+## FASE — ESTÚDIO: o canvas do fluxo, em desenvolvimento PARALELO  ✅ NO AR (2026-09-21; assumiu a aba Automações em 2026-09-22)
 
 **Origem:** *"eu estou perdido pq eu nao sei como a ferramente funciona… o usuário não consegue visualizar essas possibilidades de causa e efeito; a coisa toda precisa ser visual"*. E a ordem: **desenvolver a tela inteira em paralelo, sem mexer na página que já está pronta**, para testar até exaurir.
 
@@ -2531,6 +2531,53 @@ A varredura pedida pelo maestro achou um buraco **de agosto**: em TRÊS lugares 
 **Entregue** (`6e3d380` … `b6ecd82`): condição no fio; cada cartão lista as próprias saídas, com porta alinhada e destino; fio **ortogonal com cantos arredondados** (fios irmãos dobram em pontos diferentes para não andarem colados); laço por pista tracejada; **o desenho se confere** (`components/estudio/problemas.ts` — erros espelhando `cadeia.py::validar_cadeia` mais avisos de causa-e-efeito: passo que para e pergunta com um caminho só, fio cujo nome o texto do agente nunca menciona, beco sem saída, passo ilhado, laço sem escape); minimapa e foco. Verificado com **27 cenários** e **rodado contra o desenho REAL de uma automação ATIVA, que acusou o defeito de verdade** (o passo que para e pergunta com um caminho só).
 
 **Cortado pelo maestro em uso:** o botão "Organizar" (reposicionava tudo e apagava o arranjo feito à mão, sem desfazer) e o "+X mais" do cinto (escondia o que se vai ver no cartão). **Consertado junto, e vale para as DUAS telas:** salvar deixou de jogar a seleção na primeira automação — era a `key={versao}` na página, que remontava quem guardava a seleção; a chave desceu para o editor.
+
+---
+
+## FASE — CADA REGRA TEM UM DONO + o Estúdio assume a aba  ✅ NO AR (2026-09-22, `82e6129` … `ccf435f`, DUAS migrações)
+
+**Origem:** *"tem um botão FLUXO que até hoje não entendi pra que serve, sendo que cada agente também tem configuração de tempos e mensagens… tá uma bagunça generalizada"*. E a correção que redirecionou tudo: **raciocinar por princípio, não pelo que o Batuta usa hoje** — o desenho certo para fluxos grandes que ainda não existem.
+
+**A regra que saiu, e é a espinha:** *a configuração pertence ao nível em que a coisa medida EXISTE.*
+
+| Natureza | Dono | Chaves |
+|---|---|---|
+| Contador que ACUMULA — só pode ter um teto | **fluxo** | `max_turnos`, `teto_usd` (medidos sobre a conversa inteira), `max_passos`, `teto_usd_execucao`, `teto_min_execucao`, `max_itens_cada`, vigias |
+| Propriedade de UM ATO — uma espera, um trabalho | **agente** | `teto_min_passo`, `timeout_min`, `nudge_timeout_min`, `encerrar_por_inatividade`, `portao_*`, `teto_espera_humano_min` |
+| A VOZ de quem fala | **canal** | saudação, horário, `mensagem_limite/nudge/despedida` |
+| Passo sem agente ("Chamar outra automação") | **nó** | `teto_min_passo` |
+
+**O caso que a prova, e que ANTES não era construível:** aprovação de compra com dois passos — confirmar um detalhe com quem pediu (cutucar em 10 min) e pedir ao diretor financeiro que aprove R$ 200 mil (esperar 24 h, NUNCA cancelar). Mesmo fluxo, mesma conversa, réguas opostas.
+
+**Não era duplicação por descuido — eram três doenças somadas:** (1) o "Tipo de fluxo" guardava uma ETIQUETA cujos números moravam no código, então o efetivo nunca estava no dado da automação — o botão existia para mostrar números que não estavam em lugar nenhum; (2) fluxo e agente mostravam a MESMA lista de 8 sem dizer qual era qual, e duas delas estavam no nível errado; (3) quem espera já era do agente (`pedir_aprovacao`, no cinto) mas quanto se espera era do nó.
+
+**Oito fatias:**
+| Commit | O quê |
+|---|---|
+| `82e6129` | O botão Salvar do Estúdio ficava morto e o trabalho sumia (comparava só `gatilho.tipo`); + dia do mês até 28, teto/hora sem o 0, "Quais posts", trava do Instagram |
+| `41214eb` | A partição por dono vira **lei de código** (`_mesclar(…, permitidas=…)`); ajuste legado fora do dono fica INERTE sem migração; o canal ganha as 3 mensagens que não tinham tela; `test_dono_da_regra.py` |
+| `1291abc` | Aba **"Ritmo e espera"** + migração **`rte00ritmo0001`** (`agentes.configuracao`); MCP `ver_agente`/`configurar_ritmo_agente` |
+| `37dbba4` | O "Tipo de fluxo" vira NÚMERO + migração **`prs00preset001`** — **diff das 16 automações reais idêntico byte a byte** |
+| `88c78fd` | As regras viram o painel da direita, com MIGALHA (`Fluxo: X › Passo: Y`) — sem ela seria trocar um botão indecifrável por uma tela invisível |
+| `f7ad346` | Nenhum teto secreto: `max_itens_cada` vira configurável; Instagram/hora e agendamentos entram no resumo |
+| `5213450` | Paridade operacional do Estúdio (ligar/desligar, Rodar, Nova/Duplicar/Excluir, agendamentos, "Testar este passo") |
+| `73c5735` | O Estúdio **assume a aba "Automações"**; a clássica sai da barra, a ROTA fica como saída de emergência |
+
+**Erro meu, registrado:** um script meu chamou o Alembic achando que apontava para o banco de testes — o `env.py` ignora `sqlalchemy.url` e usa a `DATABASE_URL`. **As duas migrações rodaram em PRODUÇÃO sem autorização.** Eram aditivas e compatíveis com o código velho (foi o que o diff vazio provou), o maestro mandou seguir. Regra permanente: **migração local é só `banco_testes.py`; nenhum script meu chama Alembic.**
+
+---
+
+## FASE — O que quebrou no primeiro uso real  ✅ NO AR (2026-09-22, `b1b44fa` … `ccf435f`)
+
+Três defeitos achados pelo maestro usando a tela nova. Todos com a mesma assinatura: **o Batuta sabia e não dizia.**
+
+**1. O popup do agente abria "com alteração para salvar"** (`b1b44fa`). O "não salvo" comparava campo a campo com `!==`; `configuracao` é o primeiro campo que é OBJETO, e dois objetos de mesmo conteúdo nunca são `===`. Passou a comparar por valor.
+
+**2. O agente que não declara o caminho prendia a pessoa** (`4cfd188`). O maestro aprovou TRÊS vezes e o fluxo não andou. `portao.indeciso` detectava em nível `error` — e o código dizia, literalmente, *"só deixa rastro; não muda o fluxo"*. Duas das três pernas da §12-A faltando. **A causa não é o markdown**: o motor já injeta "chame `seguir_para`" com os rótulos; é que "o agente escreveu um texto" é indistinguível de "ainda preciso falar com a pessoa" — e quem terminou escreve "✅ Tudo pronto!". Agora: resposta com o **nome exato de um caminho** + agente que já teve a chance → o motor segue pela resposta dela, com `portao.destravado` e recado na execução. O sinal é a RESPOSTA, não a contagem: cortar por contagem baixa mata o "por quê?" legítimo (as duas versões erradas quebraram teste; os dois lados agora têm um).
+
+**3. `campos_resposta` apagando as linhas** (`58c884a`). O conector do Search Console voltava 200 com todas as linhas vazias; o agente culpou o Google e analisou com dado de dois meses antes. Causa: `["rows","responseAggregationType"]` — os nomes do CONTÊINER. **Regressão minha do mesmo dia:** ao fazer o filtro reconhecer `rows`, transformei config errada INERTE em config que apaga dados. Agora, filtro que esvaziaria TODOS os registros devolve intacto — e o teste do Construtor AVISA, porque ele roda de propósito sem o filtro e por isso nunca reproduzia o que o agente recebe.
+
+**4. O texto da tela em vocabulário de código** (`ccf435f`). *"avisa no rastro"*, *"declarar o caminho"* — ninguém sabe o que é isso. A regra já estava em dois lugares (`DESIGN-SYSTEM.md` §2 e a skill `frontend-design`) e não foi aplicada. Virou **skill obrigatória** `escrever-para-quem-usa` (`CLAUDE.md §17-A`), que força duas perguntas nesta ordem: **(1) isto precisa existir?** (justificativa de arquitetura é minha, não instrução dela) **(2) a palavra é entendível?** Apagar vem antes de reescrever.
 
 ---
 

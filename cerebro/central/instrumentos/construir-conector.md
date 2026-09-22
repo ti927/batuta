@@ -96,8 +96,35 @@ A **Data API** do Bubble tem um endereço por tabela: `https://<app>/api/1.1/obj
 A resposta é reenviada ao agente a cada passo do fluxo. Uma busca do Bubble traz dezenas de registros
 com dezenas de campos — isso custa MUITOS tokens. Em `campos_resposta` liste só os campos que o agente
 usa, com o nome EXATO da API (ex.: `["_id","cpo.NomeCliente","cpo.Valor"]`). Vazio = resposta inteira
-(só deixe assim quando o agente precisar mesmo de tudo). O filtro reconhece listas no topo e o formato
-`results` do Bubble; formato não reconhecido volta intacto (nunca descarta dado por engano).
+(só deixe assim quando o agente precisar mesmo de tudo). O filtro reconhece uma lista no topo, o
+`response.results` do Bubble e as chaves de lista das APIs conhecidas (`results`, `rows`, `items`,
+`data`, `records`); formato não reconhecido volta intacto.
+
+### ⚠️ A armadilha: são os campos DE DENTRO da linha, não o nome da lista
+`campos_resposta` filtra **cada registro**, não o envelope. O erro clássico é listar a chave que
+CONTÉM os registros.
+
+Resposta do Search Console:
+```json
+{"rows": [{"keys": ["2026-09-20"], "clicks": 5, "impressions": 900, "ctr": 0.005, "position": 8.2}],
+ "responseAggregationType": "byProperty"}
+```
+- ✅ `["keys","clicks","impressions","ctr","position"]` — os campos da linha.
+- ❌ `["rows","responseAggregationType"]` — nomes do envelope. Nenhuma linha tem um campo chamado
+  `rows`, então **toda linha viraria vazia**.
+
+Em 2026-09-22 isso aconteceu de verdade: a chamada voltava `200` com N linhas, todas sem cliques nem
+impressões, e o agente — que só vê o resultado depois do filtro — concluiu que era falha do Google e
+seguiu a análise com dado de dois meses antes.
+
+**Hoje o Batuta te protege:** se o filtro esvaziaria TODOS os registros, ele devolve a resposta
+intacta (filtro que não casa com nada é engano de configuração, não economia). E o "testar e detectar"
+avisa na tela quando isso acontece. Mesmo assim, **liste os campos certos** — a proteção evita o
+estrago, não faz a economia que você queria.
+
+**Atenção ao TESTE:** "testar e detectar" roda de propósito **sem** `campos_resposta`, para mostrar a
+resposta inteira e detectar todos os campos. Ou seja, o teste **não** reproduz o que o agente vai
+receber. Depois de preencher `campos_resposta`, confira os nomes contra a lista de campos detectados.
 
 ## Testar e detectar
 Depois de montar, use `testar_operacao_conector` para RODAR a operação com valores de exemplo e ver a

@@ -40,12 +40,12 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | O Agente e os 4 markdowns | `times-agentes/agente` | agent.md / skill.md / tools.md / soul.md; modelo de IA; os 4 são lidos juntos — instrução contraditória vence a regra nova | ✅ | ✍️ |
 | Memória do agente | `times-agentes/memoria-do-agente` | Fichas por assunto; recall sempre/sob demanda | ✅ | ✍️ |
 | Criar com a IA | `times-agentes/criar-com-a-ia` | A IA criadora (conversa que monta o time) | ✅ | ✍️ |
-| Editar pelo dashboard | `times-agentes/editar-agente` | Drawer/popup, cinto, salvar sem perder | ✅ | ✍️ |
+| Editar pelo dashboard | `times-agentes/editar-agente` | Popup, abas, cinto, salvar sem perder; **Ritmo e espera** (o que o agente faz diferente do padrão da automação) | ✅ | ✍️ |
 
 ## 3. Automações & Fluxo
 | Capítulo | slug | O que cobre | Recurso | Escrita |
 |---|---|---|---|---|
-| A Automação | `automacoes/automacao` | A definição do fluxo; ativar/desativar | ✅ | ✍️ |
+| A Automação | `automacoes/automacao` | A definição do fluxo; ativar/desativar; as **regras do fluxo** (tetos e o padrão de espera que os agentes herdam) | ✅ | ✍️ |
 | Cadeia e grafo | `automacoes/cadeia-e-grafo` | Construtor visual; nós; bifurcação; loops | ✅ | ✍️ |
 | Condições e ramos | `automacoes/condicoes-e-ramos` | A condição de cada seta; o fluxo segue TODAS as atendidas; junção; **o markdown do agente precisa citar os rótulos das saídas** | ✅ | ✍️ |
 | Quando um passo dá erro | `automacoes/erros-no-fluxo` | Saída de erro, saída "se nenhuma", aviso da falha; `ok:false` de leitura × de ação irreversível; o teto de passos nomeia o nó em laço | ✅ | ✍️ |
@@ -83,7 +83,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Busca semântica (Exa) | `instrumentos/busca-exa` | Alternativa semântica | ✅ | ✍️ |
 | **Dados & integração** | | | | |
 | Chamar API REST | `instrumentos/chamar-rest` | GET/POST/…; leitura × escrita | ✅ | ✍️ |
-| Construir um conector | `instrumentos/construir-conector` | Criar instrumento SEM código: testar e detectar, operações, autenticação (inclusive conta de serviço do Google), POST que só consulta | ✅ | ✍️ |
+| Construir um conector | `instrumentos/construir-conector` | Criar instrumento SEM código: testar e detectar, operações, autenticação (inclusive conta de serviço do Google), POST que só consulta; **a armadilha do `campos_resposta`** (campos da linha × nome da lista) | ✅ | ✍️ |
 | Banco SQL | `instrumentos/banco-sql` | Ler/escrever em SQL; somente-leitura | ✅ | ✍️ |
 | Conectar MCP | `instrumentos/mcp` | Ferramentas de um servidor MCP (Zapier); ESCOLHER quais entram no cinto e quais pedem aprovação | ✅ | ✍️ |
 | Webhook de saída | `instrumentos/webhook-saida` | Avisar/disparar um sistema externo | ✅ | ✍️ |
