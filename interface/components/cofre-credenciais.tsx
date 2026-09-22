@@ -67,12 +67,13 @@ const SERVICOS_GOOGLE: { id: string; rotulo: string; ajuda: string }[] = [
   {
     id: "drive",
     rotulo: "Drive",
-    ajuda: "Ver e baixar seus arquivos. O Google avisa que é acesso a TODOS eles.",
+    ajuda:
+      "Criar e abrir SÓ os arquivos que o Batuta gerar. Não dá acesso ao resto do seu Drive.",
   },
   {
     id: "gmail",
     rotulo: "Gmail",
-    ajuda: "Ler suas mensagens e enviar e-mail em seu nome. É o acesso mais amplo da lista.",
+    ajuda: "Enviar e-mail em seu nome. NÃO lê a sua caixa de entrada.",
   },
 ];
 
@@ -493,8 +494,9 @@ function FormularioCredencial({
               O que esta conexão pode acessar
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Marque só o que os agentes vão usar. Pedir a mais faz o Google exibir um
-              aviso de app não verificado — e dá acesso que ninguém precisa.
+              Marque só o que os agentes vão usar — dar acesso que ninguém precisa é
+              risco sem contrapartida. Nenhum destes exige aprovação extra do Google:
+              pode marcar todos sem medo do aviso de &ldquo;app não verificado&rdquo;.
             </p>
           </div>
 
