@@ -582,7 +582,36 @@ class Conector(TipoInstrumento):
             # e jogava fora a explicação que o serviço tinha acabado de dar. Era a
             # falha muda de novo, na tela feita para não deixar ninguém no escuro.
             resultado = {**resultado, "erro": _erro_legivel(resultado)}
-        return {**resultado, "campos_detectados": _detectar_campos(resultado.get("corpo"))}
+        return {
+            **resultado,
+            "campos_detectados": _detectar_campos(resultado.get("corpo")),
+            "aviso_campos_resposta": self._aviso_do_filtro(op, resultado.get("corpo")),
+        }
+
+    @staticmethod
+    def _aviso_do_filtro(op: OperacaoConector, corpo) -> str:
+        """O teste roda SEM `campos_resposta` de propósito (para detectar os campos).
+
+        Isso abria um buraco que custou uma manhã em 2026-09-22: o teste passava
+        lindamente e o AGENTE recebia linhas vazias, porque o filtro configurado não
+        casava com campo nenhum. "Testei e funciona" deixava de significar qualquer
+        coisa. Se o filtro fosse apagar tudo, o teste precisa DIZER — é o único
+        momento em que alguém está olhando."""
+        if not op.campos_resposta:
+            return ""
+        antes = json.dumps(corpo, ensure_ascii=False, default=str)
+        depois = json.dumps(
+            _projetar_registros(corpo, op.campos_resposta), ensure_ascii=False,
+            default=str,
+        )
+        if antes == depois:
+            return (
+                "Atenção: os campos escolhidos em “Campos da resposta” não batem com "
+                "nenhum campo das linhas, então eles não vão filtrar nada. Confira se "
+                "você não escolheu o nome da LISTA (ex.: “rows”) em vez dos campos de "
+                "dentro de cada linha (ex.: “clicks”, “impressions”)."
+            )
+        return ""
 
     def _ferramenta_de_operacao(
         self, config: ConfigConector, op: OperacaoConector

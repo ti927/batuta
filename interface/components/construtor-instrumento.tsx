@@ -343,10 +343,18 @@ export function ConstrutorInstrumento({
       });
       if (r.ok) {
         setDetectados((d) => ({ ...d, [idx]: r.campos_detectados }));
-        setTestMsg({
-          ok: true,
-          texto: `Conexão ok — ${r.campos_detectados.length} campos na resposta. Marque os que o agente precisa.`,
-        });
+        // O teste roda SEM o filtro de campos (para detectar todos). Se o filtro já
+        // configurado fosse apagar tudo, este é o ÚNICO momento em que alguém está
+        // olhando — calar aqui foi o que fez "testei e funciona" perder o sentido, com
+        // o agente recebendo linhas vazias depois.
+        setTestMsg(
+          r.aviso_campos_resposta
+            ? { ok: false, texto: r.aviso_campos_resposta }
+            : {
+                ok: true,
+                texto: `Conexão ok — ${r.campos_detectados.length} campos na resposta. Marque os que o agente precisa.`,
+              },
+        );
         setResultadoBruto(JSON.stringify(r.corpo, null, 2));
       } else {
         // Falhou: mostrar o MOTIVO e o corpo que o serviço devolveu. Esconder o corpo

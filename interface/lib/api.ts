@@ -341,6 +341,11 @@ export type RespostaTeste = {
   corpo?: unknown;
   erro?: string;
   campos_detectados: CampoDetectado[];
+  /** O teste roda SEM o filtro "Campos da resposta" (para detectar todos os campos).
+   *  Se o filtro já configurado não casar com nada — e portanto apagar as linhas que
+   *  o AGENTE receberia —, vem aqui a explicação. Sem isto, "testei e funciona" não
+   *  significava nada: a tela testava uma coisa e o agente recebia outra. */
+  aviso_campos_resposta?: string;
 };
 
 // Caixa-forte de credenciais nomeadas (docs/CAIXA-FORTE-PLANO.md).

@@ -225,3 +225,42 @@ def test_formato_desconhecido_volta_intacto():
 
     corpo = {"algo": {"estranho": 1}}
     assert _projetar_registros(corpo, ["x"]) == corpo
+
+
+def test_filtro_que_nao_casa_com_nada_devolve_intacto():
+    """O incidente de 2026-09-22 (Analista SearchConsole, execução d5a5073c).
+
+    A pessoa configurou `campos_resposta: ["rows", "responseAggregationType"]` — os
+    nomes do CONTÊINER, não dos campos de cada linha. Enquanto `rows` não era
+    reconhecido, isso era inerte. Ao reconhecê-lo (para economizar tokens), o filtro
+    passou a esvaziar TODAS as linhas: a chamada voltava 200, com N linhas, todas sem
+    cliques, impressões nem posição.
+
+    Pior: o agente não tinha como saber. Ele descreveu o sintoma com precisão
+    ("status 200 com linhas vazias"), concluiu que era falha do Google, e seguiu com
+    dado de dois meses atrás. Um filtro que não casa com NENHUM registro é engano de
+    configuração — devolver intacto custa tokens, apagar custa a verdade.
+    """
+    from instrumentos.rest import _projetar_registros
+
+    corpo = {
+        "rows": [
+            {"keys": ["2026-09-20"], "clicks": 5, "impressions": 900, "position": 8.2},
+            {"keys": ["2026-09-21"], "clicks": 3, "impressions": 700, "position": 9.1},
+        ],
+        "responseAggregationType": "byProperty",
+    }
+    assert _projetar_registros(corpo, ["rows", "responseAggregationType"]) == corpo
+
+
+def test_filtro_que_casa_com_ALGUNS_registros_continua_cortando():
+    """O contrapeso: a trava não pode virar desculpa para não economizar.
+
+    Se ao menos um registro tem os campos pedidos, o filtro está certo e vale para
+    todos — inclusive para os registros que não têm o campo (esses simplesmente vêm
+    vazios, que é o comportamento de sempre).
+    """
+    from instrumentos.rest import _projetar_registros
+
+    corpo = {"rows": [{"clicks": 5, "lixo": "x"}, {"lixo": "y"}]}
+    assert _projetar_registros(corpo, ["clicks"]) == {"rows": [{"clicks": 5}, {}]}

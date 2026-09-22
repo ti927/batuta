@@ -41,7 +41,21 @@ def _projetar_registros(corpo: Any, campos: list[str]) -> Any:
         return registro
 
     def enxuga_lista(lista: list) -> list:
-        return [enxuga(r) for r in lista]
+        enxuto = [enxuga(r) for r in lista]
+        # TRAVA CONTRA O ZERO ABSOLUTO (2026-09-22). Se o filtro esvaziou TODOS os
+        # registros que tinham conteúdo, ele não está economizando — está apagando: os
+        # nomes pedidos não existem em registro nenhum.
+        #
+        # É o caso clássico de pedir a chave do CONTÊINER em vez dos campos da linha.
+        # No Search Console (`campos_resposta: ["rows", …]`) a resposta voltava 200 com
+        # N linhas TODAS vazias, sem cliques nem impressões — e o agente, sem ter como
+        # saber, inventou explicação ("falha de serialização do Google") e seguiu.
+        # Filtro que não casa com nada é engano de configuração; devolver intacto custa
+        # tokens, apagar custa a verdade.
+        tinha = [r for r in lista if isinstance(r, dict) and r]
+        if tinha and all(not enxuga(r) for r in tinha):
+            return list(lista)
+        return enxuto
 
     if isinstance(corpo, dict):
         resp = corpo.get("response")
