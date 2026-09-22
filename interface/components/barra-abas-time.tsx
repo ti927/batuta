@@ -9,7 +9,6 @@ import {
   Inbox,
   Workflow,
   Wrench,
-  Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -71,22 +70,21 @@ export function BarraAbasTime({
       segmento: "/instrumentos",
       contador: contagens.instrumentos,
     },
-    {
-      chave: "automacoes",
-      rotulo: "Automações",
-      Icone: Zap,
-      segmento: "/automacoes",
-    },
-    // Estúdio: a tela do fluxo em desenvolvimento PARALELO — mesmo dado, mesmo
-    // salvamento, desenho legível (condição no fio, saídas no cartão, o desenho se
-    // confere). Convive com Automações até ser exaurida em teste; então uma das duas
-    // sai. A pílula "novo" existe para ninguém confundir as duas por acidente.
+    // A aba "Automações" SAIU da barra em 2026-09-22, quando o Estúdio alcançou
+    // paridade (ligar/desligar, rodar, criar, duplicar, excluir, agendamentos, testar
+    // um passo) e passou a ser a tela melhor: a condição aparece no fio, o cartão
+    // lista as saídas e o desenho se confere sozinho.
+    //
+    // A ROTA `/times/[id]/automacoes` continua viva de propósito — é saída de
+    // emergência enquanto o Estúdio não foi exaurido em uso real, e está a um clique
+    // no menu "⋯" do Estúdio. Apagar a tela é uma decisão para depois do teste ao
+    // vivo, não junto com ele: tirar as duas coisas ao mesmo tempo deixaria o maestro
+    // sem para onde voltar se algo aqui estiver errado.
     {
       chave: "estudio",
-      rotulo: "Estúdio",
+      rotulo: "Automações",
       Icone: Workflow,
       segmento: "/estudio",
-      etiqueta: "novo",
     },
     {
       chave: "execucoes",

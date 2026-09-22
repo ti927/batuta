@@ -320,7 +320,7 @@ O shell é uma **sidebar** escura, separada em **dois blocos**:
 Automações, Execuções (com o detalhe em `/times/[id]/execucoes/[execId]`) e Conversas. **Não existem
 mais páginas soltas de execução nem de automação** — `/execucoes` (lista global) e `/automacoes/[id]`
 (detalhe avulso) foram removidas; execuções e automações se acessam pelas abas do time. A URL do
-**webhook** de uma automação aparece no drawer do nó **Gatilho** (aba Automações). `/biblioteca`,
+**webhook** de uma automação aparece no painel do nó **Gatilho** (aba Automações = o Estúdio). `/biblioteca`,
 `/uso` e `/configuracoes-consultoria` são placeholders "em breve" (`components/area-em-breve.tsx`).
 
 **Aprovação humana — uma peça só, e é do agente (2026-08-31).** O instrumento `pedir_aprovacao`
@@ -382,7 +382,7 @@ rastro existe.
 - **Etapa 2**: papéis/identidade, cofre de chaves e de segredos, identidade visual, IA criadora (conversa eterna), memória de longo prazo, refinos (modelo da conversa selecionável, painel de uso), logo da organização, e a **implantação em produção** (acima) — tudo concluído.
 - **Frente "O motor vira um grafo de verdade" (2026-08-31 → 09-04):** Ondas **1**, **2**, **Parte III**, **3** e **4** ✅ completas e no ar (inclusive o nó "Chamar outra automação").
 - **Integrações sem código (2026-09-21/22):** o **MCP como cliente** (o agente ganha as ferramentas que se escolher de um servidor MCP, com aprovação POR FERRAMENTA) e a **conta de serviço do Google** como tipo de autenticação do Construtor — a saída da verificação de app do Google, que tinha deixado o Search Console dois meses em 401. A IA passou a poder **testar** um conector sem ver o segredo (§9-bis).
-- **Estúdio** — segunda tela do fluxo, em desenvolvimento paralelo à aba Automações, com a condição no fio e o desenho se conferindo sozinho. **Em teste; as duas convivem** até uma sair.
+- **Estúdio** — a tela do fluxo desde 2026-09-22: condição no fio, cartão listando as saídas, o desenho se conferindo sozinho, e as regras do fluxo no painel da direita (sem o antigo botão "Fluxo"). Assumiu a aba **Automações**; a tela clássica saiu da barra mas a ROTA `/times/[id]/automacoes` segue viva como saída de emergência, a um clique no menu "⋯". Apagá-la é decisão para depois do teste ao vivo.
 - **Falta:** (a) **Mensageria (WhatsApp)** — o canal do Líder (provedor decidido: Evolution API por QR); (b) **a Biblioteca** — objeto desta análise; (c) instrumentos **org-wide** (hoje `instrumentos.time_id` é obrigatório e nenhum tipo é da organização — decidido em 12/08, nunca construído; exige migração).
 
 ---

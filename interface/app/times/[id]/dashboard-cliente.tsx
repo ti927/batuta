@@ -149,7 +149,7 @@ export function DashboardCliente({
               Icone={GitBranch}
               acao={
                 <Link
-                  href={`/times/${time.id}/automacoes`}
+                  href={`/times/${time.id}/estudio`}
                   className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
                 >
                   <Pencil className="size-3.5" /> Editar a automação

@@ -131,11 +131,32 @@ export function EstudioCliente({
   // chateação, só menor. Trocar de automação limpa (o id seria de outro desenho).
   const [noSel, setNoSel] = useState<string | null>(null);
   const [saidaSel, setSaidaSel] = useState<string | null>(null);
+  const [criando, setCriando] = useState(false);
   const [autVista, setAutVista] = useState(selEfetivo);
   if (selEfetivo !== autVista) {
     setAutVista(selEfetivo);
     setNoSel(null);
     setSaidaSel(null);
+  }
+
+  // Time sem nenhuma automação: o Estúdio CRIA. Isto mandava a pessoa para a aba
+  // Automações — e essa aba está saindo, então o estado vazio viraria um beco.
+  async function criarPrimeira() {
+    if (criando) return;
+    setCriando(true);
+    try {
+      const criada = await api.post<Automacao>(`/times/${time.id}/automacoes`, {
+        nome: "Nova automação",
+        tipo_gatilho: "manual",
+      });
+      setAutomacoes((l) => [...l, criada]);
+      setSelId(criada.id);
+      toast.success("Automação criada. Desenhe o fluxo e salve.");
+    } catch (e) {
+      toast.error(mensagemDeErro(e, "Falha ao criar a automação"));
+    } finally {
+      setCriando(false);
+    }
   }
 
   if (!automacoes.length) {
@@ -144,15 +165,16 @@ export function EstudioCliente({
         <EstadoVazio
           titulo="Nenhuma automação ainda"
           acao={
-            <Link href={`/times/${time.id}/automacoes`}>
-              <Button>
-                <Plus className="size-4" /> Ir para Automações
+            souOperador ? (
+              <Button onClick={criarPrimeira} disabled={criando}>
+                <Plus className="size-4" />{" "}
+                {criando ? "Criando…" : "Criar a primeira automação"}
               </Button>
-            </Link>
+            ) : undefined
           }
         >
-          O estúdio desenha um fluxo que já existe. Crie a automação na aba Automações
-          e volte aqui.
+          Uma automação é o fluxo que encadeia os agentes deste time: o que dispara,
+          quem faz o quê, e por qual caminho a tarefa segue.
         </EstadoVazio>
       </div>
     );

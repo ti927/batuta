@@ -18,7 +18,7 @@ A automação é a receita do trabalho. Um time pode ter **várias automações 
 no Instagram" e "Responder comentários"), cada uma com seu próprio gatilho e sua própria cadeia.
 
 ## Como usar (na tela)
-1. Na aba **Automações** do time, crie uma automação (dê um nome claro).
+1. Na aba **Automações** do time (o Estúdio), crie uma automação (dê um nome claro).
 2. Defina o **gatilho** (como ela inicia) e monte a **cadeia** (o construtor visual de grafo).
 3. Ajuste **as regras do fluxo** se precisar (tetos de custo, de passos e de tempo, e o
    *padrão* de espera que os agentes herdam). Saudação e horário de atendimento **não**

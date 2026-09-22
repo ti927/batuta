@@ -40,6 +40,7 @@ import {
 import type { ConfigGatilho } from "@/components/automacao-builder/inspector";
 
 import { TestarEstePasso } from "@/components/automacao-builder/testar-no";
+import { UrlCopiavel } from "@/components/url-copiavel";
 
 import { CORES, corDaSaida } from "./cores";
 import { PainelDoFluxo } from "./painel-fluxo";
@@ -971,9 +972,22 @@ function ConfigGatilhoBloco({
       {gatilho.tipo === "webhook" && (
         <div>
           <label className={rotuloCls}>Endereço a chamar</label>
-          <div className="break-all rounded-md border border-[#E8E6F0] bg-[#FAFAF7] px-2 py-1.5 font-mono text-[11px] text-[#4A4860]">
-            {webhookUrl ?? "aparece depois de salvar a automação"}
-          </div>
+          <p className="mb-1.5 text-[11px] leading-snug text-[#6B6880]">
+            Um sistema externo dispara este fluxo por esta URL (POST). O corpo enviado
+            vira a entrada.
+          </p>
+          {/* Copiável: uma URL de webhook existe para ser colada em outro sistema, e
+              selecionar 80 caracteres à mão é onde se erra um. */}
+          {webhookUrl ? (
+            <UrlCopiavel
+              url={webhookUrl}
+              aviso="O fluxo precisa estar ATIVO para o webhook disparar."
+            />
+          ) : (
+            <div className="break-all rounded-md border border-[#E8E6F0] bg-[#FAFAF7] px-2 py-1.5 font-mono text-[11px] text-[#4A4860]">
+              aparece depois de salvar a automação
+            </div>
+          )}
         </div>
       )}
 
