@@ -247,7 +247,26 @@ def testar_operacao_conector(sessao, usuario, conector_id, operacao, valores) ->
     from instrumentos.base import obter_tipo
 
     tipo = obter_tipo("conector")
-    secretos = segredos.decifrar(sessao, inst.id)
+    try:
+        secretos = segredos.decifrar(sessao, inst.id)
+    except Exception as e:  # noqa: BLE001 — ver a recusa honesta abaixo
+        import cofre
+
+        if not isinstance(e, cofre.CofreNaoConfigurado):
+            raise
+        # NÃO é defeito de configuração: o serviço MCP roda SEM a chave-mestra do cofre
+        # DE PROPÓSITO (decisão do maestro na Fatia 3a — "a IA nunca recebe segredo").
+        # Consequência: daqui não dá para rodar uma chamada que precisa de autenticação.
+        # Antes isso virava "Algo deu errado… código 7b4ff673", e quem lia ia caçar um
+        # defeito que não existe. Recusar dizendo o motivo e para onde ir é o certo.
+        return (
+            "Deste caminho não dá para testar um conector que usa segredo: por "
+            "segurança, o serviço MCP roda sem a chave do cofre — a IA nunca recebe "
+            "segredo. O conector foi montado e está salvo; quem testa é o consultor, "
+            "na tela do instrumento (Construtor → a operação → “Testar e detectar”), "
+            "que roda a chamada real e mostra a resposta. Peça isso a ele e siga com o "
+            "resultado que ele trouxer."
+        )
     config = tipo.Config.model_validate({**(inst.configuracao or {}), **secretos})
     resultado = tipo.testar_operacao(config, operacao, valores or {})  # FalhaInstrumento → decorator
     return json.dumps({"mensagem": "Teste executado.", "resultado": resultado}, ensure_ascii=False)

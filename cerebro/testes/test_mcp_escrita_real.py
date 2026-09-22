@@ -10,6 +10,8 @@ O decorator abre a PRÓPRIA sessão (`CriadorDeSessao`), então aqui ela é apon
 para a sessão do teste — que a fixture reverte no fim.
 """
 
+import json
+
 import pytest
 from sqlalchemy import select
 
@@ -305,3 +307,34 @@ def test_servicos_resolviveis_nao_decifra(sessao, dados, monkeypatch):
     sem_chave_mestra = si.servicos_resolviveis(sessao, org_id)
     assert "tavily" in com_chave_mestra
     assert com_chave_mestra == sem_chave_mestra
+
+
+def test_testar_operacao_sem_cofre_recusa_com_motivo(mcp, dados, monkeypatch):
+    """O serviço MCP roda SEM a chave-mestra do cofre, DE PROPÓSITO (decisão da Fatia
+    3a: a IA nunca recebe segredo). Testar daqui um conector autenticado é impossível
+    — e virava "Algo deu errado… código 7b4ff673", mandando quem lesse caçar um
+    defeito que não existe.
+
+    Agora recusa dizendo o motivo e para onde ir. Um caminho que não PODE fazer algo
+    precisa dizer isso; erro genérico é o que a §12-A proíbe."""
+    import cofre
+
+    import segredos_instrumento as segredos_mod
+
+    conector = {
+        "nome": "Conector Autenticado",
+        "auth_tipo": "bearer",
+        "operacoes": [{"nome": "consultar", "metodo": "GET", "url": "https://x/y",
+                       "campos": []}],
+    }
+    r = escrita.montar_conector(_sub(dados), str(dados["timeA"].id), conector, None)
+    cid = json.loads(r)["id"]
+
+    def _sem_cofre(*a, **k):
+        raise cofre.CofreNaoConfigurado("COFRE_CHAVE_MESTRA ausente")
+
+    monkeypatch.setattr(segredos_mod, "decifrar", _sem_cofre)
+    saida = escrita.testar_operacao_conector(_sub(dados), cid, "consultar", {})
+    assert escrita.ERRO_INESPERADO not in saida, "voltou erro genérico de novo"
+    assert "cofre" in saida.lower()
+    assert "Testar e detectar" in saida
