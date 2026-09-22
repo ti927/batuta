@@ -232,8 +232,17 @@ export function FormularioAgente({
   const souOperador = podeOperar(meuPapel ?? null);
 
   // Quais campos diferem do baseline (para os marcadores de "não salvo") e o total.
-  const camposSujos = (Object.keys(form) as (keyof Campos)[]).filter(
-    (k) => form[k] !== inicial[k],
+  //
+  // Compara por VALOR, não por referência. Enquanto todo campo era texto ou booleano,
+  // `!==` bastava; `configuracao` (o ritmo do agente) é o primeiro campo que é OBJETO,
+  // e dois objetos de mesmo conteúdo nunca são `===`. Com `!==` puro, abrir o popup
+  // sem tocar em nada já o marcava como alterado.
+  const difere = (a: unknown, b: unknown): boolean =>
+    typeof a === "object" || typeof b === "object"
+      ? JSON.stringify(a ?? null) !== JSON.stringify(b ?? null)
+      : a !== b;
+  const camposSujos = (Object.keys(form) as (keyof Campos)[]).filter((k) =>
+    difere(form[k], inicial[k]),
   );
   const sujo = camposSujos.length > 0;
   const abaSuja = (chave: AbaChave): boolean => {
@@ -241,6 +250,9 @@ export function FormularioAgente({
     if (chave === "memorias")
       return camposSujos.includes("memoria_ativa") ||
         camposSujos.includes("memoria_recall");
+    // A aba "Ritmo e espera" edita `configuracao` — sem este mapa o pontinho de
+    // "não salvo" nunca apareceria nela.
+    if (chave === "ritmo") return camposSujos.includes("configuracao");
     return camposSujos.includes(chave as keyof Campos);
   };
 
