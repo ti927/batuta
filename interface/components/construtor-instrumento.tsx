@@ -59,9 +59,13 @@ const SECOES: {
   grupo: string;
   Icone: typeof ListChecks;
 }[] = [
-  { id: "operacoes", rotulo: "Operações", grupo: "Definição", Icone: ListChecks },
+  // A ORDEM é o roteiro de quem monta, e ela é deliberada: primeiro diga QUE
+  // instrumento é este (Identidade), depois COMO ele entra no serviço (Autenticação),
+  // e só então O QUE ele faz lá dentro (Operações) — que é a parte longa e a única
+  // que precisa das duas anteriores prontas para poder ser testada.
   { id: "identidade", rotulo: "Identidade", grupo: "Definição", Icone: Contact },
   { id: "auth", rotulo: "Autenticação", grupo: "Definição", Icone: KeyRound },
+  { id: "operacoes", rotulo: "Operações", grupo: "Definição", Icone: ListChecks },
   { id: "testar", rotulo: "Testar conexão", grupo: "Antes de publicar", Icone: FlaskConical },
   { id: "publicar", rotulo: "Publicar", grupo: "Antes de publicar", Icone: Rocket },
 ];
@@ -117,7 +121,8 @@ export function ConstrutorInstrumento({
   const cfg = (instrumento?.configuracao ?? {}) as Partial<ConfigConector>;
 
   const [salvoId, setSalvoId] = useState<string | null>(instrumento?.id ?? null);
-  const [secao, setSecao] = useState<Secao>("operacoes");
+  // Abre na primeira do roteiro (Identidade), não no meio dele.
+  const [secao, setSecao] = useState<Secao>("identidade");
 
   const [nome, setNome] = useState(instrumento?.nome ?? "");
   const [icone, setIcone] = useState<string | null>(instrumento?.icone ?? null);
