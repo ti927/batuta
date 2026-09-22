@@ -1067,3 +1067,88 @@ def test_vigia_conta_desde_quem_esta_esperando(sessao, dados, monkeypatch):
     assert sweeper.varrer_transferidas(sessao) == 1
     sessao.refresh(conv)
     assert conv.estado == "aguardando_resposta"
+
+
+# ───────────────── O agente que não declara o caminho (04eaa0da, 2026-09-22) ─────────────────
+
+
+def _passo_conversou(sessao, execucao, agente, ordem, texto="✅ Tudo pronto!"):
+    """Uma rodada em que o agente SÓ CONVERSOU: não escolheu caminho nem pediu
+    aprovação. É o passo que o motor lia como "ele ainda quer falar com a pessoa"."""
+    sessao.add(
+        PassoExecucao(
+            execucao_id=execucao.id, ordem=ordem, agente_id=agente.id, no_id=NO_GATE,
+            entrada={"texto": "aprovado"},
+            saida={"texto": texto, "instrumentos_acionados": [], "uso": []},
+            estado="concluido",
+        )
+    )
+    sessao.flush()
+
+
+def test_agente_que_nao_declara_o_caminho_nao_prende_mais_a_pessoa(
+    sessao, dados, monkeypatch
+):
+    """A execução 04eaa0da: o maestro aprovou TRÊS vezes e o fluxo não andou.
+
+    O agente terminava o trabalho e escrevia "✅ Tudo pronto!" sem chamar
+    `seguir_para`. Para o motor, "escreveu um texto" era indistinguível de "ainda
+    preciso falar com a pessoa" — então ele reapresentava a MESMA aprovação, para
+    sempre. O `portao.indeciso` já detectava isso em nível `error` desde 21/09 e, por
+    decisão de então, "só deixava rastro".
+
+    Agora, quando a pessoa responde com o NOME EXATO de um caminho (não há mais nada a
+    conversar) e o agente já teve a sua chance, o motor segue pela resposta dela.
+    """
+    def _nao_deveria_rodar(*a, **k):
+        raise AssertionError(
+            "o agente não podia ser re-rodado: a pessoa já disse 'aprovado' e ele já "
+            "teve a chance de declarar"
+        )
+
+    monkeypatch.setattr("mensageria.retoma.executar_agente", _nao_deveria_rodar)
+
+    canal = _canal(sessao, dados)
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal)
+    execucao = _exec_pausada(sessao, auto, ag)
+    # Duas rodadas em que ele só conversou — é o estado em que a 04eaa0da estava.
+    _passo_conversou(sessao, execucao, ag, ordem=2)
+    _passo_conversou(sessao, execucao, ag, ordem=3)
+
+    retoma.retomar_execucao(sessao, execucao, "aprovado", chaves={}, origens={})
+
+    sessao.refresh(execucao)
+    assert execucao.estado == "concluida"  # seguiu por "aprovado" → fim
+
+
+def test_pergunta_legitima_continua_conversando(sessao, dados, monkeypatch):
+    """O contrapeso, e é o que quase quebrei: uma rodada sem decidir é NORMAL.
+
+    A pessoa pergunta "por que?", o agente explica, ela decide. Se o destrave olhasse
+    só o número de rodadas, mataria esse ida-e-volta honesto — por isso quem distingue
+    é a RESPOSTA: "por que?" não é o nome de nenhum caminho.
+    """
+    rodou = {"n": 0}
+
+    def _fake(*a, **k):
+        rodou["n"] += 1
+        return {
+            "saida": "explico: é por isto.", "instrumentos_acionados": [],
+            "erros_instrumentos": [], "uso": [], "mensagens_enviadas": {},
+            "ramos_escolhidos": [], "pausado": False, "anotacoes": {},
+        }
+
+    monkeypatch.setattr("mensageria.retoma.executar_agente", _fake)
+
+    canal = _canal(sessao, dados)
+    ag = _agente(sessao, dados)
+    auto = _automacao(sessao, dados, ag, canal)
+    execucao = _exec_pausada(sessao, auto, ag)
+    _passo_conversou(sessao, execucao, ag, ordem=2, texto="respondi a dúvida")
+
+    retoma.retomar_execucao(sessao, execucao, "por que?", chaves={}, origens={})
+
+    assert rodou["n"] == 1, "o agente tinha de ser re-rodado para responder"
+    sessao.refresh(execucao)
+    assert execucao.estado == "aguardando_humano"  # segue esperando a decisão

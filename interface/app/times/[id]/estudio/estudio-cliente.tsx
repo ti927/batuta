@@ -614,7 +614,7 @@ function EditorEstudio({
             ? `${erros.length} ${erros.length === 1 ? "erro" : "erros"} no desenho`
             : avisos.length
               ? `${avisos.length} ${avisos.length === 1 ? "aviso" : "avisos"}`
-              : "desenho coerente"}
+              : "sem furos no desenho"}
         </span>
 
         {/* Estado da PRÓPRIA automação. Desligada pelo DISJUNTOR ela ganha pílula

@@ -621,7 +621,7 @@ function CanvasInterno({
             )}
             <span className="flex-1 text-[12.5px] font-medium text-[#1A1730]">
               {erros.length === 0 && avisos.length === 0
-                ? "O desenho está coerente"
+                ? "O desenho não tem furos"
                 : [
                     erros.length
                       ? `${erros.length} ${erros.length === 1 ? "erro" : "erros"}`
@@ -642,10 +642,23 @@ function CanvasInterno({
           {painelProblemas && (
             <div className="max-h-[38vh] overflow-y-auto border-t border-[#F0EEF7]">
               {problemas.length === 0 ? (
-                <p className="px-3 py-2.5 text-[11.5px] leading-snug text-[#6B6880]">
-                  Todo passo tem para onde ir, todo caminho diz quando é seguido, e
-                  ninguém ficou solto no desenho.
-                </p>
+                <div className="flex flex-col gap-2 px-3 py-2.5">
+                  <p className="text-[11.5px] leading-snug text-[#6B6880]">
+                    Todo passo tem para onde ir, todo caminho diz quando é seguido, e
+                    ninguém ficou solto no desenho.
+                  </p>
+                  {/* O selo dizia "O desenho está coerente" e uma pessoa leu isso como
+                      "vai funcionar". Em 22/09 um fluxo com esse selo verde travou:
+                      o agente não declarava o caminho e a aprovação voltava para
+                      sempre. Prometer mais do que se verificou é pior do que não
+                      verificar — quem confia no selo não vai procurar o defeito. */}
+                  <p className="rounded-md border border-[#E8E6F0] bg-[#FAFAF7] p-2 text-[11px] leading-snug text-[#6B6880]">
+                    Isto é sobre o <strong>desenho</strong>, não sobre o que os agentes
+                    vão fazer. Se um deles não concluir o trabalho nem declarar o
+                    caminho, o Batuta segue pela resposta da pessoa e avisa no rastro —
+                    mas nenhuma conferência de desenho enxerga isso antes de rodar.
+                  </p>
+                </div>
               ) : (
                 problemas.map((p) => {
                   const erro = p.nivel === "erro";

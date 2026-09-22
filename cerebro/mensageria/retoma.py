@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from mensageria.config import com_ajuste_do_agente, config_da_automacao
 from modelos import Agente, Automacao, Execucao, PassoExecucao
 from observabilidade.escritor import registrar_evento
+from orquestracao import atividade
 from orquestracao import ficha as ficha_mod
 from orquestracao import espera, grafo, memoria_conversa
 from orquestracao.agente import executar_agente
@@ -42,6 +43,11 @@ from orquestracao.llm import usar_chaves
 # Anti-loop do portão NA TELA (a tela não tem teto de conversa). No CANAL, quem
 # limita as rodadas é o teto de turnos/custo da conversa (regra geral de mensageria).
 MAX_RODADAS_GATE = 8
+# Rodadas SEGUIDAS sem decidir até o motor parar de esperar pelo agente e escolher a
+# saída pela resposta da pessoa. Conversar sem decidir é LEGÍTIMO — a pessoa pergunta
+# "por quê?", o agente explica —, então este teto é a rede de baixo, não o detector
+# principal. Quem detecta rápido é `_resposta_e_um_rotulo` abaixo.
+MAX_RODADAS_INDECISO = 3
 
 
 def entrada_retomada(saida_pausada: str, resposta: str, *, proximo_no: bool = False) -> str:
@@ -97,6 +103,26 @@ def rodadas_no_gate(sessao: Session, execucao_id, no_id: str) -> int:
         )
         or 0
     )
+
+
+def _sem_acento(t: str) -> str:
+    """Compara como gente compara: sem acento, sem caixa, sem espaço sobrando."""
+    import unicodedata
+
+    t = unicodedata.normalize("NFKD", (t or "").strip().lower())
+    return "".join(c for c in t if not unicodedata.combining(c))
+
+
+def _resposta_e_um_rotulo(resposta: str, saidas: list[dict]) -> bool:
+    """A pessoa respondeu com o NOME de um caminho do nó?
+
+    É o sinal mais barato e mais confiável de "a decisão já está tomada": ela não está
+    perguntando nada, está apontando o caminho. Só vale para resposta CURTA — um texto
+    longo que por acaso contenha a palavra "aprovado" é conversa, não decisão."""
+    r = _sem_acento(resposta)
+    if not r or len(r) > 40:
+        return False
+    return any(r == _sem_acento(s.get("rotulo") or "") for s in saidas if s.get("rotulo"))
 
 
 def rodadas_sem_decidir(sessao: Session, execucao_id, no_id: str) -> int:
@@ -318,9 +344,39 @@ def retomar_execucao(
         "portao_max_rodadas", MAX_RODADAS_GATE
     )
 
+    # O agente já teve chance e não decidiu? Para de esperar por ele.
+    #
+    # §12-A, a perna que faltava. `alertar_portao_indeciso` detecta isto desde
+    # 2026-09-21 e, por decisão de então, "só deixava rastro": gravava um evento em
+    # nível `error` e o fluxo reapresentava a MESMA aprovação. Em 2026-09-22 a execução
+    # 04eaa0da mostrou o preço — o maestro aprovou TRÊS vezes, o Batuta gravou três
+    # erros num log que ninguém abre, e ele cancelou na mão. Detectar e não agir é o
+    # mesmo que não detectar.
+    #
+    # E a causa não é o markdown do agente: o motor JÁ injeta "chame `seguir_para`" com
+    # os rótulos do nó. É que "o agente escreveu um texto" é indistinguível de "ainda
+    # preciso falar com a pessoa" — e um agente que terminou escreve uma frase de
+    # fechamento ("✅ Tudo pronto!"). O motor não pode depender de o modelo lembrar de
+    # chamar uma ferramenta para o fluxo não travar.
+    # QUEM distingue "conversa legítima" de "agente perdido" é a RESPOSTA DA PESSOA.
+    # Quando ela responde com o nome exato de um caminho ("aprovado"), não há mais nada
+    # a conversar: a decisão está tomada, em português, e o agente que mesmo assim não
+    # declara está perdido. Perguntar de novo é o que prendeu a 04eaa0da.
+    #
+    # Sem esta distinção, o teto sozinho teria de ser baixo — e um teto baixo mata o
+    # esclarecimento honesto ("por quê?" → o agente explica → a pessoa decide).
+    indecisas = rodadas_sem_decidir(sessao, execucao.id, no_id)
+    # `>= 2` e não `>= 1`: depois da aprovação o agente tem UMA chance de fechar o
+    # trabalho e declarar. Cortar na primeira o impediria de concluir — e aí o motor
+    # estaria escolhendo caminho por um agente que nem rodou.
+    indeciso = indecisas >= MAX_RODADAS_INDECISO or (
+        indecisas >= 2 and _resposta_e_um_rotulo(resposta, saidas)
+    )
+
     if (
         permitir_conversa
         and no.get("ref")
+        and not indeciso
         and rodadas_no_gate(sessao, execucao.id, no_id) < max_rodadas
     ):
         return _retomar_conversando_tela(
@@ -337,6 +393,36 @@ def retomar_execucao(
     else:
         with usar_chaves(chaves):
             escolhida, _ = _escolher_saida(resposta, saidas)
+    # RECADO HONESTO (§12-A, perna (c)): quem aprovou precisa saber que o caminho foi
+    # escolhido pelo Batuta, e não pelo agente. Sem isto o destrave seria silencioso —
+    # trocaríamos um defeito mudo por um conserto mudo, e ninguém descobriria que o
+    # agente está perdido até o fluxo tomar o caminho errado.
+    if indeciso:
+        registrar_evento(
+            categoria="execucao",
+            acao="portao.destravado",
+            nivel="warning",
+            resultado="degradado",
+            persistir=True,
+            recurso_tipo="execucao",
+            recurso_id=execucao.id,
+            detalhe={
+                "no": no_id,
+                "rodadas_sem_decidir": indecisas,
+                "escolhido_pelo_batuta": (escolhida or {}).get("rotulo"),
+                "efeito": (
+                    "o agente não declarou o caminho depois de "
+                    f"{indecisas} rodadas; o Batuta seguiu pela resposta da pessoa "
+                    "em vez de pedir a mesma aprovação de novo"
+                ),
+            },
+        )
+        atividade.registrar(
+            "O agente não declarou por qual caminho seguir — o Batuta seguiu por "
+            f"“{(escolhida or {}).get('rotulo') or 'nenhum caminho'}”, pela sua "
+            "resposta. Vale conferir o texto desse agente."
+        )
+
     entrada_proxima = entrada_retomada(
         (ultimo.saida or {}).get("texto", ""), resposta, proximo_no=True
     )
