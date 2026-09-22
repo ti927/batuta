@@ -642,23 +642,17 @@ function CanvasInterno({
           {painelProblemas && (
             <div className="max-h-[38vh] overflow-y-auto border-t border-[#F0EEF7]">
               {problemas.length === 0 ? (
-                <div className="flex flex-col gap-2 px-3 py-2.5">
-                  <p className="text-[11.5px] leading-snug text-[#6B6880]">
-                    Todo passo tem para onde ir, todo caminho diz quando é seguido, e
-                    ninguém ficou solto no desenho.
-                  </p>
-                  {/* O selo dizia "O desenho está coerente" e uma pessoa leu isso como
-                      "vai funcionar". Em 22/09 um fluxo com esse selo verde travou:
-                      o agente não declarava o caminho e a aprovação voltava para
-                      sempre. Prometer mais do que se verificou é pior do que não
-                      verificar — quem confia no selo não vai procurar o defeito. */}
-                  <p className="rounded-md border border-[#E8E6F0] bg-[#FAFAF7] p-2 text-[11px] leading-snug text-[#6B6880]">
-                    Isto é sobre o <strong>desenho</strong>, não sobre o que os agentes
-                    vão fazer. Se um deles não concluir o trabalho nem declarar o
-                    caminho, o Batuta segue pela resposta da pessoa e avisa no rastro —
-                    mas nenhuma conferência de desenho enxerga isso antes de rodar.
-                  </p>
-                </div>
+                // O selo dizia "O desenho está coerente" e uma pessoa leu isso como
+                // "vai funcionar" — um fluxo com o selo verde travou em 22/09. A
+                // honestidade coube no TÍTULO ("não tem furos" fala do desenho, e só).
+                // A primeira versão do conserto foi um parágrafo de ressalva com
+                // "rastro" e "declarar o caminho": palavras de dentro do código, que
+                // não querem dizer nada para quem usa. Ressalva que ninguém lê não
+                // protege ninguém — só polui. Título honesto > disclaimer.
+                <p className="px-3 py-2.5 text-[11.5px] leading-snug text-[#6B6880]">
+                  Todo passo tem para onde ir, todo caminho diz quando é seguido, e
+                  ninguém ficou solto no desenho.
+                </p>
               ) : (
                 problemas.map((p) => {
                   const erro = p.nivel === "erro";

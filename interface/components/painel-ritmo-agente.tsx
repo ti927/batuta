@@ -147,8 +147,8 @@ export function PainelRitmoAgente({
       <p className="flex gap-2 rounded-lg border border-border bg-muted/40 p-3 text-[12.5px] leading-relaxed text-muted-foreground">
         <Info className="mt-0.5 size-4 shrink-0" />
         <span>
-          Tudo aqui <strong>herda do fluxo</strong>. Ajuste só o que for diferente
-          neste agente — o que você não tocar segue o que cada automação definir.
+          Ajuste só o que for diferente neste agente. O que você não mexer segue o
+          valor da automação.
         </span>
       </p>
 
@@ -159,9 +159,8 @@ export function PainelRitmoAgente({
             Quanto ele pode trabalhar num passo
           </div>
           <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-            O tempo que ele tem antes de ser interrompido. Um agente que gera vídeo
-            precisa de muito mais que um que escreve um parágrafo — e é por isso que
-            este número é dele, e não do desenho.
+            Depois disso ele é interrompido. Quem gera vídeo precisa de bem mais que
+            quem escreve um parágrafo.
           </p>
         </div>
         {renderar(trabalho)}
@@ -174,19 +173,16 @@ export function PainelRitmoAgente({
               Quando ele espera uma pessoa
             </div>
             <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-              Ele tem <strong>Pedir aprovação e aguardar</strong> no cinto (aba
-              Instrumentos), então para e pergunta. Quanto esperar, e o que fazer no
-              silêncio, depende de quem é perguntado.
+              Quanto tempo esperar, e o que fazer se ninguém responder.
             </p>
           </div>
           {renderar(espera)}
         </div>
       ) : (
         <p className="rounded-lg border border-dashed border-border p-3 text-[12px] leading-relaxed text-muted-foreground">
-          Este agente não para para perguntar nada a ninguém, então não há espera a
-          configurar. Para ele pedir uma confirmação, dê a ele o instrumento{" "}
-          <strong>Pedir aprovação e aguardar</strong> na aba Instrumentos e escreva na
-          documentação dele quando usá-lo.
+          Este agente não pede confirmação a ninguém, então não há espera a
+          configurar. Para ele passar a pedir, dê a ele{" "}
+          <strong>Pedir aprovação e aguardar</strong> na aba Instrumentos.
         </p>
       )}
 
@@ -196,21 +192,12 @@ export function PainelRitmoAgente({
         <p className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-[12px] leading-relaxed text-amber-900">
           <TriangleAlert className="mt-0.5 size-4 shrink-0" />
           <span>
-            {fluxos.length > 1 ? (
+            {fluxos.length ? (
               <>
-                Estas regras valem para este agente em <strong>todos</strong> os fluxos
-                onde ele aparece — hoje: {fluxos.join(", ")}.
-              </>
-            ) : fluxos.length === 1 ? (
-              <>
-                Estas regras valem onde quer que este agente apareça. Hoje ele está em{" "}
-                <strong>{fluxos[0]}</strong>.
+                Isto muda o agente em <strong>{fluxos.join(", ")}</strong>.
               </>
             ) : (
-              <>
-                Estas regras valem para este agente em todos os fluxos onde ele
-                aparecer.
-              </>
+              <>Isto muda o agente em toda automação em que ele for usado.</>
             )}
           </span>
         </p>

@@ -233,6 +233,14 @@ Daqui em diante, o visual tem duas fontes que se complementam, e você consulta 
 
 Esse handoff é a especificação visual/UX das **Fases 9 e 10** e dos refinos de tela (shell, dashboard, inspeção). Não desenhe telas "de cabeça": parta sempre do que está em `docs/design/`.
 
+### 17-A. O TEXTO da tela — invoque a skill `escrever-para-quem-usa`
+
+**Toda vez** que escrever algo que uma pessoa vai ler numa tela (rótulo, botão, aviso, erro, estado vazio, texto de ajuda, mensagem enviada por um canal), invoque a skill **`escrever-para-quem-usa`** antes de dar a tarefa por pronta.
+
+Ela existe porque a regra já estava aqui e no `DESIGN-SYSTEM.md` §2 — *"sem jargão técnico; se aparecer, é falha de tradução"* — e mesmo assim foi para uma tela, em 2026-09-22, a frase *"o Batuta segue pela resposta da pessoa e avisa no rastro"*. **Ninguém sabe o que é "rastro".** Saber a regra não bastou; ela precisa de um passo obrigatório.
+
+As duas perguntas que a skill força, nesta ordem: **(1) isto precisa existir?** (texto que explica *por que o sistema é assim* é justificativa sua, não instrução dela — corte); **(2) quem lê sabe o que esta palavra significa?** Apagar vem antes de reescrever.
+
 ## 18. Lembrete final
 
 O maior risco deste projeto não é "construir a feature errada" — o `PRODUTO.md` já trata disso. O maior risco é **trabalhar de forma desleixada**: pular a investigação, não verificar, empilhar erro sobre erro, delegar digitação ao maestro, improvisar sobre uma biblioteca em vez de ler a documentação. Foi assim que as versões anteriores morreram.

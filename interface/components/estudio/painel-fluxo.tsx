@@ -198,24 +198,21 @@ export function PainelDoFluxo({
         <>
           <Secao titulo="Tetos deste fluxo" abertoInicial={false}>
             <p className="text-[11px] leading-snug text-[#6B6880]">
-              Contadores que acumulam ao longo de uma conversa ou de uma execução. Só
-              podem ter um teto — por isso são do fluxo, e não de um passo.
+              Valem para a automação inteira.
             </p>
             {campos("fluxo").map(renderarGrupo)}
           </Secao>
 
           <Secao titulo="Padrão que os agentes herdam" abertoInicial={false}>
             <p className="text-[11px] leading-snug text-[#6B6880]">
-              Quanto um passo pode trabalhar, e quanto espera uma pessoa. Cada agente
-              sobrepõe o que for diferente, na aba <strong>Ritmo e espera</strong> do
-              popup dele — um fluxo com duas aprovações de ritmos opostos precisa
-              disso.
+              Cada agente pode usar um valor diferente, na aba{" "}
+              <strong>Ritmo e espera</strong> dele.
             </p>
             {comRitmoProprio.length > 0 && (
               <p className="flex gap-1.5 rounded-md border border-[#E8E6F0] bg-[#FAFAF7] p-2 text-[11px] leading-snug text-[#6B6880]">
                 <User size={12} className="mt-0.5 shrink-0" />
                 <span>
-                  Já sobrescrevem o padrão:{" "}
+                  Usam valores próprios:{" "}
                   <strong>{comRitmoProprio.map((a) => a.nome).join(", ")}</strong>.
                 </span>
               </p>
@@ -231,10 +228,8 @@ export function PainelDoFluxo({
         <div className="flex gap-1.5 text-[11.5px] leading-snug text-[#6B6880]">
           <Info size={13} className="mt-0.5 shrink-0" />
           <span>
-            <strong className="text-[#1A1730]">Saudação, horário de atendimento e as
-            mensagens automáticas</strong> não ficam aqui: são do canal, e valem para
-            toda conversa daquele bot — o mesmo fluxo atendendo por dois bots deve falar
-            diferente.
+            Saudação, horário de atendimento e mensagens automáticas ficam no{" "}
+            <strong className="text-[#1A1730]">bot</strong>, não aqui.
           </span>
         </div>
         {canais.length > 0 &&
