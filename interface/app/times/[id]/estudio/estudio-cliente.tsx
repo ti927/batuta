@@ -11,11 +11,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  AlertTriangle,
+  Activity,
+  AlertCircle,
   ArrowUpRight,
+  AlertTriangle,
   CheckCircle2,
+  Copy,
+  MoreHorizontal,
   Plus,
   ShieldAlert,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,7 +41,7 @@ import {
   type Time,
   type TipoInstrumento,
 } from "@/lib/api";
-import { podeOperar } from "@/lib/permissoes";
+import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { normalizarCadeia } from "@/components/automacao-builder/nucleo";
 import type { ConfigGatilho } from "@/components/automacao-builder/inspector";
 import { CanvasEstudio } from "@/components/estudio/canvas";
@@ -44,7 +49,10 @@ import { PainelEstudio } from "@/components/estudio/painel";
 import type { Problema } from "@/components/estudio/problemas";
 import { DrawerAgente } from "@/components/drawer-agente";
 import { DrawerInstrumento } from "@/components/drawer-instrumento";
+import { AgendamentosAutomacao } from "@/components/agendamentos-automacao";
+import { BotaoRodarAgora } from "@/components/botao-rodar-agora";
 import { Aviso } from "@/components/ui/aviso";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
 import { Input } from "@/components/ui/input";
@@ -171,6 +179,14 @@ export function EstudioCliente({
       setSaidaSel={setSaidaSel}
       onSelecionar={setSelId}
       onAtualizou={(a) => setAutomacoes((l) => l.map((x) => (x.id === a.id ? a : x)))}
+      onCriou={(a) => {
+        setAutomacoes((l) => [...l, a]);
+        setSelId(a.id);
+      }}
+      onRemoveu={(id) => {
+        setAutomacoes((l) => l.filter((x) => x.id !== id));
+        setSelId(null);
+      }}
     />
   );
 }
@@ -192,6 +208,8 @@ function EditorEstudio({
   setSaidaSel,
   onSelecionar,
   onAtualizou,
+  onCriou,
+  onRemoveu,
 }: {
   time: Time;
   automacao: Automacao | null;
@@ -209,13 +227,21 @@ function EditorEstudio({
   setSaidaSel: (id: string | null) => void;
   onSelecionar: (id: string) => void;
   onAtualizou: (a: Automacao) => void;
+  onCriou: (a: Automacao) => void;
+  onRemoveu: (id: string) => void;
 }) {
   const router = useRouter();
+  const souAdmin = podeAdmin(meuPapel);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [problemas, setProblemas] = useState<Problema[]>([]);
   const [editAgenteId, setEditAgenteId] = useState<string | null>(null);
   const [editInstrumentoId, setEditInstrumentoId] = useState<string | null>(null);
+  const [maisAberto, setMaisAberto] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
+  // A automação está no ar? É estado DELA, não do time, e vale para todo gatilho —
+  // inclusive o manual, que pode ser disparado por agendamento.
+  const [ativa, setAtiva] = useState(automacao?.ativa ?? false);
 
   const [nome, setNome] = useState(automacao?.nome ?? "");
   const [gatilho, setGatilhoEstado] = useState<ConfigGatilho>(() => gatilhoDe(automacao));
@@ -360,6 +386,68 @@ function EditorEstudio({
     [setCadeiaNorm],
   );
 
+  // ── ações da automação ──
+  async function nova() {
+    if (ocupado) return;
+    setOcupado(true);
+    try {
+      const criada = await api.post<Automacao>(`/times/${time.id}/automacoes`, {
+        nome: "Nova automação",
+        tipo_gatilho: "manual",
+      });
+      toast.success("Automação criada. Desenhe o fluxo e salve.");
+      onCriou(criada);
+      router.refresh();
+    } catch (e) {
+      const msg = mensagemDeErro(e, "Falha ao criar a automação");
+      setErro(msg);
+      toast.error(msg);
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function duplicar() {
+    if (!automacao || ocupado) return;
+    const nomeCopia = prompt("Nome da cópia:", `Cópia de ${automacao.nome}`);
+    if (!nomeCopia?.trim()) return;
+    setOcupado(true);
+    try {
+      const copia = await api.post<Automacao>(`/automacoes/${automacao.id}/duplicar`, {
+        nome: nomeCopia.trim(),
+      });
+      toast.success(`Cópia criada: “${copia.nome}”.`);
+      onCriou(copia);
+      router.refresh();
+    } catch (e) {
+      const msg = mensagemDeErro(e, "Falha ao duplicar a automação");
+      setErro(msg);
+      toast.error(msg);
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function remover() {
+    if (!automacao || ocupado) return;
+    // Apagar uma automação leva o desenho junto e não tem volta — a confirmação diz o
+    // nome para ninguém apagar a errada por reflexo.
+    if (!confirm(`Remover a automação “${automacao.nome}”? Isso não tem volta.`)) return;
+    setOcupado(true);
+    try {
+      await api.delete(`/automacoes/${automacao.id}`);
+      toast.success("Automação removida.");
+      onRemoveu(automacao.id);
+      router.refresh();
+    } catch (e) {
+      const msg = mensagemDeErro(e, "Falha ao remover a automação");
+      setErro(msg);
+      toast.error(msg);
+    } finally {
+      setOcupado(false);
+    }
+  }
+
   // ── salvar ──
   function montarConfigGatilho(): Record<string, unknown> {
     if (gatilho.tipo === "comentario_instagram") {
@@ -419,7 +507,7 @@ function EditorEstudio({
         tipo_gatilho: gatilho.tipo,
         configuracao_gatilho: montarConfigGatilho(),
         cadeia: normalizarCadeia(cadeia),
-        ativa: automacao.ativa,
+        ativa,
         configuracao: configFluxo,
       });
       onAtualizou(atual);
@@ -435,6 +523,11 @@ function EditorEstudio({
     }
   }
 
+  // Desligada pelo disjuntor: falhou 3× seguidas rodando sozinha. Some assim que o
+  // operador remarca "Ativa" — religar zera a contagem no servidor, e manter o aviso
+  // depois disso seria mentir sobre o estado atual.
+  const desligadaPorFalhas = !ativa && !!automacao?.desligada_por_falhas_em;
+
   const erros = problemas.filter((p) => p.nivel === "erro");
   const avisos = problemas.filter((p) => p.nivel === "aviso");
   // Há edição pendente? Compara o gatilho INTEIRO, não só o tipo. Comparar só o tipo
@@ -444,12 +537,13 @@ function EditorEstudio({
   // Comparar demais só faz o botão acender à toa; comparar de menos perde trabalho.
   const naoSalvo =
     !!automacao &&
-    JSON.stringify([nome, normalizarCadeia(cadeia), gatilho, configFluxo]) !==
+    JSON.stringify([nome, normalizarCadeia(cadeia), gatilho, configFluxo, ativa]) !==
       JSON.stringify([
         automacao.nome,
         normalizarCadeia(automacao.cadeia ?? { nos: [] }),
         gatilhoDe(automacao),
         automacao.configuracao ?? {},
+        automacao.ativa,
       ]);
 
   return (
@@ -501,25 +595,152 @@ function EditorEstudio({
               : "desenho coerente"}
         </span>
 
+        {/* Estado da PRÓPRIA automação. Desligada pelo DISJUNTOR ela ganha pílula
+            própria: "em repouso" faria uma que quebrou parecer igual a uma que você
+            mesmo desligou. */}
+        {desligadaPorFalhas ? (
+          <Badge variant="warning" className="gap-1">
+            <AlertCircle className="size-3" /> desligada por falhas
+          </Badge>
+        ) : (
+          <Badge variant={ativa ? "success" : "neutral"}>
+            {ativa ? "ativa" : "em repouso"}
+          </Badge>
+        )}
+        {souOperador && (
+          <label
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+            title={
+              gatilho.tipo === "manual"
+                ? "Ativa: fica no ar para ser disparada por agendamento. O botão “Rodar” funciona mesmo em repouso."
+                : "Ativa: o gatilho fica armado e a automação pode disparar."
+            }
+          >
+            <input
+              type="checkbox"
+              className="accent-primary"
+              checked={ativa}
+              onChange={(e) => setAtiva(e.target.checked)}
+            />
+            Ativa
+          </label>
+        )}
+
         <div className="flex-1" />
 
-        <Link
-          href={`/times/${time.id}/automacoes`}
-          className="inline-flex items-center gap-1 text-[12.5px] text-muted-foreground hover:text-foreground"
-          title="A tela que está no ar, com as configurações de fluxo e o histórico"
-        >
-          tela clássica <ArrowUpRight className="size-3.5" />
-        </Link>
+        {souOperador && automacao && (
+          <BotaoRodarAgora
+            timeId={time.id}
+            automacoes={[{ id: automacao.id, nome }]}
+            rotulo="Rodar"
+            variant="outline"
+            size="sm"
+          />
+        )}
+        {automacao && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/times/${time.id}/execucoes`)}
+            title="Ver as execuções deste time"
+          >
+            <Activity /> Execuções
+          </Button>
+        )}
+        {souOperador && (
+          <div className="relative">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMaisAberto((v) => !v)}
+              aria-label="Mais ações"
+              disabled={ocupado}
+            >
+              <MoreHorizontal />
+            </Button>
+            {maisAberto && (
+              <>
+                <button
+                  className="fixed inset-0 z-20 cursor-default"
+                  aria-label="Fechar"
+                  onClick={() => setMaisAberto(false)}
+                />
+                <div className="absolute right-0 top-10 z-30 w-52 rounded-[10px] border border-border bg-card p-1.5 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMaisAberto(false);
+                      nova();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-muted"
+                  >
+                    <Plus className="size-3.5" /> Nova automação
+                  </button>
+                  {automacao && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMaisAberto(false);
+                        duplicar();
+                      }}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-muted"
+                    >
+                      <Copy className="size-3.5" /> Duplicar esta
+                    </button>
+                  )}
+                  <div className="my-1 h-px bg-border" />
+                  <Link
+                    href={`/times/${time.id}/automacoes`}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-muted-foreground hover:bg-muted"
+                    title="A tela antiga, enquanto as duas convivem"
+                  >
+                    <ArrowUpRight className="size-3.5" /> Abrir na tela clássica
+                  </Link>
+                  {souAdmin && automacao && (
+                    <>
+                      <div className="my-1 h-px bg-border" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMaisAberto(false);
+                          remover();
+                        }}
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="size-3.5" /> Remover esta
+                      </button>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
         {souOperador && (
           <Button onClick={salvar} disabled={salvando || !naoSalvo}>
-            {salvando ? "Salvando…" : naoSalvo ? "Salvar desenho" : "Salvo"}
+            {salvando ? "Salvando…" : naoSalvo ? "Salvar" : "Salvo"}
           </Button>
         )}
       </div>
 
-      {erro && (
-        <Aviso className="mb-3">
-          {erro}
+      {erro && <Aviso className="mb-3">{erro}</Aviso>}
+
+      {/* O Batuta desligou esta automação sozinho. Dizer só "em repouso" transformaria
+          uma automação quebrada num mistério: quem abre a tela dias depois não teria
+          como saber por que ela parou. */}
+      {desligadaPorFalhas && (
+        <Aviso variant="atencao" className="mb-3">
+          O Batuta desligou esta automação — ela falhou 3 vezes seguidas rodando
+          sozinha. Veja o que quebrou e conserte antes de ativar de novo; religar dá
+          três chances novas, então reativar sem consertar só adia o mesmo
+          desligamento.{" "}
+          <button
+            type="button"
+            onClick={() => router.push(`/times/${time.id}/execucoes`)}
+            className="underline underline-offset-2 hover:no-underline"
+          >
+            Ver execuções que falharam
+          </button>
         </Aviso>
       )}
 
@@ -552,6 +773,9 @@ function EditorEstudio({
             configFluxo={configFluxo}
             setConfigFluxo={setConfigFluxo}
             nomeDoFluxo={nome || "(sem nome)"}
+            automacaoId={automacao?.id ?? null}
+            timeId={time.id}
+            naoSalvo={naoSalvo}
             onSubirAoFluxo={() => {
               setNoSel(null);
               setSaidaSel(null);
@@ -577,6 +801,10 @@ function EditorEstudio({
           />
         </div>
       </div>
+
+      {automacao && (
+        <AgendamentosAutomacao automacaoId={automacao.id} podeOperar={souOperador} />
+      )}
 
       {agenteEdit && (
         <DrawerAgente

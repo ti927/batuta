@@ -39,6 +39,8 @@ import {
 } from "@/lib/api";
 import type { ConfigGatilho } from "@/components/automacao-builder/inspector";
 
+import { TestarEstePasso } from "@/components/automacao-builder/testar-no";
+
 import { CORES, corDaSaida } from "./cores";
 import { PainelDoFluxo } from "./painel-fluxo";
 import { nomeDoNo, papel, type Problema } from "./problemas";
@@ -475,6 +477,10 @@ export type PainelProps = {
   setConfigFluxo: (v: ConfiguracaoFluxo) => void;
   /** Nome da automação, para a migalha dizer onde a pessoa está. */
   nomeDoFluxo: string;
+  /** "Testar este passo" roda o fluxo SALVO — daí precisar do id e do "não salvo". */
+  automacaoId: string | null;
+  timeId: string;
+  naoSalvo: boolean;
   /** Sobe ao nível do fluxo (desseleciona o nó). */
   onSubirAoFluxo: () => void;
 };
@@ -504,6 +510,9 @@ export function PainelEstudio({
   setConfigFluxo,
   nomeDoFluxo,
   onSubirAoFluxo,
+  automacaoId,
+  timeId,
+  naoSalvo,
 }: PainelProps) {
   // Nada selecionado = o fluxo. É a convenção de um editor de desenho, e é o que
   // permitiu matar o botão "Fluxo" — mas só funciona porque a migalha abaixo mostra
@@ -811,6 +820,20 @@ export function PainelEstudio({
               ))
             )}
           </div>
+        )}
+
+        {/* Rodar SÓ este passo, de verdade, para ver o que ele devolve antes de
+            confiar o fluxo inteiro a ele. Só faz sentido em quem executa. */}
+        {executavel && (
+          <TestarEstePasso
+            key={no.id}
+            noId={no.id}
+            automacaoId={automacaoId}
+            timeId={timeId}
+            cinto={cintos[no.ref ?? ""] ?? []}
+            podeEditar={podeEditar}
+            naoSalvo={naoSalvo}
+          />
         )}
 
         {podeEditar && no.tipo !== "gatilho" && no.tipo !== "fim" && (
