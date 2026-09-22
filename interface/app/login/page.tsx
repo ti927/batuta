@@ -24,6 +24,23 @@ export default function LoginPage() {
           priority
           className="h-auto w-44"
         />
+        {/* A FINALIDADE do app, em texto, na página que o mundo alcança.
+            `batuta.team` redireciona para cá, então esta é a "página inicial" que um
+            revisor (Google, Meta) de fato vê — e a verificação de marca do Google
+            recusou justamente por ela não dizer para que o app serve. */}
+        <div className="max-w-sm text-center">
+          <h1 className="font-heading text-lg font-medium text-foreground">
+            Times de IA que executam o trabalho da sua empresa
+          </h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            O Batuta é a plataforma onde você monta agentes de IA, encadeia-os num
+            fluxo e os deixa trabalhar — publicando conteúdo, lendo dados e falando
+            com os seus sistemas. Você guia; a IA executa. Quando um agente precisa de
+            uma conta sua (Google, Instagram, WordPress), você autoriza o acesso e o
+            Batuta o usa apenas para as ações daquele fluxo.
+          </p>
+        </div>
+
         <LoginCliente />
 
         <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
