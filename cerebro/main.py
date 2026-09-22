@@ -27,6 +27,7 @@ from rotas import (
     instagram,
     instagram_webhook,
     instrumentos,
+    interno,
     logs,
     membros,
     mensageria,
@@ -121,6 +122,9 @@ def saude():
 
 
 app.include_router(elos.rotas)
+# Porta interna serviço-a-serviço (hoje: a IA testar conector sem ver o segredo).
+# Sem `BATUTA_INTERNO_SECRET` no ambiente, ela responde 404 — não existe por omissão.
+app.include_router(interno.rotas)
 app.include_router(organizacoes.rotas)
 app.include_router(membros.rotas)
 app.include_router(times.rotas)

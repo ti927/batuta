@@ -468,10 +468,10 @@ async def testar_operacao_conector(
     """Testa UMA operação de um conector com valores de exemplo — roda a chamada REAL e
     devolve a resposta (para você conferir que funciona e escolher os `campos_resposta`).
     `valores` = {nome_do_campo: valor} para os campos de papel 'ia'.
-    SÓ funciona em conector SEM segredo: por segurança este serviço roda sem a chave do
-    cofre (a IA nunca recebe segredo). Em conector autenticado a ferramenta RECUSA e
-    diz isso — aí peça ao consultor para testar na tela do Construtor e siga com o
-    resultado que ele trouxer; não fique retentando.
+    Funciona TAMBÉM em conector com segredo: este serviço roda sem a chave do cofre (a
+    IA nunca recebe segredo), então o teste é pedido ao cérebro, que decifra, chama a
+    API e devolve só a resposta. Se a ponte não estiver ligada no ambiente, a ferramenta
+    diz isso e manda pedir o teste ao consultor — não fique retentando.
     Quando a API recusa, a resposta traz o MOTIVO que o serviço deu (campos `erro` e
     `corpo`) — leia-o em vez de adivinhar a causa: é ali que está "startDate field is
     required" ou "User does not have sufficient permission for site"."""

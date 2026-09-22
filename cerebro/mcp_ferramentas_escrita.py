@@ -14,6 +14,7 @@ ROLLBACK + mensagem humana em qualquer erro de domínio/acesso (`ConflitoDominio
 
 import functools
 import json
+import os
 import logging
 import uuid
 
@@ -249,27 +250,83 @@ def testar_operacao_conector(sessao, usuario, conector_id, operacao, valores) ->
     tipo = obter_tipo("conector")
     try:
         secretos = segredos.decifrar(sessao, inst.id)
-    except Exception as e:  # noqa: BLE001 — ver a recusa honesta abaixo
+    except Exception as e:  # noqa: BLE001 — ver `_testar_pelo_cerebro`
         import cofre
 
         if not isinstance(e, cofre.CofreNaoConfigurado):
             raise
-        # NÃO é defeito de configuração: o serviço MCP roda SEM a chave-mestra do cofre
-        # DE PROPÓSITO (decisão do maestro na Fatia 3a — "a IA nunca recebe segredo").
-        # Consequência: daqui não dá para rodar uma chamada que precisa de autenticação.
-        # Antes isso virava "Algo deu errado… código 7b4ff673", e quem lia ia caçar um
-        # defeito que não existe. Recusar dizendo o motivo e para onde ir é o certo.
-        return (
-            "Deste caminho não dá para testar um conector que usa segredo: por "
-            "segurança, o serviço MCP roda sem a chave do cofre — a IA nunca recebe "
-            "segredo. O conector foi montado e está salvo; quem testa é o consultor, "
-            "na tela do instrumento (Construtor → a operação → “Testar e detectar”), "
-            "que roda a chamada real e mostra a resposta. Peça isso a ele e siga com o "
-            "resultado que ele trouxer."
-        )
+        # ESPERADO: o serviço MCP roda SEM a chave-mestra do cofre, de propósito (a IA
+        # nunca recebe segredo). Em vez de desistir, pedimos ao CÉREBRO que rode o
+        # teste — ele tem a chave, decifra lá, usa lá, e nos devolve só a resposta da
+        # API. O segredo não atravessa a fronteira. Ver `rotas/interno.py`.
+        return _testar_pelo_cerebro(usuario, inst, operacao, valores)
     config = tipo.Config.model_validate({**(inst.configuracao or {}), **secretos})
     resultado = tipo.testar_operacao(config, operacao, valores or {})  # FalhaInstrumento → decorator
     return json.dumps({"mensagem": "Teste executado.", "resultado": resultado}, ensure_ascii=False)
+
+
+# Endereço do cérebro para a ponte interna. Na Railway o padrão é a borda pública; em
+# desenvolvimento, o cérebro local.
+def _url_cerebro() -> str:
+    padrao = (
+        "https://api.batuta.team"
+        if os.environ.get("RAILWAY_ENVIRONMENT")
+        else "http://localhost:8000"
+    )
+    return (os.environ.get("CEREBRO_URL") or padrao).rstrip("/")
+
+
+def _testar_pelo_cerebro(usuario, inst, operacao: str, valores) -> str:
+    """Pede ao CÉREBRO que rode o teste desta operação, em nome deste usuário.
+
+    O segredo fica onde sempre esteve: o cérebro decifra, chama a API e devolve a
+    resposta. Aqui não passa chave nenhuma — só a resposta, que é o mesmo que o
+    consultor veria na tela.
+
+    Sem `BATUTA_INTERNO_SECRET` configurado, a ponte não existe: recusamos dizendo o
+    caminho manual, em vez de deixar a IA girando em falso."""
+    import httpx
+
+    segredo = (os.environ.get("BATUTA_INTERNO_SECRET") or "").strip()
+    if not segredo:
+        return (
+            "Não consigo testar daqui: a ponte com o cérebro não está configurada "
+            "(falta BATUTA_INTERNO_SECRET). O conector está salvo — peça ao consultor "
+            "para testar na tela do instrumento (Construtor → a operação → “Testar e "
+            "detectar”) e siga com o resultado que ele trouxer."
+        )
+    try:
+        with httpx.Client(timeout=30.0) as cliente:
+            r = cliente.post(
+                f"{_url_cerebro()}/interno/conector/testar-operacao",
+                headers={"X-Batuta-Interno": segredo},
+                json={
+                    "usuario_id": str(usuario.id),
+                    "instrumento_id": str(inst.id),
+                    "operacao": operacao,
+                    "valores": valores or {},
+                },
+            )
+    except httpx.HTTPError as e:
+        return f"Não consegui falar com o cérebro para rodar o teste: {e}"
+    if r.status_code == 404:
+        return (
+            "A ponte de teste com o cérebro não está ligada neste ambiente. O conector "
+            "está salvo — peça ao consultor para testar na tela do instrumento."
+        )
+    if r.status_code == 403:
+        return "O cérebro recusou a ponte de teste (segredo interno não confere)."
+    if r.status_code >= 400:
+        detalhe = ""
+        try:
+            detalhe = str(r.json().get("detail") or "")
+        except ValueError:
+            detalhe = r.text[:300]
+        return f"O teste não pôde rodar: {detalhe or f'HTTP {r.status_code}'}"
+    return json.dumps(
+        {"mensagem": "Teste executado (pelo cérebro).", "resultado": r.json()},
+        ensure_ascii=False,
+    )
 
 
 # ───────────────────────────── Cinto (instrumento ↔ agente) ─────────────────────────────

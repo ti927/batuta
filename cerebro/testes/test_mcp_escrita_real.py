@@ -334,7 +334,85 @@ def test_testar_operacao_sem_cofre_recusa_com_motivo(mcp, dados, monkeypatch):
         raise cofre.CofreNaoConfigurado("COFRE_CHAVE_MESTRA ausente")
 
     monkeypatch.setattr(segredos_mod, "decifrar", _sem_cofre)
+    monkeypatch.delenv("BATUTA_INTERNO_SECRET", raising=False)
     saida = escrita.testar_operacao_conector(_sub(dados), cid, "consultar", {})
     assert escrita.ERRO_INESPERADO not in saida, "voltou erro genérico de novo"
-    assert "cofre" in saida.lower()
     assert "Testar e detectar" in saida
+
+
+def test_ponte_de_teste_desligada_diz_o_caminho(mcp, dados, monkeypatch):
+    """Sem `BATUTA_INTERNO_SECRET`, a ponte não existe — e a ferramenta diz isso e
+    aponta a tela, em vez de deixar a IA girando em falso."""
+    import cofre
+
+    import segredos_instrumento as segredos_mod
+
+    conector = {"nome": "Autenticado", "auth_tipo": "bearer",
+                "operacoes": [{"nome": "consultar", "metodo": "GET",
+                               "url": "https://x/y", "campos": []}]}
+    cid = json.loads(
+        escrita.montar_conector(_sub(dados), str(dados["timeA"].id), conector, None)
+    )["id"]
+
+    monkeypatch.setattr(
+        segredos_mod, "decifrar",
+        lambda *a, **k: (_ for _ in ()).throw(cofre.CofreNaoConfigurado("sem chave")),
+    )
+    monkeypatch.delenv("BATUTA_INTERNO_SECRET", raising=False)
+    saida = escrita.testar_operacao_conector(_sub(dados), cid, "consultar", {})
+    assert escrita.ERRO_INESPERADO not in saida
+    assert "Testar e detectar" in saida
+
+
+def test_ponte_ligada_pede_o_teste_ao_cerebro(mcp, dados, monkeypatch):
+    """Com a ponte ligada, o MCP NÃO decifra nada: manda o pedido ao cérebro e devolve
+    a resposta. O que atravessa a fronteira é o resultado da API, nunca o segredo."""
+    import cofre
+
+    import segredos_instrumento as segredos_mod
+
+    conector = {"nome": "Autenticado2", "auth_tipo": "bearer",
+                "operacoes": [{"nome": "consultar", "metodo": "GET",
+                               "url": "https://x/y", "campos": []}]}
+    cid = json.loads(
+        escrita.montar_conector(_sub(dados), str(dados["timeA"].id), conector, None)
+    )["id"]
+
+    monkeypatch.setattr(
+        segredos_mod, "decifrar",
+        lambda *a, **k: (_ for _ in ()).throw(cofre.CofreNaoConfigurado("sem chave")),
+    )
+    monkeypatch.setenv("BATUTA_INTERNO_SECRET", "segredo-de-teste")
+    enviado = {}
+
+    class _Resp:
+        status_code = 200
+
+        def json(self):
+            return {"ok": True, "status": 200, "corpo": {"rows": []},
+                    "campos_detectados": ["rows"]}
+
+    class _Cliente:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            enviado.update({"url": url, "headers": headers, "corpo": json})
+            return _Resp()
+
+    import httpx
+
+    monkeypatch.setattr(httpx, "Client", _Cliente)
+    saida = escrita.testar_operacao_conector(_sub(dados), cid, "consultar", {"a": "1"})
+    assert "Teste executado" in saida
+    assert enviado["headers"]["X-Batuta-Interno"] == "segredo-de-teste"
+    assert enviado["corpo"]["instrumento_id"] == cid
+    assert enviado["corpo"]["operacao"] == "consultar"
+    # o segredo do instrumento NÃO vai no pedido
+    assert "auth_segredo" not in json.dumps(enviado["corpo"])

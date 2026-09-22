@@ -308,6 +308,18 @@ class TestarOperacaoConector(BaseModel):
     valores: dict = Field(default_factory=dict)
 
 
+class TestarOperacaoInterno(BaseModel):
+    """O mesmo teste, pedido pela porta INTERNA (serviço-a-serviço) — usado pelo MCP
+    para a IA poder testar um conector sem nunca ver o segredo dele. Aqui o usuário
+    vem no CORPO (não da sessão), e é por ele que a autorização é conferida; ver
+    `rotas/interno.py` para as três camadas de proteção."""
+
+    usuario_id: str = Field(min_length=1)
+    instrumento_id: str = Field(min_length=1)
+    operacao: str = Field(min_length=1)
+    valores: dict = Field(default_factory=dict)
+
+
 class VincularInstrumento(BaseModel):
     """Pendura um instrumento no cinto de um agente."""
 
