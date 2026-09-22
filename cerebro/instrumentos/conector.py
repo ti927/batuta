@@ -93,9 +93,10 @@ class ConfigConector(BaseModel):
     `auth_segredo` é SEGREDO (cofre): nunca vai para a `instrumentos.configuracao`
     em claro — é cifrado e injetado só na execução, como todos os campos secretos."""
 
-    auth_tipo: Literal["nenhuma", "bearer", "cabecalho", "query", "basic", "oauth2"] = (
-        "nenhuma"
-    )
+    auth_tipo: Literal[
+        "nenhuma", "bearer", "cabecalho", "query", "basic", "oauth2",
+        "google_conta_servico",
+    ] = "nenhuma"
     auth_nome: str = Field(
         default="",
         description="Nome do cabeçalho/parâmetro que leva o segredo (para 'cabecalho'/'query').",
@@ -111,7 +112,8 @@ class ConfigConector(BaseModel):
         default="",
         description=(
             "A metade secreta da autenticação (→ cofre): o token no Bearer, a chave "
-            "no cabeçalho/query, a SENHA no Basic, o Client Secret no OAuth 2.0."
+            "no cabeçalho/query, a SENHA no Basic, o Client Secret no OAuth 2.0, e o "
+            "JSON inteiro da chave na conta de serviço do Google."
         ),
     )
     # OAuth 2.0 (client credentials): o Batuta troca usuário+segredo por um token
@@ -119,7 +121,12 @@ class ConfigConector(BaseModel):
     url_token: str = Field(
         default="", description="Endereço que emite o token (OAuth 2.0)."
     )
-    escopo: str = Field(default="", description="Escopo pedido ao emitir o token.")
+    escopo: str = Field(
+        default="",
+        description="Escopo pedido ao emitir o token. Na conta de serviço do Google é "
+        "obrigatório (ex.: https://www.googleapis.com/auth/webmasters.readonly) — "
+        "pedir acesso amplo seria pior do que pedir de menos.",
+    )
     # Certificado de cliente (mTLS) — vem da caixa-forte por referência a uma
     # credencial `certificado_mtls`, nunca digitado. Vale para TODAS as operações
     # do conector (é propriedade da conexão com o serviço, não de uma chamada).
@@ -286,7 +293,16 @@ def _executar_operacao(
 
     # 3) autenticação (declarativa, reusa o segredo do cofre).
     cabecalhos = dict(op.cabecalhos or {})
-    if config.auth_tipo == "oauth2":
+    if config.auth_tipo == "google_conta_servico":
+        # Conta de serviço do Google: o segredo é o JSON da chave, e o token sai de uma
+        # afirmação ASSINADA com ela (não de uma troca simples). Sem consentimento, sem
+        # app verificado, sem token morrendo em 7 dias — ver `google_conta_servico.py`.
+        import google_conta_servico
+
+        cabecalhos["Authorization"] = (
+            f"Bearer {google_conta_servico.token(config.auth_segredo, config.escopo)}"
+        )
+    elif config.auth_tipo == "oauth2":
         # O segredo aqui é o Client Secret: quem vai no cabeçalho é o token que a
         # BORDA já trocou por ele (e renova sozinha). Sem token, a chamada sai sem
         # Authorization e o serviço responde 401 — com recado claro.

@@ -73,6 +73,10 @@ const AUTHS: { valor: TipoAuthConector; rotulo: string }[] = [
   { valor: "query", rotulo: "Chave na URL (query)" },
   { valor: "basic", rotulo: "Usuário e senha (Basic)" },
   { valor: "oauth2", rotulo: "OAuth 2.0 (o Batuta renova o token)" },
+  {
+    valor: "google_conta_servico",
+    rotulo: "Conta de serviço do Google (sem login, sem expirar)",
+  },
 ];
 
 function opVazia(n: number): OperacaoConector {
@@ -1099,7 +1103,9 @@ function SecaoAuth({
         ? "Senha"
         : authTipo === "oauth2"
           ? "Client Secret"
-          : "Chave / segredo";
+          : authTipo === "google_conta_servico"
+            ? "Chave da conta de serviço (o JSON inteiro)"
+            : "Chave / segredo";
   return (
     <div>
       <header className="mb-5">
@@ -1158,21 +1164,68 @@ function SecaoAuth({
               <Lock className="size-3 text-muted-foreground" />
               {rotuloSegredo}
             </span>
-            <Input
-              type="password"
-              value={authSegredo}
-              onChange={(e) => onSegredo(e.target.value)}
-              autoComplete="new-password"
-              placeholder={
-                jaGuardado
-                  ? `•••• ${jaGuardado} — em branco para manter`
-                  : "cole aqui"
-              }
-            />
+            {authTipo === "google_conta_servico" ? (
+              // O JSON tem ~20 linhas: numa caixa de senha de uma linha ninguém
+              // confere o que colou. Área de texto, e o conteúdo segue indo cifrado
+              // para o cofre igual aos demais segredos.
+              <Textarea
+                value={authSegredo}
+                onChange={(e) => onSegredo(e.target.value)}
+                rows={5}
+                spellCheck={false}
+                className="font-mono text-[12px]"
+                placeholder={
+                  jaGuardado
+                    ? `•••• ${jaGuardado} — em branco para manter a chave atual`
+                    : '{ "type": "service_account", "project_id": ... }'
+                }
+              />
+            ) : (
+              <Input
+                type="password"
+                value={authSegredo}
+                onChange={(e) => onSegredo(e.target.value)}
+                autoComplete="new-password"
+                placeholder={
+                  jaGuardado
+                    ? `•••• ${jaGuardado} — em branco para manter`
+                    : "cole aqui"
+                }
+              />
+            )}
             <span className="text-xs font-normal text-muted-foreground">
               Guardado cifrado no cofre; nunca é reexibido.
             </span>
           </Label>
+        )}
+
+        {authTipo === "google_conta_servico" && (
+          <>
+            <Aviso variant="info">
+              A conta de serviço é uma identidade da máquina, não de uma pessoa: não tem
+              tela de login, não depende de app verificado pelo Google e não expira. No
+              Google Cloud, crie a conta de serviço, gere uma chave em JSON e cole acima.
+              Depois <strong>dê acesso ao e-mail dela</strong> no serviço — no Search
+              Console, adicionando-o como usuário da propriedade. Sem isso o Google
+              responde que ela não tem permissão.
+            </Aviso>
+            <Label className="flex-col items-start gap-1">
+              Permissão pedida (escopo)
+              <Input
+                value={escopo}
+                onChange={(e) => onEscopo(e.target.value)}
+                placeholder="https://www.googleapis.com/auth/webmasters.readonly"
+                className="font-mono text-[13px]"
+              />
+              <span className="text-xs font-normal text-muted-foreground">
+                Obrigatório, e proposital: a conta de serviço só deve poder o que este
+                instrumento usa. Search Console (só leitura):{" "}
+                <span className="font-mono">
+                  https://www.googleapis.com/auth/webmasters.readonly
+                </span>
+              </span>
+            </Label>
+          </>
         )}
 
         {authTipo === "oauth2" && (

@@ -282,7 +282,11 @@ export type TipoAuthConector =
   | "cabecalho"
   | "query"
   | "basic"
-  | "oauth2";
+  | "oauth2"
+  // Conta de serviço do Google: identidade de MÁQUINA. Sem tela de login, sem app
+  // verificado, sem expirar — o segredo é o JSON da chave e o Batuta assina o token
+  // com ela. Espelha `instrumentos/conector.py::ConfigConector.auth_tipo`.
+  | "google_conta_servico";
 
 export type CampoConector = {
   nome: string;
