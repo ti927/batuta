@@ -946,6 +946,30 @@ async def importar_csv(
 
 
 @mcp.tool()
+async def listar_links_quadro(organizacao_id: str, quadro: str) -> str:
+    """Lista os LINKS DE LEITURA de um quadro — os endereços que painéis de fora (Google
+    Planilhas com IMPORTDATA, Looker Studio, Power BI, painel próprio) usam para ler o
+    quadro sem login. Por link: nome, os 4 últimos caracteres, estado (ativo/revogado/
+    expirado), limite de leituras por minuto, validade, quantas leituras e a última.
+    Você NÃO recebe o link inteiro nem pode criar um: ele é uma senha, e quem cria é um
+    admin pela tela (quadro › Quem usa › Acesso de fora). Oriente o consultor a fazer lá."""
+    return await anyio.to_thread.run_sync(
+        quadros_mcp.listar_links_quadro, _sub(), organizacao_id, quadro
+    )
+
+
+@mcp.tool()
+async def revogar_link_quadro(
+    organizacao_id: str, quadro: str, link_id: str, confirmar: bool = False
+) -> str:
+    """REVOGA um link de leitura de um quadro: o painel que o usa para de receber dados na
+    hora. SEM `confirmar=true` é só uma PRÉVIA (qual link e quem o usa). Exige admin."""
+    return await anyio.to_thread.run_sync(
+        quadros_mcp.revogar_link_quadro, _sub(), organizacao_id, quadro, link_id, confirmar
+    )
+
+
+@mcp.tool()
 async def excluir_quadro(organizacao_id: str, quadro: str, confirmar: bool = False) -> str:
     """EXCLUI um quadro com todas as linhas e o histórico. AÇÃO IRREVERSÍVEL. SEM
     `confirmar=true` é só uma PRÉVIA (quantas linhas e QUAIS instrumentos/agentes usam o

@@ -251,6 +251,39 @@ def importar_csv(
     return _rodar(fn)
 
 
+# ───────────────────────────── links de leitura ─────────────────────────────
+# O MCP LISTA e REVOGA, mas não cria nem troca: criar entregaria o link (uma senha) à IA,
+# e a regra do projeto é que a IA nunca vê segredo. Criar é pela tela, por um admin.
+
+
+@_ferramenta
+def listar_links_quadro(sessao, usuario, organizacao_id, quadro) -> str:
+    from quadros import links as links_mod
+
+    def fn():
+        org = _org(sessao, usuario, organizacao_id, "observador")
+        return {"links": [links_mod.serializar(link) for link in links_mod.listar(sessao, org, quadro)]}
+    return _rodar(fn)
+
+
+@_ferramenta_escrita
+def revogar_link_quadro(sessao, usuario, organizacao_id, quadro, link_id, confirmar) -> str:
+    from quadros import links as links_mod
+
+    def fn():
+        org = _org(sessao, usuario, organizacao_id, "admin")
+        if not confirmar:
+            atual = next((link for link in links_mod.listar(sessao, org, quadro) if str(link.id) == str(link_id)), None)
+            if atual is None:
+                raise ErroQuadro("Não achei esse link neste quadro.")
+            return {"simulado": True, "link": links_mod.serializar(atual), "aviso": (
+                "Isto foi só uma PRÉVIA. Revogar corta o link na hora: o painel que o usa para de "
+                "receber dados. Confirme com o consultor e chame de novo com confirmar=true."
+            )}
+        return {"link": links_mod.serializar(links_mod.revogar(sessao, org, quadro, link_id))}
+    return _rodar(fn)
+
+
 # ───────────────────────────── admin ─────────────────────────────
 
 

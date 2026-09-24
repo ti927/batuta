@@ -9,6 +9,16 @@
 > Painel saem da planilha) fica com o maestro, feita por ele pelo MCP (2026-09-24).** O código da Parte 1 está completo;
 > a próxima frente de código é a Parte 2 (fila e gatilhos), só com o sinal dele.
 >
+> *Acesso de fora (2026-09-24, pedido do maestro: "montar um dashboard baseado num quadro que um agente alimenta"):*
+> **links de leitura** por quadro — tabela `quadro_links` (migração `lnk00links0001`, só o HASH + 4 últimos
+> caracteres), rota pública `GET /publico/quadros/{link}` (CSV por padrão para `IMPORTDATA`; `?formato=json`;
+> filtros na URL `filtro=Coluna|op|valor` com datas relativas `hoje-90`; `recente`, `ordem`, `colunas`, `busca`,
+> `limite` ≤ 10.000, `decimal=virgula`) e `/totais` (agrupar + métricas calculadas pelo Batuta). Só admin cria/
+> troca/revoga/ajusta; o link inteiro aparece UMA vez; limite de leituras por minuto por link (padrão 60, até 600,
+> contado em memória — 1 réplica); cada leitura conta no link e vira evento `quadro.link_lido`; CORS aberto só
+> nessas rotas. Tela: quadro › Quem usa › **Acesso de fora**, com a fórmula do Planilhas pronta. MCP lista e revoga,
+> **não cria** (a IA não vê segredo). Central: `cerebro/acesso-de-fora`.
+>
 > *Entrega 4, como ficou:* proposta visual aprovada (`claude.ai/artifact/NJi4o3QPvPwWUJJxQsZjYq`) com UMA mudança do
 > maestro — **lista em cartões horizontais, um por linha, e sempre com busca/filtro** (virou preferência permanente).
 > Menu "Biblioteca" → **"Cérebro"** (`/organizacoes/[id]/cerebro`, a org ativa; `/biblioteca` redireciona). Quadro com

@@ -12,6 +12,7 @@ não existe (404).
 """
 
 import uuid
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -23,6 +24,7 @@ import auditoria
 from auth import usuario_atual
 from modelos import Agente, Automacao, Execucao, Usuario
 from quadros import importacao
+from quadros import links as links_mod
 from quadros import servico as qs
 from quadros.servico import Autor, ErroQuadro
 from rotas._comum import organizacao_acessivel
@@ -364,6 +366,121 @@ def historico(
     r = qs.historico_linha(sessao, org_id, q.id, linha_id)
     _nomes_do_carimbo(sessao, r["alteracoes"])
     return r
+
+
+# ───────────────────────────── links de leitura (acesso de fora) ─────────────────────────────
+
+
+class LinkCriar(BaseModel):
+    nome: str
+    limite_por_minuto: int | None = None
+    expira_em: datetime | None = None
+
+
+class LinkAjustar(BaseModel):
+    limite_por_minuto: int | None = None
+    expira_em: datetime | None = None
+    sem_validade: bool = False
+
+
+def _link_com_token(link, token: str) -> dict:
+    # O link inteiro só existe nesta resposta — a tela mostra uma vez e pede para copiar.
+    return {"ok": True, "link": links_mod.serializar(link), "caminho": links_mod.caminho_publico(token)}
+
+
+@rotas.get("/organizacoes/{org_id}/quadros/{quadro_id}/links")
+def listar_links(
+    org_id: uuid.UUID,
+    quadro_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    organizacao_acessivel(sessao, usuario, org_id)
+    q = _quadro_ou_404(sessao, org_id, quadro_id)
+    return [links_mod.serializar(link) for link in links_mod.listar(sessao, org_id, q.id)]
+
+
+@rotas.post("/organizacoes/{org_id}/quadros/{quadro_id}/links")
+def criar_link(
+    org_id: uuid.UUID,
+    quadro_id: uuid.UUID,
+    dados: LinkCriar,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    # Um link expõe o quadro para fora da empresa: é decisão de admin.
+    organizacao_acessivel(sessao, usuario, org_id, minimo="admin")
+    q = _quadro_ou_404(sessao, org_id, quadro_id)
+    try:
+        link, token = links_mod.criar(
+            sessao, org_id, q.id, nome=dados.nome, limite_por_minuto=dados.limite_por_minuto,
+            expira_em=dados.expira_em, criado_por_id=usuario.id,
+        )
+    except ErroQuadro as e:
+        return _recusa(e)
+    _auditar(sessao, usuario, "quadro.link_criado", q, org_id, {"nome": link.nome, "final": link.token_final})
+    sessao.commit()
+    return _link_com_token(link, token)
+
+
+@rotas.post("/organizacoes/{org_id}/quadros/{quadro_id}/links/{link_id}/trocar")
+def trocar_link(
+    org_id: uuid.UUID,
+    quadro_id: uuid.UUID,
+    link_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    organizacao_acessivel(sessao, usuario, org_id, minimo="admin")
+    q = _quadro_ou_404(sessao, org_id, quadro_id)
+    try:
+        link, token = links_mod.trocar(sessao, org_id, q.id, link_id)
+    except ErroQuadro as e:
+        return _recusa(e)
+    _auditar(sessao, usuario, "quadro.link_trocado", q, org_id, {"nome": link.nome, "final": link.token_final})
+    sessao.commit()
+    return _link_com_token(link, token)
+
+
+@rotas.post("/organizacoes/{org_id}/quadros/{quadro_id}/links/{link_id}/revogar")
+def revogar_link(
+    org_id: uuid.UUID,
+    quadro_id: uuid.UUID,
+    link_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    organizacao_acessivel(sessao, usuario, org_id, minimo="admin")
+    q = _quadro_ou_404(sessao, org_id, quadro_id)
+    try:
+        link = links_mod.revogar(sessao, org_id, q.id, link_id)
+    except ErroQuadro as e:
+        return _recusa(e)
+    _auditar(sessao, usuario, "quadro.link_revogado", q, org_id, {"nome": link.nome, "final": link.token_final})
+    sessao.commit()
+    return {"ok": True, "link": links_mod.serializar(link)}
+
+
+@rotas.patch("/organizacoes/{org_id}/quadros/{quadro_id}/links/{link_id}")
+def ajustar_link(
+    org_id: uuid.UUID,
+    quadro_id: uuid.UUID,
+    link_id: uuid.UUID,
+    dados: LinkAjustar,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    organizacao_acessivel(sessao, usuario, org_id, minimo="admin")
+    q = _quadro_ou_404(sessao, org_id, quadro_id)
+    try:
+        link = links_mod.ajustar(
+            sessao, org_id, q.id, link_id, limite_por_minuto=dados.limite_por_minuto,
+            expira_em=dados.expira_em, sem_validade=dados.sem_validade,
+        )
+    except ErroQuadro as e:
+        return _recusa(e)
+    sessao.commit()
+    return {"ok": True, "link": links_mod.serializar(link)}
 
 
 # ───────────────────────────── importar / exportar ─────────────────────────────

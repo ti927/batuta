@@ -38,7 +38,7 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
 - **Matriz de papéis:** observador lê; **operador** cria/edita; **admin** cria
   organização/time, duplica e exclui.
 
-## As ferramentas (61)
+## As ferramentas (63)
 
 - **Leitura/diagnóstico:** `listar_organizacoes`, `listar_times`, `descrever_time`,
   `listar_agentes`, `ver_agente`, `ver_memoria_agente`, `listar_instrumentos`/
@@ -71,7 +71,9 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
   `excluir_quadro`. **Toda escrita aceita `simular`; apagar e excluir SÓ simulam sem
   `confirmar=true`.** O carimbo das linhas registra `origem=mcp` e o consultor. E o
   `diagnosticar_execucao` passou a trazer `quadros_gravados` — o que a execução gravou de
-  fato. **Total: 61 ferramentas.**
+  fato. **Links de leitura (acesso de fora, 2026-09-24):** `listar_links_quadro` (sem nunca
+  devolver o link inteiro) e `revogar_link_quadro` (admin, só com `confirmar=true`). **Criar ou
+  trocar link é só pela tela** — o link é uma senha e a IA não o recebe. **Total: 63 ferramentas.**
 
 > **Nomes que mudaram (2026-08-26):** `ativar_time`/`desativar_time` viraram
 > `ativar_automacao`/`desativar_automacao` — recebiam `automacao_id` e operavam sobre uma

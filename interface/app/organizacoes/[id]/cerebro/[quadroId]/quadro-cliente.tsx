@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AbaColunas } from "@/components/quadros/aba-colunas";
+import { AcessoDeFora } from "@/components/quadros/acesso-de-fora";
 import { AbaLimites } from "@/components/quadros/aba-limites";
 import { AbaLinhas } from "@/components/quadros/aba-linhas";
 import { DialogoImportar } from "@/components/quadros/dialogo-importar";
@@ -176,6 +177,13 @@ export function QuadroCliente({
               ))}
             </ul>
           )}
+          <AcessoDeFora
+            organizacaoId={organizacaoId}
+            quadroId={q.id}
+            quadroNome={q.nome}
+            admin={podeAdmin(meuPapel)}
+            colunaExemplo={q.colunas.find((c) => c.tipo === "data" || c.tipo === "data_hora")?.nome ?? null}
+          />
         </div>
       )}
       {aba === "limites" && (

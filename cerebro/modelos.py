@@ -1080,6 +1080,39 @@ class QuadroLinha(IdData, Base):
     )
 
 
+class QuadroLink(IdData, Base):
+    """Um LINK DE LEITURA de um quadro, para painéis de fora (Google Planilhas, Looker
+    Studio, Power BI, um painel próprio) lerem o quadro sem login.
+
+    Só leitura e só deste quadro. O link é uma senha: guardamos só o HASH (`token_hash`)
+    e os 4 últimos caracteres para a tela identificar qual é; o link inteiro aparece uma
+    vez, ao criar ou trocar. Revogar e expirar cortam na hora. `limite_por_minuto` é
+    visível e ajustável (nenhum limite secreto)."""
+
+    __tablename__ = "quadro_links"
+    quadro_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("quadros.id", ondelete="CASCADE"), nullable=False
+    )
+    organizacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    nome: Mapped[str] = mapped_column(String(120), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    token_final: Mapped[str] = mapped_column(String(8), nullable=False)
+    limite_por_minuto: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("60")
+    )
+    expira_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revogado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ultimo_uso_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    usos: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    criado_por_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (Index("ix_quadro_link_quadro", "quadro_id"),)
+
+
 class QuadroAlteracao(Base):
     """O histórico de um quadro: cada criação, mudança e remoção de linha, com o valor
     ANTES e DEPOIS e o carimbo de quem fez. Só se acrescenta; ninguém edita.
