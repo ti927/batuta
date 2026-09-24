@@ -273,6 +273,9 @@ def diagnosticar(sessao: Session, execucao_id, *, seguir_webhook: bool = True) -
         "canais_de_aprovacao": [],
         "conversas_vinculadas": [],
         "webhook_alvo": None,
+        # O que esta execução GRAVOU de fato nos quadros do cérebro (o carimbo da linha).
+        # É a prova contra "o agente disse que gravou": sem linha aqui, não gravou.
+        "quadros_gravados": _quadros_gravados(sessao, ex.id),
         "avisos": [],
     }
 
@@ -346,6 +349,42 @@ def diagnosticar(sessao: Session, execucao_id, *, seguir_webhook: bool = True) -
     avisos.sort(key=lambda a: _ORDEM_SEVERIDADE.get(a["severidade"], 9))
     d["avisos"] = avisos
     return d
+
+
+def _quadros_gravados(sessao, execucao_id) -> list[dict]:
+    """Por quadro, quantas linhas esta execução deixou gravadas (as que ela criou ou foi a
+    última a mudar) e quantas mudanças ela fez no total (inclui o que foi apagado)."""
+    from sqlalchemy import func
+
+    from modelos import Quadro, QuadroAlteracao, QuadroLinha
+
+    linhas = dict(
+        sessao.execute(
+            select(QuadroLinha.quadro_id, func.count())
+            .where(QuadroLinha.execucao_id == execucao_id)
+            .group_by(QuadroLinha.quadro_id)
+        ).all()
+    )
+    mudancas = sessao.execute(
+        select(QuadroAlteracao.quadro_id, QuadroAlteracao.acao, func.count())
+        .where(QuadroAlteracao.execucao_id == execucao_id)
+        .group_by(QuadroAlteracao.quadro_id, QuadroAlteracao.acao)
+    ).all()
+    por_quadro: dict = {}
+    for qid, acao, n in mudancas:
+        por_quadro.setdefault(qid, {})[acao] = n
+    saida = []
+    for qid in set(linhas) | set(por_quadro):
+        q = sessao.get(Quadro, qid)
+        saida.append({
+            "quadro_id": str(qid),
+            "quadro": q.nome if q else None,
+            "linhas_com_o_carimbo_desta_execucao": linhas.get(qid, 0),
+            "criou": por_quadro.get(qid, {}).get("criou", 0),
+            "mudou": por_quadro.get(qid, {}).get("mudou", 0),
+            "apagou": por_quadro.get(qid, {}).get("apagou", 0),
+        })
+    return sorted(saida, key=lambda x: x["quadro"] or "")
 
 
 def _verificar_falha(sessao, d, ex, passos, avisos, nomes) -> None:

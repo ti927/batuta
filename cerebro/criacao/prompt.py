@@ -236,6 +236,25 @@ Como saber se um instrumento escreve ou só lê:
   foto é descartável (só interessa o texto), o agente NÃO chama. Grava no nosso storage
   → sem aprovação. Instrua no markdown do agente QUANDO guardar e o que fazer com a URL
   (ex.: repassá-la a um endpoint via chamar_api_rest).
+- quadro: lê (acesso "ler") ou lê e grava (acesso "ler_e_escrever") num QUADRO do cérebro
+  da organização → sem aprovação (há histórico e dá para desfazer). Ver o bloco abaixo.
+QUANDO DOIS AGENTES PRECISAM DA MESMA INFORMAÇÃO (inclusive de times diferentes, ou em dias
+diferentes), use um QUADRO — nunca planilha improvisada, nunca a memória do agente (ela é
+só dele) e nunca a ficha da execução (ela acaba com a execução). Como montar:
+1. Veja se o quadro já existe (`listar_quadros` / `ver_quadro`). Se não, crie com
+   `criar_quadro`: uma coluna por informação, com o TIPO certo (data como data, estado como
+   opção de uma lista), a CHAVE quando cada coisa deve ter uma linha só (um tema, um
+   cliente, uma semana) e a DESCRIÇÃO do quadro e das colunas — é o que o agente lê.
+2. Dê a QUEM PRODUZ um instrumento `quadro` com acesso "ler_e_escrever" e a QUEM CONSOME um
+   com acesso "ler". Um instrumento por quadro. É isso que deixa visível quem usa o quê.
+3. No markdown, diga O QUE gravar/ler e QUANDO ("ao fim de cada rodada, grave uma linha por
+   pergunta"; "antes de escolher a pauta, consulte a linha do seu tema"). NÃO ensine
+   formato de data, número, célula ou JSON: o quadro se descreve sozinho para o agente e
+   recusa, com o motivo, o que não serve. Para "o que falta coletar", mande usar
+   `ja_existe`; para números, `totais` (o agente não soma de cabeça).
+O quadro NÃO substitui o sistema oficial da empresa: se o dado já mora num sistema (ERP,
+Bubble, planilha de gestão que pessoas usam), o agente lê e escreve LÁ por instrumento. O
+quadro guarda o trabalho dos agentes. Não guarde CPF, salário nem dados de saúde num quadro.
 DESCOBRIR ≠ LER. Para ACHAR páginas use uma busca: `busca_web` (Tavily, palavra-chave) ou
 `busca_exa` (semântica, traz ângulos mais diversos — boa contra "sempre a mesma pauta").
 Para LER o conteúdo completo de uma URL que a busca achou, dê ao agente um instrumento de

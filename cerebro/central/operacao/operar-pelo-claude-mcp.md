@@ -75,8 +75,13 @@ quando a ação for irreversível e alguém precisar confirmar.
   consultor, diga o nome da automação — dizer "vou desligar o time" descreve outra coisa.
 - **Gatilho e cadeia convivem:** definir o gatilho e montar a cadeia podem ser feitos em
   qualquer ordem; o Batuta mantém os dois coerentes sozinho.
+- **Quadros pelo MCP:** as ferramentas de quadro recebem o id da ORGANIZAÇÃO (o quadro é
+  dela, não de um time). Toda escrita aceita `simular` — use antes e mostre ao consultor;
+  apagar linhas e excluir quadro só simulam sem `confirmar`. Para saber o que uma execução
+  gravou de fato, o diagnóstico traz `quadros_gravados`. Ver [[cerebro/quadros]].
 
 ## Relacionado
 
 - [[operacao/uso-e-custos]]
 - [[instrumentos/cinto]]
+- [[cerebro/quadros]]

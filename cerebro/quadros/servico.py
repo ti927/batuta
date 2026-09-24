@@ -530,16 +530,52 @@ def alterar_quadro(
     return _em_savepoint(sessao, simular, trabalho)
 
 
+def quem_usa(sessao: Session, organizacao_id: uuid.UUID, ref) -> list[dict]:
+    """Os instrumentos `quadro` da organização que apontam para este quadro, com o time,
+    o acesso e os agentes que os têm no cinto. É o "quem lê e quem escreve" da tela."""
+    from modelos import Agente, AgenteInstrumento, Instrumento, Time
+
+    q = obter_quadro(sessao, organizacao_id, ref)
+    alvos = {str(q.id), q.nome.lower()}
+    linhas = sessao.execute(
+        select(Instrumento, Time.nome)
+        .join(Time, Time.id == Instrumento.time_id)
+        .where(Instrumento.tipo == "quadro", Time.organizacao_id == organizacao_id)
+    ).all()
+    usos = []
+    for inst, nome_time in linhas:
+        ref_inst = str((inst.configuracao or {}).get("quadro") or "")
+        if ref_inst not in alvos and ref_inst.lower() not in alvos:
+            continue
+        agentes = sessao.scalars(
+            select(Agente.nome)
+            .join(AgenteInstrumento, AgenteInstrumento.agente_id == Agente.id)
+            .where(AgenteInstrumento.instrumento_id == inst.id)
+        ).all()
+        usos.append({
+            "instrumento_id": str(inst.id),
+            "instrumento": inst.nome,
+            "time": nome_time,
+            "time_id": str(inst.time_id),
+            "acesso": (inst.configuracao or {}).get("acesso") or "ler",
+            "agentes": list(agentes),
+        })
+    return usos
+
+
 def excluir_quadro(sessao: Session, organizacao_id: uuid.UUID, ref, *, simular: bool = False) -> dict:
-    """Apaga o quadro, as linhas e o histórico. Irreversível — a porta confirma antes."""
+    """Apaga o quadro, as linhas e o histórico. Irreversível — a porta confirma antes.
+    Devolve também quem usava o quadro: esses instrumentos passam a sair do cinto (com
+    aviso) até serem apontados para outro quadro ou removidos."""
 
     def trabalho():
         q = obter_quadro(sessao, organizacao_id, ref)
         total = contar_linhas(sessao, q.id)
         nome = q.nome
+        usos = quem_usa(sessao, organizacao_id, q.id)
         sessao.delete(q)
         sessao.flush()
-        return {"quadro": nome, "linhas_apagadas": total}
+        return {"quadro": nome, "linhas_apagadas": total, "instrumentos_que_usavam": usos}
 
     return _em_savepoint(sessao, simular, trabalho)
 

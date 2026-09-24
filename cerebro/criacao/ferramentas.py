@@ -373,6 +373,12 @@ MENSAGENS_CRIADORA: dict[str, str] = {
     "esquecer": "Atualizando o que sei…",
     "consultar_conhecimento": "Consultando a base de conhecimento…",
     "buscar_no_historico": "Procurando no histórico da conversa…",
+    "listar_quadros": "Consultando os quadros da organização…",
+    "ver_quadro": "Lendo o quadro…",
+    "criar_quadro": "Criando o quadro…",
+    "alterar_quadro": "Ajustando o quadro…",
+    "consultar_quadro": "Consultando o quadro…",
+    "importar_csv_quadro": "Importando a planilha para o quadro…",
 }
 
 # Parte C (iceberg): teto de resultados e de tamanho por trecho na busca do histórico —
@@ -1127,7 +1133,145 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
             ],
         )
 
+    # ── Quadros do cérebro da organização (docs/CEREBRO-PLANO.md) ──
+    # O quadro é da ORGANIZAÇÃO (não do time desta conversa): as ferramentas agem na
+    # organização da conversa e mostram quais times usam cada quadro.
+    from quadros import importacao as quadros_importacao
+    from quadros import servico as quadros_servico
+    from quadros.servico import Autor, ErroQuadro
+
+    org_id = ctx.conversa.organizacao_id
+
+    def _autor_criadora() -> Autor:
+        return Autor(origem="ia_criadora", usuario_id=ctx.usuario.id if ctx.usuario else None)
+
+    def _quadro(fn) -> str:
+        try:
+            return _ok("Pronto.", **fn())
+        except ErroQuadro as e:
+            corpo = {"ok": False, "erro": e.mensagem}
+            if e.detalhes:
+                corpo["detalhes"] = e.detalhes
+            return json.dumps(corpo, ensure_ascii=False, default=str)
+
+    def listar_quadros() -> str:
+        """Lista os QUADROS do cérebro da organização — onde os agentes deixam informação
+        para outros agentes, inclusive de outros times. Mostra, por quadro, quantas linhas
+        tem e QUAIS times/agentes leem e escrevem nele. Olhe isto antes de criar um quadro
+        novo (talvez ele já exista)."""
+        def fn():
+            itens = []
+            for q in quadros_servico.listar_quadros(sess, org_id):
+                itens.append({
+                    "quadro_id": str(q.id), "nome": q.nome, "descricao": q.descricao,
+                    "linhas": quadros_servico.contar_linhas(sess, q.id),
+                    "usado_por": quadros_servico.quem_usa(sess, org_id, q.id),
+                })
+            return {"quadros": itens}
+        return _quadro(fn)
+
+    def ver_quadro(quadro: str) -> str:
+        """Mostra um quadro (por nome ou id): colunas e tipos, a chave, a descrição, os
+        limites, as 5 linhas mais recentes e quem usa. Use para entender o quadro antes de
+        dar um instrumento `quadro` a um agente ou de mudar a estrutura."""
+        def fn():
+            q = quadros_servico.obter_quadro(sess, org_id, quadro)
+            amostra = quadros_servico.consultar(sess, org_id, q.id, limite=5)
+            return {
+                "quadro": quadros_servico.descrever_quadro(q, quadros_servico.contar_linhas(sess, q.id)),
+                "ultimas_linhas": [ln["valores"] for ln in amostra["linhas"]],
+                "usado_por": quadros_servico.quem_usa(sess, org_id, q.id),
+            }
+        return _quadro(fn)
+
+    def criar_quadro(
+        nome: str, colunas: list[dict], chave: list[str] | None = None,
+        descricao: str | None = None, simular: bool = False,
+    ) -> str:
+        """Cria um QUADRO no cérebro da organização. Use quando um agente precisa deixar
+        informação para OUTRO agente (outro time, outro dia). Antes, veja listar_quadros.
+
+        `colunas`: lista de {"nome", "tipo", "obrigatoria"?, "opcoes"?, "descricao"?}.
+        Tipos: texto (até 500 caracteres), texto_longo, numero, dinheiro, data, data_hora,
+        sim_nao, opcao (exige "opcoes": [...]; use para ESTADOS como pendente/aprovado).
+        `chave`: nomes das colunas que identificam cada linha (ex.: ["Tema"], ["Data",
+        "Pergunta"]) — use quando cada coisa deve ter UMA linha só; vazio = registro que só
+        acumula. `descricao`: para que serve o quadro (o AGENTE lê isto — escreva bem).
+        `simular=true` mostra o resultado sem criar. Depois, dê o instrumento `quadro`
+        (configurar_instrumento, tipo "quadro", configuracao {"quadro": <nome>, "acesso":
+        "ler" ou "ler_e_escrever"}) a quem produz e a quem consome."""
+        return _quadro(lambda: quadros_servico.criar_quadro(
+            sess, org_id, nome=nome, colunas=colunas, chave=chave, descricao=descricao,
+            criado_por_id=ctx.usuario.id if ctx.usuario else None, simular=simular,
+        ))
+
+    def alterar_quadro(quadro: str, operacoes: list[dict], simular: bool = False) -> str:
+        """Muda a ESTRUTURA de um quadro, tudo ou nada, na ordem. Cada operação é um
+        objeto com "acao": renomear{nome} · descrever{descricao} ·
+        adicionar_coluna{coluna:{nome,tipo,...}} · renomear_coluna{coluna,nome} ·
+        descrever_coluna{coluna,descricao} · trocar_tipo{coluna,tipo,opcoes?,
+        esvaziar_invalidos?} · mudar_opcoes{coluna,opcoes,esvaziar_invalidos?} ·
+        obrigatoria{coluna,valor} · remover_coluna{coluna} (APAGA os valores) ·
+        mudar_chave{colunas:[...]} · ajustar_limite{limite,valor} (valor null = padrão;
+        limites: colunas, linhas_por_gravacao, linhas_por_consulta, linhas_no_quadro,
+        tamanho_texto_longo). Trocar tipo CONVERTE o que existe; use `simular=true` antes
+        para ver o que não se converte, e mostre isso ao consultor. Remover coluna apaga
+        dado: confirme com o consultor antes."""
+        return _quadro(lambda: quadros_servico.alterar_quadro(
+            sess, org_id, quadro, operacoes, simular=simular,
+        ))
+
+    def consultar_quadro(
+        quadro: str, filtros: list[dict] | None = None, ordem: list[str] | None = None,
+        limite: int = 20, so_o_mais_recente_de: str | None = None,
+    ) -> str:
+        """Lê linhas de um quadro (para SUPERVISIONAR o que os agentes gravaram ou mostrar
+        ao consultor). `filtros`: lista de {"coluna", "operador", "valor"} com operadores
+        =, !=, >, >=, <, <=, contem, em (valor é lista), vazio, nao_vazio; também valem
+        _criado_em, _origem e _execucao_id. `ordem`: ["-Data"] = decrescente.
+        `so_o_mais_recente_de`: só as linhas com o maior valor desta coluna."""
+        return _quadro(lambda: quadros_servico.consultar(
+            sess, org_id, quadro, filtros=filtros, ordem=ordem, limite=limite,
+            so_o_mais_recente_de=so_o_mais_recente_de,
+        ))
+
+    def importar_csv_quadro(
+        csv: str, quadro: str | None = None, criar_com_nome: str | None = None,
+        chave: list[str] | None = None, mapeamento: dict | None = None,
+        ignorar_colunas_extras: bool = False, simular: bool = True,
+    ) -> str:
+        """Importa uma planilha (texto CSV que o consultor colou) para um quadro. Para um
+        quadro EXISTENTE passe `quadro`; o cabeçalho casa com as colunas pelo nome (ou pelo
+        `mapeamento` {cabeçalho: coluna}). Para CRIAR um quadro a partir do CSV passe
+        `criar_com_nome` (e `chave`, se houver): as colunas e os tipos são SUGERIDOS pelos
+        valores — com `simular=true` (o padrão) nada é criado nem gravado e você recebe a
+        sugestão de colunas e o que seria importado para mostrar ao consultor; confirme
+        com ele e chame de novo com `simular=false`. Tudo ou nada: um valor ruim recusa a
+        importação inteira, com a linha e a coluna."""
+        def fn():
+            if criar_com_nome:
+                sugestao = quadros_importacao.sugerir_colunas(csv)
+                criado = quadros_servico.criar_quadro(
+                    sess, org_id, nome=criar_com_nome, colunas=sugestao["colunas"], chave=chave,
+                    criado_por_id=ctx.usuario.id if ctx.usuario else None, simular=simular,
+                )
+                if simular:
+                    return {"simulado": True, "colunas_sugeridas": sugestao["colunas"],
+                            "linhas_no_csv": sugestao["linhas_no_csv"]}
+                alvo = criado["quadro_id"]
+            elif quadro:
+                alvo = quadro
+            else:
+                raise ErroQuadro("Diga o `quadro` de destino ou `criar_com_nome`.")
+            return quadros_importacao.importar_csv(
+                sess, org_id, alvo, csv, autor=_autor_criadora(), mapeamento=mapeamento,
+                ignorar_colunas_extras=ignorar_colunas_extras, simular=simular,
+            )
+        return _quadro(fn)
+
     funcoes = [
+        listar_quadros, ver_quadro, criar_quadro, alterar_quadro, consultar_quadro,
+        importar_csv_quadro,
         definir_time, adicionar_agente, editar_agente, remover_agente,
         configurar_instrumento, editar_instrumento, montar_conector,
         testar_operacao_conector, encaixar_instrumento,

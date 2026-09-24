@@ -14,6 +14,7 @@ from instrumentos.base import (
     campos_secretos,
     obter_tipo,
     preparar_config,
+    resolver_config,
     tipos_disponiveis,
     validar_configuracao,
 )
@@ -40,6 +41,7 @@ from instrumentos import mcp  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import montar_imagem  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import pedir_aprovacao  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import publicar_instagram  # noqa: E402, F401  (efeito colateral: registro)
+from instrumentos import quadro  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import rest  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import search_console  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import sql  # noqa: E402, F401  (efeito colateral: registro)
@@ -52,6 +54,7 @@ __all__ = [
     "campos_secretos",
     "obter_tipo",
     "preparar_config",
+    "resolver_config",
     "tipos_disponiveis",
     "validar_configuracao",
 ]

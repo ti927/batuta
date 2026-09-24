@@ -129,6 +129,12 @@ class TipoInstrumento(ABC):
     # Instrumento do Framework). A rota de catálogo (`/instrumentos/tipos`) filtra
     # por isto; a criação/execução por tipo seguem funcionando normalmente.
     oculto_no_catalogo: bool = False
+    # OCULTO SÓ NA TELA: o tipo fica fora do dropdown de "criar instrumento" da tela, mas
+    # SEGUE no catálogo das IAs (criadora e MCP), que o criam por `configurar_instrumento`.
+    # Para um tipo cujo formulário da tela ainda não existe (ex.: o `quadro`, até a tela
+    # dos quadros trazer o seletor). Diferente do `oculto_no_catalogo`, que esconde das
+    # IAs também porque o tipo tem ferramenta de criação própria (o conector).
+    oculto_na_tela: bool = False
 
     def normalizar_config(self, bruta: dict) -> dict:
         """Chance de o tipo TRANSFORMAR a configuração crua antes de ela ser
@@ -146,6 +152,17 @@ class TipoInstrumento(ABC):
         Levante `ValueError` (com mensagem humana) se a entrada não presta — as
         rotas já a traduzem em 422. O padrão não mexe em nada."""
         return bruta
+
+    def resolver_config(self, sessao, organizacao_id, config_publica: dict) -> dict:
+        """Chance de o tipo CONFERIR e FIXAR a configuração contra o que existe na
+        organização, na hora de criar/editar o instrumento (tela, IA criadora, MCP —
+        as quatro portas chamam isto depois de `preparar_config`).
+
+        O caso que motivou: o `quadro` recebe o NOME do quadro, mas guarda o ID — senão
+        renomear o quadro quebraria o instrumento em silêncio — e recusa na hora um
+        quadro que não existe na organização, em vez de o agente descobrir só na
+        execução. Levante `ValueError` (mensagem humana) para recusar. Padrão: nada."""
+        return config_publica
 
     def irreversivel_para(self, configuracao: dict) -> bool:
         """Se ESTA instância (com esta configuração) faz ação irreversível.
@@ -185,6 +202,15 @@ class TipoInstrumento(ABC):
         O padrão é `None`: o instrumento é de ferramenta única (o caso comum),
         e a orquestração segue pelo `executar`."""
         return None
+
+    def expandir_ferramentas_da_instancia(self, instrumento, config: BaseModel) -> list | None:
+        """O mesmo que `expandir_ferramentas`, mas sabendo QUAL instrumento está no
+        cinto (e, por ele, de qual time e organização ele é).
+
+        Existe para o instrumento `quadro` (Cérebro): o quadro é da ORGANIZAÇÃO, e a
+        ferramenta só pode tocar quadro da organização do time dono do instrumento — a
+        config sozinha não prova isso. Quem não precisa ignora a instância (padrão)."""
+        return self.expandir_ferramentas(config)
 
     def dependencias_ui(self) -> dict | None:
         """Campos do formulário cujas OPÇÕES dependem do valor de outro campo
@@ -246,6 +272,15 @@ def acao_irreversivel(tipo: str, configuracao: dict | None = None) -> bool:
     if t is None:
         return False
     return bool(t.irreversivel_para(configuracao or {}))
+
+
+def resolver_config(sessao, tipo: str, organizacao_id, config_publica: dict) -> dict:
+    """A config conferida e fixada contra a organização (ver `TipoInstrumento.
+    resolver_config`). Tipo desconhecido devolve como veio. Levanta `ValueError`."""
+    t = obter_tipo(tipo)
+    if t is None:
+        return config_publica
+    return t.resolver_config(sessao, organizacao_id, config_publica)
 
 
 def validar_cabecalhos_ascii(cabecalhos: dict | None) -> None:

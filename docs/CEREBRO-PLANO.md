@@ -3,9 +3,10 @@
 **Plano de construção. Escrito em 2026-09-24.** Substitui a "FASE — Biblioteca" como estava no `BUILD-PLAN.md` e absorve o
 `docs/BIBLIOTECA-DECISAO.md`, que vira a **Parte 4** deste plano.
 
-> Estado: **Entrega 1 (a fundação) ✅ pronta em 2026-09-24** — migração `qdr00quadros001`, `cerebro/quadros/`, 62 testes,
-> capítulos `cerebro/o-que-e-o-cerebro` e `cerebro/quadros` na Central. Próxima: Entrega 2 (o agente usa). Cada entrega
-> começa só com o sinal do maestro e é mostrada pronta antes de a próxima começar.
+> Estado (2026-09-24): **Entregas 1, 2 e 3 ✅** — a fundação (migração `qdr00quadros001`, `cerebro/quadros/`), o
+> instrumento `quadro` (o agente lê e grava) e as IAs operando (6 ferramentas na criadora, 13 no MCP, diagnóstico com
+> `quadros_gravados`). 90 testes novos, suíte 1405. **Próxima: Entrega 4 (a tela) — começa pela proposta visual.** O
+> maestro autorizou 2 e 3 juntas ("conclua e suba tudo de uma vez").
 
 ---
 
@@ -358,6 +359,26 @@ ficou intocado. Duas descobertas dos testes viraram regra: "1.000"/"1,000" são 
 em vez de chutados, e o histórico ganhou um número sequencial (duas mudanças na mesma transação têm o mesmo horário). A
 área `cerebro` da Central ainda **não aparece no /ajuda** (a lista de áreas da tela é fixa): entra junto com a tela, na
 Entrega 4 — até lá, só as IAs leem, e os capítulos dizem "em construção".
+
+*Como ficaram as Entregas 2 e 3 (2026-09-24):*
+- **Toque mínimo no motor, dito na cara** (evolução dirigida, `MIGRACAO.md §6.1`): (1) o contrato de instrumento ganhou
+  `expandir_ferramentas_da_instancia(inst, config)` — padrão delega ao antigo; o `quadro` precisa da instância para
+  saber a organização pelo TIME dono do instrumento (a config sozinha não prova nada); (2) `executar_agente` põe o
+  `agente_id` no contexto de quem-fez durante o turno (é o carimbo). Nada mais do motor mudou.
+- **`resolver_config(sessao, org, config)`**, gancho novo chamado pelas QUATRO portas de criar/editar instrumento
+  (tela ×2, `criacao/servicos` ×2 — a criadora e o MCP passam por ali): o `quadro` recebe o nome, **guarda o id**
+  (renomear o quadro não quebra o instrumento) e recusa na hora quadro inexistente ou de outra organização.
+- **`oculto_na_tela`** (novo, ≠ `oculto_no_catalogo`): o tipo `quadro` fica fora do dropdown da tela até a Entrega 4
+  trazer o seletor de quadro, mas segue no catálogo das IAs. O `oculto_no_catalogo` esconderia das IAs também.
+- A recusa do quadro volta ao agente como `ok:false` com o motivo por linha e entra nos erros da execução (a borda
+  já registrava `ok:false` das ferramentas expandidas). Falha de banco vira resposta honesta + evento `quadro.falhou`.
+- A consulta volta ao agente em forma de **tabela compacta** (cabeçalho + linhas como listas) — barata em tokens.
+- Importar CSV (`quadros/importacao.py`) sugere colunas pelos valores e importa tudo-ou-nada em partes do limite;
+  numera os erros pela linha do ARQUIVO.
+- MCP: apagar linhas e excluir quadro **só simulam sem `confirmar=true`**; importar CSV simula por padrão. As
+  descrições das ferramentas com `_FILTROS_DOC` usam o marcador `_doc(...)` — string montada no corpo da função
+  **não é docstring** em Python, e a ferramenta iria para a IA externa sem descrição (pego antes de subir).
+- **Fica para quando houver a tela:** o seletor de quadro no formulário do instrumento; a área "Cérebro" no /ajuda.
 
 **Entrega 2 — O agente usa.**
 Instrumento `quadro` com as seis ações, descrição gerada a partir das colunas, carimbo automático, mensagens de atividade e

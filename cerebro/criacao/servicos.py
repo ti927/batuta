@@ -176,6 +176,9 @@ def configurar_instrumento(
     secretos que o consultor ainda precisa preencher no cofre."""
     try:
         config_publica, segredos_novos = encaixe.preparar_config(tipo, configuracao or {})
+        config_publica = encaixe.resolver_config(
+            sessao, tipo, time.organizacao_id, config_publica
+        )
     except ValueError as e:
         raise ConflitoDominio(str(e))
     inst = Instrumento(time_id=time.id, nome=nome, tipo=tipo, configuracao=config_publica)
@@ -203,6 +206,10 @@ def editar_instrumento(
     if configuracao is not None:
         try:
             config_publica, segredos_novos = encaixe.preparar_config(inst.tipo, configuracao)
+            time = sessao.get(Time, inst.time_id)
+            config_publica = encaixe.resolver_config(
+                sessao, inst.tipo, time.organizacao_id if time else None, config_publica
+            )
         except ValueError as e:
             raise ConflitoDominio(str(e))
         inst.configuracao = config_publica

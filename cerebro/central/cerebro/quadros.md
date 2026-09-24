@@ -9,8 +9,8 @@ fontes: ["cerebro/quadros/servico.py", "cerebro/quadros/tipos.py", "cerebro/quad
 
 # Quadros
 
-> **Em construção.** As regras abaixo já valem no Batuta, mas os agentes ainda não têm a ferramenta para
-> usar um quadro e ainda não há tela.
+> **Em construção.** Os quadros já funcionam para os agentes e para a IA que monta os times. Ainda não
+> há uma tela para você ver e editar os quadros — ela é a próxima parte.
 
 ## Em uma frase
 Um quadro é como uma aba de planilha, só que o Batuta sabe o que tem em cada coluna: confere o que entra,
@@ -21,7 +21,8 @@ Para um agente deixar informação que outro agente (ou uma pessoa) vai usar dep
 rodada, a situação de cada cliente, a lista de contas a pagar, os números da semana.
 
 ## Como usar (na tela)
-Ainda não há tela.
+Ainda não há tela. Peça à IA que monta o time para criar o quadro, importar uma planilha que você já tem
+(cole o conteúdo em CSV) ou mostrar o que os agentes gravaram.
 
 ## As colunas
 Cada coluna tem um nome e um tipo:
@@ -91,17 +92,21 @@ Todo quadro tem limites, e todos podem ser vistos e ajustados:
   vazio, se você pedir).
 
 ## Para a IA
-Ainda não há ferramenta para os agentes nem para você: **não monte quadros e não prometa ao consultor
-que dá para usar agora.**
+Ferramentas (IA criadora): `listar_quadros`, `ver_quadro`, `criar_quadro`, `alterar_quadro`,
+`consultar_quadro`, `importar_csv_quadro`. Pelo MCP há também totais, histórico, exportar, gravar,
+editar, apagar e excluir. Ainda não há tela: o consultor vê os quadros por você.
 
-Quando estiver pronto, ao desenhar um quadro:
+Ao desenhar um quadro:
 - dê a cada coluna o tipo certo (data como **Data**, não texto) — é o que permite filtrar e ordenar;
 - use **Opção de uma lista** para estados (pendente/aprovado/pago), nunca texto livre;
 - defina a **chave** quando cada coisa deve ter uma linha só (um tema, um cliente, uma semana);
 - escreva a **descrição** do quadro e das colunas: é o que o agente vai ler para saber o que gravar;
-- **não** ensine formato de dado no texto do agente — o quadro já recusa o que não serve e explica.
+- **não** ensine formato de dado no texto do agente — o quadro já recusa o que não serve e explica;
+- antes de mudar tipo ou remover coluna, rode com `simular` e mostre ao consultor o que muda;
+- ao migrar uma planilha, importe com `simular` primeiro (é o padrão) e confira as colunas sugeridas.
 
 ## Relacionado
 - [[cerebro/o-que-e-o-cerebro]]
+- [[cerebro/instrumento-quadro]]
 - [[times-agentes/memoria-do-agente]]
 - [[automacoes/ficha-da-execucao]]

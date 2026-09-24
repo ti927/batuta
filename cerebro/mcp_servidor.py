@@ -28,6 +28,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 import mcp_escopo
 import mcp_ferramentas
 import mcp_ferramentas_escrita as escrita
+import mcp_ferramentas_quadros as quadros_mcp
 import mcp_login
 
 # ───────────────────────────── Servidor ─────────────────────────────
@@ -62,6 +63,13 @@ mcp = FastMCP(
         "nº 1 de 'aprovei e não aconteceu nada'. (3) Ações IRREVERSÍVEIS (`excluir_*`) apagam de verdade — confirme "
         "com o consultor antes de chamar; `ativar_automacao`/`desativar_automacao` mexem "
         "numa AUTOMAÇÃO (nunca no time), então diga o nome dela ao confirmar.\n"
+        "QUADROS (o cérebro da organização): quando agentes precisam passar informação uns "
+        "aos outros — inclusive entre times —, use um quadro (`listar_quadros`, "
+        "`criar_quadro`) e dê o instrumento tipo \"quadro\" a quem grava e a quem lê; nunca "
+        "planilha improvisada nem a memória do agente. Toda escrita aceita `simular=true` "
+        "(use antes e mostre ao consultor); apagar/excluir só simulam sem `confirmar=true`. "
+        "Para saber o que uma execução GRAVOU de fato, `diagnosticar_execucao` lista as "
+        "linhas por quadro — a narração do agente não é prova.\n"
         "ERRO: se uma ferramenta devolver falha com um CÓDIGO, repasse o código ao consultor "
         "— ele localiza o erro exato no servidor. Não invente causa nem repita a chamada às "
         "cegas."
@@ -714,6 +722,236 @@ async def excluir_organizacao(organizacao_id: str) -> str:
     antes: nunca apaga times/execuções/credenciais em cascata. Exige admin."""
     return await anyio.to_thread.run_sync(
         escrita.excluir_organizacao, _sub(), organizacao_id
+    )
+
+
+# ───────────────────── Quadros do cérebro da organização ─────────────────────
+# docs/CEREBRO-PLANO.md §7. Os textos abaixo são o que a IA externa LÊ para usar os
+# quadros — por isso listam tipos, operadores e modos por extenso (a lição de agosto:
+# a IA lê a docstring, não o capítulo da Central).
+
+_FILTROS_DOC = (
+    "`filtros`: lista de {\"coluna\": <nome>, \"operador\": <op>, \"valor\": <valor>}, todos "
+    "valendo juntos. Operadores: = · != · > · >= · < · <= · contem (texto) · em (valor é "
+    "lista) · vazio · nao_vazio (sem valor). O valor passa pela mesma conversão da "
+    "gravação (\"21/09/2026\" filtra data). Também dá para filtrar pelo carimbo: "
+    "_criado_em, _atualizado_em, _origem (agente|pessoa|ia_criadora|mcp|importacao), "
+    "_execucao_id, _agente_id."
+)
+
+
+def _doc(texto: str):
+    """Prende a descrição à função ANTES do `@mcp.tool()` lê-la. Necessário quando o
+    texto é montado (com `_FILTROS_DOC`): uma string montada no corpo NÃO é docstring
+    em Python — a ferramenta iria para a IA externa sem descrição nenhuma."""
+
+    def aplicar(fn):
+        fn.__doc__ = texto
+        return fn
+
+    return aplicar
+
+
+@mcp.tool()
+async def listar_quadros(organizacao_id: str) -> str:
+    """Lista os QUADROS do cérebro de uma organização — dados em colunas que os agentes
+    (e pessoas) escrevem e leem, inclusive entre times diferentes. Por quadro: linhas,
+    descrição e QUEM USA (instrumento, time, acesso ler|ler_e_escrever, agentes)."""
+    return await anyio.to_thread.run_sync(quadros_mcp.listar_quadros, _sub(), organizacao_id)
+
+
+@mcp.tool()
+async def ver_quadro(organizacao_id: str, quadro: str) -> str:
+    """Mostra um quadro (por nome ou id): colunas com tipo/obrigatória/opções/descrição,
+    a CHAVE (colunas que identificam cada linha), os LIMITES (valor, padrão, teto), as 5
+    linhas mais recentes (com o carimbo de quem gravou) e quem usa o quadro."""
+    return await anyio.to_thread.run_sync(quadros_mcp.ver_quadro, _sub(), organizacao_id, quadro)
+
+
+@mcp.tool()
+@_doc(
+    "Lê linhas de um quadro. Sempre devolve o `total` que casa e, se veio só parte, o "
+    "`proximo` deslocamento para continuar (paginação). Cada linha traz `id`, `valores` "
+    "(por nome de coluna) e `carimbo` (origem, agente, execução, usuário, versão, datas). "
+    + _FILTROS_DOC
+    + " `ordem`: nomes de coluna, \"-\" na frente = decrescente (padrão: mais recentes "
+    "primeiro). `colunas`: só estas na resposta. `limite`: padrão 50, teto do quadro. "
+    "`so_o_mais_recente_de`: só as linhas com o MAIOR valor desta coluna (ex.: \"Data\" = "
+    "a rodada mais recente). `execucao_id`: só o que aquela execução gravou."
+)
+async def consultar_quadro(
+    organizacao_id: str, quadro: str, filtros: list[dict] | None = None,
+    ordem: list[str] | None = None, colunas: list[str] | None = None,
+    limite: int | None = None, deslocamento: int = 0,
+    so_o_mais_recente_de: str | None = None, execucao_id: str | None = None,
+) -> str:
+    return await anyio.to_thread.run_sync(
+        quadros_mcp.consultar_quadro, _sub(), organizacao_id, quadro, filtros, ordem,
+        colunas, limite, deslocamento, so_o_mais_recente_de, execucao_id,
+    )
+
+
+@mcp.tool()
+@_doc(
+    "Totais calculados PELO BANCO (não some de cabeça): `metricas` = lista de "
+    "{\"funcao\": contar|soma|media|minimo|maximo, \"coluna\": <nome>} (sem = contar "
+    "linhas; soma/média só em número/dinheiro). `agrupar_por`: até 3 colunas. "
+    "`so_o_mais_recente_de`: como na consulta. " + _FILTROS_DOC
+)
+async def totais_quadro(
+    organizacao_id: str, quadro: str, metricas: list[dict] | None = None,
+    agrupar_por: list[str] | None = None, filtros: list[dict] | None = None,
+    so_o_mais_recente_de: str | None = None,
+) -> str:
+    return await anyio.to_thread.run_sync(
+        quadros_mcp.totais_quadro, _sub(), organizacao_id, quadro, metricas, agrupar_por,
+        filtros, so_o_mais_recente_de,
+    )
+
+
+@mcp.tool()
+async def historico_linha(organizacao_id: str, quadro: str, linha_id: str) -> str:
+    """Todas as mudanças de uma linha (inclusive se já foi apagada): criou/mudou/apagou,
+    o valor ANTES e DEPOIS, quando, e quem (origem, agente, execução, usuário)."""
+    return await anyio.to_thread.run_sync(
+        quadros_mcp.historico_linha, _sub(), organizacao_id, quadro, linha_id
+    )
+
+
+@mcp.tool()
+@_doc(
+    "Exporta o quadro (ou o que casa com os filtros) como texto CSV, até 5.000 linhas. "
+    + _FILTROS_DOC
+)
+async def exportar_quadro(organizacao_id: str, quadro: str, filtros: list[dict] | None = None) -> str:
+    return await anyio.to_thread.run_sync(
+        quadros_mcp.exportar_quadro, _sub(), organizacao_id, quadro, filtros
+    )
+
+
+@mcp.tool()
+async def criar_quadro(
+    organizacao_id: str, nome: str, colunas: list[dict], chave: list[str] | None = None,
+    descricao: str | None = None, limites: dict | None = None, simular: bool = False,
+) -> str:
+    """Cria um QUADRO no cérebro da organização. Use quando agentes precisam deixar
+    informação para OUTROS agentes (outro time, outro dia) — no lugar de planilha. NÃO use
+    para o que já mora num sistema oficial da empresa (ERP, Bubble): lá o agente lê e
+    escreve por instrumento. Não guarde CPF, salário nem dados de saúde.
+
+    `colunas`: lista de {"nome", "tipo", "obrigatoria"?, "opcoes"?, "descricao"?}. Tipos:
+    texto (até 500 caracteres) · texto_longo · numero · dinheiro · data · data_hora ·
+    sim_nao · opcao (exige "opcoes": [...]; use para estados). `chave`: nomes das colunas
+    que identificam cada linha (UMA linha por tema/cliente/semana); vazio = só acumula.
+    `descricao`: para que serve (o agente lê — escreva bem). `limites` (opcional):
+    {colunas, linhas_por_gravacao, linhas_por_consulta, linhas_no_quadro,
+    tamanho_texto_longo}. `simular=true` mostra sem criar. Exige operador.
+    Depois, dê o instrumento tipo "quadro" (configurar_instrumento, configuracao
+    {"quadro": <nome>, "acesso": "ler" | "ler_e_escrever"}) a quem produz e a quem lê."""
+    return await anyio.to_thread.run_sync(
+        quadros_mcp.criar_quadro, _sub(), organizacao_id, nome, colunas, chave, descricao,
+        limites, simular,
+    )
+
+
+@mcp.tool()
+async def alterar_quadro(
+    organizacao_id: str, quadro: str, operacoes: list[dict], simular: bool = False
+) -> str:
+    """Muda a ESTRUTURA de um quadro — lista de operações aplicadas na ordem, tudo ou
+    nada. Cada uma tem "acao": renomear{nome} · descrever{descricao} ·
+    adicionar_coluna{coluna:{nome,tipo,...}} · renomear_coluna{coluna,nome} ·
+    descrever_coluna{coluna,descricao} · trocar_tipo{coluna,tipo,opcoes?,
+    esvaziar_invalidos?} · mudar_opcoes{coluna,opcoes,esvaziar_invalidos?} ·
+    obrigatoria{coluna,valor} · remover_coluna{coluna} (APAGA os valores dela) ·
+    mudar_chave{colunas:[...]} · ajustar_limite{limite,valor (null = padrão)}.
+    Trocar tipo CONVERTE os valores existentes: o que não converte recusa a mudança
+    (com a lista), a menos que esvaziar_invalidos=true. Rode com `simular=true` antes e
+    mostre ao consultor. Exige operador."""
+    return await anyio.to_thread.run_sync(
+        quadros_mcp.alterar_quadro, _sub(), organizacao_id, quadro, operacoes, simular
+    )
+
+
+@mcp.tool()
+async def gravar_linhas(
+    organizacao_id: str, quadro: str, linhas: list[dict], modo: str = "acrescentar",
+    simular: bool = False,
+) -> str:
+    """Grava linhas num quadro — TUDO OU NADA: se qualquer linha tiver problema, nada é
+    gravado e a resposta lista linha, coluna e motivo. `linhas`: lista de
+    {"<nome da coluna>": valor}. Datas como 2026-09-21 ou 21/09/2026; números sem
+    separador de milhar ("1.000" é recusado como ambíguo). `modo`: "acrescentar" (chave
+    repetida é recusada) ou "pela_chave" (cria se não existe; se existe, muda só as
+    colunas informadas; valor "" apaga o campo). `simular=true` diz o que aconteceria.
+    O carimbo registra que foi você (MCP) em nome do consultor. Exige operador."""
+    return await anyio.to_thread.run_sync(
+        quadros_mcp.gravar_linhas, _sub(), organizacao_id, quadro, linhas, modo, simular
+    )
+
+
+@mcp.tool()
+@_doc(
+    "Muda as colunas de `campos` ({\"<coluna>\": novo valor}) nas linhas achadas por "
+    "`ids` OU `filtros` (um dos dois é obrigatório — não existe \"mudar tudo\" sem "
+    "querer). Use `simular=true` para ver quantas mudariam. Exige operador. " + _FILTROS_DOC
+)
+async def editar_linhas(
+    organizacao_id: str, quadro: str, campos: dict, ids: list[str] | None = None,
+    filtros: list[dict] | None = None, simular: bool = False,
+) -> str:
+    return await anyio.to_thread.run_sync(
+        quadros_mcp.editar_linhas, _sub(), organizacao_id, quadro, campos, ids, filtros, simular
+    )
+
+
+@mcp.tool()
+@_doc(
+    "Apaga linhas achadas por `ids`, `filtros` e/ou `execucao_id` (desfazer TUDO o que "
+    "uma execução gravou — ex.: uma rodada de teste). SEM `confirmar=true` é só uma "
+    "PRÉVIA (quantas sairiam); mostre ao consultor e só então confirme. O histórico "
+    "guarda o que existia. Exige operador. " + _FILTROS_DOC
+)
+async def apagar_linhas(
+    organizacao_id: str, quadro: str, ids: list[str] | None = None,
+    filtros: list[dict] | None = None, execucao_id: str | None = None,
+    confirmar: bool = False,
+) -> str:
+    return await anyio.to_thread.run_sync(
+        quadros_mcp.apagar_linhas, _sub(), organizacao_id, quadro, ids, filtros,
+        execucao_id, confirmar,
+    )
+
+
+@mcp.tool()
+async def importar_csv(
+    organizacao_id: str, csv_texto: str, quadro: str | None = None,
+    criar_com_nome: str | None = None, chave: list[str] | None = None,
+    mapeamento: dict | None = None, ignorar_colunas_extras: bool = False,
+    modo: str = "acrescentar", simular: bool = True,
+) -> str:
+    """Importa uma planilha (texto CSV, separado por vírgula, ponto e vírgula ou tab) —
+    o caminho para migrar de uma planilha do Google. Para um quadro EXISTENTE passe
+    `quadro`: o cabeçalho casa com as colunas pelo nome, ou pelo `mapeamento`
+    {"<cabeçalho>": "<coluna>"}; colunas a mais recusam a importação, a menos que
+    `ignorar_colunas_extras=true`. Para CRIAR o quadro a partir do CSV passe
+    `criar_com_nome` (+ `chave`): as colunas e tipos são SUGERIDOS pelos valores.
+    `simular` é TRUE por padrão: primeiro veja a sugestão/o que entraria, confira com o
+    consultor, depois chame com simular=false. Tudo ou nada; até 5.000 linhas por vez.
+    `modo`: acrescentar | pela_chave. Exige operador."""
+    return await anyio.to_thread.run_sync(
+        quadros_mcp.importar_csv, _sub(), organizacao_id, csv_texto, quadro, criar_com_nome,
+        chave, mapeamento, ignorar_colunas_extras, modo, simular,
+    )
+
+
+@mcp.tool()
+async def excluir_quadro(organizacao_id: str, quadro: str, confirmar: bool = False) -> str:
+    """EXCLUI um quadro com todas as linhas e o histórico. AÇÃO IRREVERSÍVEL. SEM
+    `confirmar=true` é só uma PRÉVIA (quantas linhas e QUAIS instrumentos/agentes usam o
+    quadro — eles deixam de funcionar). Confirme com o consultor. Exige admin."""
+    return await anyio.to_thread.run_sync(
+        quadros_mcp.excluir_quadro, _sub(), organizacao_id, quadro, confirmar
     )
 
 

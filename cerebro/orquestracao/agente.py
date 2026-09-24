@@ -27,6 +27,7 @@ from instrumentos.base import (
     acionar_com_retentativa,
 )
 from modelos import Agente, Instrumento
+from observabilidade import contexto
 from orquestracao import atividade
 from orquestracao import ficha as ficha_mod
 from orquestracao import prazo
@@ -376,7 +377,7 @@ def _ferramentas_de_instrumento(
     config = tipo.Config.model_validate(
         {**(inst.configuracao or {}), **getattr(inst, "segredos_decifrados", {})}
     )
-    expandidas = tipo.expandir_ferramentas(config)
+    expandidas = tipo.expandir_ferramentas_da_instancia(inst, config)
     if expandidas is not None:
         # Baseline do instrumento; uma ferramenta EXPANDIDA pode dizer o seu próprio
         # (`metadata={"irreversivel": …}`) — é assim que um servidor MCP tem ferramenta
@@ -915,9 +916,14 @@ def executar_agente(
     bloco_ficha = ficha_mod.para_o_prompt(ficha) if tem_ficha else ""
     conteudo = f"{bloco_ficha}\n\n---\n\n{entrada}" if bloco_ficha else entrada
     try:
-        resultado = app.invoke(
-            {"messages": [{"role": "user", "content": conteudo}]}, config
-        )
+        # "Quem está agindo" (Cérebro, Entrega 2): o agente entra no contexto de quem-fez
+        # durante o turno, para um instrumento que grava em nome dele (o quadro) carimbar
+        # QUAL agente gravou — sem mudar a assinatura de nenhuma ferramenta. A execução já
+        # vem no mesmo contexto, fixada pela borda (`disparo`).
+        with contexto.usar_contexto(agente_id=str(agente.id)):
+            resultado = app.invoke(
+                {"messages": [{"role": "user", "content": conteudo}]}, config
+            )
     except GraphRecursionError as e:
         # Laço de ferramentas sem fim. Erro honesto (§12-A), com o nome do agente e o
         # que fazer — em vez do `GraphRecursionError` cru, que não diz nada a ninguém.

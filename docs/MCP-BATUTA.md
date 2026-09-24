@@ -38,7 +38,7 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
 - **Matriz de papéis:** observador lê; **operador** cria/edita; **admin** cria
   organização/time, duplica e exclui.
 
-## As ferramentas (47)
+## As ferramentas (61)
 
 - **Leitura/diagnóstico:** `listar_organizacoes`, `listar_times`, `descrever_time`,
   `listar_agentes`, `ver_agente`, `ver_memoria_agente`, `listar_instrumentos`/
@@ -61,6 +61,17 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
   `apontar_credencial` (instrumento→credencial), `duplicar_time`, `excluir_time`/
   `excluir_automacao`/`excluir_instrumento`, `criar_organizacao`/`excluir_organizacao`
   (esta só apaga organização **vazia** — nunca em cascata).
+- **Quadros do cérebro da organização (2026-09-24, `docs/CEREBRO-PLANO.md` §7), 13
+  ferramentas:** leitura (observador) `listar_quadros` (com quem usa cada um), `ver_quadro`,
+  `consultar_quadro` (filtro único, ordem, paginação com total e `proximo`, "só a mais
+  recente de", por execução), `totais_quadro` (calculados pelo banco), `historico_linha`,
+  `exportar_quadro` (CSV); escrita (operador) `criar_quadro`, `alterar_quadro`,
+  `gravar_linhas` (acrescentar | pela_chave), `editar_linhas`, `apagar_linhas`,
+  `importar_csv` (simula por padrão; pode criar o quadro a partir do CSV); admin
+  `excluir_quadro`. **Toda escrita aceita `simular`; apagar e excluir SÓ simulam sem
+  `confirmar=true`.** O carimbo das linhas registra `origem=mcp` e o consultor. E o
+  `diagnosticar_execucao` passou a trazer `quadros_gravados` — o que a execução gravou de
+  fato. **Total: 61 ferramentas.**
 
 > **Nomes que mudaram (2026-08-26):** `ativar_time`/`desativar_time` viraram
 > `ativar_automacao`/`desativar_automacao` — recebiam `automacao_id` e operavam sobre uma

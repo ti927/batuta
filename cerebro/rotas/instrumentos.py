@@ -122,6 +122,7 @@ def listar_tipos(usuario: Usuario = Depends(usuario_atual)):
         )
         for t in encaixe.tipos_disponiveis()
         if not getattr(t, "oculto_no_catalogo", False)
+        and not getattr(t, "oculto_na_tela", False)
     ]
 
 
@@ -156,6 +157,9 @@ def criar(
         # Fase 7-B: separa os segredos da config pública antes de gravar.
         config_limpa, segredos_novos = encaixe.preparar_config(
             dados.tipo, dados.configuracao
+        )
+        config_limpa = encaixe.resolver_config(
+            sessao, dados.tipo, time.organizacao_id, config_limpa
         )
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
@@ -204,6 +208,9 @@ def editar(
         # Fase 7-B: separa os segredos; um segredo omitido preserva o atual.
         config_limpa, segredos_novos = encaixe.preparar_config(
             inst.tipo, dados.configuracao
+        )
+        config_limpa = encaixe.resolver_config(
+            sessao, inst.tipo, auditoria.org_do_time(sessao, inst.time_id), config_limpa
         )
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))

@@ -77,6 +77,8 @@ MENSAGENS_ATIVIDADE: dict[str, str] = {
     "banco_sql": "Consultando o banco de dados…",
     "disparar_webhook": "Acionando outra automação…",
     "agendar_automacao": "Agendando o próximo disparo…",
+    # O quadro publica a própria frase por ação ("Gravando 20 linhas no quadro X…").
+    "quadro": "Usando o quadro…",
 }
 
 
