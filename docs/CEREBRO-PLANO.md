@@ -3,8 +3,9 @@
 **Plano de construção. Escrito em 2026-09-24.** Substitui a "FASE — Biblioteca" como estava no `BUILD-PLAN.md` e absorve o
 `docs/BIBLIOTECA-DECISAO.md`, que vira a **Parte 4** deste plano.
 
-> Estado: **PLANEJADO. Nenhum código escrito.** Cada entrega começa só com o sinal do maestro, e cada uma é mostrada pronta
-> antes de a próxima começar.
+> Estado: **Entrega 1 (a fundação) ✅ pronta em 2026-09-24** — migração `qdr00quadros001`, `cerebro/quadros/`, 62 testes,
+> capítulos `cerebro/o-que-e-o-cerebro` e `cerebro/quadros` na Central. Próxima: Entrega 2 (o agente usa). Cada entrega
+> começa só com o sinal do maestro e é mostrada pronta antes de a próxima começar.
 
 ---
 
@@ -348,8 +349,15 @@ Cada uma segue o ritual investigar → planejar → implementar → verificar �
 
 **Entrega 1 — A fundação.**
 Migração das três tabelas, a camada única de serviço (§5.2), os tipos e a validação, o histórico e os testes (isolamento
-entre organizações provado por teste). Resolve o **contexto de quem está agindo** (§5.3). Sem tela.
+entre organizações provado por teste). Sem tela.
 *Ensino:* capítulos `o-que-e-o-cerebro` e `quadros`.
+*Como ficou (2026-09-24):* o serviço recebe **quem grava explicitamente** (`Autor`: origem, agente, execução, pessoa) em vez
+de adivinhar por contexto — quem monta o `Autor` é a porta (ferramenta do agente, rota, MCP). Por isso o **contexto de
+quem está agindo** (§5.3) passou para a Entrega 2, onde a ferramenta do agente é quem precisa dele; nesta entrega o motor
+ficou intocado. Duas descobertas dos testes viraram regra: "1.000"/"1,000" são **recusados como ambíguos** (mil ou um?)
+em vez de chutados, e o histórico ganhou um número sequencial (duas mudanças na mesma transação têm o mesmo horário). A
+área `cerebro` da Central ainda **não aparece no /ajuda** (a lista de áreas da tela é fixa): entra junto com a tela, na
+Entrega 4 — até lá, só as IAs leem, e os capítulos dizem "em construção".
 
 **Entrega 2 — O agente usa.**
 Instrumento `quadro` com as seis ações, descrição gerada a partir das colunas, carimbo automático, mensagens de atividade e

@@ -129,6 +129,12 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Membros e convites | `admin/membros-e-convites` | Convidar por e-mail; aceitar; desativar | ✅ | ✍️ |
 | Duplicar time | `admin/duplicar-time` | Cópia com remapeamento; canais nascem desconectados | ✅ | ✍️ |
 
+## 9. O cérebro da organização (em construção — `docs/CEREBRO-PLANO.md`)
+| Capítulo | slug | O que cobre | Recurso | Escrita |
+|---|---|---|---|---|
+| O cérebro da organização | `cerebro/o-que-e-o-cerebro` | As três partes (quadros, arquivos, Biblioteca); o que NÃO é (sistema oficial); **onde guardar cada informação** (quadro × memória do agente × ficha × sistema × Biblioteca) | 📋 | ✍️ |
+| Quadros | `cerebro/quadros` | Colunas e tipos; tudo ou nada; chave e gravar pela chave; filtros, "só a mais recente de", totais, "já existe?"; quem gravou e histórico; limites | 📋 (a base existe; falta a ferramenta do agente e a tela) | ✍️ |
+
 ---
 
 **Total:** ~40 capítulos (8 áreas). **Onda A** (fundamentos + chave/credencial + agente + instrumentos-chave

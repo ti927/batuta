@@ -9,9 +9,11 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     ForeignKey,
+    Identity,
     Index,
     Integer,
     Numeric,
@@ -979,3 +981,135 @@ class MensagemConversa(IdData, Base):
     )
 
     __table_args__ = (Index("ix_mensagem_conversa", "conversa_id", "criado_em"),)
+
+
+# ───────────────────── O CÉREBRO da organização: Quadros ──────────────────────
+# Ver `docs/CEREBRO-PLANO.md`. Quadros são dados com colunas e tipos que agentes E
+# pessoas escrevem e leem, compartilhados entre times. Toda regra (tipos, validação,
+# chave, histórico) mora em `cerebro/quadros/` — agente, tela, IA criadora e MCP
+# passam pelo MESMO serviço.
+
+
+class Quadro(IdData, Base):
+    """Um quadro da organização: como uma aba de planilha, só que o Batuta sabe o que
+    tem em cada coluna.
+
+    `colunas` é a lista `[{id, nome, tipo, obrigatoria, opcoes, descricao}]`. O `id` da
+    coluna é estável (renomear não mexe nos dados); os valores das linhas são guardados
+    por esse `id`. `chave` lista os ids das colunas que identificam uma linha — vazia =
+    registro que só acumula. `limites` guarda os ajustes do usuário sobre os padrões de
+    `quadros/limites.py` (nenhum limite é secreto)."""
+
+    __tablename__ = "quadros"
+    organizacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    nome: Mapped[str] = mapped_column(String(120), nullable=False)
+    descricao: Mapped[str | None] = mapped_column(Text, nullable=True)
+    colunas: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    chave: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    limites: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    criado_por_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (
+        # Nome único por organização, sem diferenciar maiúscula — é pelo nome que
+        # pessoas e IAs se referem ao quadro.
+        Index(
+            "uq_quadro_nome_por_org",
+            "organizacao_id",
+            text("lower(nome)"),
+            unique=True,
+        ),
+    )
+
+
+class QuadroLinha(IdData, Base):
+    """Uma linha de um quadro. `valores` = `{coluna_id: valor}` já normalizado pelo tipo
+    (data como 'AAAA-MM-DD', número como número JSON…).
+
+    `chave_valor` é a chave da linha normalizada em texto; o índice ÚNICO parcial
+    (quadro_id, chave_valor) é o que torna a gravação pela chave atômica sob
+    concorrência. O CARIMBO (origem/agente/execução/usuário) diz quem gravou por último
+    e não é editável — o histórico completo está em `QuadroAlteracao`."""
+
+    __tablename__ = "quadro_linhas"
+    quadro_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("quadros.id", ondelete="CASCADE"), nullable=False
+    )
+    organizacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    valores: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    chave_valor: Mapped[str | None] = mapped_column(Text, nullable=True)
+    versao: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("1")
+    )
+    # O carimbo. `origem`: agente | pessoa | ia_criadora | mcp | importacao.
+    origem: Mapped[str] = mapped_column(String(20), nullable=False)
+    agente_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("agentes.id", ondelete="SET NULL"), nullable=True
+    )
+    execucao_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("execucoes.id", ondelete="SET NULL"), nullable=True
+    )
+    usuario_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (
+        Index(
+            "uq_quadro_linha_chave",
+            "quadro_id",
+            "chave_valor",
+            unique=True,
+            postgresql_where=text("chave_valor is not null"),
+        ),
+        Index("ix_quadro_linha_quadro", "quadro_id", "criado_em"),
+        Index("ix_quadro_linha_execucao", "execucao_id"),
+        Index("ix_quadro_linha_valores", "valores", postgresql_using="gin"),
+    )
+
+
+class QuadroAlteracao(Base):
+    """O histórico de um quadro: cada criação, mudança e remoção de linha, com o valor
+    ANTES e DEPOIS e o carimbo de quem fez. Só se acrescenta; ninguém edita.
+
+    `linha_id` NÃO é chave estrangeira de propósito: a linha pode ser apagada e o
+    registro de que ela existiu (e de quem a apagou) precisa sobreviver."""
+
+    __tablename__ = "quadro_alteracoes"
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    # Ordem garantida: duas mudanças na mesma transação têm o mesmo `quando` (o `now()`
+    # do Postgres é o início da transação); a sequência desempata sem ambiguidade.
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(), nullable=False)
+    quadro_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("quadros.id", ondelete="CASCADE"), nullable=False
+    )
+    linha_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    acao: Mapped[str] = mapped_column(String(10), nullable=False)  # criou|mudou|apagou
+    antes: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    depois: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    origem: Mapped[str] = mapped_column(String(20), nullable=False)
+    agente_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    execucao_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    usuario_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    quando: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_quadro_alteracao_linha", "linha_id", "quando"),
+        Index("ix_quadro_alteracao_quadro", "quadro_id", "quando"),
+    )
