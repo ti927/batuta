@@ -5,8 +5,9 @@
 
 > Estado (2026-09-24): **Entregas 1, 2, 3 e 4 ✅** — a fundação (migração `qdr00quadros001`, `cerebro/quadros/`), o
 > instrumento `quadro` (o agente lê e grava), as IAs operando (6 ferramentas na criadora, 13 no MCP, diagnóstico com
-> `quadros_gravados`) e a **tela** (menu Cérebro). Suíte 1412; `tsc`/`eslint`/`build` limpos. **Próxima: Entrega 5 —
-> Radar e Painel migram da planilha (reescrever markdowns pede aval).**
+> `quadros_gravados`) e a **tela** (menu Cérebro). Suíte 1412; `tsc`/`eslint`/`build` limpos. **Entrega 5 (Radar e
+> Painel saem da planilha) fica com o maestro, feita por ele pelo MCP (2026-09-24).** O código da Parte 1 está completo;
+> a próxima frente de código é a Parte 2 (fila e gatilhos), só com o sinal dele.
 >
 > *Entrega 4, como ficou:* proposta visual aprovada (`claude.ai/artifact/NJi4o3QPvPwWUJJxQsZjYq`) com UMA mudança do
 > maestro — **lista em cartões horizontais, um por linha, e sempre com busca/filtro** (virou preferência permanente).
