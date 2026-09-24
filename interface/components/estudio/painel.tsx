@@ -37,7 +37,7 @@ import {
   type TipoSaida,
   type ToneSaida,
 } from "@/lib/api";
-import type { ConfigGatilho } from "@/components/automacao-builder/inspector";
+import type { ConfigGatilho } from "@/components/automacao-builder/nucleo";
 
 import { TestarEstePasso } from "@/components/automacao-builder/testar-no";
 import { UrlCopiavel } from "@/components/url-copiavel";

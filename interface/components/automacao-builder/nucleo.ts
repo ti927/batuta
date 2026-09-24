@@ -132,3 +132,20 @@ export function normalizarCadeia(cadeia: Cadeia): Cadeia {
     }),
   };
 }
+
+// O formulário do gatilho (Estúdio). Morava no painel da tela clássica, que saiu em
+// 2026-09-24; ficou aqui, com o resto do que o Estúdio reaproveita.
+export type ConfigGatilho = {
+  tipo: "manual" | "agendamento" | "webhook" | "comentario_instagram";
+  frequencia: "diaria" | "semanal" | "mensal";
+  diaSemana: number;
+  diaMes: number;
+  horario: string;
+  entrada: string;
+  // gatilho de comentário do Instagram
+  credencialId: string; // "" = conta a conectar (o humano escolhe)
+  midiasModo: "todas" | "especificas";
+  midiasIds: string; // texto: media_ids separados por vírgula
+  palavraChave: string;
+  tetoPorHora: number;
+};

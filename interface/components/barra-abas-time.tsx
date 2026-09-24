@@ -75,11 +75,9 @@ export function BarraAbasTime({
     // um passo) e passou a ser a tela melhor: a condição aparece no fio, o cartão
     // lista as saídas e o desenho se confere sozinho.
     //
-    // A ROTA `/times/[id]/automacoes` continua viva de propósito — é saída de
-    // emergência enquanto o Estúdio não foi exaurido em uso real, e está a um clique
-    // no menu "⋯" do Estúdio. Apagar a tela é uma decisão para depois do teste ao
-    // vivo, não junto com ele: tirar as duas coisas ao mesmo tempo deixaria o maestro
-    // sem para onde voltar se algo aqui estiver errado.
+    // A tela clássica foi APAGADA em 2026-09-24, depois do teste ao vivo do Estúdio
+    // (decisão do maestro). A rota `/times/[id]/automacoes` só redireciona ao Estúdio,
+    // para links salvos não caírem numa página quebrada.
     {
       chave: "estudio",
       rotulo: "Automações",

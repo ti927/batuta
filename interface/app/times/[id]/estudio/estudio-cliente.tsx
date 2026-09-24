@@ -9,11 +9,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   Activity,
   AlertCircle,
-  ArrowUpRight,
   AlertTriangle,
   CheckCircle2,
   Copy,
@@ -43,7 +41,7 @@ import {
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { normalizarCadeia } from "@/components/automacao-builder/nucleo";
-import type { ConfigGatilho } from "@/components/automacao-builder/inspector";
+import type { ConfigGatilho } from "@/components/automacao-builder/nucleo";
 import { CanvasEstudio } from "@/components/estudio/canvas";
 import { PainelEstudio } from "@/components/estudio/painel";
 import type { Problema } from "@/components/estudio/problemas";
@@ -710,14 +708,6 @@ function EditorEstudio({
                       <Copy className="size-3.5" /> Duplicar esta
                     </button>
                   )}
-                  <div className="my-1 h-px bg-border" />
-                  <Link
-                    href={`/times/${time.id}/automacoes`}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-muted-foreground hover:bg-muted"
-                    title="A tela antiga, enquanto as duas convivem"
-                  >
-                    <ArrowUpRight className="size-3.5" /> Abrir na tela clássica
-                  </Link>
                   {souAdmin && automacao && (
                     <>
                       <div className="my-1 h-px bg-border" />
