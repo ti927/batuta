@@ -1194,8 +1194,16 @@ a IA criadora também monta o grafo; suíte verde; `tsc`/`eslint` limpos; `agent
 
 ---
 
-## FASE — O CÉREBRO da organização: Quadros, Arquivos e Biblioteca (§9)  📋 PLANEJADA (2026-09-24), aguarda o sinal
+## FASE — O CÉREBRO da organização: Quadros, Arquivos e Biblioteca (§9)  ✅ PARTE 1 (Quadros) NO AR (2026-09-24) · Partes 2–4 aguardam o sinal
 **Substitui a fase "Biblioteca" abaixo, que fica como histórico.** Plano completo em **`docs/CEREBRO-PLANO.md`**.
+
+**Estado (2026-09-24, fim do dia):** a Parte 1 foi planejada e entregue no mesmo dia, em produção:
+- **E1 — fundação** (`97ce428`, migração `qdr00quadros001`): 3 tabelas, serviço único `cerebro/quadros/`, 8 tipos de coluna, tudo-ou-nada, `simular`, filtro único, totais pelo banco, "já existe?", histórico. "1.000" é recusado como ambíguo.
+- **E2+E3 — o agente usa e as IAs operam** (`2125dca`): instrumento `quadro` (ler × ler e gravar; a organização vem do TIME dono do instrumento), 6 ferramentas na IA criadora, 13 no MCP, `quadros_gravados` no diagnóstico. Toque mínimo e declarado no motor.
+- **E4 — a tela** (`b2b73fb`): menu **Cérebro**, lista em cartões horizontais com busca/filtro (pedido do maestro), quadro com abas Linhas/Colunas/Quem usa/Limites, importar CSV com prévia, seletor de quadro no instrumento. Gravação em lote (5.000 linhas em ~2 s).
+- **E5 — Radar e Painel saem da planilha:** feita **pelo maestro, via MCP**.
+- **Acesso de fora** (`154aad7`, migração `lnk00links0001`): links de leitura por quadro para painéis (Google Planilhas/IMPORTDATA → Looker, Power BI, JSON), com filtros na URL e totais; só admin cria; a IA não recebe o link.
+- **Testado ao vivo pelo maestro** (tela, E5 pelo MCP).
 
 **Por que mudou:** revisitando a Biblioteca, o maestro trouxe a necessidade real: **os agentes precisam passar informação uns para os outros**, inclusive entre times. Hoje isso é feito com planilha do Google, e o caso vivo é o **Radar IA** e o **Painel Lure** (📈 COF Post Blog), que alimentam os 5 Analistas dos blogs por uma planilha: o markdown do agente virou banco de dados (tabela de semanas escrita à mão, "descarte a linha 'teste'", `Briefing!A2:D2`), a carga histórica fez 64 chamadas numa execução, e em 23/09 o Radar falhou duas vezes com 403 ao gravar. Uma base de documentos só-leitura não resolve nada disso.
 
@@ -2607,3 +2615,11 @@ As três pernas da §12-A: **evento** `google.renovacao_falhou` (nível error, c
 # Encerramento
 
 As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar **à medida que executadas** (MIGRACAO §6.3). O `MIGRACAO.md` é o documento de transição; quando tudo estiver refletido nos documentos vigentes, ele vai para `docs/historico/` — registro da decisão, não apagado.
+
+---
+
+## FASE — Pooler cheio e a tela clássica apagada  ✅ NO AR (2026-09-24, `13dc2b3` + `94e1b76`, sem migração)
+
+**Pooler do Supabase cheio (`EMAXCONNSESSION`).** Erro 500 esporádico ("max clients reached in session mode, pool_size 15") em 11 momentos desde 26/08 — deploys (dois cérebros no ar juntos) e picos de execuções. Causa: o pooler em modo sessão aceitava 15 clientes (o Postgres aceita 60) e o Batuta podia pedir 30+ (engine com o padrão do SQLAlchemy 5+10 por processo, checkpointer até 4, MCP mais 15). Feito: orçamento explícito e ajustável por variável (`DB_POOL_SIZE`/`DB_MAX_OVERFLOW`/`DB_POOL_TIMEOUT`; cérebro 5+7, MCP 2+4), espera-e-tenta-de-novo (~6,5 s) só para esse erro, evento `banco.pooler_cheio`; o maestro subiu o **Pool Size para 30** no painel. Modo transação avaliado e não adotado. Ver `docs/ARQUITETURA.md` ("Orçamento de conexões").
+
+**Tela clássica de Automações apagada** (decisão do maestro depois do teste ao vivo do Estúdio). Sai a tela e o que só ela usava; `/times/[id]/automacoes` redireciona ao Estúdio; do `automacao-builder/` ficam só as peças que o Estúdio reaproveita.

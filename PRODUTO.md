@@ -85,6 +85,8 @@ A escrita automática na biblioteca por agentes é um ponto que exige controle d
 > **[Nota de implementação 2026-07-26]** A Biblioteca ainda **não foi construída**. A decisão técnica vigente (`docs/BIBLIOTECA-DECISAO.md`, `docs/ARQUITETURA.md §12`) revisou o escopo: a base é **da ORGANIZAÇÃO** (todos os times acessam), **não por time**; e a **v1 é só-leitura** (os agentes consultam — a escrita/"alimentar", a mão dupla, fica para depois, com revisão humana). Este parágrafo descreve a visão original; o escopo da v1 é o do `BIBLIOTECA-DECISAO.md`.
 
 > **[Revisão 2026-09-24 — o segundo cérebro vira o CÉREBRO da organização]** Ao revisitar a Biblioteca, o maestro trouxe a necessidade real: **os agentes precisam passar informação uns para os outros, inclusive entre times** (hoje isso é feito com planilha do Google, e isso tem sido ruim). O plano vigente é o **`docs/CEREBRO-PLANO.md`**: o cérebro é **da organização** e tem três partes — **Quadros** (dados com colunas e tipos que agentes **e** pessoas escrevem e leem: a mão dupla deste parágrafo, agora no centro), **Arquivos** anexados às linhas (com leitura do conteúdo) e a **Biblioteca** de documentos por sentido (o `BIBLIOTECA-DECISAO.md`, agora Parte 4). Tudo visível, editável e criável pelo usuário. **Regra de fronteira:** se a empresa já tem um sistema oficial onde o dado mora, a fonte é esse sistema; o cérebro guarda o que é do trabalho dos agentes.
+>
+> **[Estado 2026-09-24]** Os **Quadros estão no ar** (menu **Cérebro**): agentes leem e gravam por um instrumento visível no cinto, pessoas veem e editam na tela, e um painel de fora lê um quadro por um **link de leitura** criado por um administrador. **Arquivos** e **Biblioteca** ainda não existem.
 
 ## 10. Líder
 
