@@ -20,7 +20,14 @@ raiz). Sobe com: `uv run python mcp_servidor.py`.
 
 import os
 
-import anyio
+# Orçamento de conexões DESTE serviço (ver db.py): o MCP atende poucas pessoas e divide o
+# pooler do Supabase com o cérebro — fica com uma fatia pequena. Precisa vir ANTES de
+# qualquer import que carregue `db` (o engine lê isto ao nascer). Uma variável definida no
+# Railway continua mandando.
+os.environ.setdefault("DB_POOL_SIZE", "2")
+os.environ.setdefault("DB_MAX_OVERFLOW", "4")
+
+import anyio  # noqa: E402
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings

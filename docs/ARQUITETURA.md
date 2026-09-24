@@ -178,6 +178,20 @@ um responsável de verdade.
 que um operador escreveu pela inbox — seguia conduzindo às cegas. `_conteudo_novo` passa a trazer tudo que
 não é fala dele, rotulado (`[Operador (humano)]`, `[Sistema]`).
 
+**Orçamento de conexões com o pooler (2026-09-24).** O pooler do Supabase em modo sessão aceita um número
+FIXO de clientes (era 15), enquanto o banco aceita 60. O engine usava o padrão do SQLAlchemy (5 fixas + 10
+extras por processo), a memória das conversas até 4 e o serviço MCP mais 15: o Batuta podia pedir 30+ e,
+em repouso, já segurava 11–15. Todo pico (deploy com dois cérebros no ar, várias execuções juntas) virava
+`EMAXCONNSESSION` e erro 500 — 11 vezes entre 26/08 e 24/09. Agora: orçamento explícito e ajustável por
+variável de ambiente (`DB_POOL_SIZE`/`DB_MAX_OVERFLOW`/`DB_POOL_TIMEOUT`; cérebro 5+7, MCP 2+4 fixado em
+`mcp_servidor.py`), quem passa do orçamento ESPERA uma conexão livre do próprio pool, e quando o pooler
+recusa por estar cheio a conexão **espera e tenta de novo** (~6,5 s, `db.conectar_com_paciencia`) em vez de
+falhar na primeira — com evento `banco.pooler_cheio` no banco de logs (warning se saiu, error se desistiu).
+Recomendado subir o **Pool Size** do pooler para 30 no painel do Supabase (Project Settings › Database ›
+Connection pooling): o conector MCP do Supabase não alcança essa configuração. Modo transação (porta 6543)
+foi avaliado e **não** adotado: exige desligar comandos preparados e mudar o `statement_timeout` por
+sessão, e o checkpointer depende do modo sessão.
+
 **Nenhum elo sem limite de rede, e todos vigiados (2026-08-27).** A rede entre o Railway e o pooler do
 Supabase **congelou por ~30 min** (bytes parados em trânsito, sem erro, sem fechamento): uma consulta
 aterrissou 15 min atrasada na mesma transação, três turnos destravaram no mesmo instante e o app inteiro
