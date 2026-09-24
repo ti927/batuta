@@ -1194,7 +1194,20 @@ a IA criadora também monta o grafo; suíte verde; `tsc`/`eslint` limpos; `agent
 
 ---
 
-## FASE — Biblioteca: a base de conhecimento da organização (§9)  📋 PLANEJADA — APROVADA, aguarda execução
+## FASE — O CÉREBRO da organização: Quadros, Arquivos e Biblioteca (§9)  📋 PLANEJADA (2026-09-24), aguarda o sinal
+**Substitui a fase "Biblioteca" abaixo, que fica como histórico.** Plano completo em **`docs/CEREBRO-PLANO.md`**.
+
+**Por que mudou:** revisitando a Biblioteca, o maestro trouxe a necessidade real: **os agentes precisam passar informação uns para os outros**, inclusive entre times. Hoje isso é feito com planilha do Google, e o caso vivo é o **Radar IA** e o **Painel Lure** (📈 COF Post Blog), que alimentam os 5 Analistas dos blogs por uma planilha: o markdown do agente virou banco de dados (tabela de semanas escrita à mão, "descarte a linha 'teste'", `Briefing!A2:D2`), a carga histórica fez 64 chamadas numa execução, e em 23/09 o Radar falhou duas vezes com 403 ao gravar. Uma base de documentos só-leitura não resolve nada disso.
+
+**O que é:** o cérebro é **da organização** e tem três partes — **Quadros** (dados com colunas e tipos que agentes e pessoas escrevem e leem; compartilhamento **explícito** por instrumento `quadro`, um por quadro e por acesso), **Arquivos** nas linhas (com leitura do conteúdo) e **Biblioteca** (busca por sentido). A memória do agente continua individual. **Regra de fronteira:** se a empresa já tem um sistema oficial onde o dado mora, a fonte é esse sistema.
+
+**Desenhado pelos 8 padrões que se repetem em todos os departamentos** (registro, ficha por chave, tabela de apoio, "já processei?", totais, fila com etapas, "algo muda → outra automação acorda", prazo), não só pelo caso do marketing.
+
+**Partes:** 1) Quadros (5 entregas: fundação · o agente usa · as IAs operam — criadora + MCP com `simular`, filtro único e paginação · a tela, com proposta visual antes · o caso real Radar/Painel); 2) fila com trava + gatilhos "quando o quadro muda" e "quando a data chega" (toca o disparo → `MIGRACAO.md §6.1`); 3) coluna arquivo + extração de texto; 4) Biblioteca (pgvector, reaproveita a extração). **Toda entrega fecha com o checklist de ensino das IAs** (Central, docstrings, prompt da criadora, ferramentas da criadora e do MCP, mensagens de atividade).
+
+---
+
+## FASE — Biblioteca: a base de conhecimento da organização (§9)  ↪️ ABSORVIDA pelo Cérebro (2026-09-24) — virou a Parte 4 do `docs/CEREBRO-PLANO.md`
 O `PRODUTO.md` §9 prevê a **Biblioteca** ("segundo cérebro") — mas ela **caiu num vão** e nunca foi implementada (hoje só há um placeholder em `/biblioteca`; não há tabela). O maestro **revisou o conceito**: é uma **base de conhecimento da ORGANIZAÇÃO inteira** (todos os times acessam, não é por-time) de **documentos gerais** (PDF, Word, planilhas, texto — não só markdown), que os agentes **consultam** durante a execução. Esta fase fecha essa lacuna. A decisão arquitetural está fechada em **`docs/BIBLIOTECA-DECISAO.md`** e o pano de fundo técnico em **`docs/ARQUITETURA.md`**; o **plano de implementação detalhado (10 passos) está aprovado** e aguarda o sinal do maestro para começar.
 
 **Decisão arquitetural (fechada):**

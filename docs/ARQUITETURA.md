@@ -391,6 +391,9 @@ rastro existe.
 
 ## 12. O PROBLEMA DA BIBLIOTECA (a decisão a tomar)
 
+> **[2026-09-24] Esta seção é histórico.** A Biblioteca foi absorvida pelo **Cérebro da organização**
+> (`docs/CEREBRO-PLANO.md`): Quadros (dados que os agentes escrevem e leem entre si), Arquivos e Biblioteca, nessa ordem.
+
 ### O que é (requisito, já revisado pelo maestro)
 A **Biblioteca** é uma **base de conhecimento da ORGANIZAÇÃO** (todos os times da org acessam — **não**
 por time, como dizia a especificação antiga). É composta de **documentos gerais** (PDF, Word, txt,

@@ -1,5 +1,9 @@
 # Batuta — Decisão arquitetural da Biblioteca
 
+> **[2026-09-24] Virou a Parte 4 do `docs/CEREBRO-PLANO.md`.** As decisões abaixo seguem valendo no essencial; as correções
+> (extração de texto construída antes, na Parte 3; banco de testes sem pgvector; custo fora de execução sem lugar no painel)
+> estão no §6 daquele plano. A necessidade que veio primeiro foi outra: os agentes passarem informação uns para os outros.
+
 **Documento de decisão.** Após análise do `ARQUITETURA.md`, aqui está a arquitetura proposta da Biblioteca, com justificativas e plano de implementação. Cada item foi decidido — não é mais uma rodada de perguntas.
 
 ---
