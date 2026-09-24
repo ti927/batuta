@@ -9,9 +9,8 @@ fontes: ["docs/CEREBRO-PLANO.md", "PRODUTO.md §9"]
 
 # O cérebro da organização
 
-> **Em construção.** Os quadros já funcionam: os agentes leem e gravam neles, e a IA que monta os
-> times (aqui dentro ou pelo Claude) cria e ajusta os quadros. Ainda não há uma tela para você ver e
-> editar os quadros; ela é a próxima parte. Arquivos e Biblioteca vêm depois.
+> Os **quadros** já funcionam: os agentes leem e gravam neles, e você vê e edita tudo no menu
+> **Cérebro**. **Arquivos** e **Biblioteca** vêm depois.
 
 ## Em uma frase
 O lugar onde a organização guarda o que os agentes precisam **passar uns para os outros**, inclusive
@@ -34,8 +33,14 @@ A **memória do agente** continua existindo e é outra coisa: é o que **um** ag
 Os outros agentes não enxergam.
 
 ## Como usar (na tela)
-Ainda não há tela. Por enquanto, peça à IA que monta o time: "crie um quadro para os agentes deixarem o
-resultado de cada rodada" — ela cria o quadro e dá a cada agente o que ele precisa para ler ou gravar.
+1. No menu à esquerda, abra **Cérebro**. Ele mostra os quadros da organização ativa, cada um com quem
+   grava e quem lê. Use a busca e os filtros por time e por agente.
+2. **Novo quadro** para criar do zero, ou **Importar planilha** para começar de uma planilha que você já tem.
+3. Para um agente usar o quadro, no time dele crie um instrumento do tipo **Quadro**, escolha o quadro e se
+   ele só lê ou também grava, e encaixe no agente.
+
+Você também pode pedir à IA que monta o time: "crie um quadro para os agentes deixarem o resultado de cada
+rodada".
 
 ## Exemplos
 - O agente do Radar grava toda semana se as IAs citaram a empresa; o agente do Painel lê essas linhas e
@@ -51,9 +56,9 @@ resultado de cada rodada" — ela cria o quadro e dá a cada agente o que ele pr
 - Até existir proteção por coluna, **não guarde CPF, salário nem dados de saúde** num quadro.
 
 ## Para a IA
-Os **quadros já estão prontos para usar** (criar, alterar, importar CSV, dar o instrumento `quadro` aos
-agentes). Ainda **não há tela** para o consultor ver os quadros: mostre o conteúdo você mesmo quando ele
-pedir. **Arquivos e Biblioteca ainda não existem** — não os ofereça.
+Os **quadros estão prontos para usar** (criar, alterar, importar CSV, dar o instrumento `quadro` aos
+agentes), e o consultor os vê e edita no menu **Cérebro**. **Arquivos e Biblioteca ainda não existem** —
+não os ofereça.
 
 A pergunta a fazer para decidir onde guardar uma informação é **"quem mais precisa disso, e quando?"**:
 

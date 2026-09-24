@@ -10,7 +10,7 @@ import {
   Gauge,
   Home,
   Key,
-  Library,
+  Brain,
   LogOut,
   Menu,
   Settings,
@@ -166,8 +166,14 @@ export function Sidebar({
           </div>
         )}
 
-        <ItemNav href="/biblioteca" Icone={Library} ativo={ativo("/biblioteca")}>
-          Biblioteca
+        {/* O cérebro é da ORGANIZAÇÃO ativa (quadros; depois a Biblioteca). Todos os
+            papéis entram: observador lê, operador mexe. */}
+        <ItemNav
+          href={org ? `/organizacoes/${org.id}/cerebro` : "/biblioteca"}
+          Icone={Brain}
+          ativo={!!org && ativo(`/organizacoes/${org.id}/cerebro`)}
+        >
+          Cérebro
         </ItemNav>
         <ItemNav href="/uso" Icone={Gauge} ativo={ativo("/uso")}>
           Uso e custos

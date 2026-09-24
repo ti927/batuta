@@ -21,7 +21,7 @@ import uuid
 from dataclasses import dataclass
 from decimal import Decimal
 
-from sqlalchemy import false, func, select
+from sqlalchemy import String, cast, false, func, insert, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -530,6 +530,46 @@ def alterar_quadro(
     return _em_savepoint(sessao, simular, trabalho)
 
 
+def resumo_das_linhas(sessao: Session, quadro_ids: list[uuid.UUID]) -> dict:
+    """{quadro_id: {"linhas": n, "ultima_gravacao": datetime|None}} numa consulta só —
+    para a lista de quadros não fazer uma consulta por quadro."""
+    if not quadro_ids:
+        return {}
+    linhas = sessao.execute(
+        select(QuadroLinha.quadro_id, func.count(), func.max(QuadroLinha.atualizado_em))
+        .where(QuadroLinha.quadro_id.in_(quadro_ids))
+        .group_by(QuadroLinha.quadro_id)
+    ).all()
+    saida = {qid: {"linhas": 0, "ultima_gravacao": None} for qid in quadro_ids}
+    for qid, n, ultima in linhas:
+        saida[qid] = {"linhas": n, "ultima_gravacao": ultima}
+    return saida
+
+
+def execucoes_que_gravaram(sessao: Session, organizacao_id: uuid.UUID, ref, limite: int = 5) -> list[dict]:
+    """As execuções mais recentes que deixaram linhas neste quadro, com quantas — é o que
+    a tela oferece para "apagar o que ela gravou" (desfazer uma rodada de teste)."""
+    from modelos import Automacao, Execucao
+
+    q = obter_quadro(sessao, organizacao_id, ref)
+    rows = sessao.execute(
+        select(
+            QuadroLinha.execucao_id, func.count(), func.max(QuadroLinha.atualizado_em),
+            Automacao.nome,
+        )
+        .join(Execucao, Execucao.id == QuadroLinha.execucao_id)
+        .outerjoin(Automacao, Automacao.id == Execucao.automacao_id)
+        .where(QuadroLinha.quadro_id == q.id, QuadroLinha.execucao_id.is_not(None))
+        .group_by(QuadroLinha.execucao_id, Automacao.nome)
+        .order_by(func.max(QuadroLinha.atualizado_em).desc())
+        .limit(limite)
+    ).all()
+    return [
+        {"execucao_id": str(eid), "linhas": n, "quando": quando, "automacao": nome}
+        for eid, n, quando, nome in rows
+    ]
+
+
 def quem_usa(sessao: Session, organizacao_id: uuid.UUID, ref) -> list[dict]:
     """Os instrumentos `quadro` da organização que apontam para este quadro, com o time,
     o acesso e os agentes que os têm no cinto. É o "quem lê e quem escreve" da tela."""
@@ -553,6 +593,42 @@ def quem_usa(sessao: Session, organizacao_id: uuid.UUID, ref) -> list[dict]:
             .where(AgenteInstrumento.instrumento_id == inst.id)
         ).all()
         usos.append({
+            "instrumento_id": str(inst.id),
+            "instrumento": inst.nome,
+            "time": nome_time,
+            "time_id": str(inst.time_id),
+            "acesso": (inst.configuracao or {}).get("acesso") or "ler",
+            "agentes": list(agentes),
+        })
+    return usos
+
+
+def quem_usa_por_quadro(sessao: Session, organizacao_id: uuid.UUID) -> dict[str, list[dict]]:
+    """`quem_usa` de TODOS os quadros da organização de uma vez: {quadro_id: [usos]}."""
+    from modelos import Agente, AgenteInstrumento, Instrumento, Time
+
+    quadros = listar_quadros(sessao, organizacao_id)
+    por_ref: dict[str, str] = {}
+    for q in quadros:
+        por_ref[str(q.id)] = str(q.id)
+        por_ref[q.nome.lower()] = str(q.id)
+    linhas = sessao.execute(
+        select(Instrumento, Time.nome)
+        .join(Time, Time.id == Instrumento.time_id)
+        .where(Instrumento.tipo == "quadro", Time.organizacao_id == organizacao_id)
+    ).all()
+    usos: dict[str, list[dict]] = {str(q.id): [] for q in quadros}
+    for inst, nome_time in linhas:
+        ref_inst = str((inst.configuracao or {}).get("quadro") or "")
+        qid = por_ref.get(ref_inst) or por_ref.get(ref_inst.lower())
+        if qid is None:
+            continue
+        agentes = sessao.scalars(
+            select(Agente.nome)
+            .join(AgenteInstrumento, AgenteInstrumento.agente_id == Agente.id)
+            .where(AgenteInstrumento.instrumento_id == inst.id)
+        ).all()
+        usos[qid].append({
             "instrumento_id": str(inst.id),
             "instrumento": inst.nome,
             "time": nome_time,
@@ -750,16 +826,33 @@ def gravar_linhas(
                 )
 
         ids_criados, ids_atualizados, sem_mudanca = [], [], 0
+        # Linhas NOVAS vão em LOTE (um INSERT para as linhas, um para o histórico): uma
+        # importação de milhares de linhas cabe em segundos, sem virar pedido longo.
+        carimbo = {
+            "origem": autor.origem, "agente_id": autor.agente_id,
+            "execucao_id": autor.execucao_id, "usuario_id": autor.usuario_id,
+        }
+        novas, historico = [], []
         for _i, valores, kv in criar:
+            lid = uuid.uuid4()
             limpos = {k: v for k, v in valores.items() if v is not None}
-            ln = QuadroLinha(
-                id=uuid.uuid4(), quadro_id=q.id, organizacao_id=q.organizacao_id,
-                valores=limpos, chave_valor=kv, versao=1, origem=autor.origem,
-            )
-            _carimbar(ln, autor)
-            sessao.add(ln)
-            _alteracao(sessao, q, ln.id, "criou", None, limpos, autor)
-            ids_criados.append(str(ln.id))
+            novas.append({
+                "id": lid, "quadro_id": q.id, "organizacao_id": q.organizacao_id,
+                "valores": limpos, "chave_valor": kv, "versao": 1, **carimbo,
+            })
+            historico.append({
+                "quadro_id": q.id, "linha_id": lid, "acao": "criou", "antes": None,
+                "depois": limpos, **carimbo,
+            })
+            ids_criados.append(str(lid))
+        if novas:
+            try:
+                sessao.execute(insert(QuadroLinha), novas)
+            except IntegrityError:
+                raise ErroQuadro(
+                    "Outra gravação criou a mesma chave ao mesmo tempo. Nada foi gravado; mande de novo."
+                ) from None
+            sessao.execute(insert(QuadroAlteracao), historico)
         for i, valores, ln in atualizar:
             antes = dict(ln.valores or {})
             depois = {**antes, **valores}
@@ -855,9 +948,11 @@ def consultar(
     so_o_mais_recente_de=None,
     ids=None,
     execucao_id=None,
+    busca: str | None = None,
 ) -> dict:
     """Linhas que casam com os filtros. Sempre diz o TOTAL e, se houver mais, o
-    `proximo` deslocamento — nunca corta calado. Ordem padrão: mais recentes primeiro."""
+    `proximo` deslocamento — nunca corta calado. Ordem padrão: mais recentes primeiro.
+    `busca` = texto livre procurado em qualquer coluna (a caixa de busca da tela)."""
     q = obter_quadro(sessao, organizacao_id, ref)
     lim = limites_mod.efetivos(q)
     teto = lim["linhas_por_consulta"]
@@ -875,6 +970,11 @@ def consultar(
             colunas = [colunas]
         so_ids = [_coluna_ou_erro(q, q.colunas, c)["id"] for c in colunas]
     conds = _selecao(sessao, q, filtros, ids, execucao_id, so_o_mais_recente_de, lim["tamanho_texto_longo"])
+    if busca and busca.strip():
+        # Texto livre em qualquer coluna: procura no JSON inteiro da linha (os valores
+        # já estão na forma guardada; datas buscam por "2026-09").
+        termo = busca.strip()[:100].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        conds.append(cast(QuadroLinha.valores, String).ilike(f"%{termo}%", escape="\\"))
     try:
         itens = ordem if isinstance(ordem, list) else ([ordem] if ordem else [])
         ordens = [filtros_mod.expressao_de_ordem(q, o) for o in itens]

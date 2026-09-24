@@ -163,10 +163,13 @@ class ArgsAtualizar(_Base):
 class ConfigQuadro(BaseModel):
     quadro: str = Field(
         description="O quadro da organização que este instrumento usa (nome ou id).",
+        # A tela desenha um seletor com os quadros da organização (e o que cada um tem).
+        json_schema_extra={"ui": "quadro"},
     )
     acesso: Literal["ler", "ler_e_escrever"] = Field(
         default="ler",
         description="“ler”: o agente só consulta. “ler_e_escrever”: também grava e muda linhas.",
+        json_schema_extra={"ui": "acesso_quadro"},
     )
 
 
@@ -285,9 +288,6 @@ class InstrumentoQuadro(TipoInstrumento):
     # Gravar num quadro NÃO é irreversível: há histórico e dá para desfazer (apagar o
     # que uma execução gravou). Não pede aprovação.
     acao_irreversivel = False
-    # Fora do dropdown da tela até a Entrega 4 (o formulário cru pediria o nome do quadro
-    # num campo de texto e, ao editar, mostraria o id). A IA criadora e o MCP já criam.
-    oculto_na_tela = True
 
     def resolver_config(self, sessao, organizacao_id, config_publica: dict) -> dict:
         """Guarda o ID do quadro (renomear o quadro não pode quebrar o instrumento) e

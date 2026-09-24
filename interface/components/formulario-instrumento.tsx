@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { type QuadroResumo } from "@/lib/quadros";
 
 // Formulário de instrumento, compartilhado entre a tela "Instrumentos do time"
 // (/times/[id]/instrumentos) e o drawer do dashboard. `instrumento=null` cria;
@@ -197,6 +198,7 @@ function CampoConfigInput({
   disponiveis,
   automacoes,
   canais,
+  quadros,
   onChange,
 }: {
   campo: CampoConfig;
@@ -208,6 +210,7 @@ function CampoConfigInput({
   disponiveis: ProvedoresDisponiveis | undefined; // p/ o seletor de modelo de IA
   automacoes: AutomacaoOrg[]; // p/ o seletor de automação-alvo (agendar_automacao)
   canais: Instrumento[]; // p/ o seletor de canal (ui:canal_mensageria)
+  quadros: QuadroResumo[]; // p/ o seletor de quadro (ui:quadro — instrumento `quadro`)
   onChange: (v: string) => void;
 }) {
   let entrada;
@@ -260,6 +263,74 @@ function CampoConfigInput({
           </optgroup>
         ))}
       </Select>
+    );
+  } else if (campo.ui === "quadro" && !campo.secreto) {
+    // O quadro do cérebro que este instrumento usa: seletor com os quadros da
+    // organização + prévia do que ele tem (colunas e quem já usa). O valor guardado é
+    // o id do quadro (renomear o quadro não quebra o instrumento).
+    const escolhido = quadros.find((q) => q.id === valor || q.nome.toLowerCase() === valor.toLowerCase());
+    entrada = (
+      <div className="flex flex-col gap-2">
+        <Select value={escolhido?.id ?? valor} onChange={(e) => onChange(e.target.value)}>
+          <option value="">(escolha um quadro)</option>
+          {quadros.map((q) => (
+            <option key={q.id} value={q.id}>
+              {q.nome}
+            </option>
+          ))}
+        </Select>
+        {escolhido && (
+          <div className="flex flex-col gap-0.5 rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+            <span className="text-foreground">
+              {escolhido.nome} · {escolhido.linhas.toLocaleString("pt-BR")} linhas
+            </span>
+            <span>Colunas: {escolhido.colunas.join(", ")}</span>
+            {escolhido.usado_por.length > 0 && (
+              <span>
+                Já usado por:{" "}
+                {escolhido.usado_por
+                  .map((u) => `${u.agentes.join(", ") || u.instrumento} (${u.acesso === "ler_e_escrever" ? "grava" : "lê"})`)
+                  .join("; ")}
+              </span>
+            )}
+          </div>
+        )}
+        {quadros.length === 0 && (
+          <span className="text-xs text-muted-foreground">
+            Esta organização ainda não tem quadros. Crie um no Cérebro (menu à esquerda).
+          </span>
+        )}
+      </div>
+    );
+  } else if (campo.ui === "acesso_quadro" && !campo.secreto) {
+    const opcoes = [
+      { v: "ler", titulo: "Só ler", texto: "Consultar linhas, somar e conferir o que já existe." },
+      { v: "ler_e_escrever", titulo: "Ler e gravar", texto: "Também acrescentar linhas e mudar as que existem. Não apaga." },
+    ];
+    const atual = valor || "ler";
+    entrada = (
+      <div className="flex flex-col gap-2" role="radiogroup">
+        {opcoes.map((o) => (
+          <button
+            key={o.v}
+            type="button"
+            role="radio"
+            aria-checked={atual === o.v}
+            onClick={() => onChange(o.v)}
+            className={`flex items-start gap-3 rounded-md border px-3 py-2.5 text-left text-sm transition-colors ${
+              atual === o.v ? "border-primary bg-accent/40" : "border-border hover:border-[#D6D3E8]"
+            }`}
+          >
+            <span className={`mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border ${atual === o.v ? "border-primary" : "border-[#D6D3E8]"}`}>
+              {atual === o.v && <span className="size-2 rounded-full bg-primary" />}
+            </span>
+            <span>
+              <span className="block font-medium text-foreground">{o.titulo}</span>
+              <span className="text-muted-foreground">{o.texto}</span>
+            </span>
+          </button>
+        ))}
+      </div>
     );
   } else if (campo.ui === "ferramentas_mcp") {
     // Quais ferramentas de um servidor MCP entram no cinto, e quais pedem aprovação.
@@ -486,6 +557,23 @@ export function FormularioInstrumento({
     };
   }, [time.id]);
 
+  // Quadros do cérebro da organização — para o campo `ui:quadro` (instrumento `quadro`).
+  const [quadrosOrg, setQuadrosOrg] = useState<QuadroResumo[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    api
+      .get<QuadroResumo[]>(`/organizacoes/${time.organizacao_id}/quadros`)
+      .then((d) => {
+        if (vivo) setQuadrosOrg(d);
+      })
+      .catch(() => {
+        /* sem quadros: o seletor mostra o aviso para criar um no Cérebro */
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [time.organizacao_id]);
+
   useEffect(() => {
     let ativo = true;
     (async () => {
@@ -696,6 +784,7 @@ export function FormularioInstrumento({
             disponiveis={disponiveis}
             automacoes={automacoesOrg}
             canais={canaisDoTime}
+            quadros={quadrosOrg}
             onChange={(v) =>
               setValores((atual) => {
                 const proximo = { ...atual, [campo.nome]: v };

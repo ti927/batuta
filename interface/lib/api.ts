@@ -140,8 +140,9 @@ export const api = {
       { method: "PATCH", body: JSON.stringify(corpo) },
       await tokenNavegador(),
     ),
-  delete: async (caminho: string) =>
-    requisitar<void>(caminho, { method: "DELETE" }, await tokenNavegador()),
+  // `T` para rotas de exclusão que respondem com o que saiu (ex.: a prévia do quadro).
+  delete: async <T = void>(caminho: string) =>
+    requisitar<T>(caminho, { method: "DELETE" }, await tokenNavegador()),
 };
 
 // ───────────────────────── Tipos do core ─────────────────────────

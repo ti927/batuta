@@ -32,6 +32,7 @@ from rotas import (
     membros,
     mensageria,
     organizacoes,
+    quadros,
     times,
     webhooks,
 )
@@ -142,6 +143,7 @@ app.include_router(webhooks.rotas)
 app.include_router(mensageria.rotas)
 app.include_router(ajuda.rotas)
 app.include_router(logs.rotas)
+app.include_router(quadros.rotas)
 
 # Arquivos gerados (ex.: PDFs do instrumento gerar_pdf), servidos localmente.
 app.mount("/arquivos", StaticFiles(directory=DIRETORIO_ARQUIVOS), name="arquivos")

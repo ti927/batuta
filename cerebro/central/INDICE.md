@@ -129,11 +129,11 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Membros e convites | `admin/membros-e-convites` | Convidar por e-mail; aceitar; desativar | ✅ | ✍️ |
 | Duplicar time | `admin/duplicar-time` | Cópia com remapeamento; canais nascem desconectados | ✅ | ✍️ |
 
-## 9. O cérebro da organização (em construção — `docs/CEREBRO-PLANO.md`)
+## 9. O cérebro da organização (`docs/CEREBRO-PLANO.md` — Quadros no ar; Arquivos e Biblioteca a construir)
 | Capítulo | slug | O que cobre | Recurso | Escrita |
 |---|---|---|---|---|
 | O cérebro da organização | `cerebro/o-que-e-o-cerebro` | As três partes (quadros, arquivos, Biblioteca); o que NÃO é (sistema oficial); **onde guardar cada informação** (quadro × memória do agente × ficha × sistema × Biblioteca) | 📋 | ✍️ |
-| Quadros | `cerebro/quadros` | Colunas e tipos; tudo ou nada; chave e gravar pela chave; filtros, "só a mais recente de", totais, "já existe?"; quem gravou e histórico; limites; ferramentas da criadora e do MCP | ✅ (falta a tela) | ✍️ |
+| Quadros | `cerebro/quadros` | Colunas e tipos; tudo ou nada; chave e gravar pela chave; filtros, "só a mais recente de", totais, "já existe?"; quem gravou e histórico; limites; ferramentas da criadora e do MCP | ✅ | ✍️ |
 | O agente lendo e gravando num quadro | `cerebro/instrumento-quadro` | O instrumento `quadro` (ler × ler_e_escrever, um por quadro); as ações; o carimbo como prova; o que escrever no markdown (e o que NÃO) | ✅ | ✍️ |
 
 ---

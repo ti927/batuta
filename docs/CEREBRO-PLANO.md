@@ -3,10 +3,21 @@
 **Plano de construção. Escrito em 2026-09-24.** Substitui a "FASE — Biblioteca" como estava no `BUILD-PLAN.md` e absorve o
 `docs/BIBLIOTECA-DECISAO.md`, que vira a **Parte 4** deste plano.
 
-> Estado (2026-09-24): **Entregas 1, 2 e 3 ✅** — a fundação (migração `qdr00quadros001`, `cerebro/quadros/`), o
-> instrumento `quadro` (o agente lê e grava) e as IAs operando (6 ferramentas na criadora, 13 no MCP, diagnóstico com
-> `quadros_gravados`). 90 testes novos, suíte 1405. **Próxima: Entrega 4 (a tela) — começa pela proposta visual.** O
-> maestro autorizou 2 e 3 juntas ("conclua e suba tudo de uma vez").
+> Estado (2026-09-24): **Entregas 1, 2, 3 e 4 ✅** — a fundação (migração `qdr00quadros001`, `cerebro/quadros/`), o
+> instrumento `quadro` (o agente lê e grava), as IAs operando (6 ferramentas na criadora, 13 no MCP, diagnóstico com
+> `quadros_gravados`) e a **tela** (menu Cérebro). Suíte 1412; `tsc`/`eslint`/`build` limpos. **Próxima: Entrega 5 —
+> Radar e Painel migram da planilha (reescrever markdowns pede aval).**
+>
+> *Entrega 4, como ficou:* proposta visual aprovada (`claude.ai/artifact/NJi4o3QPvPwWUJJxQsZjYq`) com UMA mudança do
+> maestro — **lista em cartões horizontais, um por linha, e sempre com busca/filtro** (virou preferência permanente).
+> Menu "Biblioteca" → **"Cérebro"** (`/organizacoes/[id]/cerebro`, a org ativa; `/biblioteca` redireciona). Quadro com
+> abas Linhas (busca livre no servidor, filtros removíveis, "só a mais recente de", "gravado por" com nomes, painel da
+> linha com histórico, apagar o que uma execução gravou com prévia), Colunas (trocar tipo/remover só depois de "ver o que
+> muda"), Quem usa, Limites (ajustáveis). Importar CSV com prévia de TODAS as linhas com problema, mapeamento por coluna,
+> pular linhas, substituir pela chave. Instrumento `quadro` voltou à lista da tela com **seletor** (`ui: quadro`) e
+> escolha só ler × ler e gravar (`ui: acesso_quadro`). **Importação ficou direta, não em segundo plano:** medida, 5.000
+> linhas levavam 8 s; a gravação de linhas novas passou a ser EM LOTE (2 s) — cabe numa chamada com cronômetro. Se um
+> caso real passar disso, vira fila. Área "Cérebro" entrou no /ajuda.
 
 ---
 

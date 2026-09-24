@@ -304,7 +304,11 @@ def test_cinto_do_instrumento_quadro_no_catalogo_da_criadora():
     assert "quadro" in tipos_
 
 
-def test_fora_da_lista_da_tela_ate_a_entrega_4(cliente, entrar, dados):
+def test_na_lista_da_tela_com_seletor_de_quadro(cliente, entrar, dados):
+    """Entrega 4: o tipo entra na lista da tela, com o campo do quadro marcado para virar
+    seletor (e não caixa de texto)."""
     entrar(dados["operador"])
-    tipos_ = [t["tipo"] for t in cliente.get("/instrumentos/tipos").json()]
-    assert "quadro" not in tipos_
+    tipos_ = {t["tipo"]: t for t in cliente.get("/instrumentos/tipos").json()}
+    assert "quadro" in tipos_
+    props = tipos_["quadro"]["esquema_config"]["properties"]
+    assert props["quadro"]["ui"] == "quadro" and props["acesso"]["ui"] == "acesso_quadro"

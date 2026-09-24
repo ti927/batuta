@@ -14,7 +14,8 @@ function tituloDaRota(pathname: string): string {
   const regras: [RegExp, string][] = [
     [/^\/$/, "Início"],
     [/^\/criar/, "Criar com a IA"],
-    [/^\/biblioteca/, "Biblioteca"],
+    [/^\/biblioteca/, "Cérebro"],
+    [/^\/organizacoes\/[^/]+\/cerebro/, "Cérebro"],
     [/^\/uso-consultoria/, "Uso da consultoria"],
     [/^\/uso/, "Uso e custos"],
     [/^\/chaves-consultoria/, "Chaves da consultoria"],

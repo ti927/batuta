@@ -19,8 +19,12 @@ estar em times diferentes e rodar em dias diferentes. Como cada agente só enxer
 instrumento, dá para saber exatamente quem usa cada quadro.
 
 ## Como usar (na tela)
-Ainda não há como criar este instrumento pela tela. Peça à IA que monta o time: "dê ao Coletor acesso de
-escrita ao quadro Painel – semanas, e ao Briefing só de leitura".
+1. No time, aba **Instrumentos** › novo instrumento do tipo **Quadro**.
+2. Escolha o quadro na lista (ela mostra as colunas e quem já usa) e se o agente **só lê** ou **lê e grava**.
+3. Encaixe o instrumento no agente.
+
+Ou peça à IA que monta o time: "dê ao Coletor acesso de escrita ao quadro Painel – semanas, e ao Briefing só
+de leitura".
 
 ## Exemplos
 - O agente do Radar grava uma linha por pergunta de cada rodada. O agente do Briefing lê só as lacunas da

@@ -27,6 +27,7 @@ const AREAS: { chave: string; rotulo: string }[] = [
   { chave: "times-agentes", rotulo: "Times e agentes" },
   { chave: "automacoes", rotulo: "Automações e fluxo" },
   { chave: "instrumentos", rotulo: "Instrumentos" },
+  { chave: "cerebro", rotulo: "Cérebro" },
   { chave: "segredos", rotulo: "Segredos e conexões" },
   { chave: "mensageria", rotulo: "Mensageria" },
   { chave: "operacao", rotulo: "Operação" },

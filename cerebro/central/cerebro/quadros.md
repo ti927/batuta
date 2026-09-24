@@ -9,8 +9,7 @@ fontes: ["cerebro/quadros/servico.py", "cerebro/quadros/tipos.py", "cerebro/quad
 
 # Quadros
 
-> **Em construção.** Os quadros já funcionam para os agentes e para a IA que monta os times. Ainda não
-> há uma tela para você ver e editar os quadros — ela é a próxima parte.
+> Menu **Cérebro** › o quadro.
 
 ## Em uma frase
 Um quadro é como uma aba de planilha, só que o Batuta sabe o que tem em cada coluna: confere o que entra,
@@ -21,8 +20,16 @@ Para um agente deixar informação que outro agente (ou uma pessoa) vai usar dep
 rodada, a situação de cada cliente, a lista de contas a pagar, os números da semana.
 
 ## Como usar (na tela)
-Ainda não há tela. Peça à IA que monta o time para criar o quadro, importar uma planilha que você já tem
-(cole o conteúdo em CSV) ou mostrar o que os agentes gravaram.
+1. **Cérebro** › escolha o quadro. A aba **Linhas** mostra o que foi gravado, com busca, filtros ("é igual
+   a", "contém", "maior que", "só a mais recente de") e, em cada linha, quem gravou e quando.
+2. Clique numa linha para corrigir um valor, ver o **histórico** dela ou apagá-la. **Nova linha** acrescenta
+   à mão.
+3. **Importar** traz uma planilha em CSV: você confere para qual coluna vai cada coluna da planilha e vê as
+   linhas com problema antes de gravar. **Exportar** baixa o que está na tela em CSV.
+4. Se uma execução de teste gravou o que não devia, o aviso no alto da aba Linhas oferece **apagar só o que
+   ela gravou**.
+5. As abas **Colunas**, **Quem usa** e **Limites** mostram e ajustam o resto. Trocar o tipo de uma coluna
+   mostra antes o que não se converte.
 
 ## As colunas
 Cada coluna tem um nome e um tipo:
@@ -94,7 +101,7 @@ Todo quadro tem limites, e todos podem ser vistos e ajustados:
 ## Para a IA
 Ferramentas (IA criadora): `listar_quadros`, `ver_quadro`, `criar_quadro`, `alterar_quadro`,
 `consultar_quadro`, `importar_csv_quadro`. Pelo MCP há também totais, histórico, exportar, gravar,
-editar, apagar e excluir. Ainda não há tela: o consultor vê os quadros por você.
+editar, apagar e excluir. O consultor vê e edita tudo no menu **Cérebro**.
 
 Ao desenhar um quadro:
 - dê a cada coluna o tipo certo (data como **Data**, não texto) — é o que permite filtrar e ordenar;
