@@ -187,8 +187,9 @@ variável de ambiente (`DB_POOL_SIZE`/`DB_MAX_OVERFLOW`/`DB_POOL_TIMEOUT`; cére
 `mcp_servidor.py`), quem passa do orçamento ESPERA uma conexão livre do próprio pool, e quando o pooler
 recusa por estar cheio a conexão **espera e tenta de novo** (~6,5 s, `db.conectar_com_paciencia`) em vez de
 falhar na primeira — com evento `banco.pooler_cheio` no banco de logs (warning se saiu, error se desistiu).
-Recomendado subir o **Pool Size** do pooler para 30 no painel do Supabase (Project Settings › Database ›
-Connection pooling): o conector MCP do Supabase não alcança essa configuração. Modo transação (porta 6543)
+O **Pool Size** do pooler foi subido para **30** pelo maestro no painel do Supabase (Project Settings ›
+Database › Connection pooling) no mesmo dia — o conector MCP do Supabase não alcança essa configuração. No
+pior caso o Batuta pede 22 (cérebro 12 + memória 4 + MCP 6); na troca de versão, a espera cobre o excedente. Modo transação (porta 6543)
 foi avaliado e **não** adotado: exige desligar comandos preparados e mudar o `statement_timeout` por
 sessão, e o checkpointer depende do modo sessão.
 
