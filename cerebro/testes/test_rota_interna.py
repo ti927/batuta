@@ -291,3 +291,18 @@ def test_operacao_de_conector_que_grava_diz_que_gravou(
                      headers=LIGADA)
     assert r.status_code == 200, r.text
     assert r.json()["escreve"] is True
+
+
+def test_rastro_do_teste_vai_para_o_banco(cliente, entrar, dados, ligada, monkeypatch):
+    """O evento do teste feito pela IA precisa ser GRAVADO. A categoria "interno" não é
+    persistida por padrão, e de 22/09 a 26/09 o rastro prometido nunca chegou ao banco."""
+    import rotas.interno as mod
+
+    chamadas = []
+    monkeypatch.setattr(mod, "registrar_evento", lambda **k: chamadas.append(k))
+    monkeypatch.setattr(mod, "acionar_instrumento", lambda s, i, a: {})
+    iid = _instrumento(cliente, entrar, dados)
+    r = cliente.post(CAMINHO_INST, json=_corpo_inst(dados["operador"].id, iid),
+                     headers=LIGADA)
+    assert r.status_code == 200, r.text
+    assert chamadas and chamadas[-1]["persistir"] is True

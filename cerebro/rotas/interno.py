@@ -101,6 +101,9 @@ def testar_operacao_interno(
     # rastro é uma ponte que ninguém audita.
     registrar_evento(
         categoria="interno",
+        # "interno" não está nas categorias persistidas por padrão; sem isto o rastro
+        # prometido aqui nunca chegava ao banco (ficou assim de 22/09 a 26/09).
+        persistir=True,
         acao="conector.testado_pela_ia",
         nivel="info",
         resultado="ok" if resultado.get("ok") else "falha",
@@ -148,6 +151,9 @@ def testar_instrumento_interno(
 
     registrar_evento(
         categoria="interno",
+        # "interno" não está nas categorias persistidas por padrão; sem isto o rastro
+        # prometido aqui nunca chegava ao banco (ficou assim de 22/09 a 26/09).
+        persistir=True,
         acao="instrumento.testado_pela_ia",
         nivel="info",
         resultado="ok" if saida["ok"] else "falha",
