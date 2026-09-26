@@ -39,7 +39,7 @@ from instrumentos.base import (
 )
 # Reuso do corte de custo do REST (mesma projeção de campos por registro): uma
 # fonte de verdade só, comportamento idêntico ao `campos_resposta` do rest.py.
-from instrumentos.rest import _projetar_registros
+from instrumentos.rest import _projetar_registros, campos_resposta_nao_casam
 
 # Limites de segurança de uma resposta — iguais ao rest.py (evita estourar contexto).
 TIMEOUT_S = 15.0
@@ -601,14 +601,7 @@ class Conector(TipoInstrumento):
         casava com campo nenhum. "Testei e funciona" deixava de significar qualquer
         coisa. Se o filtro fosse apagar tudo, o teste precisa DIZER — é o único
         momento em que alguém está olhando."""
-        if not op.campos_resposta:
-            return ""
-        antes = json.dumps(corpo, ensure_ascii=False, default=str)
-        depois = json.dumps(
-            _projetar_registros(corpo, op.campos_resposta), ensure_ascii=False,
-            default=str,
-        )
-        if antes == depois:
+        if campos_resposta_nao_casam(corpo, op.campos_resposta):
             return (
                 "Atenção: os campos escolhidos em “Campos da resposta” não batem com "
                 "nenhum campo das linhas, então eles não vão filtrar nada. Confira se "

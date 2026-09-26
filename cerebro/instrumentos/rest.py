@@ -57,20 +57,55 @@ def _projetar_registros(corpo: Any, campos: list[str]) -> Any:
             return list(lista)
         return enxuto
 
+    registros = _registros_da_resposta(corpo)
+    return registros.trocar(enxuga_lista(registros.lista)) if registros else corpo
+
+
+class _Registros:
+    """Onde estão as linhas de uma resposta, e como devolvê-la com as linhas trocadas."""
+
+    def __init__(self, lista: list, trocar):
+        self.lista = lista
+        self.trocar = trocar
+
+
+def _registros_da_resposta(corpo: Any) -> "_Registros | None":
+    """Acha a LISTA de registros de uma resposta — fonte única do formato, usada pelo
+    filtro `campos_resposta` e pelo aviso do teste do conector (se cada um tivesse a
+    sua lista de formatos, um dia eles discordariam em silêncio). `None` = formato não
+    reconhecido."""
     if isinstance(corpo, dict):
         resp = corpo.get("response")
         if isinstance(resp, dict) and isinstance(resp.get("results"), list):
-            return {**corpo, "response": {**resp, "results": enxuga_lista(resp["results"])}}
+            return _Registros(
+                resp["results"],
+                lambda nova: {**corpo, "response": {**resp, "results": nova}},
+            )
         # `rows` é o formato das APIs do Google (Search Console, BigQuery, Sheets);
         # `items`/`data`/`records` cobrem o resto do que se vê por aí. Antes só
         # `results` era reconhecido, então `campos_resposta` num conector do Google
         # não economizava NADA — e em silêncio, que é o pior jeito de não funcionar.
         for chave in ("results", "rows", "items", "data", "records"):
             if isinstance(corpo.get(chave), list):
-                return {**corpo, chave: enxuga_lista(corpo[chave])}
+                return _Registros(corpo[chave], lambda nova, c=chave: {**corpo, c: nova})
     if isinstance(corpo, list):
-        return enxuga_lista(corpo)
-    return corpo
+        return _Registros(corpo, lambda nova: nova)
+    return None
+
+
+def campos_resposta_nao_casam(corpo: Any, campos: list[str]) -> bool:
+    """Os `campos` escolhidos não existem em NENHUM registro com conteúdo?
+
+    É a pergunta certa para o aviso do teste. A anterior ("o filtro mudou a resposta?")
+    dava alarme falso quando os campos escolhidos eram TODOS os da linha — o filtro
+    guarda tudo, nada muda, e o aviso dizia que nada batia (visto em 2026-09-26 no
+    Search Console, com `keys, clicks, impressions, ctr, position` certinhos)."""
+    registros = _registros_da_resposta(corpo)
+    if not registros or not campos:
+        return False
+    conjunto = set(campos)
+    tinha = [r for r in registros.lista if isinstance(r, dict) and r]
+    return bool(tinha) and not any(conjunto & r.keys() for r in tinha)
 
 
 class ConfigRest(BaseModel):

@@ -264,3 +264,47 @@ def test_filtro_que_casa_com_ALGUNS_registros_continua_cortando():
 
     corpo = {"rows": [{"clicks": 5, "lixo": "x"}, {"lixo": "y"}]}
     assert _projetar_registros(corpo, ["clicks"]) == {"rows": [{"clicks": 5}, {}]}
+
+
+# ── O aviso do teste não pode dar alarme falso (2026-09-26) ─────────────────────
+# O aviso perguntava "o filtro mudou a resposta?". Com os campos certos e TODOS os da
+# linha escolhidos, o filtro guarda tudo, nada muda — e o aviso dizia que nada batia.
+# O consultor desconfiou do próprio conector, que estava certo.
+
+
+def _aviso(campos, corpo):
+    from instrumentos.conector import Conector, OperacaoConector
+
+    op = OperacaoConector(nome="x", metodo="POST", url="https://x", campos=[],
+                          campos_resposta=campos, somente_leitura=True)
+    return Conector._aviso_do_filtro(op, corpo)
+
+
+_LINHAS_GOOGLE = {
+    "rows": [{"keys": ["lure"], "clicks": 16, "impressions": 263,
+              "ctr": 0.06, "position": 3.7}],
+    "responseAggregationType": "byProperty",
+}
+
+
+def test_aviso_nao_dispara_quando_os_campos_sao_todos_os_da_linha():
+    assert _aviso(["keys", "clicks", "impressions", "ctr", "position"], _LINHAS_GOOGLE) == ""
+
+
+def test_aviso_dispara_com_o_nome_da_lista():
+    assert "não batem" in _aviso(["rows"], _LINHAS_GOOGLE)
+
+
+def test_aviso_nao_dispara_com_parte_dos_campos():
+    assert _aviso(["clicks"], _LINHAS_GOOGLE) == ""
+
+
+def test_aviso_vale_para_o_formato_do_bubble():
+    corpo = {"response": {"results": [{"_id": "1", "nome": "a"}]}}
+    assert _aviso(["_id", "nome"], corpo) == ""
+    assert "não batem" in _aviso(["results"], corpo)
+
+
+def test_aviso_calado_em_formato_desconhecido_ou_sem_linhas():
+    assert _aviso(["x"], {"algo": {"estranho": 1}}) == ""
+    assert _aviso(["clicks"], {"rows": []}) == ""
