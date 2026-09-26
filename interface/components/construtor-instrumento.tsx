@@ -870,6 +870,31 @@ function SecaoOperacoes({
                 </span>
               </label>
             )}
+            {/* O Batuta não sabe o preço de uma API qualquer; sem isto, uma API paga
+                (ex.: Gemini) some do custo do time. */}
+            <label className="mt-2.5 flex items-center gap-3 rounded-md border border-border p-2.5">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] text-foreground">
+                  Custo por chamada (US$)
+                </span>
+                <span className="block text-xs leading-snug text-muted-foreground">
+                  Se o serviço cobra por uso, informe quanto — entra no custo do time.
+                  Deixe 0 se for gratuito.
+                </span>
+              </span>
+              <Input
+                type="number"
+                min={0}
+                step="0.0001"
+                inputMode="decimal"
+                value={op.custo_por_chamada_usd ?? 0}
+                onChange={(e) => {
+                  const v = Number(e.target.value.replace(",", "."));
+                  onAtualizar({ custo_por_chamada_usd: Number.isFinite(v) && v > 0 ? v : 0 });
+                }}
+                className="h-8 w-28 shrink-0 text-right tabular-nums"
+              />
+            </label>
           </div>
 
           {/* 4. testar e detectar */}

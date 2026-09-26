@@ -187,9 +187,33 @@ export type TimeResumo = {
   ativo: boolean;
   gatilho: string | null;
   custo_acumulado_usd: number;
+  // O custo acumulado em duas partes (IA dos próprios agentes × instrumentos que eles
+  // acionaram), e os cortes por agente e por instrumento, do mais caro ao mais barato.
+  custo_ia_agentes_usd: number;
+  custo_instrumentos_usd: number;
+  custo_por_agente: CustoDoAgente[];
+  custo_por_instrumento: CustoDoInstrumento[];
   taxa_sucesso: number | null;
   pendencias: number;
   conversas_em_andamento: number;
+};
+
+export type CustoDoAgente = {
+  agente_id: string | null; // null = agente removido ou não identificado
+  nome: string | null;
+  ia_usd: number;
+  instrumentos_usd: number;
+  total_usd: number;
+};
+
+export type CustoDoInstrumento = {
+  instrumento_id: string | null;
+  nome: string | null;
+  // "transcricao" = transcrição de áudio; null = custo gravado antes de 26/09/2026,
+  // sem o nome do instrumento.
+  tipo: string | null;
+  custo_usd: number;
+  chamadas: number;
 };
 
 export type Papel = "lider" | "agente";
@@ -313,6 +337,9 @@ export type OperacaoConector = {
   // URL (Google Search Console). Declaração CONSCIENTE de quem monta — sem ela, cada
   // consulta dessas pararia para pedir aprovação.
   somente_leitura?: boolean;
+  // Quanto a API cobra por chamada (US$) — informado por quem monta; entra no custo
+  // do time. 0/ausente = gratuita ou desconhecida.
+  custo_por_chamada_usd?: number;
 };
 
 export type ConfigConector = {

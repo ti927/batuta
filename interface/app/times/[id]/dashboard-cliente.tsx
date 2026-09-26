@@ -31,6 +31,7 @@ import {
   type Agente,
   type Automacao,
   type Cadeia,
+  type CustoDoInstrumento,
   type ExecucaoNaLista,
   type Instrumento,
   type PapelAcesso,
@@ -131,7 +132,11 @@ export function DashboardCliente({
             tom={{ bg: "#E6F4EA", fg: "#3DAA5C" }}
             rotulo="Custo acumulado"
             valor={`~US$ ${custo.toFixed(2)}`}
-            sub={`${totalExec} ${totalExec === 1 ? "execução" : "execuções"} · estimado`}
+            sub={
+              custo > 0
+                ? `IA dos agentes ${dolar(resumo?.custo_ia_agentes_usd ?? 0)} · instrumentos ${dolar(resumo?.custo_instrumentos_usd ?? 0)}`
+                : `${totalExec} ${totalExec === 1 ? "execução" : "execuções"} · estimado`
+            }
           />
           <StatCard
             Icone={Activity}
@@ -141,6 +146,11 @@ export function DashboardCliente({
             sub={taxa === null ? "sem execuções finalizadas" : "das finalizadas"}
           />
         </div>
+
+        {/* Para onde vai o custo — a IA de cada agente e os instrumentos que ele aciona
+            são custos diferentes (um agente no Claude que gera imagem na OpenAI paga os
+            dois). */}
+        {custo > 0 && resumo && <ParaOndeVaiOCusto resumo={resumo} />}
 
         {/* Cadeia */}
         {automacoes.some((a) => inicialDaCadeia(a.cadeia)) && (
@@ -297,6 +307,78 @@ export function DashboardCliente({
         />
       )}
     </main>
+  );
+}
+
+// ───────────────────────── Custo ─────────────────────────
+
+// Valores pequenos (uma busca custa milésimos) não podem virar "US$ 0.00".
+function dolar(v: number): string {
+  if (v > 0 && v < 0.01) return "< US$ 0.01";
+  return `US$ ${v.toFixed(2)}`;
+}
+
+function nomeDoInstrumento(i: CustoDoInstrumento): string {
+  if (i.tipo === "transcricao") return "Transcrição de áudio";
+  if (!i.tipo) return "Instrumentos usados antes de 26/09";
+  return i.nome || "Instrumento removido";
+}
+
+function ParaOndeVaiOCusto({ resumo }: { resumo: TimeResumo }) {
+  const agentes = resumo.custo_por_agente.filter((a) => a.total_usd > 0);
+  const instrumentos = resumo.custo_por_instrumento.filter((i) => i.custo_usd > 0);
+  return (
+    <>
+      <RotuloSecao Icone={Gauge}>Para onde vai o custo</RotuloSecao>
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <p className="border-b border-border bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
+          Por agente
+        </p>
+        {agentes.map((a, i) => (
+          <div
+            key={a.agente_id ?? `sem-${i}`}
+            className={`flex items-center gap-3 px-4 py-2.5 ${i > 0 ? "border-t border-border" : ""}`}
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm text-foreground">
+                {a.nome ?? "Agente removido"}
+              </span>
+              <span className="block text-xs text-muted-foreground tabular-nums">
+                IA {dolar(a.ia_usd)} · instrumentos {dolar(a.instrumentos_usd)}
+              </span>
+            </span>
+            <span className="w-24 text-right text-sm font-medium text-foreground tabular-nums">
+              {dolar(a.total_usd)}
+            </span>
+          </div>
+        ))}
+        {instrumentos.length > 0 && (
+          <>
+            <p className="border-y border-border bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
+              Instrumentos que mais custaram
+            </p>
+            {instrumentos.map((inst, i) => (
+              <div
+                key={inst.instrumento_id ?? inst.tipo ?? `antes-${i}`}
+                className={`flex items-center gap-3 px-4 py-2.5 ${i > 0 ? "border-t border-border" : ""}`}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-foreground">
+                    {nomeDoInstrumento(inst)}
+                  </span>
+                  <span className="block text-xs text-muted-foreground tabular-nums">
+                    {inst.chamadas} {inst.chamadas === 1 ? "uso" : "usos"}
+                  </span>
+                </span>
+                <span className="w-24 text-right text-sm font-medium text-foreground tabular-nums">
+                  {dolar(inst.custo_usd)}
+                </span>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    </>
   );
 }
 
