@@ -57,7 +57,7 @@ def _projetar_registros(corpo: Any, campos: list[str]) -> Any:
             return list(lista)
         return enxuto
 
-    registros = _registros_da_resposta(corpo)
+    registros = registros_da_resposta(corpo)
     return registros.trocar(enxuga_lista(registros.lista)) if registros else corpo
 
 
@@ -69,7 +69,7 @@ class _Registros:
         self.trocar = trocar
 
 
-def _registros_da_resposta(corpo: Any) -> "_Registros | None":
+def registros_da_resposta(corpo: Any) -> "_Registros | None":
     """Acha a LISTA de registros de uma resposta — fonte única do formato, usada pelo
     filtro `campos_resposta` e pelo aviso do teste do conector (se cada um tivesse a
     sua lista de formatos, um dia eles discordariam em silêncio). `None` = formato não
@@ -100,7 +100,7 @@ def campos_resposta_nao_casam(corpo: Any, campos: list[str]) -> bool:
     dava alarme falso quando os campos escolhidos eram TODOS os da linha — o filtro
     guarda tudo, nada muda, e o aviso dizia que nada batia (visto em 2026-09-26 no
     Search Console, com `keys, clicks, impressions, ctr, position` certinhos)."""
-    registros = _registros_da_resposta(corpo)
+    registros = registros_da_resposta(corpo)
     if not registros or not campos:
         return False
     conjunto = set(campos)

@@ -39,7 +39,11 @@ from instrumentos.base import (
 )
 # Reuso do corte de custo do REST (mesma projeção de campos por registro): uma
 # fonte de verdade só, comportamento idêntico ao `campos_resposta` do rest.py.
-from instrumentos.rest import _projetar_registros, campos_resposta_nao_casam
+from instrumentos.rest import (
+    _projetar_registros,
+    campos_resposta_nao_casam,
+    registros_da_resposta,
+)
 
 # Limites de segurança de uma resposta — iguais ao rest.py (evita estourar contexto).
 TIMEOUT_S = 15.0
@@ -423,16 +427,18 @@ def _registros_da_resposta(corpo: Any) -> list[dict]:
 
     Varre TODOS — não só o primeiro — de propósito: o Bubble (e outras APIs) OMITE
     da resposta os campos VAZIOS de cada registro. Olhar só o primeiro perderia
-    campos que estão preenchidos em outros registros. A união dá a lista completa."""
+    campos que estão preenchidos em outros registros. A união dá a lista completa.
+
+    Onde ficam as linhas vem da MESMA fonte do filtro `campos_resposta`
+    (`rest.registros_da_resposta`). Até 2026-09-26 esta função tinha a sua própria
+    lista e não conhecia o `rows` do Google: o "Testar e detectar" oferecia `rows`
+    como campo a escolher — e escolher `rows` é justamente o engano que apagou as
+    linhas do Search Console em 22/09. A tela induzia o erro que o filtro punia."""
+    registros = registros_da_resposta(corpo)
+    if registros is not None:
+        return [r for r in registros.lista if isinstance(r, dict)]
     if isinstance(corpo, dict):
-        resp = corpo.get("response")
-        if isinstance(resp, dict) and isinstance(resp.get("results"), list):
-            return [r for r in resp["results"] if isinstance(r, dict)]
-        if isinstance(corpo.get("results"), list):
-            return [r for r in corpo["results"] if isinstance(r, dict)]
-        return [corpo]
-    if isinstance(corpo, list):
-        return [r for r in corpo if isinstance(r, dict)]
+        return [corpo]  # um registro só
     return []
 
 

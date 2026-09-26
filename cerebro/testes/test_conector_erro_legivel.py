@@ -308,3 +308,20 @@ def test_aviso_vale_para_o_formato_do_bubble():
 def test_aviso_calado_em_formato_desconhecido_ou_sem_linhas():
     assert _aviso(["x"], {"algo": {"estranho": 1}}) == ""
     assert _aviso(["clicks"], {"rows": []}) == ""
+
+
+def test_detectar_oferece_os_campos_da_LINHA_no_google():
+    """O "Testar e detectar" oferecia `rows` como campo — o nome da caixa. Escolhê-lo
+    é o engano que apagou as linhas em 22/09. Agora oferece os campos de cada linha."""
+    from instrumentos.conector import _detectar_campos
+
+    nomes = [c["nome"] for c in _detectar_campos(_LINHAS_GOOGLE)]
+    assert nomes == ["keys", "clicks", "impressions", "ctr", "position"]
+
+
+def test_detectar_continua_igual_no_bubble_e_em_registro_unico():
+    from instrumentos.conector import _detectar_campos
+
+    bubble = {"response": {"results": [{"_id": "1"}, {"_id": "2", "nome": "a"}]}}
+    assert [c["nome"] for c in _detectar_campos(bubble)] == ["_id", "nome"]
+    assert [c["nome"] for c in _detectar_campos({"id": 9, "ok": True})] == ["id", "ok"]
