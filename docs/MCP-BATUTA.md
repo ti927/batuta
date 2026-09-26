@@ -38,7 +38,7 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
 - **Matriz de papéis:** observador lê; **operador** cria/edita; **admin** cria
   organização/time, duplica e exclui.
 
-## As ferramentas (63)
+## As ferramentas (64)
 
 - **Leitura/diagnóstico:** `listar_organizacoes`, `listar_times`, `descrever_time`,
   `listar_agentes`, `ver_agente`, `ver_memoria_agente`, `listar_instrumentos`/
@@ -51,7 +51,7 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
   `consultar_conhecimento` (a Central).
 - **Criação núcleo:** `criar_time`/`editar_time`, `criar_agente`/`editar_agente`/
   `remover_agente`, `configurar_instrumento`/`editar_instrumento`, `montar_conector`/
-  `testar_operacao_conector`, `encaixar_instrumento`/`desencaixar_instrumento`,
+  `testar_operacao_conector`/`testar_instrumento`, `encaixar_instrumento`/`desencaixar_instrumento`,
   `criar_automacao`/`renomear_automacao`/`montar_cadeia`/`definir_gatilho`/
   `ativar_automacao`/`desativar_automacao`. Reusa a porta validada `criacao/servicos.py`.
 - **Credenciais/chaves (esqueleto — a IA NUNCA recebe segredo):** `listar_tipos_credencial`,
@@ -73,7 +73,15 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
   `diagnosticar_execucao` passou a trazer `quadros_gravados` — o que a execução gravou de
   fato. **Links de leitura (acesso de fora, 2026-09-24):** `listar_links_quadro` (sem nunca
   devolver o link inteiro) e `revogar_link_quadro` (admin, só com `confirmar=true`). **Criar ou
-  trocar link é só pela tela** — o link é uma senha e a IA não o recebe. **Total: 63 ferramentas.**
+  trocar link é só pela tela** — o link é uma senha e a IA não o recebe. **Total: 64 ferramentas.**
+- **Testar (2026-09-26):** a IA testa o que monta, em vez de o consultor testar por ela —
+  `testar_operacao_conector` (cada operação de um conector) e `testar_instrumento` (os outros tipos,
+  pelo mesmo caminho do botão de testar da tela). O teste é **real, inclusive quando grava** (decisão
+  do maestro): as instruções mandam marcar com **TESTES** tudo o que o teste criar, só alterar/apagar
+  o que o próprio teste criou, e contar ao consultor o que foi criado; a resposta traz `escreve` e
+  um aviso `atencao`. Como o serviço MCP não tem a chave do cofre, o teste é pedido ao cérebro pela
+  porta interna (`docs/ARQUITETURA.md §9-bis`) — **só funciona com `BATUTA_INTERNO_SECRET`
+  configurado nos dois serviços**; sem ela, a ferramenta diz isso e manda testar pela tela.
 
 > **Nomes que mudaram (2026-08-26):** `ativar_time`/`desativar_time` viraram
 > `ativar_automacao`/`desativar_automacao` — recebiam `automacao_id` e operavam sobre uma

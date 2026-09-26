@@ -464,3 +464,127 @@ def test_ponte_ligada_pede_o_teste_ao_cerebro(mcp, dados, monkeypatch):
     assert enviado["corpo"]["operacao"] == "consultar"
     # o segredo do instrumento NÃO vai no pedido
     assert "auth_segredo" not in json.dumps(enviado["corpo"])
+
+
+# ── Testar os OUTROS tipos de instrumento (2026-09-26) ──────────────────────────
+# A IA montava instrumento e não tinha como testá-lo: o consultor virava o testador de
+# cada chamada. `testar_instrumento` aciona de verdade — inclusive o que grava, com o
+# aviso para marcar TESTES e contar ao consultor o que foi criado.
+
+
+class _ClienteFalso:
+    """Um `httpx.Client` que guarda o pedido e devolve `resposta`."""
+
+    def __init__(self, enviado, resposta):
+        self._enviado, self._resposta = enviado, resposta
+
+    def __call__(self, *a, **k):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def post(self, url, headers=None, json=None):
+        self._enviado.update({"url": url, "headers": headers, "corpo": json})
+        resposta = self._resposta
+
+        class _Resp:
+            status_code = 200
+
+            def json(self):
+                return resposta
+
+        return _Resp()
+
+
+def _instrumento(dados, tipo, configuracao=None):
+    r = escrita.configurar_instrumento(
+        _sub(dados), str(dados["timeA"].id), f"Teste {tipo}", tipo, configuracao or {}
+    )
+    return json.loads(r)["id"]
+
+
+def test_testar_instrumento_aciona_de_verdade(mcp, dados, monkeypatch):
+    """Com o cofre à mão (local), aciona pelo MESMO caminho do botão da tela."""
+    import rotas.instrumentos as rotas_inst
+
+    iid = _instrumento(dados, "busca_web")
+    chamado = {}
+
+    def _acionar(sessao, inst, argumentos):
+        chamado.update({"id": str(inst.id), "argumentos": argumentos})
+        return {"resultados": ["a"]}
+
+    monkeypatch.setattr(rotas_inst, "acionar_instrumento", _acionar)
+    saida = json.loads(escrita.testar_instrumento(_sub(dados), iid, {"consulta": "x"}))
+    assert chamado == {"id": iid, "argumentos": {"consulta": "x"}}
+    assert saida["resultado"] == {"ok": True, "resultado": {"resultados": ["a"]}}
+    assert "atencao" not in saida  # busca só lê
+
+
+def test_testar_instrumento_que_grava_avisa_testes(mcp, dados, monkeypatch):
+    """Instrumento que envia/publica: roda, e a resposta lembra a IA de contar ao
+    consultor o que foi criado, marcado TESTES."""
+    import rotas.instrumentos as rotas_inst
+
+    iid = _instrumento(dados, "chamar_api_rest", {"url": "https://x/y", "metodo": "POST"})
+    monkeypatch.setattr(rotas_inst, "acionar_instrumento", lambda *a, **k: {"status": 201})
+    saida = json.loads(escrita.testar_instrumento(_sub(dados), iid, {}))
+    assert "TESTES" in saida["atencao"]
+
+
+def test_testar_instrumento_falha_volta_como_dado(mcp, dados, monkeypatch):
+    """A IA precisa LER o motivo para consertar a montagem — não um erro genérico."""
+    import rotas.instrumentos as rotas_inst
+    from instrumentos.base import FalhaInstrumento
+
+    iid = _instrumento(dados, "busca_web")
+
+    def _falha(*a, **k):
+        raise FalhaInstrumento("a API recusou: chave inválida")
+
+    monkeypatch.setattr(rotas_inst, "acionar_instrumento", _falha)
+    saida = json.loads(escrita.testar_instrumento(_sub(dados), iid, {}))
+    assert saida["resultado"] == {"ok": False, "erro": "a API recusou: chave inválida"}
+
+
+def test_testar_instrumento_conector_manda_testar_por_operacao(mcp, dados):
+    conector = {"nome": "C", "auth_tipo": "nenhuma",
+                "operacoes": [{"nome": "consultar", "metodo": "GET",
+                               "url": "https://x/y", "campos": []}]}
+    cid = json.loads(
+        escrita.montar_conector(_sub(dados), str(dados["timeA"].id), conector, None)
+    )["id"]
+    assert "testar_operacao_conector" in escrita.testar_instrumento(_sub(dados), cid, {})
+
+
+def test_testar_instrumento_sem_cofre_pede_ao_cerebro(mcp, dados, monkeypatch):
+    """Em produção o MCP roda SEM a chave do cofre: o pedido vai ao cérebro, e o que
+    volta é só o resultado."""
+    import httpx
+
+    iid = _instrumento(dados, "chamar_api_rest", {"url": "https://x/y", "metodo": "POST"})
+    monkeypatch.delenv("COFRE_CHAVE_MESTRA", raising=False)
+    monkeypatch.setenv("BATUTA_INTERNO_SECRET", "segredo-de-teste")
+    enviado = {}
+    monkeypatch.setattr(
+        httpx, "Client",
+        _ClienteFalso(enviado, {"ok": True, "resultado": {"status": 201}, "escreve": True}),
+    )
+    saida = json.loads(escrita.testar_instrumento(_sub(dados), iid, {"a": 1}))
+    assert enviado["url"].endswith("/interno/instrumento/testar")
+    assert enviado["headers"]["X-Batuta-Interno"] == "segredo-de-teste"
+    assert enviado["corpo"]["argumentos"] == {"a": 1}
+    assert "TESTES" in saida["atencao"]
+
+
+def test_testar_instrumento_ponte_desligada_diz_o_caminho(mcp, dados, monkeypatch):
+    iid = _instrumento(dados, "busca_web")
+    monkeypatch.delenv("COFRE_CHAVE_MESTRA", raising=False)
+    monkeypatch.delenv("BATUTA_INTERNO_SECRET", raising=False)
+    saida = escrita.testar_instrumento(_sub(dados), iid, {})
+    assert escrita.ERRO_INESPERADO not in saida
+    assert "BATUTA_INTERNO_SECRET" in saida

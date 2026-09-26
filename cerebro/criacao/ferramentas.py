@@ -632,7 +632,11 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         {"constraints": "[{...}]"}). Se a API pede token e ele ainda não foi colado no
         cofre, a resposta volta com ok=false (autenticação) — nesse caso, peça o token
         ao consultor e teste de novo. DICA: se uma busca devolve o lote inteiro sem
-        filtrar, confira o NOME do campo do filtro (ex.: Bubble usa 'constraints')."""
+        filtrar, confira o NOME do campo do filtro (ex.: Bubble usa 'constraints').
+        O teste é REAL também quando a operação GRAVA (a resposta traz `escreve: true`):
+        pode testar, mas marque o que criar com a palavra TESTES nos campos de texto (ex.:
+        "TESTES — cliente de exemplo"), só altere/apague registro que o próprio teste
+        criou, e diga ao consultor o que foi criado e onde."""
         inst = _instrumento(conector_id)
         if inst is None or inst.tipo != "conector":
             return _erro(f"Não há conector com id {conector_id} neste time.")

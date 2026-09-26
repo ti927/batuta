@@ -571,11 +571,14 @@ class Conector(TipoInstrumento):
                 f"operação '{nome_operacao}' não existe neste conector.", retentavel=False
             )
         op_cheia = op.model_copy(update={"campos_resposta": []})
+        # O teste roda a chamada REAL. Quem pediu precisa saber se ela mexeu em algo lá
+        # fora — a IA que testa pelo MCP usa isto para avisar o consultor do que criou.
+        escreve = _operacao_escreve(op)
         try:
             resultado = _executar_operacao(config, op_cheia, valores or {})
         except FalhaInstrumento as e:
             return {"ok": False, "erro": str(e), "status": None, "corpo": None,
-                    "campos_detectados": []}
+                    "campos_detectados": [], "escreve": escreve}
         if not resultado.get("ok") and not resultado.get("erro"):
             # Resposta 4xx: `_executar_operacao` devolve `ok:false` + status + corpo,
             # SEM a chave `erro` — e quem só olhava `erro` mostrava "a chamada falhou"
@@ -586,6 +589,7 @@ class Conector(TipoInstrumento):
             **resultado,
             "campos_detectados": _detectar_campos(resultado.get("corpo")),
             "aviso_campos_resposta": self._aviso_do_filtro(op, resultado.get("corpo")),
+            "escreve": escreve,
         }
 
     @staticmethod

@@ -135,6 +135,16 @@ Quando a API recusa (4xx), a resposta traz o **motivo que o serviço deu**, não
 leia o campo `erro` e o `corpo`: é ali que está a explicação (ex.: `"startDate field is required"`,
 `"User does not have sufficient permission for site"`). Não adivinhe a causa; ela está escrita.
 
+**O teste é REAL, inclusive quando a operação GRAVA.** Pode (e deve) testar também a operação que
+cria, altera, envia ou apaga — sem isso ela vai para o agente sem nunca ter rodado. Três regras:
+1. **Marque com TESTES tudo o que o teste criar.** Nos campos de texto que aparecem no sistema de
+   destino (nome, título, assunto, descrição, mensagem), use a palavra TESTES — ex.:
+   `"TESTES — cliente de exemplo"`. Assim qualquer pessoa reconhece e apaga depois.
+2. **Só altere ou apague o que o próprio teste criou** — nunca um registro real do cliente. Para
+   testar "atualizar" ou "excluir", crie antes um registro TESTES e use o id dele.
+3. **Diga ao consultor o que foi criado e onde.** A resposta do teste traz `escreve: true` e um aviso
+   `atencao` quando a chamada mexeu em algo lá fora.
+
 ## Limites e cuidados
 - **Escrita pede aprovação — por OPERAÇÃO, não pelo conector inteiro.** O método é o sinal
   (GET lê; POST/PUT/PATCH/DELETE escrevem), e cada operação que escreve para e pede aprovação; as de
@@ -163,7 +173,10 @@ leia o campo `erro` e o `corpo`: é ali que está a explicação (ex.: `"startDa
 - Monte/edite com **`montar_conector(conector, conector_id?)`** — sem `conector_id` cria; com ele edita
   (por exemplo, para acrescentar uma operação ou preencher `campos_resposta` depois do teste). O objeto
   precisa de `nome` ao criar; os campos secretos (token) NUNCA entram aqui.
-- Teste com **`testar_operacao_conector(conector_id, operacao, valores?)`** antes de encaixar no cinto.
+- Teste VOCÊ mesmo com **`testar_operacao_conector(conector_id, operacao, valores?)`** antes de
+  encaixar no cinto — cada operação, inclusive as que gravam (marcando TESTES; ver acima). Os outros
+  tipos de instrumento se testam com **`testar_instrumento(instrumento_id, argumentos?)`** (só pelo
+  MCP).
 - Encaixe as ferramentas no cinto encaixando o CONECTOR no agente (`encaixar_instrumento`): cada
   operação declarada vira uma ação separada para o agente.
 - O par "um endpoint só, sem operações" é o [[instrumentos/chamar-rest]]; o "só disparar/notificar" é o

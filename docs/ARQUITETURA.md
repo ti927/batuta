@@ -354,7 +354,9 @@ existindo como política de falha e selo do catálogo.
 
 Até aqui o Batuta tinha duas portas: a **pública** do cérebro (`api.batuta.team`, autenticada por
 JWT do Supabase) e a do **serviço MCP** (OAuth 2.1 próprio). Nasceu uma terceira, estreita:
-`POST /interno/conector/testar-operacao` (`cerebro/rotas/interno.py`).
+`POST /interno/conector/testar-operacao` (`cerebro/rotas/interno.py`) e, desde 2026-09-26,
+`POST /interno/instrumento/testar` — o "Acionar" da tela para os tipos que não são conector, pela
+mesma função (`rotas.instrumentos.acionar_instrumento`).
 
 **Por que existe.** O serviço MCP roda **sem** a `COFRE_CHAVE_MESTRA`, de propósito (least-privilege:
 a IA nunca recebe segredo). Consequência: a IA monta um conector e não consegue testá-lo. Em vez de
@@ -369,10 +371,16 @@ decifrado, usado e descartado do lado de cá; o que atravessa a fronteira é só
 2. **Autorização por USUÁRIO, pelos guardas de sempre.** O segredo não autoriza nada sozinho: o corpo
    diz em nome de quem se age e o pedido passa por `instrumento_acessivel(..., "operador")` — o mesmo
    guarda da tela. Há teste dedicado a isso; se ele cair, a porta virou atalho de permissão.
-3. **Escopo mínimo.** Faz UMA coisa (testar uma operação de conector), não é proxy genérico, e devolve
-   só `{ok, status, corpo, erro, campos_detectados}` — sem configuração e sem segredo.
+3. **Escopo mínimo.** Só TESTA um instrumento que já existe no escopo do usuário, exatamente como os
+   botões da tela; não é proxy genérico (não chama URL arbitrária) e devolve só o que a tela
+   mostraria — sem configuração e sem segredo.
 
-Toda chamada deixa evento `conector.testado_pela_ia` (origem `mcp`) com quem agiu. **Risco residual,
+O teste é **real, inclusive quando grava** (decisão do maestro, 2026-09-26): a resposta traz
+`escreve` (a operação/instrumento mexe em algo lá fora?) e as instruções do MCP mandam marcar com
+**TESTES** o que o teste criar.
+
+Toda chamada deixa evento `conector.testado_pela_ia` ou `instrumento.testado_pela_ia` (origem
+`mcp`) com quem agiu e se gravou (`escreve`). **Risco residual,
 dito na cara:** quem tiver o segredo interno pode testar operações de conector em nome de qualquer
 usuário — limitado ao que aquele usuário já poderia fazer. É por isso que o escopo é mínimo e o
 rastro existe.

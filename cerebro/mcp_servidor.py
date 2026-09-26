@@ -77,6 +77,15 @@ mcp = FastMCP(
         "(use antes e mostre ao consultor); apagar/excluir só simulam sem `confirmar=true`. "
         "Para saber o que uma execução GRAVOU de fato, `diagnosticar_execucao` lista as "
         "linhas por quadro — a narração do agente não é prova.\n"
+        "TESTAR (antes de entregar): criou ou mudou um instrumento? Teste VOCÊ mesmo — "
+        "`testar_operacao_conector` para cada operação de um conector, `testar_instrumento` "
+        "para os outros tipos — em vez de pedir ao consultor que teste. O teste é REAL, "
+        "inclusive o que grava: pode testar a operação que cria, envia ou publica, mas TUDO "
+        "que um teste criar precisa ser reconhecível como teste: ponha a palavra TESTES nos "
+        "campos de texto que aparecem lá fora (nome, título, assunto, descrição, mensagem — "
+        "ex.: \"TESTES — pedido de exemplo\"), prefira rascunho/privado quando a API "
+        "permitir, e ao terminar diga ao consultor o que foi criado e onde, para ele apagar "
+        "se quiser. Leia o `erro`/`corpo` da resposta antes de concluir que funcionou.\n"
         "ERRO: se uma ferramenta devolver falha com um CÓDIGO, repasse o código ao consultor "
         "— ele localiza o erro exato no servidor. Não invente causa nem repita a chamada às "
         "cegas."
@@ -431,7 +440,8 @@ async def configurar_instrumento(
     """Cria um instrumento (uma ferramenta do cinto) de um `tipo` do catálogo (veja
     `listar_tipos_instrumento` para os tipos e campos). Os campos secretos NÃO são
     plugados aqui — ficam pendentes para o consultor colar no cofre. Para uma integração
-    de API com várias operações, use `montar_conector`."""
+    de API com várias operações, use `montar_conector`. Depois de criar, TESTE você mesmo
+    com `testar_instrumento`."""
     return await anyio.to_thread.run_sync(
         escrita.configurar_instrumento, _sub(), time_id, nome, tipo, configuracao
     )
@@ -470,7 +480,8 @@ async def montar_conector(
     No destino 'corpo', texto começando com [ ou { (JSON válido) e true/false/null viram
     lista/objeto/booleano; número NÃO converte (ids viram outra coisa).
     Em dúvida do formato (sobretudo Bubble), chame consultar_conhecimento 'construir
-    conector'. Depois teste cada operação com `testar_operacao_conector`."""
+    conector'. Depois TESTE você mesmo cada operação com `testar_operacao_conector` —
+    inclusive as que gravam, marcando com TESTES o que o teste criar."""
     return await anyio.to_thread.run_sync(
         escrita.montar_conector, _sub(), time_id, conector, conector_id
     )
@@ -483,6 +494,12 @@ async def testar_operacao_conector(
     """Testa UMA operação de um conector com valores de exemplo — roda a chamada REAL e
     devolve a resposta (para você conferir que funciona e escolher os `campos_resposta`).
     `valores` = {nome_do_campo: valor} para os campos de papel 'ia'.
+    O teste é REAL também quando a operação GRAVA (cria, altera, envia, apaga): pode
+    testar, mas marque o que criar com a palavra TESTES nos campos de texto (ex.: nome
+    "TESTES — cliente de exemplo") e, ao terminar, diga ao consultor o que foi criado e
+    onde. A resposta traz `escreve: true` e um campo `atencao` quando a chamada mexeu em
+    algo lá fora. Para ALTERAR ou APAGAR, use um registro que você mesmo criou no teste
+    — nunca um registro real do cliente.
     Funciona TAMBÉM em conector com segredo: este serviço roda sem a chave do cofre (a
     IA nunca recebe segredo), então o teste é pedido ao cérebro, que decifra, chama a
     API e devolve só a resposta. Se a ponte não estiver ligada no ambiente, a ferramenta
@@ -492,6 +509,27 @@ async def testar_operacao_conector(
     required" ou "User does not have sufficient permission for site"."""
     return await anyio.to_thread.run_sync(
         escrita.testar_operacao_conector, _sub(), conector_id, operacao, valores
+    )
+
+
+@mcp.tool()
+async def testar_instrumento(instrumento_id: str, argumentos: dict | None = None) -> str:
+    """Testa um instrumento que NÃO é conector (REST, SQL, WordPress, Telegram, busca,
+    gerar imagem, webhook…) acionando-o de verdade, como o botão de testar da tela.
+    `argumentos` = os argumentos que o agente passaria (veja os campos do tipo em
+    `listar_tipos_instrumento`). Conector se testa por operação, com
+    `testar_operacao_conector`.
+    O teste é REAL: se o instrumento envia, publica ou grava, isso ACONTECE. Pode
+    testar, mas ponha a palavra TESTES no conteúdo (título, mensagem, texto — ex.:
+    "TESTES — post de exemplo"), prefira rascunho/privado quando o instrumento permitir,
+    e ao terminar diga ao consultor o que foi criado/enviado e onde. A resposta traz
+    `escreve: true` e um campo `atencao` nesse caso. Geração de vídeo custa caro: só
+    teste se o consultor pedir.
+    Funciona com instrumento que tem segredo: o teste é pedido ao cérebro, que decifra
+    lá e devolve só o resultado. Se a ponte não estiver ligada, a ferramenta diz isso —
+    não fique retentando. Falha volta com `ok: false` e o motivo em `erro`: leia-o."""
+    return await anyio.to_thread.run_sync(
+        escrita.testar_instrumento, _sub(), instrumento_id, argumentos
     )
 
 

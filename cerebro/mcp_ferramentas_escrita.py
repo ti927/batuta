@@ -179,8 +179,9 @@ def configurar_instrumento(sessao, usuario, time_id, nome, tipo, configuracao) -
             "id": str(inst.id),
             "segredos_pendentes": pendentes,
             "lembrete": (
-                "Peça ao consultor para colar os segredos pendentes no cofre (você não pluga token)."
-                if pendentes else "Sem segredos pendentes."
+                "Peça ao consultor para colar os segredos pendentes no cofre (você não pluga "
+                "token); depois teste VOCÊ mesmo com testar_instrumento."
+                if pendentes else "Sem segredos pendentes. Teste VOCÊ mesmo com testar_instrumento."
             ),
         },
         ensure_ascii=False,
@@ -208,9 +209,11 @@ def montar_conector(sessao, usuario, time_id, conector, conector_id) -> str:
     dados.pop("auth_segredo", None)  # a IA nunca pluga o token (fica pendente no cofre)
     auth = str(dados.get("auth_tipo") or "nenhuma")
     lembrete = (
-        "Peça ao consultor para colar o token no cofre; depois teste com testar_operacao_conector."
+        "Peça ao consultor para colar o token no cofre; depois teste VOCÊ mesmo cada "
+        "operação com testar_operacao_conector (marque com TESTES o que o teste criar)."
         if auth != "nenhuma"
-        else "Sem autenticação. Teste as operações com testar_operacao_conector."
+        else "Sem autenticação. Teste VOCÊ mesmo cada operação com "
+        "testar_operacao_conector (marque com TESTES o que o teste criar)."
     )
     if conector_id:
         cid = _uuid(conector_id)
@@ -263,7 +266,55 @@ def testar_operacao_conector(sessao, usuario, conector_id, operacao, valores) ->
         return _testar_pelo_cerebro(usuario, inst, operacao, valores)
     config = tipo.Config.model_validate({**(inst.configuracao or {}), **secretos})
     resultado = tipo.testar_operacao(config, operacao, valores or {})  # FalhaInstrumento → decorator
-    return json.dumps({"mensagem": "Teste executado.", "resultado": resultado}, ensure_ascii=False)
+    return _saida_do_teste("Teste executado.", resultado, bool(resultado.get("escreve")))
+
+
+# O teste é REAL, inclusive quando grava (decisão do maestro, 2026-09-26). O que a IA
+# cria testando precisa ser reconhecível depois — daí o marcador "TESTES" que as
+# instruções mandam usar — e o consultor precisa ficar sabendo. Este aviso vai junto
+# de toda resposta de teste que mexeu em algo lá fora, para a IA não esquecer.
+AVISO_GRAVOU = (
+    "Este teste GRAVOU/ENVIOU de verdade no sistema de destino. Conte ao consultor o "
+    "que foi criado (e onde), marcado com TESTES, para ele apagar se quiser."
+)
+
+
+def _saida_do_teste(mensagem: str, resultado, escreve: bool) -> str:
+    saida = {"mensagem": mensagem, "resultado": resultado}
+    if escreve:
+        saida["atencao"] = AVISO_GRAVOU
+    return json.dumps(saida, ensure_ascii=False, default=str)
+
+
+@_ferramenta_escrita
+def testar_instrumento(sessao, usuario, instrumento_id, argumentos) -> str:
+    iid = _uuid(instrumento_id)
+    inst = mcp_escopo.instrumento_acessivel(sessao, usuario, iid, "operador") if iid else None
+    if inst is None:
+        return f"Não há instrumento com id {instrumento_id} no seu escopo."
+    if inst.tipo == "conector":
+        return (
+            "Conector se testa por operação: use testar_operacao_conector com o nome "
+            "da operação."
+        )
+    if not (os.environ.get("COFRE_CHAVE_MESTRA") or "").strip():
+        # ESPERADO em produção: este serviço roda sem a chave do cofre. Quem aciona é o
+        # cérebro, que decifra lá e devolve só o resultado. Ver `rotas/interno.py`.
+        return _pedir_teste_ao_cerebro(
+            "/interno/instrumento/testar",
+            {"usuario_id": str(usuario.id), "instrumento_id": str(inst.id),
+             "argumentos": argumentos or {}},
+            onde_testar="na tela do instrumento (botão de testar)",
+        )
+    import instrumentos as encaixe
+    from rotas.instrumentos import acionar_instrumento
+
+    escreve = encaixe.acao_irreversivel(inst.tipo, inst.configuracao or {})
+    try:
+        resultado = {"ok": True, "resultado": acionar_instrumento(sessao, inst, argumentos)}
+    except (ValueError, FalhaInstrumento) as e:
+        resultado = {"ok": False, "erro": str(e)}
+    return _saida_do_teste("Teste executado.", resultado, escreve)
 
 
 # Endereço do cérebro para a ponte interna. Na Railway o padrão é a borda pública; em
@@ -278,43 +329,51 @@ def _url_cerebro() -> str:
 
 
 def _testar_pelo_cerebro(usuario, inst, operacao: str, valores) -> str:
-    """Pede ao CÉREBRO que rode o teste desta operação, em nome deste usuário.
+    """Pede ao CÉREBRO que rode o teste desta operação de conector, em nome deste
+    usuário. Ver `_pedir_teste_ao_cerebro`."""
+    return _pedir_teste_ao_cerebro(
+        "/interno/conector/testar-operacao",
+        {"usuario_id": str(usuario.id), "instrumento_id": str(inst.id),
+         "operacao": operacao, "valores": valores or {}},
+        onde_testar=(
+            "na tela do instrumento (Construtor → a operação → “Testar e detectar”)"
+        ),
+    )
 
-    O segredo fica onde sempre esteve: o cérebro decifra, chama a API e devolve a
-    resposta. Aqui não passa chave nenhuma — só a resposta, que é o mesmo que o
-    consultor veria na tela.
+
+def _pedir_teste_ao_cerebro(caminho: str, corpo: dict, *, onde_testar: str) -> str:
+    """Pede ao CÉREBRO que rode um teste, em nome do usuário que vai no `corpo`.
+
+    O segredo fica onde sempre esteve: o cérebro decifra, chama o sistema de fora e
+    devolve a resposta. Aqui não passa chave nenhuma — só a resposta, que é o mesmo que
+    o consultor veria na tela.
 
     Sem `BATUTA_INTERNO_SECRET` configurado, a ponte não existe: recusamos dizendo o
     caminho manual, em vez de deixar a IA girando em falso."""
     import httpx
 
     segredo = (os.environ.get("BATUTA_INTERNO_SECRET") or "").strip()
+    manual = (
+        f"O instrumento está salvo — peça ao consultor para testar {onde_testar} e "
+        "siga com o resultado que ele trouxer."
+    )
     if not segredo:
         return (
             "Não consigo testar daqui: a ponte com o cérebro não está configurada "
-            "(falta BATUTA_INTERNO_SECRET). O conector está salvo — peça ao consultor "
-            "para testar na tela do instrumento (Construtor → a operação → “Testar e "
-            "detectar”) e siga com o resultado que ele trouxer."
+            f"(falta BATUTA_INTERNO_SECRET). {manual}"
         )
     try:
-        with httpx.Client(timeout=30.0) as cliente:
+        # Teto: o instrumento mais lento testável (gerar imagem) leva ~1 min.
+        with httpx.Client(timeout=120.0) as cliente:
             r = cliente.post(
-                f"{_url_cerebro()}/interno/conector/testar-operacao",
+                f"{_url_cerebro()}{caminho}",
                 headers={"X-Batuta-Interno": segredo},
-                json={
-                    "usuario_id": str(usuario.id),
-                    "instrumento_id": str(inst.id),
-                    "operacao": operacao,
-                    "valores": valores or {},
-                },
+                json=corpo,
             )
     except httpx.HTTPError as e:
         return f"Não consegui falar com o cérebro para rodar o teste: {e}"
     if r.status_code == 404:
-        return (
-            "A ponte de teste com o cérebro não está ligada neste ambiente. O conector "
-            "está salvo — peça ao consultor para testar na tela do instrumento."
-        )
+        return f"A ponte de teste com o cérebro não está ligada neste ambiente. {manual}"
     if r.status_code == 403:
         return "O cérebro recusou a ponte de teste (segredo interno não confere)."
     if r.status_code >= 400:
@@ -324,9 +383,9 @@ def _testar_pelo_cerebro(usuario, inst, operacao: str, valores) -> str:
         except ValueError:
             detalhe = r.text[:300]
         return f"O teste não pôde rodar: {detalhe or f'HTTP {r.status_code}'}"
-    return json.dumps(
-        {"mensagem": "Teste executado (pelo cérebro).", "resultado": r.json()},
-        ensure_ascii=False,
+    resultado = r.json()
+    return _saida_do_teste(
+        "Teste executado (pelo cérebro).", resultado, bool(resultado.get("escreve"))
     )
 
 

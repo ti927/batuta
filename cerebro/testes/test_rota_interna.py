@@ -180,3 +180,114 @@ def test_caminho_feliz_devolve_o_resultado_e_nenhum_segredo(
     # nada de configuração nem de segredo atravessa
     texto = r.text
     assert "auth_segredo" not in texto and "auth_tipo" not in texto
+
+
+# ── 4. Testar os OUTROS tipos (2026-09-26) ──────────────────────────────────
+
+
+CAMINHO_INST = "/interno/instrumento/testar"
+LIGADA = {"X-Batuta-Interno": "segredo-interno-de-teste"}
+
+
+def _instrumento(cliente, entrar, dados, tipo="busca_web", configuracao=None):
+    entrar(dados["operador"])
+    r = cliente.post(
+        f"/times/{dados['timeA'].id}/instrumentos",
+        json={"nome": f"Interno {tipo}", "tipo": tipo, "configuracao": configuracao or {}},
+    )
+    assert r.status_code in (200, 201), r.text
+    return r.json()["id"]
+
+
+def _corpo_inst(usuario_id, instrumento_id, argumentos=None):
+    return {"usuario_id": str(usuario_id), "instrumento_id": str(instrumento_id),
+            "argumentos": argumentos or {}}
+
+
+def test_instrumento_sem_variavel_nao_existe(cliente, entrar, dados, monkeypatch):
+    monkeypatch.delenv("BATUTA_INTERNO_SECRET", raising=False)
+    iid = _instrumento(cliente, entrar, dados)
+    r = cliente.post(CAMINHO_INST, json=_corpo_inst(dados["operador"].id, iid),
+                     headers={"X-Batuta-Interno": "qualquer"})
+    assert r.status_code == 404
+
+
+def test_instrumento_segredo_errado_recusa(cliente, entrar, dados, ligada):
+    iid = _instrumento(cliente, entrar, dados)
+    r = cliente.post(CAMINHO_INST, json=_corpo_inst(dados["operador"].id, iid),
+                     headers={"X-Batuta-Interno": "quase-certo"})
+    assert r.status_code == 403
+
+
+def test_instrumento_segredo_certo_NAO_burla_o_papel(cliente, entrar, dados, ligada):
+    iid = _instrumento(cliente, entrar, dados)
+    r = cliente.post(CAMINHO_INST, json=_corpo_inst(dados["observador"].id, iid),
+                     headers=LIGADA)
+    assert r.status_code == 403, r.text
+
+
+def test_instrumento_conector_vai_pela_outra_porta(cliente, entrar, dados, ligada):
+    cid = _conector(cliente, entrar, dados)
+    r = cliente.post(CAMINHO_INST, json=_corpo_inst(dados["operador"].id, cid),
+                     headers=LIGADA)
+    assert r.status_code == 422
+
+
+def test_instrumento_caminho_feliz_e_falha_como_dado(
+    cliente, entrar, dados, ligada, monkeypatch
+):
+    """Aciona pela MESMA função do botão da tela; a falha volta como dado legível."""
+    import rotas.interno as mod
+    from instrumentos.base import FalhaInstrumento
+
+    iid = _instrumento(cliente, entrar, dados)
+    monkeypatch.setattr(mod, "acionar_instrumento", lambda s, i, a: {"eco": a})
+    r = cliente.post(CAMINHO_INST, json=_corpo_inst(dados["operador"].id, iid, {"q": "x"}),
+                     headers=LIGADA)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"ok": True, "resultado": {"eco": {"q": "x"}}, "escreve": False}
+
+    def _falha(*a):
+        raise FalhaInstrumento("o serviço recusou a chave")
+
+    monkeypatch.setattr(mod, "acionar_instrumento", _falha)
+    r = cliente.post(CAMINHO_INST, json=_corpo_inst(dados["operador"].id, iid),
+                     headers=LIGADA)
+    assert r.status_code == 200
+    assert r.json() == {"ok": False, "erro": "o serviço recusou a chave", "escreve": False}
+
+
+def test_instrumento_que_grava_diz_que_gravou(cliente, entrar, dados, ligada, monkeypatch):
+    import rotas.interno as mod
+
+    iid = _instrumento(cliente, entrar, dados, "chamar_api_rest",
+                       {"url": "https://exemplo.invalido/x", "metodo": "POST"})
+    monkeypatch.setattr(mod, "acionar_instrumento", lambda s, i, a: {"status": 201})
+    r = cliente.post(CAMINHO_INST, json=_corpo_inst(dados["operador"].id, iid),
+                     headers=LIGADA)
+    assert r.status_code == 200, r.text
+    assert r.json()["escreve"] is True
+
+
+def test_operacao_de_conector_que_grava_diz_que_gravou(
+    cliente, entrar, dados, ligada, monkeypatch
+):
+    """O teste de conector também diz se a operação mexeu em algo lá fora."""
+    import instrumentos.conector as mod
+
+    monkeypatch.setattr(mod, "_executar_operacao",
+                        lambda *a, **k: {"ok": True, "status": 201, "corpo": {"id": 9}})
+    entrar(dados["operador"])
+    r = cliente.post(
+        f"/times/{dados['timeA'].id}/instrumentos",
+        json={"nome": "Conector que grava", "tipo": "conector", "configuracao": {
+            "auth_tipo": "nenhuma",
+            "operacoes": [{"nome": "criar", "metodo": "POST",
+                           "url": "https://exemplo.invalido/x", "campos": []}],
+        }},
+    )
+    cid = r.json()["id"]
+    r = cliente.post(CAMINHO, json=_corpo(dados["operador"].id, cid, operacao="criar"),
+                     headers=LIGADA)
+    assert r.status_code == 200, r.text
+    assert r.json()["escreve"] is True

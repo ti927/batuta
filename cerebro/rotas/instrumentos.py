@@ -291,33 +291,39 @@ def acionar(
     """Aciona o instrumento isoladamente, pelo encaixe — testa o tipo e é a
     base do que a Fase 4 fará durante a orquestração."""
     inst = instrumento_acessivel(sessao, usuario, instrumento_id, minimo="operador")
-    tipo = encaixe.obter_tipo(inst.tipo)
-    if tipo is None:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            f"Tipo de instrumento desconhecido: {inst.tipo!r}",
-        )
     try:
-        # Resolve os segredos como na execução real (borda): inline próprio +
-        # credencial da central + pool de serviço (gerar_imagem/busca_web reusam
-        # a chave da org). Sem isso, "Testar" não enxergaria credencial nem pool.
-        import chaves
-        from orquestracao.llm import usar_chaves
-
-        chaves_map, _ = chaves.resolver_chaves_por_time(sessao, inst.time_id)
-        with usar_chaves(chaves_map):
-            segredos.anexar_aos_instrumentos(sessao, [inst])
-        config_efetiva = {
-            **(inst.configuracao or {}),
-            **getattr(inst, "segredos_decifrados", {}),
-        }
-        config = tipo.Config.model_validate(config_efetiva)
-        args = tipo.Args.model_validate(dados.argumentos or {})
+        return acionar_instrumento(sessao, inst, dados.argumentos)
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
-    try:
-        return tipo.executar(config, args)
     except FalhaInstrumento as e:
         # O instrumento não conseguiu operar (sistema externo recusou, config
         # incompleta…). Devolve a mensagem REAL para a tela, em vez de um 500 cru.
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
+
+
+def acionar_instrumento(sessao: Session, inst, argumentos: dict | None) -> dict:
+    """Aciona UM instrumento fora de uma execução — a fonte única do "Acionar" da tela
+    e do teste que a IA pede pela porta interna (`rotas/interno.py`). Se um dia os dois
+    divergissem, a IA testaria uma coisa e o consultor veria outra.
+
+    Levanta `ValueError` (tipo desconhecido, configuração ou argumentos inválidos) e
+    `FalhaInstrumento` (o instrumento não conseguiu operar); quem chama traduz."""
+    tipo = encaixe.obter_tipo(inst.tipo)
+    if tipo is None:
+        raise ValueError(f"Tipo de instrumento desconhecido: {inst.tipo!r}")
+    # Resolve os segredos como na execução real (borda): inline próprio +
+    # credencial da central + pool de serviço (gerar_imagem/busca_web reusam
+    # a chave da org). Sem isso, "Testar" não enxergaria credencial nem pool.
+    import chaves
+    from orquestracao.llm import usar_chaves
+
+    chaves_map, _ = chaves.resolver_chaves_por_time(sessao, inst.time_id)
+    with usar_chaves(chaves_map):
+        segredos.anexar_aos_instrumentos(sessao, [inst])
+    config_efetiva = {
+        **(inst.configuracao or {}),
+        **getattr(inst, "segredos_decifrados", {}),
+    }
+    config = tipo.Config.model_validate(config_efetiva)
+    args = tipo.Args.model_validate(argumentos or {})
+    return tipo.executar(config, args)

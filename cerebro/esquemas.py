@@ -331,6 +331,16 @@ class TestarOperacaoInterno(BaseModel):
     valores: dict = Field(default_factory=dict)
 
 
+class TestarInstrumentoInterno(BaseModel):
+    """Aciona um instrumento que NÃO é conector (o "Acionar" da tela), pedido pela
+    porta INTERNA — para a IA testar os outros tipos sem ver segredo. Mesmas três
+    camadas de `rotas/interno.py`."""
+
+    usuario_id: str = Field(min_length=1)
+    instrumento_id: str = Field(min_length=1)
+    argumentos: dict = Field(default_factory=dict)
+
+
 class VincularInstrumento(BaseModel):
     """Pendura um instrumento no cinto de um agente."""
 
