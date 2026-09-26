@@ -1069,6 +1069,10 @@ def _rodar_turno(
             sessao, agente.id, resultado.get("instrumentos_acionados"), origens=origens
         )
     )
+    # QUEM gastou: a mensagem não tem coluna de agente, e sem isto o resumo do time
+    # não conseguia dividir o custo do atendimento por agente.
+    for e in uso_turno:
+        e.setdefault("agente_id", str(agente.id))
 
     # Rastro-sombra do turno conversacional (Fatia 1a): grava o passo — com entrada,
     # saída, instrumentos acionados, ERROS de instrumento e o uso CHEIO do turno — nos

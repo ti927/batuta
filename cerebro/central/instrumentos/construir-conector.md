@@ -145,6 +145,11 @@ cria, altera, envia ou apaga — sem isso ela vai para o agente sem nunca ter ro
 3. **Diga ao consultor o que foi criado e onde.** A resposta do teste traz `escreve: true` e um aviso
    `atencao` quando a chamada mexeu em algo lá fora.
 
+## Custo da API
+Se a API que o conector chama **cobra por chamada** (o Gemini, por exemplo), informe o valor em
+`custo_por_chamada_usd` na operação (US$ por chamada). É o único jeito de esse custo entrar no resumo do
+time: o Batuta não tem como saber o preço de uma API qualquer. Vazio ou `0` = gratuita.
+
 ## Limites e cuidados
 - **Escrita pede aprovação — por OPERAÇÃO, não pelo conector inteiro.** O método é o sinal
   (GET lê; POST/PUT/PATCH/DELETE escrevem), e cada operação que escreve para e pede aprovação; as de

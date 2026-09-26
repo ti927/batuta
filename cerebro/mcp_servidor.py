@@ -470,7 +470,9 @@ async def montar_conector(
     escopo (oauth2 se pedir; OBRIGATÓRIO na conta de serviço), operacoes: [{nome,
     descricao, metodo, url (use [colchete] p/ trecho variável), campos: [{nome,
     papel: 'ia|fixo', destino: 'query|corpo|url', valor, descricao, obrigatorio}],
-    campos_resposta: [...], somente_leitura: false}]}.
+    campos_resposta: [...], somente_leitura: false, custo_por_chamada_usd: 0}]}.
+    API PAGA (ex.: Gemini): informe `custo_por_chamada_usd` (US$ por chamada) na
+    operação — é o único jeito de esse custo entrar no custo do time.
     APIs do GOOGLE: use 'google_conta_servico', não 'oauth2' — identidade de máquina, sem
     consentimento, sem app verificado, sem expirar; o segredo é o JSON da chave e o
     consultor precisa dar acesso ao E-MAIL da conta de serviço no serviço de destino.

@@ -99,6 +99,13 @@ class OperacaoConector(BaseModel):
         description="Este POST/PUT só CONSULTA (não muda nada lá fora) — então não "
         "pede aprovação. Só marque se tiver certeza.",
     )
+    # A API que o conector chama pode cobrar por chamada (ex.: o Gemini), e o Batuta
+    # não tem como saber quanto. Quem monta informa; 0 = gratuita ou desconhecida.
+    custo_por_chamada_usd: float = Field(
+        default=0.0, ge=0,
+        description="Opcional. Quanto a API cobra por chamada desta operação, em US$ "
+        "(entra no custo do time). 0 = gratuita ou não sabe.",
+    )
 
 
 class ConfigConector(BaseModel):

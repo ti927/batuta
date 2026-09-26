@@ -557,6 +557,8 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
           ou "url" (substitui [colchete] na URL).
         - `campos_resposta`: liste só os campos que o agente usa (nome EXATO da API) —
           corta MUITO custo em buscas que voltam listas. Vazio = resposta inteira.
+        - `custo_por_chamada_usd`: se a API COBRA por chamada (ex.: Gemini), o valor em
+          US$ — sem isso o custo dela não aparece no custo do time. 0 = gratuita.
         - Operação que ESCREVE (POST/PUT/PATCH/DELETE) para e pede aprovação — POR
           OPERAÇÃO, não pelo conector inteiro: as de leitura correm livres ao lado.
           Não há portão no desenho: dê ao agente o instrumento `pedir_aprovacao` e

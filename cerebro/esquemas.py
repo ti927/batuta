@@ -112,6 +112,24 @@ class TimeLer(BaseModel):
     atualizado_em: datetime
 
 
+class CustoDoAgente(BaseModel):
+    agente_id: str | None  # None = agente removido ou não identificado
+    nome: str | None
+    ia_usd: float
+    instrumentos_usd: float
+    total_usd: float
+
+
+class CustoDoInstrumento(BaseModel):
+    # None em `instrumento_id`: transcrição de áudio (tipo "transcricao") ou custo
+    # gravado antes de 2026-09-26, sem o instrumento (tipo None).
+    instrumento_id: str | None
+    nome: str | None
+    tipo: str | None
+    custo_usd: float
+    chamadas: int
+
+
 class TimeResumoLer(BaseModel):
     """Visão de saúde do time para a barra de abas e a aba Início: contadores das
     coleções + agregados (gatilho, custo, taxa de sucesso, pendências). Só leitura
@@ -127,6 +145,13 @@ class TimeResumoLer(BaseModel):
     ativo: bool  # alguma automação ativa? (badge ativo/em repouso no cabeçalho)
     gatilho: str | None  # tipo_gatilho da automação principal (manual/agendamento/webhook)
     custo_acumulado_usd: float
+    # O custo acumulado em duas partes: o que a IA dos PRÓPRIOS agentes gastou e o que
+    # os instrumentos que eles acionaram gastaram (imagem, busca, leitura…). As listas
+    # vêm do mais caro para o mais barato. Ver `custos_time.py`.
+    custo_ia_agentes_usd: float = 0.0
+    custo_instrumentos_usd: float = 0.0
+    custo_por_agente: list[CustoDoAgente] = Field(default_factory=list)
+    custo_por_instrumento: list[CustoDoInstrumento] = Field(default_factory=list)
     taxa_sucesso: float | None  # concluídas / (concluídas + falhou); None se nenhuma finalizou
     pendencias: int  # execuções aguardando_humano
     conversas_em_andamento: int  # conversas não fechadas (ponto de alerta)

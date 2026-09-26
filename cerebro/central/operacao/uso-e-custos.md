@@ -4,8 +4,8 @@ area: "operacao"
 slug: "uso-e-custos"
 tags: ["uso", "custo", "medicao", "categoria", "origem", "provedor", "consumo",
        "teto", "limite de gastos", "orcamento"]
-revisado_em: "2026-09-03"
-fontes: ["cerebro/precos.py", "cerebro/medicao_instrumentos.py",
+revisado_em: "2026-09-26"
+fontes: ["cerebro/precos.py", "cerebro/medicao_instrumentos.py", "cerebro/custos_time.py",
          "cerebro/orquestracao/cadeia.py", "cerebro/mensageria/config.py"]
 ---
 
@@ -27,6 +27,29 @@ que corta é o **teto de custo por execução**, abaixo — e ele nasce **deslig
 2. O consumo é quebrado por **categoria** e **origem/provedor**, então você vê de onde vem o gasto (agentes,
    mensageria, Whisper, imagem…).
 3. A consultoria tem uma visão própria do que passou pela **chave-mãe** (fallback).
+
+## Dois custos: a IA do agente e os instrumentos
+
+Um agente que pensa com o Claude e aciona um instrumento que gera imagem com a OpenAI tem **dois custos**,
+e o Batuta mede os dois separados:
+
+- **IA dos agentes** — o modelo do próprio agente, pensando e respondendo (nas automações e no atendimento
+  por canal).
+- **Instrumentos** — o que os instrumentos acionados gastaram por fora: gerar/montar imagem, ler imagem,
+  vídeo, **busca na web Exa**, **leitura de página pela Firecrawl**, transcrição de áudio e as operações de
+  conector com preço informado.
+
+O resumo do time mostra o total, as duas partes, o custo **por agente** (a IA dele + os instrumentos que
+ele acionou) e os **instrumentos que mais custaram**. Custo de instrumento gravado antes de 2026-09-26 não
+tem o nome do instrumento e aparece como "anteriores".
+
+**Conector não sabe o preço da API que chama.** Se a API cobra por chamada (o Gemini, por exemplo), informe
+o valor em **"custo por chamada (US$)"** na operação (`custo_por_chamada_usd`). Sem isso, a operação conta
+como gratuita.
+
+Preços usados (aproximados): Exa — US$ 7/mil buscas até 10 resultados (a profunda, US$ 12/mil) + US$ 1/mil
+páginas de texto; Firecrawl — 1 crédito por página, a ~US$ 0,0032 (plano de entrada; planos maiores pagam
+menos).
 
 ## O teto de custo por execução
 
@@ -66,7 +89,9 @@ Não prometa "custo zero". Se o consultor quer economizar, aponte os ajustes rea
 mídia, recência/profundidade de busca, modelo de IA mais barato. Num fluxo que consulta APIs que devolvem
 listas grandes (CRM, Bubble, ERP), o maior gasto costuma ser a **resposta gorda reenviada a cada passo** —
 filtre com `campos_resposta` no [[instrumentos/chamar-rest]] para trazer só os campos usados (corte típico
-de tokens grande). O uso é medido por categoria/origem.
+de tokens grande). O uso é medido por categoria/origem, e o
+`ver_uso` já separa `ia_dos_agentes_usd` × `instrumentos_usd`, `por_agente` e `por_instrumento`. Ao montar
+um conector para uma API **paga**, preencha `custo_por_chamada_usd` nas operações — senão o custo some.
 
 Quando uma execução falhar com **"passou do teto de custo do fluxo"**, não trate como bug: foi uma regra
 que o consultor ligou, funcionando. Diga quanto gastou e qual era o teto, e ofereça as duas saídas

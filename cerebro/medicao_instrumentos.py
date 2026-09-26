@@ -31,6 +31,9 @@ from orquestracao.modelos_ia import provedor_do_modelo_seguro
 # e o de VÍDEO (`gerar_video`, Sora, cobrado por segundo).
 TIPOS_PAGOS = {
     "gerar_imagem", "montar_imagem", "descrever_imagem", "gerar_video", "gerar_video_fal",
+    # Serviços pagos POR CHAMADA (2026-09-26): até aqui acionavam dezenas de vezes por
+    # mês sem que o custo aparecesse em lugar nenhum.
+    "busca_exa", "ler_site_firecrawl",
 }
 
 
@@ -88,6 +91,27 @@ def _custo_video_fal(cfg: dict) -> dict:
     }
 
 
+def _custo_busca_exa(cfg: dict) -> dict:
+    """Entrada de uso de UMA busca na Exa (com o texto das páginas), pela config."""
+    from instrumentos.busca_exa import TIPOS_BUSCA
+
+    tipo_api = TIPOS_BUSCA.get(cfg.get("tipo_busca") or "equilibrada", "auto")
+    n = cfg.get("max_resultados") or 5
+    return {
+        "modelo": f"exa-{tipo_api}",
+        "chamadas": 1,
+        "custo_usd": round(precos.custo_por_busca_exa(tipo_api, n), 6),
+    }
+
+
+def _custo_pagina_firecrawl() -> dict:
+    return {
+        "modelo": "firecrawl-scrape",
+        "chamadas": 1,
+        "custo_usd": round(precos.PRECO_FIRECRAWL_POR_PAGINA, 6),
+    }
+
+
 def _entrada_e_servico(inst: Instrumento) -> tuple[dict, str | None]:
     """(entrada de uso, serviço p/ a origem) de um instrumento pago acionado. Para a
     visão, o serviço é o PROVEDOR do modelo escolhido (não há chave compartilhada
@@ -99,6 +123,10 @@ def _entrada_e_servico(inst: Instrumento) -> tuple[dict, str | None]:
         return _custo_video(cfg), _servico_do_tipo(inst.tipo)
     if inst.tipo == "gerar_video_fal":
         return _custo_video_fal(cfg), _servico_do_tipo(inst.tipo)
+    if inst.tipo == "busca_exa":
+        return _custo_busca_exa(cfg), _servico_do_tipo(inst.tipo)
+    if inst.tipo == "ler_site_firecrawl":
+        return _custo_pagina_firecrawl(), _servico_do_tipo(inst.tipo)
     return _custo_imagem(cfg), _servico_do_tipo(inst.tipo)
 
 
@@ -132,13 +160,18 @@ def uso_de_instrumentos_pagos(
         agente_id = uuid.UUID(agente_id)
     origens = origens or {}
 
-    pagos = sessao.scalars(
+    cinto = sessao.scalars(
         select(Instrumento)
         .join(AgenteInstrumento, AgenteInstrumento.instrumento_id == Instrumento.id)
         .where(AgenteInstrumento.agente_id == agente_id)
-        .where(Instrumento.tipo.in_(TIPOS_PAGOS))
+        .where(Instrumento.tipo.in_(TIPOS_PAGOS | {"conector"}))
     ).all()
-    if not pagos:
+    pagos = [i for i in cinto if i.tipo in TIPOS_PAGOS]
+    # Operações de conector com preço informado por quem montou (a API que o conector
+    # chama pode cobrar — ex.: o Gemini —, e o Batuta não tem como saber quanto).
+    # A ferramenta de uma operação se chama pelo nome dela, sem o id do instrumento.
+    por_operacao = _operacoes_com_preco([i for i in cinto if i.tipo == "conector"])
+    if not pagos and not por_operacao:
         return []
     por_id8 = {inst.id.hex[:8]: inst for inst in pagos}
 
@@ -151,11 +184,23 @@ def uso_de_instrumentos_pagos(
                 SegredoInstrumento.instrumento_id.in_([i.id for i in pagos])
             )
         ).all()
-    )
+    ) if pagos else set()
 
     entradas: list = []
     for nome in instrumentos_acionados:
         if not nome:
+            continue
+        if nome in por_operacao:
+            inst, op = por_operacao[nome]
+            entrada = {
+                "modelo": "conector",
+                "chamadas": 1,
+                "custo_usd": round(float(op.get("custo_por_chamada_usd") or 0), 6),
+                "operacao": op.get("nome"),
+                # A credencial do conector é a do próprio instrumento (cliente).
+                "origem": ORIGEM_ORGANIZACAO,
+            }
+            entradas.append(_carimbar(entrada, inst))
             continue
         inst = por_id8.get(_id8(nome))
         if inst is None:
@@ -165,6 +210,31 @@ def uso_de_instrumentos_pagos(
             entrada["origem"] = ORIGEM_ORGANIZACAO
         else:
             entrada["origem"] = origens.get(servico) or ORIGEM_ORGANIZACAO
-        entrada["categoria"] = "instrumento"
-        entradas.append(entrada)
+        entradas.append(_carimbar(entrada, inst))
     return entradas
+
+
+def _carimbar(entrada: dict, inst: Instrumento) -> dict:
+    """QUAL instrumento gastou — sem isto o resumo do time só sabia "instrumento,
+    gpt-image-2", e não "FotoMontagem_1:1". O nome é o da hora da chamada."""
+    entrada["categoria"] = "instrumento"
+    entrada["instrumento_id"] = str(inst.id)
+    entrada["instrumento"] = inst.nome
+    entrada["tipo"] = inst.tipo
+    return entrada
+
+
+def _operacoes_com_preco(conectores: list[Instrumento]) -> dict:
+    """{nome da ferramenta: (conector, operação)} das operações com custo informado."""
+    from instrumentos.conector import _nome_ferramenta
+
+    mapa: dict = {}
+    for inst in conectores:
+        for op in (inst.configuracao or {}).get("operacoes") or []:
+            try:
+                preco = float(op.get("custo_por_chamada_usd") or 0)
+            except (TypeError, ValueError):
+                preco = 0.0
+            if preco > 0 and op.get("nome"):
+                mapa.setdefault(_nome_ferramenta(op["nome"]), (inst, op))
+    return mapa

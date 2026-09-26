@@ -11,8 +11,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 import auditoria
+import custos_time
 import duplicacao_time
-import precos
 from auth import usuario_atual
 from esquemas import DuplicarTime, TimeCriar, TimeEditar, TimeLer, TimeResumoLer
 from modelos import (
@@ -21,8 +21,6 @@ from modelos import (
     Conversa,
     Execucao,
     Instrumento,
-    MensagemConversa,
-    PassoExecucao,
     Time,
     Usuario,
 )
@@ -165,23 +163,10 @@ def resumo(
     n_conversas = len(estados_conv)
     conversas_em_andamento = sum(1 for e in estados_conv if e != "fechada")
 
-    # Custo acumulado: mesmo cálculo do /uso/resumo com filtro de time (passos das
-    # execuções + uso de IA dos turnos de atendimento). A conversa da IA criadora é
-    # da organização, não do time, então fica de fora aqui.
-    passos = sessao.scalars(
-        select(PassoExecucao)
-        .join(Execucao, Execucao.id == PassoExecucao.execucao_id)
-        .join(Automacao, Automacao.id == Execucao.automacao_id)
-        .where(Automacao.time_id == time_id)
-    ).all()
-    mensagens = sessao.scalars(
-        select(MensagemConversa)
-        .join(Conversa, Conversa.id == MensagemConversa.conversa_id)
-        .join(Instrumento, Instrumento.id == Conversa.instrumento_id)
-        .where(Instrumento.time_id == time_id)
-        .where(MensagemConversa.uso.isnot(None))
-    ).all()
-    uso = precos.resumir_uso(passos, (), mensagens)
+    # Custo acumulado, separado entre a IA dos agentes e os instrumentos (fonte única
+    # com o `ver_uso` do MCP). A conversa da IA criadora é da organização, não do
+    # time, então fica de fora aqui.
+    custos = custos_time.custos_do_time(sessao, time_id)
 
     return TimeResumoLer(
         agentes=n_agentes,
@@ -191,7 +176,11 @@ def resumo(
         conversas=n_conversas,
         ativo=ativo,
         gatilho=gatilho,
-        custo_acumulado_usd=uso["custo_usd"],
+        custo_acumulado_usd=custos["custo_usd"],
+        custo_ia_agentes_usd=custos["ia_agentes_usd"],
+        custo_instrumentos_usd=custos["instrumentos_usd"],
+        custo_por_agente=custos["por_agente"],
+        custo_por_instrumento=custos["por_instrumento"],
         taxa_sucesso=taxa_sucesso,
         pendencias=pendencias,
         conversas_em_andamento=conversas_em_andamento,

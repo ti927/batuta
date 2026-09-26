@@ -480,6 +480,9 @@ def ver_uso(sessao, usuario, time_id) -> str:
         .where(Instrumento.time_id == time.id)
     ).all()
     resumo = precos.resumir_uso(passos=passos, mensagens=mensagens)
+    import custos_time
+
+    custos = custos_time.custos_do_time(sessao, time.id)
     return json.dumps(
         {
             "time": time.nome,
@@ -487,7 +490,18 @@ def ver_uso(sessao, usuario, time_id) -> str:
             "tokens_entrada": resumo.get("tokens_entrada", 0),
             "tokens_saida": resumo.get("tokens_saida", 0),
             "por_categoria": resumo.get("por_categoria", {}),
-            "observacao": "Execuções + mensageria deste time. O custo da IA criadora é por organização.",
+            "ia_dos_agentes_usd": round(custos["ia_agentes_usd"], 4),
+            "instrumentos_usd": round(custos["instrumentos_usd"], 4),
+            "por_agente": custos["por_agente"],
+            "por_instrumento": custos["por_instrumento"],
+            "observacao": (
+                "Execuções + mensageria deste time. O custo da IA criadora é por "
+                "organização. `ia_dos_agentes_usd` é o modelo do próprio agente; "
+                "`instrumentos_usd` é o que os instrumentos acionados gastaram (imagem, "
+                "busca, leitura, transcrição…). Em `por_instrumento`, tipo nulo = custo "
+                "gravado antes de 2026-09-26, sem o nome do instrumento. Operação de "
+                "conector só entra se tiver `custo_por_chamada_usd` informado."
+            ),
         },
         ensure_ascii=False,
     )

@@ -91,6 +91,20 @@ PRECOS_FAL_VIDEO_USD = {
 }
 PRECO_FAL_VIDEO_PADRAO = 0.35
 
+# Busca semântica EXA (`busca_exa`). Tabela oficial (exa.ai/pricing, 2026-09-26):
+# US$7/mil buscas (cobre até 10 resultados) + US$1/mil resultados além de 10; a busca
+# "deep" custa US$12/mil. O CONTEÚDO (texto de cada página) é cobrado à parte, US$1/mil
+# páginas por tipo — e o instrumento sempre pede o texto, então cada resultado soma.
+PRECO_EXA_BUSCA = {"fast": 0.007, "auto": 0.007, "deep": 0.012}
+PRECO_EXA_RESULTADO_EXTRA = 0.001  # cada resultado além de 10
+PRECO_EXA_TEXTO_POR_PAGINA = 0.001
+
+# Leitura de página pela FIRECRAWL (`ler_site_firecrawl`): 1 crédito por página no
+# scrape básico (docs.firecrawl.dev/billing). O preço do crédito depende do PLANO
+# (assinatura mensal); usamos o do plano de entrada (~US$0,0032/crédito). Quem estiver
+# num plano maior paga menos por página — ajuste aqui.
+PRECO_FIRECRAWL_POR_PAGINA = 0.0032
+
 # Rótulos internos das categorias de uso (em que FUNÇÃO a IA paga foi gasta). A
 # interface dá o nome amigável (`interface/lib/uso.ts`). Carimbadas na borda:
 # execucao (disparo), conversa (IA criadora), mensageria/transcricao (atendimento),
@@ -187,6 +201,15 @@ def custo_por_video_fal(modelo: str) -> float:
     return PRECOS_FAL_VIDEO_USD.get((modelo or "").strip().lower(), PRECO_FAL_VIDEO_PADRAO)
 
 
+def custo_por_busca_exa(tipo_api: str, resultados: int) -> float:
+    """Custo aproximado de UMA busca na Exa com texto das páginas, em USD. `tipo_api` é
+    o valor da API (fast/auto/deep); `resultados` é quantos foram pedidos (o teto — a
+    Exa pode devolver menos, então isto é o custo máximo daquela busca)."""
+    n = max(0, int(resultados or 0))
+    base = PRECO_EXA_BUSCA.get((tipo_api or "auto").lower(), PRECO_EXA_BUSCA["auto"])
+    return base + max(0, n - 10) * PRECO_EXA_RESULTADO_EXTRA + n * PRECO_EXA_TEXTO_POR_PAGINA
+
+
 def custo_de_entrada(e: dict) -> float:
     """Custo (USD) de UMA entrada de uso. Honra `custo_usd` pré-calculado quando a
     entrada o traz (itens não-token, como o Whisper); senão estima por token."""
@@ -281,6 +304,56 @@ def resumir_uso_de_entradas(entradas) -> dict:
         "por_modelo": por_modelo,
         "por_origem": por_origem,
         "por_categoria": por_categoria,
+    }
+
+
+# Categorias em que o gasto é do PRÓPRIO agente (o modelo que pensa e responde); o
+# resto é de um instrumento/serviço que ele acionou (imagem, visão, busca, leitura,
+# transcrição de áudio…). É a divisão que o resumo do time mostra.
+CATEGORIAS_IA_DO_AGENTE = ("execucao", "mensageria", "conversa")
+
+
+def separar_custos(itens) -> dict:
+    """Separa o custo entre a IA DOS AGENTES e os INSTRUMENTOS, por agente e por
+    instrumento. `itens` = pares (entrada de uso, agente_id ou None).
+
+    Devolve {ia_agentes_usd, instrumentos_usd, por_agente, por_instrumento}:
+    - `por_agente[agente_id]` = {ia_usd, instrumentos_usd} ("" = agente não identificado);
+    - `por_instrumento[chave]` = {instrumento_id, nome, tipo, custo_usd, chamadas}. A
+      chave é o id do instrumento; a transcrição de áudio vira "transcricao"; o custo de
+      instrumento gravado antes de 2026-09-26 (sem id) cai em "anteriores"."""
+    ia_total = inst_total = 0.0
+    por_agente: dict[str, dict] = {}
+    por_instrumento: dict[str, dict] = {}
+    for e, agente_id in itens:
+        c = custo_de_entrada(e)
+        ag = por_agente.setdefault(
+            str(agente_id or ""), {"ia_usd": 0.0, "instrumentos_usd": 0.0}
+        )
+        if (e.get("categoria") or "execucao") in CATEGORIAS_IA_DO_AGENTE:
+            ia_total += c
+            ag["ia_usd"] = round(ag["ia_usd"] + c, 6)
+            continue
+        inst_total += c
+        ag["instrumentos_usd"] = round(ag["instrumentos_usd"] + c, 6)
+        if e.get("categoria") == "transcricao":
+            chave, nome, tipo = "transcricao", None, "transcricao"
+        elif e.get("instrumento_id"):
+            chave, nome, tipo = str(e["instrumento_id"]), e.get("instrumento"), e.get("tipo")
+        else:
+            chave, nome, tipo = "anteriores", None, None
+        d = por_instrumento.setdefault(
+            chave,
+            {"instrumento_id": chave if tipo not in (None, "transcricao") else None,
+             "nome": nome, "tipo": tipo, "custo_usd": 0.0, "chamadas": 0},
+        )
+        d["custo_usd"] = round(d["custo_usd"] + c, 6)
+        d["chamadas"] += 1
+    return {
+        "ia_agentes_usd": round(ia_total, 6),
+        "instrumentos_usd": round(inst_total, 6),
+        "por_agente": por_agente,
+        "por_instrumento": por_instrumento,
     }
 
 
