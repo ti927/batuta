@@ -38,7 +38,7 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
 - **Matriz de papéis:** observador lê; **operador** cria/edita; **admin** cria
   organização/time, duplica e exclui.
 
-## As ferramentas (64)
+## As ferramentas (66)
 
 - **Leitura/diagnóstico:** `listar_organizacoes`, `listar_times`, `descrever_time`,
   `listar_agentes`, `ver_agente`, `ver_memoria_agente`, `listar_instrumentos`/
@@ -74,8 +74,14 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
   `confirmar=true`.** O carimbo das linhas registra `origem=mcp` e o consultor. E o
   `diagnosticar_execucao` passou a trazer `quadros_gravados` — o que a execução gravou de
   fato. **Links de leitura (acesso de fora, 2026-09-24):** `listar_links_quadro` (sem nunca
-  devolver o link inteiro) e `revogar_link_quadro` (admin, só com `confirmar=true`). **Criar ou
-  trocar link é só pela tela** — o link é uma senha e a IA não o recebe. **Total: 64 ferramentas.**
+  devolver o link inteiro) e `revogar_link_quadro` (admin, só com `confirmar=true`). **Desde 2026-09-27 a IA também CRIA e
+  TESTA links** (decisão do maestro): `criar_link_quadro` — só admin, prévia antes de `confirmar=true`,
+  **sem validade** (o link serve automações; um link que vencesse pararia o painel em silêncio), nome
+  marcado "(criado pela IA)", auditoria `quadro.link_criado` com `origem: mcp`; devolve a URL e a fórmula
+  do Planilhas UMA vez. `testar_link_quadro` — o que o painel recebe, pelo MESMO código da rota pública
+  (`rotas.quadros_publico.ler_linhas`/`ler_totais`), pela URL inteira ou por `link_id` + `consulta`; não
+  conta leitura nem gasta o limite do link. O risco aceito: o link fica na conversa do claude.ai. Trocar
+  link segue só pela tela. **Total: 66 ferramentas.**
 - **Testar (2026-09-26):** a IA testa o que monta, em vez de o consultor testar por ela —
   `testar_operacao_conector` (cada operação de um conector) e `testar_instrumento` (os outros tipos,
   pelo mesmo caminho do botão de testar da tela). O teste é **real, inclusive quando grava** (decisão

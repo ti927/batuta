@@ -17,7 +17,10 @@
 > troca/revoga/ajusta; o link inteiro aparece UMA vez; limite de leituras por minuto por link (padrão 60, até 600,
 > contado em memória — 1 réplica); cada leitura conta no link e vira evento `quadro.link_lido`; CORS aberto só
 > nessas rotas. Tela: quadro › Quem usa › **Acesso de fora**, com a fórmula do Planilhas pronta. MCP lista e revoga,
-> **não cria** (a IA não vê segredo). Central: `cerebro/acesso-de-fora`.
+> **não cria** (a IA não vê segredo). Central: `cerebro/acesso-de-fora`. **Revisto em 2026-09-27** (decisão do
+> maestro): com um ADMIN conectado, o MCP **cria** o link (`criar_link_quadro`, prévia antes, **sem validade** —
+> o link serve automações) e **testa** o que o painel recebe (`testar_link_quadro`, mesmo código da rota
+> pública). E o evento `quadro.link_lido` passou a ser gravado de fato (a categoria `quadro` não persistia).
 >
 > *Entrega 4, como ficou:* proposta visual aprovada (`claude.ai/artifact/NJi4o3QPvPwWUJJxQsZjYq`) com UMA mudança do
 > maestro — **lista em cartões horizontais, um por linha, e sempre com busca/filtro** (virou preferência permanente).

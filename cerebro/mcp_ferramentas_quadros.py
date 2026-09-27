@@ -252,8 +252,10 @@ def importar_csv(
 
 
 # ───────────────────────────── links de leitura ─────────────────────────────
-# O MCP LISTA e REVOGA, mas não cria nem troca: criar entregaria o link (uma senha) à IA,
-# e a regra do projeto é que a IA nunca vê segredo. Criar é pela tela, por um admin.
+# O MCP lista, revoga, CRIA e TESTA. Criar entrega o link (uma senha) à conversa da IA —
+# por isso é só para ADMIN, com prévia antes, e fica na auditoria. SEM validade, por
+# decisão do maestro (2026-09-27): o link serve automações, e um link que vence para a
+# automação em silêncio. Trocar continua sendo pela tela.
 
 
 @_ferramenta
@@ -264,6 +266,113 @@ def listar_links_quadro(sessao, usuario, organizacao_id, quadro) -> str:
         org = _org(sessao, usuario, organizacao_id, "observador")
         return {"links": [links_mod.serializar(link) for link in links_mod.listar(sessao, org, quadro)]}
     return _rodar(fn)
+
+
+@_ferramenta_escrita
+def criar_link_quadro(sessao, usuario, organizacao_id, quadro, nome, limite_por_minuto, confirmar) -> str:
+    import auditoria
+    from mcp_ferramentas_escrita import _url_cerebro
+    from quadros import links as links_mod
+
+    def fn():
+        # Um link expõe o quadro para fora da empresa: é decisão de admin (igual à tela).
+        org = _org(sessao, usuario, organizacao_id, "admin")
+        q = qs.obter_quadro(sessao, org, quadro)
+        nome_link = (nome or "").strip()
+        if not nome_link:
+            raise ErroQuadro("Dê um nome ao link (ex.: “Painel do Looker”), para saber quem o usa.")
+        if not confirmar:
+            return {"simulado": True, "quadro": q.nome, "linhas": qs.contar_linhas(sessao, q.id),
+                    "colunas": [c.get("nome") for c in (q.colunas or [])],
+                    "aviso": (
+                        "Isto foi só uma PRÉVIA. O link dá leitura deste quadro a QUALQUER um que o "
+                        "tenha, sem login e sem validade, até ser revogado. Confirme com o consultor "
+                        "e chame de novo com confirmar=true."
+                    )}
+        link, token = links_mod.criar(
+            sessao, org, q.id, nome=f"{nome_link} (criado pela IA)",
+            limite_por_minuto=limite_por_minuto, expira_em=None, criado_por_id=usuario.id,
+        )
+        auditoria.registrar(
+            sessao, usuario=usuario, acao="quadro.link_criado", recurso_tipo="quadro",
+            recurso_id=q.id, organizacao_id=org,
+            detalhe={"nome": link.nome, "final": link.token_final, "origem": "mcp"},
+        )
+        url = _url_cerebro() + links_mod.caminho_publico(token)
+        return {
+            "link": links_mod.serializar(link),
+            "url": url,
+            "formula_planilhas": f'=IMPORTDATA("{url}?decimal=virgula")',
+            "aviso": (
+                "Entregue o link ao consultor AGORA: ele não aparece de novo (o Batuta guarda só "
+                "o final). Teste o que o painel vai receber com testar_link_quadro."
+            ),
+        }
+    return _rodar(fn)
+
+
+@_ferramenta
+def testar_link_quadro(sessao, usuario, organizacao_id, quadro, link_id, url, consulta_url, totais_url) -> str:
+    from urllib.parse import parse_qs, urlsplit
+
+    from observabilidade.escritor import registrar_evento
+    from quadros import links as links_mod
+    from rotas.quadros_publico import ler_linhas, ler_totais
+
+    def fn():
+        consulta: dict = {}
+        totais = False
+        if url:
+            partes = urlsplit(url.strip())
+            caminho = partes.path.rstrip("/")
+            totais = caminho.endswith("/totais")
+            if totais:
+                caminho = caminho[: -len("/totais")]
+            token = caminho.rsplit("/", 1)[-1]
+            consulta = parse_qs(partes.query, keep_blank_values=True)
+            link = links_mod.localizar(sessao, token)
+            # O link autoriza o PAINEL; a IA ainda precisa poder ver aquela organização.
+            _org(sessao, usuario, str(link.organizacao_id), "observador")
+        elif link_id:
+            org = _org(sessao, usuario, organizacao_id, "observador")
+            link = next((ln for ln in links_mod.listar(sessao, org, quadro) if str(ln.id) == str(link_id)), None)
+            if link is None:
+                raise ErroQuadro("Não achei esse link neste quadro (veja listar_links_quadro).")
+            links_mod.verificar_ativo(link)
+            consulta = parse_qs((consulta_url or "").lstrip("?"), keep_blank_values=True)
+            totais = bool(totais_url)
+        else:
+            raise ErroQuadro("Passe a `url` do link (com os filtros) ou o `link_id` + `quadro`.")
+
+        def um(chave, padrao=None):
+            v = consulta.get(chave)
+            return v[-1] if v else padrao
+
+        if totais:
+            r = ler_totais(sessao, link, agrupar=consulta.get("agrupar", []),
+                           metrica=consulta.get("metrica", []), filtro=consulta.get("filtro", []),
+                           recente=um("recente"))
+        else:
+            r = ler_linhas(sessao, link, filtro=consulta.get("filtro", []),
+                           ordem=consulta.get("ordem", []), recente=um("recente"),
+                           colunas=um("colunas"), busca=um("busca"),
+                           limite=int(um("limite", "10000") or 10000))
+            mostradas = r["linhas"][:20]
+            r = {**r, "linhas": mostradas,
+                 "nota": f"Mostrando {len(mostradas)} de {r['devolvidas']} linhas que o painel recebe."}
+        registrar_evento(
+            categoria="quadro", acao="quadro.link_testado_pela_ia", nivel="info", resultado="ok",
+            persistir=True,  # "quadro" não é categoria persistida por padrão
+            usuario_id=str(usuario.id), recurso_tipo="quadro", recurso_id=link.quadro_id,
+            organizacao_id=link.organizacao_id, origem="mcp",
+            detalhe={"link": link.nome, "final": link.token_final, "totais": totais},
+        )
+        return {"link": links_mod.serializar(link), "totais": totais, "resultado": r}
+
+    try:
+        return _rodar(fn)
+    except links_mod.LinkRecusado as e:
+        return _json({"ok": False, "erro": str(e)})
 
 
 @_ferramenta_escrita

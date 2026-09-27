@@ -3,7 +3,7 @@ titulo: "Ler um quadro de fora"
 area: "cerebro"
 slug: "acesso-de-fora"
 tags: ["quadro", "link", "painel", "dashboard", "looker", "google planilhas", "importdata", "power bi", "excel", "csv", "json", "api", "acesso externo", "cerebro"]
-revisado_em: "2026-09-24"
+revisado_em: "2026-09-27"
 fontes: ["cerebro/quadros/links.py", "cerebro/rotas/quadros_publico.py", "docs/CEREBRO-PLANO.md"]
 ---
 
@@ -62,12 +62,20 @@ Operadores do filtro: `eq` (igual), `ne` (diferente), `gt`/`gte` (maior / maior 
   painel recebe um aviso para esperar um minuto.
 - Até 10.000 linhas por leitura. Para mais, use filtros ou os totais.
 - Toda leitura fica contada no link (quantas e a última), e o link aparece em **Quem usa**.
+- Link criado pela IA **não vence** (serve automações; um link que vencesse pararia o painel sem aviso).
+  Ele vale até alguém revogar, e aparece com "(criado pela IA)" no nome.
 - Não guarde CPF, salário nem dados de saúde num quadro que tem link de fora.
 
 ## Para a IA
-- Você **não cria nem troca** link de leitura, e **não recebe** o link inteiro: ele é uma senha. Oriente o
-  consultor a criar pela tela (quadro › Quem usa › Acesso de fora), como administrador.
-- Pelo MCP há `listar_links_quadro` (nome, final, estado, leituras) e `revogar_link_quadro` (pede
+- Pelo MCP, **se o consultor é administrador**, você cria o link com `criar_link_quadro`: primeiro a
+  PRÉVIA (sem `confirmar`), que mostra o quadro, as linhas e as colunas que ficam expostas; depois, com o
+  aceite dele, `confirmar=true`. A resposta traz a `url` e a fórmula do Planilhas prontas — entregue na
+  hora: o link inteiro não aparece de novo. O link não vence. Trocar um link continua sendo pela tela.
+- **Antes de entregar o painel, confira** com `testar_link_quadro`: passe a URL inteira com os filtros (a
+  mesma do IMPORTDATA) e veja exatamente o que o painel vai receber — colunas, total e as primeiras
+  linhas, ou os totais se a URL termina em `/totais`. Para um link criado pela tela (cujo endereço você
+  não tem), use `link_id` + `quadro` e os filtros em `consulta`. O teste não conta como leitura do painel.
+- Há também `listar_links_quadro` (nome, final, estado, leituras) e `revogar_link_quadro` (pede
   confirmação; o painel para na hora).
 - Ajude a montar a URL do painel com os parâmetros acima: por exemplo, para "os últimos 90 dias só do tema
   COF", `?filtro=Semana|gte|hoje-90&filtro=Tema|eq|COF`.

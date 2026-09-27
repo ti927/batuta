@@ -66,9 +66,60 @@ def _csv(colunas: list[str], linhas: list[list], decimal_virgula: bool) -> Respo
     )
 
 
+# ── A leitura em si — fonte única da rota pública e do `testar_link_quadro` do MCP ──
+# Se a IA testasse por um caminho próprio, ela conferiria uma coisa e o painel
+# receberia outra.
+
+
+def ler_linhas(sessao: Session, link, *, filtro=(), ordem=(), recente=None, colunas=None,
+               busca=None, limite=MAX_LINHAS) -> dict:
+    """As linhas que o link entrega, com os parâmetros da URL. Levanta `ErroQuadro`."""
+    q = qs.obter_quadro(sessao, link.organizacao_id, link.quadro_id)
+    teto = qs.limites_mod.efetivos(q)["linhas_por_consulta"]
+    pedidas = max(1, min(int(limite or MAX_LINHAS), MAX_LINHAS))
+    so = [c.strip() for c in colunas.split(",")] if colunas else None
+    filtros = links.filtros_da_url(list(filtro or []))
+    linhas, desloc, total, nomes = [], 0, 0, None
+    while len(linhas) < pedidas:
+        r = qs.consultar(
+            sessao, link.organizacao_id, q.id, filtros=filtros,
+            ordem=list(ordem or []) or ["_criado_em"], colunas=so, busca=busca,
+            so_o_mais_recente_de=recente, limite=min(teto, pedidas - len(linhas)),
+            deslocamento=desloc,
+        )
+        total, nomes = r["total"], r["colunas"]
+        linhas += r["linhas"]
+        if r["proximo"] is None:
+            break
+        desloc = r["proximo"]
+    return {
+        "quadro": q.nome,
+        "total": total,
+        "devolvidas": len(linhas),
+        "colunas": nomes,
+        "linhas": [ln["valores"] for ln in linhas],
+    }
+
+
+def ler_totais(sessao: Session, link, *, agrupar=(), metrica=(), filtro=(), recente=None) -> dict:
+    """As contas que o link entrega (`/totais`). Levanta `ErroQuadro`."""
+    metricas = []
+    for m in list(metrica or []) or ["contar"]:
+        funcao, _, coluna = m.partition("|")
+        metricas.append({"funcao": funcao.strip(), **({"coluna": coluna.strip()} if coluna.strip() else {})})
+    return qs.totais(
+        sessao, link.organizacao_id, link.quadro_id, metricas=metricas,
+        agrupar_por=list(agrupar or []) or None, filtros=links.filtros_da_url(list(filtro or [])),
+        so_o_mais_recente_de=recente,
+    )
+
+
 def _registrar(link, tipo: str, n: int) -> None:
     registrar_evento(
         categoria="quadro", acao="quadro.link_lido", nivel="info", resultado="ok",
+        # "quadro" não é categoria persistida por padrão: de 24/09 a 27/09 nenhuma das
+        # centenas de leituras virou evento, embora a regra do link prometa rastro.
+        persistir=True,
         recurso_tipo="quadro", recurso_id=link.quadro_id, organizacao_id=link.organizacao_id,
         detalhe={"link": link.nome, "final": link.token_final, "leitura": tipo, "linhas": n},
     )
@@ -94,39 +145,16 @@ def ler(
     except links.LinkRecusado as e:
         return _erro(str(e), e.status, formato)
     try:
-        q = qs.obter_quadro(sessao, link.organizacao_id, link.quadro_id)
-        teto = qs.limites_mod.efetivos(q)["linhas_por_consulta"]
-        pedidas = max(1, min(int(limite or MAX_LINHAS), MAX_LINHAS))
-        so = [c.strip() for c in colunas.split(",")] if colunas else None
-        filtros = links.filtros_da_url(filtro)
-        linhas, desloc, total, nomes = [], 0, 0, None
-        while len(linhas) < pedidas:
-            r = qs.consultar(
-                sessao, link.organizacao_id, q.id, filtros=filtros, ordem=ordem or ["_criado_em"],
-                colunas=so, busca=busca, so_o_mais_recente_de=recente,
-                limite=min(teto, pedidas - len(linhas)), deslocamento=desloc,
-            )
-            total, nomes = r["total"], r["colunas"]
-            linhas += r["linhas"]
-            if r["proximo"] is None:
-                break
-            desloc = r["proximo"]
+        r = ler_linhas(sessao, link, filtro=filtro, ordem=ordem, recente=recente,
+                       colunas=colunas, busca=busca, limite=limite)
     except ErroQuadro as e:
         return _erro(e.mensagem, 422, formato)
-    _registrar(link, "linhas", len(linhas))
+    _registrar(link, "linhas", r["devolvidas"])
     sessao.commit()
     if formato == "json":
-        return JSONResponse(
-            {
-                "quadro": q.nome,
-                "total": total,
-                "devolvidas": len(linhas),
-                "colunas": nomes,
-                "linhas": [ln["valores"] for ln in linhas],
-            },
-            headers=_CABECALHOS,
-        )
-    return _csv(nomes or [], [[ln["valores"].get(c) for c in nomes] for ln in linhas], decimal == "virgula")
+        return JSONResponse(r, headers=_CABECALHOS)
+    nomes = r["colunas"] or []
+    return _csv(nomes, [[ln.get(c) for c in nomes] for ln in r["linhas"]], decimal == "virgula")
 
 
 @rotas.get("/publico/quadros/{token}/totais")
@@ -147,15 +175,8 @@ def totais(
     except links.LinkRecusado as e:
         return _erro(str(e), e.status, formato)
     try:
-        metricas = []
-        for m in metrica or ["contar"]:
-            funcao, _, coluna = m.partition("|")
-            metricas.append({"funcao": funcao.strip(), **({"coluna": coluna.strip()} if coluna.strip() else {})})
-        r = qs.totais(
-            sessao, link.organizacao_id, link.quadro_id, metricas=metricas,
-            agrupar_por=agrupar or None, filtros=links.filtros_da_url(filtro),
-            so_o_mais_recente_de=recente,
-        )
+        r = ler_totais(sessao, link, agrupar=agrupar, metrica=metrica, filtro=filtro,
+                       recente=recente)
     except ErroQuadro as e:
         return _erro(e.mensagem, 422, formato)
     _registrar(link, "totais", len(r["resultados"]))

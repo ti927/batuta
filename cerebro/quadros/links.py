@@ -195,15 +195,27 @@ def _dentro_do_limite(link: QuadroLink) -> bool:
         return True
 
 
-def abrir(sessao: Session, token: str) -> QuadroLink:
-    """O link válido para este token, já contando a leitura. Levanta `LinkRecusado`."""
+def localizar(sessao: Session, token: str) -> QuadroLink:
+    """O link válido para este token, SEM contar leitura nem gastar o limite por minuto —
+    é o que o teste da IA usa (conferir o que o painel vai receber não é o painel lendo).
+    Levanta `LinkRecusado` se não existe, foi revogado ou venceu."""
     link = sessao.scalar(select(QuadroLink).where(QuadroLink.token_hash == _hash(token or "")))
     if link is None:
         raise LinkRecusado("Link não encontrado. Confira se ele foi copiado inteiro.", 404)
+    verificar_ativo(link)
+    return link
+
+
+def verificar_ativo(link: QuadroLink) -> None:
     if link.revogado_em is not None:
         raise LinkRecusado("Este link foi revogado. Peça um novo a quem administra o quadro no Batuta.", 410)
     if link.expira_em is not None and link.expira_em <= datetime.now(timezone.utc):
         raise LinkRecusado("Este link passou da validade. Peça um novo a quem administra o quadro no Batuta.", 410)
+
+
+def abrir(sessao: Session, token: str) -> QuadroLink:
+    """O link válido para este token, já contando a leitura. Levanta `LinkRecusado`."""
+    link = localizar(sessao, token)
     if not _dentro_do_limite(link):
         raise LinkRecusado(
             f"Leituras demais em um minuto (o limite deste link é {link.limite_por_minuto}). "

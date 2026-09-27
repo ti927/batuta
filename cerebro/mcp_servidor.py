@@ -76,7 +76,10 @@ mcp = FastMCP(
         "planilha improvisada nem a memória do agente. Toda escrita aceita `simular=true` "
         "(use antes e mostre ao consultor); apagar/excluir só simulam sem `confirmar=true`. "
         "Para saber o que uma execução GRAVOU de fato, `diagnosticar_execucao` lista as "
-        "linhas por quadro — a narração do agente não é prova.\n"
+        "linhas por quadro — a narração do agente não é prova. Para um painel ou automação "
+        "de FORA ler um quadro (Planilhas/Looker/script), um admin cria um link de leitura com "
+        "`criar_link_quadro` (não vence; vale até revogar) e você CONFERE o que o painel vai "
+        "receber com `testar_link_quadro` antes de entregar.\n"
         "TESTAR (antes de entregar): criou ou mudou um instrumento? Teste VOCÊ mesmo — "
         "`testar_operacao_conector` para cada operação de um conector, `testar_instrumento` "
         "para os outros tipos — em vez de pedir ao consultor que teste. O teste é REAL, "
@@ -1006,6 +1009,46 @@ async def listar_links_quadro(organizacao_id: str, quadro: str) -> str:
     admin pela tela (quadro › Quem usa › Acesso de fora). Oriente o consultor a fazer lá."""
     return await anyio.to_thread.run_sync(
         quadros_mcp.listar_links_quadro, _sub(), organizacao_id, quadro
+    )
+
+
+@mcp.tool()
+async def criar_link_quadro(
+    organizacao_id: str, quadro: str, nome: str,
+    limite_por_minuto: int | None = None, confirmar: bool = False,
+) -> str:
+    """CRIA um link de leitura de um quadro — para um painel ou automação de fora (Google
+    Planilhas com IMPORTDATA, Looker Studio, Power BI, um script) ler o quadro sem login.
+    SEM `confirmar=true` é só uma PRÉVIA (quadro, linhas e colunas que ficam expostas).
+    Exige admin. O link NÃO vence: vale até ser revogado. `nome` diz quem vai usar (ex.:
+    "Painel do Looker"); `limite_por_minuto` padrão 60, até 600.
+    A resposta traz a `url` e a `formula_planilhas` prontas — entregue ao consultor NA
+    HORA: o link inteiro não aparece de novo. Monte os filtros na URL
+    (`?filtro=Coluna|gte|hoje-30&recente=Coluna&colunas=A,B`; `/totais?agrupar=…&metrica=soma|Coluna`)
+    e confira com `testar_link_quadro` antes de entregar."""
+    return await anyio.to_thread.run_sync(
+        quadros_mcp.criar_link_quadro, _sub(), organizacao_id, quadro, nome,
+        limite_por_minuto, confirmar,
+    )
+
+
+@mcp.tool()
+async def testar_link_quadro(
+    url: str | None = None, organizacao_id: str | None = None,
+    quadro: str | None = None, link_id: str | None = None,
+    consulta: str | None = None, totais: bool = False,
+) -> str:
+    """Mostra EXATAMENTE o que um painel de fora recebe de um link de leitura — mesmo
+    código da leitura pública: colunas, total e as primeiras 20 linhas (ou os totais, se a
+    URL termina em `/totais`). Passe a `url` inteira com os filtros (a que vai no
+    IMPORTDATA) — ou, para um link criado pela tela, cujo endereço você não tem,
+    `organizacao_id` + `quadro` + `link_id` (de `listar_links_quadro`), com os filtros em
+    `consulta` (o trecho depois do `?`, ex.: "filtro=Status|eq|novo&recente=Semana") e
+    `totais=true` para a leitura `/totais`. Não conta como leitura do painel nem gasta o limite por minuto do link. Use
+    para conferir filtros, datas relativas e colunas ANTES de entregar o painel."""
+    return await anyio.to_thread.run_sync(
+        quadros_mcp.testar_link_quadro, _sub(), organizacao_id, quadro, link_id, url,
+        consulta, totais,
     )
 
 

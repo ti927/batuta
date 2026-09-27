@@ -164,3 +164,127 @@ def test_data_relativa():
     assert links.data_relativa("2026-09-01") == "2026-09-01"
     assert len(links.data_relativa("hoje-90")) == 10
     assert links.data_relativa("hoje") <= links.data_relativa("hoje+1")
+
+
+# ── A IA cria e testa links (2026-09-27) ────────────────────────────────────────
+# Decisão do maestro: admin conectado pelo MCP pode criar link, SEM validade (o link
+# serve automações; um link que vence para a automação em silêncio). E a IA confere o
+# que o painel vai receber pelo MESMO código da leitura pública.
+
+
+def _mcp(sessao, monkeypatch):
+    import mcp_ferramentas as leitura
+    import mcp_ferramentas_escrita as escrita
+
+    class _Fake:
+        def __init__(self, s):
+            self._s = s
+
+        def __getattr__(self, n):
+            return getattr(self._s, n)
+
+        def commit(self):
+            self._s.flush()
+
+        def rollback(self):
+            # A recusa desfaz o que a ferramenta fez; no teste, desfazer a sessão inteira
+            # apagaria o que o próprio teste montou (usuários, quadro).
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(escrita, "CriadorDeSessao", lambda: _Fake(sessao))
+    monkeypatch.setattr(leitura, "CriadorDeSessao", lambda: _Fake(sessao))
+    monkeypatch.setenv("CEREBRO_URL", "https://api.exemplo")
+
+
+def _quadro_servico(sessao, org):
+    qs.criar_quadro(sessao, org, nome="Semanas", colunas=[
+        {"nome": "Semana", "tipo": "data"}, {"nome": "Tema", "tipo": "texto"},
+        {"nome": "Cliques", "tipo": "numero"},
+    ])
+    qs.gravar_linhas(sessao, org, "Semanas", [
+        {"Semana": "2026-09-07", "Tema": "COF", "Cliques": 10},
+        {"Semana": "2026-09-14", "Tema": "COF", "Cliques": 30},
+        {"Semana": "2026-09-14", "Tema": "PRO", "Cliques": 7},
+    ], autor=Autor(origem="agente"))
+
+
+def test_mcp_cria_link_so_admin_com_previa_e_sem_validade(sessao, dados, monkeypatch):
+    import json
+
+    import mcp_ferramentas_quadros as mq
+
+    _mcp(sessao, monkeypatch)
+    org = dados["orgA"].id
+    _quadro_servico(sessao, org)
+    recusa = mq.criar_link_quadro(str(dados["operador"].id), str(org), "Semanas", "Looker", None, True)
+    assert sessao.query(QuadroLink).count() == 0 and "bq_" not in recusa
+
+    previa = json.loads(mq.criar_link_quadro(str(dados["admin"].id), str(org), "Semanas", "Looker", None, False))
+    assert previa["simulado"] and previa["linhas"] == 3 and sessao.query(QuadroLink).count() == 0
+
+    feito = json.loads(mq.criar_link_quadro(str(dados["admin"].id), str(org), "Semanas", "Looker", None, True))
+    assert feito["url"].startswith("https://api.exemplo/publico/quadros/bq_")
+    assert feito["formula_planilhas"] == f'=IMPORTDATA("{feito["url"]}?decimal=virgula")'
+    link = sessao.query(QuadroLink).one()
+    assert link.expira_em is None and link.nome == "Looker (criado pela IA)"
+
+
+def test_mcp_testa_o_link_como_o_painel_e_nao_conta_leitura(cliente, sessao, dados, monkeypatch):
+    import json
+
+    import mcp_ferramentas_quadros as mq
+
+    _mcp(sessao, monkeypatch)
+    org = dados["orgA"].id
+    _quadro_servico(sessao, org)
+    link, token = links.criar(sessao, org, "Semanas", nome="Looker")
+    consulta = "filtro=Tema|eq|COF&recente=Semana"
+    url = f"https://api.exemplo/publico/quadros/{token}?{consulta}"
+
+    teste = json.loads(mq.testar_link_quadro(str(dados["observador"].id), None, None, None, url, None, False))
+    assert teste["ok"] and teste["resultado"]["total"] == 1
+    assert teste["resultado"]["linhas"][0]["Cliques"] == 30
+    assert sessao.get(QuadroLink, link.id).usos == 0  # conferir não é o painel lendo
+
+    # O MESMO que o painel recebe pela rota pública
+    painel = cliente.get(f"/publico/quadros/{token}?{consulta}&formato=json").json()
+    assert painel["linhas"] == teste["resultado"]["linhas"]
+
+    totais = json.loads(mq.testar_link_quadro(
+        str(dados["observador"].id), str(org), "Semanas", str(link.id), None,
+        "agrupar=Tema&metrica=soma|Cliques", True,
+    ))
+    assert totais["totais"] and len(totais["resultado"]["resultados"]) == 2
+
+
+def test_mcp_testar_link_revogado_diz_o_motivo(sessao, dados, monkeypatch):
+    import json
+
+    import mcp_ferramentas_quadros as mq
+
+    _mcp(sessao, monkeypatch)
+    org = dados["orgA"].id
+    _quadro_servico(sessao, org)
+    link, token = links.criar(sessao, org, "Semanas", nome="Looker")
+    links.revogar(sessao, org, "Semanas", link.id)
+    r = json.loads(mq.testar_link_quadro(
+        str(dados["admin"].id), None, None, None, f"https://x/publico/quadros/{token}", None, False
+    ))
+    assert r["ok"] is False and "revogado" in r["erro"]
+
+
+def test_leitura_publica_vira_evento_gravado(cliente, sessao, dados, monkeypatch):
+    """A regra do link promete rastro de toda leitura; a categoria "quadro" não é
+    persistida por padrão, e de 24/09 a 27/09 nenhuma leitura virou evento."""
+    import rotas.quadros_publico as pub
+
+    org = dados["orgA"].id
+    _quadro_servico(sessao, org)
+    _, token = links.criar(sessao, org, "Semanas", nome="Looker")
+    chamadas = []
+    monkeypatch.setattr(pub, "registrar_evento", lambda **k: chamadas.append(k))
+    assert cliente.get(f"/publico/quadros/{token}").status_code == 200
+    assert chamadas and chamadas[-1]["persistir"] is True

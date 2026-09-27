@@ -2651,3 +2651,11 @@ Pedido do maestro: *"um agente da Anthropic que usa um instrumento GPT tem dois 
 - **Provado ao vivo:** 📈 COF Post Instagram — US$ 11,31 = IA 2,90 + instrumentos 8,40 (as imagens são 74% do custo do time).
 
 **Em aberto (decisão do maestro):** (a) o custo de instrumento gravado antes de 26/09 aparece sem nome ("Instrumentos usados antes de 26/09") — dá para recuperar pelos `instrumentos_acionados` de cada passo, mas mexe em dado de produção; (b) preencher o custo por chamada do conector do Gemini; (c) ajustar o preço da Firecrawl ao plano real da Lure.
+
+## FASE — A IA cria e testa os links de leitura do Cérebro  ✅ (2026-09-27, sem migração)
+
+Pedido do maestro: *"verifique a possibilidade da IA externa compartilhar registros do cérebro e fazer a leitura do link de compartilhamento"*. Até aqui o MCP só **listava** e **revogava** links (decisão de 24/09: o link é uma senha e a IA não o recebia). Decisões dele: **admin conectado pelo MCP pode criar**, e **sem validade** — *"a intenção é automações; daqui 30 dias a automação para e temos que fazer de novo"*.
+
+- **`criar_link_quadro`** (admin): prévia antes (quadro, linhas, colunas expostas), `confirmar=true` cria, nome marcado "(criado pela IA)", sem validade, auditoria `quadro.link_criado` com `origem: mcp`; devolve a URL e a fórmula do Planilhas uma vez. Risco aceito: o link fica na conversa do claude.ai.
+- **`testar_link_quadro`**: o que o painel recebe, pelo MESMO código da rota pública (extraído para `rotas.quadros_publico.ler_linhas`/`ler_totais`), pela URL inteira com filtros ou por `link_id` + `consulta` (serve para links criados pela tela). Não conta leitura nem gasta o limite do link (`links.localizar`, separado de `abrir`). MCP: **66 ferramentas**.
+- **Defeito achado no caminho:** o evento `quadro.link_lido`, prometido a cada leitura, **nunca foi gravado** — a categoria `quadro` não é persistida por padrão (mesma classe do `interno` de 26/09). Em 3 dias, ~385 leituras dos 7 links sem nenhum evento (o contador `usos` do link funcionava). Agora `persistir=True`.
