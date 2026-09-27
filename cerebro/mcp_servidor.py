@@ -288,7 +288,11 @@ async def ler_conversa(conversa_id: str) -> str:
 @mcp.tool()
 async def ver_uso(time_id: str) -> str:
     """Mostra o custo de IA (US$) de um time — execuções + mensageria — com a quebra por
-    categoria e os tokens. (O custo da IA criadora é por organização, não por time.)
+    categoria e os tokens, e SEPARA os dois custos de um agente: a IA dele
+    (`ia_dos_agentes_usd`) e os instrumentos que ele aciona e que cobram por fora
+    (`instrumentos_usd`: imagem, busca, leitura, transcrição…), com `por_agente` e
+    `por_instrumento`. Para saber onde o dinheiro vai, olhe `por_instrumento` antes de
+    culpar o modelo do agente. (O custo da IA criadora é por organização, não por time.)
 
     Serve também para escolher o TETO DE CUSTO POR EXECUÇÃO de uma automação (Fluxo ›
     Limites da execução, na tela — você não tem ferramenta para defini-lo): veja aqui

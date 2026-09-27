@@ -277,6 +277,8 @@ Decisão de produto a ser detalhada: até onde o agente lembra. Da conversa de h
 
 Cada passo de um fluxo é uma chamada de IA paga. Uma cadeia de 15 passos custa 15 vezes. O usuário leigo não tem noção disso. O produto precisa tornar o custo visível — dar uma estimativa de quanto um fluxo custa antes de rodar, e mostrar o consumo real depois (ver seção 24).
 
+O custo de um agente tem **duas partes**, e o produto mostra as duas separadas: a **IA do próprio agente** (o modelo que pensa e responde) e os **instrumentos** que ele aciona e que cobram por fora — gerar imagem, ler imagem, vídeo, busca na web, leitura de páginas, transcrição de áudio, APIs pagas chamadas por conector. Um agente que pensa com o Claude e gera imagem com a OpenAI paga os dois. O resumo do time mostra o total, as duas partes, o custo de cada agente e os instrumentos que mais custaram — porque o gasto costuma estar num instrumento, não na conversa. Quando o Batuta não tem como saber o preço (uma API qualquer chamada por conector), quem monta informa o custo por chamada.
+
 Visível não basta quando algo dispara: um fluxo pode ter um **teto de custo por execução** (em dólares) e um **teto de tempo**, por passo e pela execução inteira. Estourou, ele **para** e diz quanto gastou, qual era o limite e o que fazer. Os três nascem **desligados**, de propósito: um limite que o usuário não pediu interromperia trabalho legítimo e lento — gerar um vídeo leva uns 25 minutos — como se fosse defeito. O teto de tempo da execução conta **tempo de trabalho**, não de relógio: uma execução que esperou dois dias por uma aprovação humana não gastou dois dias de trabalho.
 
 ### Nenhum limite é secreto

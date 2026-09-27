@@ -2537,7 +2537,7 @@ A saída não foi dar a chave ao MCP: foi **inverter o pedido**. Porta interna `
 
 A varredura pedida pelo maestro achou um buraco **de agosto**: em TRÊS lugares o formato dizia `auth_tipo: 'nenhuma|bearer|cabecalho|query'` — `basic` e `oauth2` existiam desde então e as IAs **nunca os ofereceram**, porque quem elas leem ao decidir é a **docstring da ferramenta**, não o capítulo. Corrigido nas duas docstrings (criadora + MCP) e no capítulo, junto com `somente_leitura`, a aprovação por operação, os tipos no corpo e "leia o motivo em vez de adivinhar". Capítulos reescritos: `instrumentos/mcp` (era de julho, ensinava "traz TODAS as ferramentas"), `segredos/conectar-google` (a alternativa que não expira e quando usar cada uma) e `instrumentos/search-console` (401 ≠ 403). 59 capítulos, 0 links `[[..]]` quebrados.
 
-**Em aberto:** (a) o **teste ao vivo** das 3 operações do Search Console (o maestro clica — o conector já está montado no time COF Post Blog); (b) **`BATUTA_INTERNO_SECRET`** a configurar nos dois serviços; (c) **Usuário do Sistema da Meta** — o equivalente da conta de serviço para Instagram, pesquisado e adiado: resolve as contas próprias sem App Review (Acesso Padrão é automático); para conta de CLIENTE, falta testar se "ativo gerenciado" basta ou se cai no app do próprio cliente. Quando entrar, marcar a credencial como "não expira" para o job noturno do Instagram não alarmar à toa.
+**Em aberto:** (a) o **teste ao vivo** das 3 operações do Search Console (o maestro clica — o conector já está montado no time COF Post Blog); (b) ~~**`BATUTA_INTERNO_SECRET`** a configurar nos dois serviços~~ — **configurada em 2026-09-26** (ver a fase "A IA externa testa o que monta"); (c) **Usuário do Sistema da Meta** — o equivalente da conta de serviço para Instagram, pesquisado e adiado: resolve as contas próprias sem App Review (Acesso Padrão é automático); para conta de CLIENTE, falta testar se "ativo gerenciado" basta ou se cai no app do próprio cliente. Quando entrar, marcar a credencial como "não expira" para o job noturno do Instagram não alarmar à toa.
 
 ---
 
@@ -2623,3 +2623,31 @@ As fases da Etapa 2 são detalhadas no formato investigar/implementar/verificar 
 **Pooler do Supabase cheio (`EMAXCONNSESSION`).** Erro 500 esporádico ("max clients reached in session mode, pool_size 15") em 11 momentos desde 26/08 — deploys (dois cérebros no ar juntos) e picos de execuções. Causa: o pooler em modo sessão aceitava 15 clientes (o Postgres aceita 60) e o Batuta podia pedir 30+ (engine com o padrão do SQLAlchemy 5+10 por processo, checkpointer até 4, MCP mais 15). Feito: orçamento explícito e ajustável por variável (`DB_POOL_SIZE`/`DB_MAX_OVERFLOW`/`DB_POOL_TIMEOUT`; cérebro 5+7, MCP 2+4), espera-e-tenta-de-novo (~6,5 s) só para esse erro, evento `banco.pooler_cheio`; o maestro subiu o **Pool Size para 30** no painel. Modo transação avaliado e não adotado. Ver `docs/ARQUITETURA.md` ("Orçamento de conexões").
 
 **Tela clássica de Automações apagada** (decisão do maestro depois do teste ao vivo do Estúdio). Sai a tela e o que só ela usava; `/times/[id]/automacoes` redireciona ao Estúdio; do `automacao-builder/` ficam só as peças que o Estúdio reaproveita.
+
+---
+
+## FASE — A IA externa testa o que monta  ✅ NO AR (2026-09-26, `0c41278` · `48b83c6` · `831a5cd` · `5806292`, sem migração)
+
+Pedido do maestro: *"a IA que está criando instrumentos não testa as próprias chamadas, e eu tenho que ficar testando por ela"*. A causa tinha três partes: a ponte de teste pelo cérebro (`/interno/conector/testar-operacao`, de 22/09) **nunca foi ligada** (`BATUTA_INTERNO_SECRET` ausente nos dois serviços); ela só cobria **conector**; e nada mandava a IA testar.
+
+- **`testar_instrumento`** (ferramenta MCP nº 64) testa os outros tipos pela porta nova `POST /interno/instrumento/testar`, que usa a MESMA função do botão da tela (`rotas.instrumentos.acionar_instrumento`, agora fonte única). Mesmas três camadas da porta de 22/09. Falha volta como dado legível.
+- **O teste é real, inclusive o que grava** (decisão do maestro). A resposta traz `escreve` e um aviso `atencao`; as instruções do MCP, as docstrings, a IA criadora e a Central mandam **marcar com TESTES** o que o teste criar, só alterar/apagar o que o próprio teste criou e contar ao consultor.
+- **Variáveis configuradas** pelo Railway-MCP: `BATUTA_INTERNO_SECRET` no serviço `cerebro` e, no serviço `batuta` (o MCP), a referência `${{cerebro.BATUTA_INTERNO_SECRET}}` + `CEREBRO_URL`. **Provado ao vivo:** o Search Console (conta de serviço, segredo no cofre) respondeu dados reais pela ponte.
+
+**Três defeitos que o primeiro uso real revelou, curados no mesmo dia:**
+1. `48b83c6` — o rastro dos testes feitos pela IA **nunca era gravado**: a categoria `interno` não está entre as persistidas por padrão. De 22/09 a 26/09 o evento prometido existia só no log do servidor. Agora `persistir=True`, conferido no `evento_log`.
+2. `831a5cd` — o aviso "os campos da resposta não batem" dava **alarme falso** quando os campos escolhidos eram TODOS os da linha (o critério era "o filtro mudou a resposta?"). Virou "nenhum campo escolhido existe em nenhuma linha?". Achado pelo maestro, que desconfiou do conector certo.
+3. `5806292` — o "Testar e detectar" tinha a **sua própria** lista de formatos e não conhecia o `rows` do Google: oferecia `rows` como campo a escolher — o engano que apagou as linhas em 22/09. A tela induzia o erro que o filtro punia. Detecção, filtro e aviso passaram a usar `rest.registros_da_resposta`.
+
+**Em aberto:** testar o `testar_instrumento` e uma gravação marcada TESTES numa conversa nova (a lista de ferramentas do MCP carrega no início da conversa).
+
+## FASE — Custo separado: a IA dos agentes × os instrumentos  ✅ NO AR (2026-09-26, `e65aa34` + `dd6f4b5`, sem migração)
+
+Pedido do maestro: *"um agente da Anthropic que usa um instrumento GPT tem dois custos — medir, separar e destacar nos resumos do time"*. O banco já guardava os dois em categorias diferentes (`execucao`/`mensageria` × `instrumento`), mas: o resumo do time somava tudo num número só; o registro de instrumento não dizia QUAL instrumento gastou; e três instrumentos pagos **não eram medidos** — Exa (71 chamadas no mês), Firecrawl (36) e conector que chama API paga (o Gemini dos times de blog).
+
+- **Medição:** cada entrada de instrumento leva `instrumento_id`/`instrumento`/`tipo` (`medicao_instrumentos._carimbar`). Exa medida pela tabela oficial (US$ 7/mil buscas até 10 resultados, deep US$ 12/mil, + US$ 1/mil páginas de texto); Firecrawl a 1 crédito por página, ~US$ 0,0032 (plano de entrada, ajustável em `precos.py`). A operação de conector ganhou `custo_por_chamada_usd` (quem monta informa; campo no Construtor). O atendimento por canal carimba o `agente_id` em cada entrada do turno.
+- **Corte:** `custos_time.custos_do_time` é a fonte única — IA dos agentes × instrumentos, por agente e por instrumento, com nomes atuais. Serve o `GET /times/{id}/resumo` e o `ver_uso` do MCP. **O total não muda** (teste garante que a soma das partes é o custo acumulado de antes). Sem contagem dupla: os "passos-sombra" do atendimento ficam em execuções sem automação, fora da soma.
+- **Tela (aba Início):** o cartão "Custo acumulado" diz "IA dos agentes US$ X · instrumentos US$ Y"; a seção **"Para onde vai o custo"** lista cada agente (a IA dele + os instrumentos que acionou) e os instrumentos que mais custaram.
+- **Provado ao vivo:** 📈 COF Post Instagram — US$ 11,31 = IA 2,90 + instrumentos 8,40 (as imagens são 74% do custo do time).
+
+**Em aberto (decisão do maestro):** (a) o custo de instrumento gravado antes de 26/09 aparece sem nome ("Instrumentos usados antes de 26/09") — dá para recuperar pelos `instrumentos_acionados` de cada passo, mas mexe em dado de produção; (b) preencher o custo por chamada do conector do Gemini; (c) ajustar o preço da Firecrawl ao plano real da Lure.

@@ -386,7 +386,11 @@ usuário — limitado ao que aquele usuário já poderia fazer. É por isso que 
 rastro existe.
 
 **Variáveis novas:** `BATUTA_INTERNO_SECRET` (nos DOIS serviços) e, no serviço MCP, `CEREBRO_URL`
-(padrão `https://api.batuta.team` na Railway).
+(padrão `https://api.batuta.team` na Railway). **Ligadas em 2026-09-26:** o valor mora no serviço
+`cerebro`; o serviço `batuta` (o MCP) usa a referência `${{cerebro.BATUTA_INTERNO_SECRET}}`, então trocar
+o segredo é trocar num lugar só. Desde então a porta tem DUAS operações: `/interno/conector/testar-operacao`
+e `/interno/instrumento/testar`; os eventos `conector.testado_pela_ia`/`instrumento.testado_pela_ia` são
+gravados com `persistir=True` (a categoria `interno` não é persistida por padrão).
 
 ---
 
@@ -408,6 +412,8 @@ rastro existe.
 - **Estúdio** — a tela do fluxo desde 2026-09-22: condição no fio, cartão listando as saídas, o desenho se conferindo sozinho, e as regras do fluxo no painel da direita (sem o antigo botão "Fluxo"). Assumiu a aba **Automações** em 22/09; a tela clássica foi **apagada em 2026-09-24**, depois do teste ao vivo (decisão do maestro) — a rota `/times/[id]/automacoes` só redireciona ao Estúdio. Do `components/automacao-builder/` sobraram só as peças que o Estúdio usa (`nucleo.ts` com `normalizarCadeia` e o tipo do gatilho, o campo de regra em `config-fluxo.tsx`, o `testar-no.tsx`).
 - **Cada regra tem um DONO (2026-09-22).** A cascata de configuração passou a ser particionada por dono, e isso virou **lei de código** (`_mesclar(…, permitidas=…)` em `mensageria/config.py`): **canal** = a voz de quem fala (saudação, horário, mensagens automáticas); **agente** = propriedade de um ATO (quanto trabalha num passo, quanto/como espera uma pessoa); **fluxo** = contador que acumula (mensagens e custo da conversa, passos e custo da execução, vigias). Antes qualquer camada escrevia qualquer chave e quem vencia mudava campo a campo. Junto, o **"Tipo de fluxo" morreu como camada**: guardava uma etiqueta cujos números moravam no código (migração `prs00preset001` materializou-os nos ajustes, com diff provado vazio nas 16 automações reais), e virou modelo de partida. O agente ganhou a coluna `configuracao` (`rte00ritmo0001`) e a aba **"Ritmo e espera"**.
 - **A espera por uma pessoa não prende mais ninguém (2026-09-22).** Um agente que conclui o trabalho e não declara o caminho deixava a mesma aprovação voltando para sempre — o `portao.indeciso` detectava em nível `error` e, por decisão anterior, "só deixava rastro". Agora, se a pessoa responde com o nome exato de um caminho e o agente já teve a chance dele, o motor segue por essa resposta e registra `portao.destravado` (§12-A: evento + vigia + recado).
+- **A IA externa testa o que monta (2026-09-26).** A porta interna do §9-bis ganhou `POST /interno/instrumento/testar` (os tipos que não são conector, pela mesma função do "Acionar" da tela — `rotas.instrumentos.acionar_instrumento`) e foi **ligada** em produção (`BATUTA_INTERNO_SECRET` nos serviços `cerebro` e `batuta`/MCP). O teste é real inclusive quando grava; o MCP instrui marcar com **TESTES** o que o teste cria. O formato das linhas de uma resposta virou fonte única (`instrumentos.rest.registros_da_resposta`), usada pelo filtro `campos_resposta`, pelo aviso do teste e pela detecção de campos — antes a detecção tinha a sua própria lista e oferecia `rows` como campo.
+- **Custo separado: IA dos agentes × instrumentos (2026-09-26).** Cada entrada de uso de instrumento carrega `instrumento_id`/`instrumento`/`tipo`; Exa, Firecrawl e operação de conector com `custo_por_chamada_usd` passaram a ser medidos (`medicao_instrumentos.py`, preços em `precos.py`); a mensageria carimba `agente_id` em cada entrada. `custos_time.custos_do_time` é a fonte única do corte (por agente e por instrumento), usada pelo `GET /times/{id}/resumo` e pelo `ver_uso` do MCP. Sem migração: tudo mora no JSON de `uso` que já existia.
 - **Falta:** (a) **Mensageria (WhatsApp)** — o canal do Líder (provedor decidido: Evolution API por QR); (b) **a Biblioteca** — objeto desta análise; (c) instrumentos **org-wide** (hoje `instrumentos.time_id` é obrigatório e nenhum tipo é da organização — decidido em 12/08, nunca construído; exige migração).
 
 ---

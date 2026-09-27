@@ -47,7 +47,9 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
   `listar_execucoes`, `diagnosticar_execucao` (avisos + ação sugerida; sabe distinguir
   pausa legítima de travamento, e desde 21/09 lê os eventos `espera.esquecida`,
   `portao.indeciso` e `*.entrada_recusada`),
-  `listar_conversas`, `ler_conversa`, `ver_uso`, `listar_tipos_instrumento`,
+  `listar_conversas`, `ler_conversa`, `ver_uso` (desde 2026-09-26 separa `ia_dos_agentes_usd` ×
+  `instrumentos_usd`, com `por_agente` e `por_instrumento` — mesma fonte da aba Início do time),
+  `listar_tipos_instrumento`,
   `consultar_conhecimento` (a Central).
 - **Criação núcleo:** `criar_time`/`editar_time`, `criar_agente`/`editar_agente`/
   `remover_agente`, `configurar_instrumento`/`editar_instrumento`, `montar_conector`/
