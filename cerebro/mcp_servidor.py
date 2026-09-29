@@ -532,8 +532,9 @@ async def testar_instrumento(instrumento_id: str, argumentos: dict | None = None
     testar, mas ponha a palavra TESTES no conteúdo (título, mensagem, texto — ex.:
     "TESTES — post de exemplo"), prefira rascunho/privado quando o instrumento permitir,
     e ao terminar diga ao consultor o que foi criado/enviado e onde. A resposta traz
-    `escreve: true` e um campo `atencao` nesse caso. Geração de vídeo custa caro: só
-    teste se o consultor pedir.
+    `escreve: true` e um campo `atencao` nesse caso. Cada teste que GERA mídia é cobrado:
+    imagem ~US$ 0,01–0,17 por teste (conforme a qualidade) — teste uma vez e não repita
+    sem motivo; vídeo custa caro — só teste se o consultor pedir.
     Funciona com instrumento que tem segredo: o teste é pedido ao cérebro, que decifra
     lá e devolve só o resultado. Se a ponte não estiver ligada, a ferramenta diz isso —
     não fique retentando. Falha volta com `ok: false` e o motivo em `erro`: leia-o."""

@@ -414,6 +414,14 @@ gravados com `persistir=True` (a categoria `interno` não é persistida por padr
 - **A espera por uma pessoa não prende mais ninguém (2026-09-22).** Um agente que conclui o trabalho e não declara o caminho deixava a mesma aprovação voltando para sempre — o `portao.indeciso` detectava em nível `error` e, por decisão anterior, "só deixava rastro". Agora, se a pessoa responde com o nome exato de um caminho e o agente já teve a chance dele, o motor segue por essa resposta e registra `portao.destravado` (§12-A: evento + vigia + recado).
 - **A IA externa testa o que monta (2026-09-26).** A porta interna do §9-bis ganhou `POST /interno/instrumento/testar` (os tipos que não são conector, pela mesma função do "Acionar" da tela — `rotas.instrumentos.acionar_instrumento`) e foi **ligada** em produção (`BATUTA_INTERNO_SECRET` nos serviços `cerebro` e `batuta`/MCP). O teste é real inclusive quando grava; o MCP instrui marcar com **TESTES** o que o teste cria. O formato das linhas de uma resposta virou fonte única (`instrumentos.rest.registros_da_resposta`), usada pelo filtro `campos_resposta`, pelo aviso do teste e pela detecção de campos — antes a detecção tinha a sua própria lista e oferecia `rows` como campo.
 - **Custo separado: IA dos agentes × instrumentos (2026-09-26).** Cada entrada de uso de instrumento carrega `instrumento_id`/`instrumento`/`tipo`; Exa, Firecrawl e operação de conector com `custo_por_chamada_usd` passaram a ser medidos (`medicao_instrumentos.py`, preços em `precos.py`); a mensageria carimba `agente_id` em cada entrada. `custos_time.custos_do_time` é a fonte única do corte (por agente e por instrumento), usada pelo `GET /times/{id}/resumo` e pelo `ver_uso` do MCP. Sem migração: tudo mora no JSON de `uso` que já existia.
+- **A IA cria e testa os links de leitura do Cérebro (2026-09-27).** Com admin conectado, o MCP cria link
+  (`criar_link_quadro`, prévia antes, **sem validade** — o link serve automações) e mostra o que o painel
+  recebe (`testar_link_quadro`), pelo mesmo código da rota pública (`rotas.quadros_publico.ler_linhas`/
+  `ler_totais`); `quadros.links.localizar` valida sem contar leitura. MCP com 66 ferramentas.
+- **Eventos informativos precisam de `persistir=True` fora das categorias padrão.** `registrar_evento` com
+  `nivel="info"` só grava se a categoria está em `CATEGORIAS_PERSISTENTES` (`observabilidade/escritor.py`);
+  `interno` e `quadro` não estavam, e o rastro de testes da IA e de leituras de link não chegava ao banco
+  (corrigido em 26–27/09; provado: 500 leituras de link gravadas até 29/09).
 - **Falta:** (a) **Mensageria (WhatsApp)** — o canal do Líder (provedor decidido: Evolution API por QR); (b) **a Biblioteca** — objeto desta análise; (c) instrumentos **org-wide** (hoje `instrumentos.time_id` é obrigatório e nenhum tipo é da organização — decidido em 12/08, nunca construído; exige migração).
 
 ---
