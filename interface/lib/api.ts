@@ -266,6 +266,8 @@ export type Instrumento = {
   credencial_id: string | null;
   // O que o último "Conectar" descobriu (servidor MCP). Null = nunca testado.
   conexao?: ConexaoInstrumento | null;
+  // "time" (só o time dono) ou "organizacao" (todos os times da organização usam).
+  escopo?: "time" | "organizacao";
   criado_em: string;
   atualizado_em: string;
 };

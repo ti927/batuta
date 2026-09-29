@@ -595,9 +595,14 @@ def _instrumento_da_falha(
     pelos passos (best-effort, o comportamento antigo)."""
     alvo = _nome_no_erro(erro)
     if alvo and time_id is not None:
+        import escopo_instrumento
+        from modelos import Time
+
+        time = sessao.get(Time, time_id)
         inst = sessao.scalars(
             select(Instrumento).where(
-                Instrumento.time_id == time_id, Instrumento.nome == alvo
+                escopo_instrumento.filtro_visiveis(time) if time else Instrumento.time_id == time_id,
+                Instrumento.nome == alvo,
             )
         ).first()
         if inst is not None:

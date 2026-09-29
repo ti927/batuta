@@ -26,6 +26,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 import auditoria
+import escopo_instrumento
 import segredos_instrumento as segredos
 from auth import usuario_atual
 from instrumentos import mcp_oauth
@@ -51,6 +52,9 @@ def iniciar(
     usuario: Usuario = Depends(usuario_atual),
 ):
     inst = instrumento_acessivel(sessao, usuario, instrumento_id, minimo="operador")
+    if escopo_instrumento.da_organizacao(inst):
+        # O login vale para todos os times: só admin conecta.
+        inst = instrumento_acessivel(sessao, usuario, instrumento_id, minimo="admin")
     if inst.tipo != "conectar_mcp":
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Este instrumento não é MCP.")
     cofre_inst = segredos.decifrar(sessao, inst.id)

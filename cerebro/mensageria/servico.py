@@ -88,7 +88,13 @@ _ROTULOS = {
 def agente_atendente(sessao: Session, instrumento_id: uuid.UUID) -> Agente | None:
     """O agente que atende este canal: o que tem o instrumento no cinto. Se mais
     de um o tiver (incomum), usa o mais antigo (e isso é uma limitação conhecida
-    da v1 — um canal deveria ter um atendente)."""
+    da v1 — um canal deveria ter um atendente).
+
+    Bot da ORGANIZAÇÃO não tem atendente (decisão do maestro, 2026-09-29): ele só
+    envia avisos e pedidos de aprovação; canal de conversa é sempre de um time."""
+    inst = sessao.get(Instrumento, instrumento_id)
+    if inst is not None and (inst.escopo or "time") == "organizacao":
+        return None
     return sessao.scalars(
         select(Agente)
         .join(AgenteInstrumento, AgenteInstrumento.agente_id == Agente.id)
@@ -366,10 +372,28 @@ def registrar_entrada(
             },
         )
 
+    bot_da_organizacao = (instrumento.escopo or "time") == "organizacao"
     deve_processar = conversa.estado not in ("humano_assumiu", "fechada") and (
         aprovacao_pendente
-        or (conversa.destino_tipo == "agente" and conversa.destino_id is not None)
+        or (
+            not bot_da_organizacao  # bot da organização não atende conversa
+            and conversa.destino_tipo == "agente"
+            and conversa.destino_id is not None
+        )
     )
+    if bot_da_organizacao and not aprovacao_pendente:
+        # Sem pedido esperando esta pessoa: não há para onde levar a mensagem. Dizer
+        # isso é melhor que o silêncio (§12-A).
+        token = segredos_instrumento.decifrar(sessao, instrumento.id).get("token_bot", "")
+        if token:
+            try:
+                _enviar_e_registrar(
+                    sessao, conversa, token,
+                    "Este bot só envia avisos e pedidos de aprovação — não há nenhum pedido "
+                    "esperando sua resposta agora.",
+                )
+            except Exception:  # noqa: BLE001 — cortesia; a mensagem já está gravada
+                pass
     if deve_processar:
         conversa.estado = "bot_respondendo"
     sessao.commit()
@@ -378,12 +402,16 @@ def registrar_entrada(
 
 def _qual_pedido(sessao: Session, execucoes: list) -> str:
     """Recado quando a pessoa tem 2+ pedidos abertos e a resposta não aponta um."""
+    from zoneinfo import ZoneInfo
+
     linhas = []
     for i, ex in enumerate(execucoes, 1):
         auto = sessao.get(Automacao, ex.automacao_id)
-        quando = ex.iniciada_em.astimezone(timezone.utc) if ex.iniciada_em else None
+        quando = (
+            ex.iniciada_em.astimezone(ZoneInfo("America/Sao_Paulo")) if ex.iniciada_em else None
+        )
         rotulo = auto.nome if auto else "automação"
-        linhas.append(f"{i}. {rotulo}" + (f" (iniciada {quando:%d/%m %H:%M} UTC)" if quando else ""))
+        linhas.append(f"{i}. {rotulo}" + (f" (começou {quando:%d/%m às %H:%M})" if quando else ""))
     return (
         f"Você tem {len(execucoes)} pedidos esperando resposta:\n"
         + "\n".join(linhas)

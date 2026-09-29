@@ -265,6 +265,8 @@ class InstrumentoCriar(BaseModel):
     # Caixa-forte: se preenchido, o instrumento usa uma credencial nomeada da
     # central em vez de segredo inline. NULL = inline/pool, como antes.
     credencial_id: uuid.UUID | None = None
+    # "time" (padrão) ou "organizacao" (todos os times encaixam; só admin).
+    escopo: Literal["time", "organizacao"] = "time"
 
 
 class InstrumentoEditar(BaseModel):
@@ -275,6 +277,8 @@ class InstrumentoEditar(BaseModel):
     configuracao: dict = Field(default_factory=dict)
     icone: str | None = Field(default=None, max_length=60)
     credencial_id: uuid.UUID | None = None
+    # Promover/rebaixar (só admin). None = não muda.
+    escopo: Literal["time", "organizacao"] | None = None
 
 
 class InstrumentoLer(BaseModel):
@@ -297,6 +301,8 @@ class InstrumentoLer(BaseModel):
     credencial_id: uuid.UUID | None = None
     # O que o último teste de conexão descobriu (servidor MCP). Sem segredo.
     conexao: dict | None = None
+    # "time" ou "organizacao" (todos os times da organização encaixam).
+    escopo: str = "time"
     criado_em: datetime
     atualizado_em: datetime
 

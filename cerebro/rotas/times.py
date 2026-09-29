@@ -210,9 +210,13 @@ def remover(
     usuario: Usuario = Depends(usuario_atual),
 ):
     time = time_acessivel(sessao, usuario, time_id, minimo="admin")
+    import escopo_instrumento
+
+    movidos = escopo_instrumento.rehospedar_antes_de_excluir_time(sessao, time)
     auditoria.registrar(
         sessao, usuario=usuario, acao="time.removido", recurso_tipo="time",
         recurso_id=time.id, organizacao_id=time.organizacao_id,
+        detalhe={"instrumentos_da_organizacao_movidos": movidos} if movidos else None,
     )
     sessao.delete(time)
     sessao.commit()

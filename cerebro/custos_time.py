@@ -37,6 +37,36 @@ def _uuid(valor) -> uuid.UUID | None:
         return None
 
 
+def mensagens_do_time(sessao: Session, time_id: uuid.UUID) -> list:
+    """(mensagem com uso, destino_tipo, destino_id) do que o time gastou em conversa.
+
+    Canal do time: tudo dele. Bot da ORGANIZAÇÃO (Fase 4): as respostas de aprovação
+    de vários times passam por ele — cada mensagem vai para o time do AGENTE que
+    respondeu (carimbado no uso desde 2026-09-26), nunca para o time dono do bot."""
+    from modelos import Time
+
+    base = (
+        select(MensagemConversa, Conversa.destino_tipo, Conversa.destino_id)
+        .join(Conversa, Conversa.id == MensagemConversa.conversa_id)
+        .join(Instrumento, Instrumento.id == Conversa.instrumento_id)
+        .where(MensagemConversa.uso.isnot(None))
+    )
+    linhas = list(sessao.execute(
+        base.where(Instrumento.time_id == time_id, Instrumento.escopo != "organizacao")
+    ).all())
+    time = sessao.get(Time, time_id)
+    if time is None:
+        return linhas
+    agentes = {str(a) for a in sessao.scalars(select(Agente.id).where(Agente.time_id == time_id))}
+    times_da_org = select(Time.id).where(Time.organizacao_id == time.organizacao_id)
+    for linha in sessao.execute(
+        base.where(Instrumento.escopo == "organizacao", Instrumento.time_id.in_(times_da_org))
+    ).all():
+        if any(str((e or {}).get("agente_id")) in agentes for e in (linha[0].uso or [])):
+            linhas.append(linha)
+    return linhas
+
+
 def _pares_do_time(sessao: Session, time_id: uuid.UUID):
     """(entrada de uso, agente_id) de tudo que o time gastou."""
     passos = sessao.scalars(
@@ -49,14 +79,7 @@ def _pares_do_time(sessao: Session, time_id: uuid.UUID):
         for e in precos.entradas_dos_passos([p]):
             yield e, p.agente_id
 
-    linhas = sessao.execute(
-        select(MensagemConversa, Conversa.destino_tipo, Conversa.destino_id)
-        .join(Conversa, Conversa.id == MensagemConversa.conversa_id)
-        .join(Instrumento, Instrumento.id == Conversa.instrumento_id)
-        .where(Instrumento.time_id == time_id)
-        .where(MensagemConversa.uso.isnot(None))
-    ).all()
-    for msg, destino_tipo, destino_id in linhas:
+    for msg, destino_tipo, destino_id in mensagens_do_time(sessao, time_id):
         # Desde 2026-09-26 cada entrada do turno carrega o agente que respondeu. Antes
         # disso, a melhor pista é o destino da conversa quando ele é um agente.
         reserva = destino_id if destino_tipo == "agente" else None

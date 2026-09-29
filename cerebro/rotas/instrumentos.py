@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import auditoria
+import escopo_instrumento
 import instrumentos as encaixe
 import segredos_instrumento as segredos
 from auth import usuario_atual
@@ -132,13 +133,26 @@ def listar(
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
-    time_acessivel(sessao, usuario, time_id)
+    time = time_acessivel(sessao, usuario, time_id)
+    # Os do time e os da ORGANIZAÇÃO (qualquer time pode encaixá-los).
     consulta = (
         select(Instrumento)
-        .where(Instrumento.time_id == time_id)
+        .where(escopo_instrumento.filtro_visiveis(time))
         .order_by(Instrumento.criado_em)
     )
     return [_ler(sessao, inst) for inst in sessao.scalars(consulta).all()]
+
+
+@rotas.get("/instrumentos/{instrumento_id}/uso")
+def uso(
+    instrumento_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """Quem depende deste instrumento — times, agentes, automações e pedidos de
+    aprovação que mandam por ele. A tela mostra isto antes de excluir ou mudar."""
+    inst = instrumento_acessivel(sessao, usuario, instrumento_id)
+    return escopo_instrumento.usado_por(sessao, inst)
 
 
 @rotas.post(
@@ -152,7 +166,10 @@ def criar(
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
-    time = time_acessivel(sessao, usuario, time_id, minimo="operador")
+    time = time_acessivel(
+        sessao, usuario, time_id,
+        minimo="admin" if dados.escopo == escopo_instrumento.ORGANIZACAO else "operador",
+    )
     try:
         # Fase 7-B: separa os segredos da config pública antes de gravar.
         config_limpa, segredos_novos = encaixe.preparar_config(
@@ -172,6 +189,7 @@ def criar(
         configuracao=config_limpa,
         icone=dados.icone,
         credencial_id=dados.credencial_id,
+        escopo=dados.escopo,
     )
     sessao.add(inst)
     sessao.flush()
@@ -203,7 +221,22 @@ def editar(
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
+    # Instrumento da ORGANIZAÇÃO (ou mudar o escopo): só admin — a configuração e os
+    # segredos dele valem para todos os times.
     inst = instrumento_acessivel(sessao, usuario, instrumento_id, minimo="operador")
+    muda_escopo = dados.escopo is not None and dados.escopo != inst.escopo
+    if escopo_instrumento.da_organizacao(inst) or muda_escopo:
+        inst = instrumento_acessivel(sessao, usuario, instrumento_id, minimo="admin")
+    if muda_escopo and dados.escopo == escopo_instrumento.TIME:
+        outros = escopo_instrumento.outros_times(
+            escopo_instrumento.usado_por(sessao, inst), inst.time_id
+        )
+        if outros:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Não dá para deixar este instrumento só do time: ele é usado por "
+                + ", ".join(outros) + ". Tire-o do cinto desses agentes antes.",
+            )
     try:
         # Fase 7-B: separa os segredos; um segredo omitido preserva o atual.
         config_limpa, segredos_novos = encaixe.preparar_config(
@@ -221,6 +254,13 @@ def editar(
     inst.configuracao = config_limpa
     inst.icone = dados.icone
     inst.credencial_id = dados.credencial_id
+    if muda_escopo:
+        auditoria.registrar(
+            sessao, usuario=usuario, acao="instrumento.escopo_alterado",
+            recurso_tipo="instrumento", recurso_id=inst.id, organizacao_id=org_id_inst,
+            detalhe={"de": inst.escopo, "para": dados.escopo},
+        )
+        inst.escopo = dados.escopo
     alterados = segredos.salvar_segredos(sessao, inst.id, segredos_novos)
     if alterados:
         auditoria.registrar(
@@ -272,6 +312,13 @@ def remover(
     usuario: Usuario = Depends(usuario_atual),
 ):
     inst = instrumento_acessivel(sessao, usuario, instrumento_id, minimo="admin")
+    uso_atual = escopo_instrumento.usado_por(sessao, inst)
+    if escopo_instrumento.em_uso(uso_atual):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Este instrumento está em uso por " + escopo_instrumento.resumo_do_uso(uso_atual)
+            + ". Tire-o do cinto (e dos pedidos de aprovação) antes de excluir.",
+        )
     auditoria.registrar(
         sessao, usuario=usuario, acao="instrumento.removido",
         recurso_tipo="instrumento", recurso_id=inst.id,

@@ -17,6 +17,7 @@ import {
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { FormularioInstrumento } from "@/components/formulario-instrumento";
+import { buscarUso, emUso, quemUsa, UsadoPor } from "@/components/uso-instrumento";
 import { IconeInstrumento } from "@/components/icone-instrumento";
 import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
@@ -156,9 +157,23 @@ export function DrawerInstrumento({
 
   async function remover() {
     if (!instrumento) return;
+    setErro(null);
+    // Quem depende dele? Em uso, não dá para excluir — diz quem usa, em vez de
+    // perguntar "tem certeza?" e depois falhar.
+    try {
+      const uso = await buscarUso(instrumento.id);
+      if (emUso(uso)) {
+        setErro(
+          `Não dá para remover: este instrumento é usado por ${quemUsa(uso)}. Tire-o do ` +
+            "cinto desses agentes antes.",
+        );
+        return;
+      }
+    } catch {
+      /* sem a checagem, o cérebro recusa do mesmo jeito se estiver em uso */
+    }
     if (!confirm(`Remover o instrumento "${instrumento.nome}"?`)) return;
     setOcupado(true);
-    setErro(null);
     try {
       await api.delete(`/instrumentos/${instrumento.id}`);
       toast.success("Instrumento removido");
@@ -219,6 +234,11 @@ export function DrawerInstrumento({
           <h2 className="min-w-0 flex-1 truncate font-medium text-foreground">
             {criando ? "Novo instrumento" : instrumento.nome}
           </h2>
+          {instrumento?.escopo === "organizacao" && (
+            <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground">
+              da organização
+            </span>
+          )}
           {souAdmin && !criando && (
             <Button
               size="sm"
@@ -244,6 +264,7 @@ export function DrawerInstrumento({
             time={time}
             instrumento={instrumento}
             tipos={tipos}
+            souAdmin={souAdmin}
             onSalvo={(salvo) => {
               toast.success(criando ? "Instrumento criado" : "Instrumento salvo");
               onSalvou(salvo);
@@ -253,6 +274,8 @@ export function DrawerInstrumento({
             }}
             onCancelar={onFechar}
           />
+
+          {!criando && <UsadoPor instrumentoId={instrumento.id} />}
 
           {/* Ações do instrumento existente: conectar canal (Telegram) e testar. */}
           {!criando && souOperador && (

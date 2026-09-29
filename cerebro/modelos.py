@@ -167,6 +167,13 @@ class Instrumento(IdData, Base):
     # regrava a `configuracao` inteira a cada salvamento e apagaria este estado.
     # Nunca guarda segredo. NULL = nunca testado.
     conexao: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Quem pode usar: "time" (só o time dono — o de sempre) ou "organizacao" (todos os
+    # times da organização encaixam; a identificação é feita uma vez e serve a todos).
+    # O instrumento da organização continua com um time de ORIGEM (`time_id`): é ele
+    # que responde pelas verificações de acesso e pelas chaves. Ver `escopo_instrumento`.
+    escopo: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="time", server_default=text("'time'")
+    )
 
 
 class AgenteInstrumento(Base):

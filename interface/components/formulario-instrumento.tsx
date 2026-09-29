@@ -497,10 +497,13 @@ export function FormularioInstrumento({
   tipos,
   onSalvo,
   onCancelar,
+  souAdmin = false,
 }: {
   time: Time;
   instrumento: Instrumento | null;
   tipos: TipoInstrumento[];
+  /** Só admin escolhe "toda a organização" e mexe em instrumento da organização. */
+  souAdmin?: boolean;
   onSalvo: (salvo: Instrumento) => void;
   onCancelar: () => void;
 }) {
@@ -526,6 +529,12 @@ export function FormularioInstrumento({
   );
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [escopo, setEscopo] = useState<"time" | "organizacao">(
+    instrumento?.escopo ?? "time",
+  );
+  const daOrganizacao = (instrumento?.escopo ?? "time") === "organizacao";
+  // Instrumento da organização vale para todos os times: só admin muda.
+  const bloqueado = daOrganizacao && !souAdmin;
 
   // Caixa-forte: credencial nomeada da central que este instrumento usa (ou null
   // = segredo próprio inline). As credenciais disponíveis e seus tipos são
@@ -732,12 +741,14 @@ export function FormularioInstrumento({
             configuracao: config,
             icone,
             credencial_id,
+            escopo,
           })
         : await api.put<Instrumento>(`/instrumentos/${instrumento.id}`, {
             nome: nome.trim(),
             configuracao: config,
             icone,
             credencial_id,
+            ...(souAdmin ? { escopo } : {}),
           });
       setErro(null);
       onSalvo(salvo);
@@ -751,6 +762,13 @@ export function FormularioInstrumento({
   return (
     <div className="flex flex-col gap-3">
       {erro && <Aviso>{erro}</Aviso>}
+      {daOrganizacao && (
+        <Aviso variant="info" className="text-xs">
+          {bloqueado
+            ? "Este instrumento é da organização: só um administrador muda a configuração dele."
+            : "Este instrumento é da organização: o que você mudar aqui vale para todos os times que o usam."}
+        </Aviso>
+      )}
 
       <Label className="flex-col items-start gap-1">
         Nome
@@ -896,8 +914,27 @@ export function FormularioInstrumento({
         </p>
       )}
 
+      {souAdmin && (
+        <Label className="flex-col items-start gap-1">
+          Quem pode usar
+          <Select
+            value={escopo}
+            onChange={(e) => setEscopo(e.target.value as "time" | "organizacao")}
+          >
+            <option value="time">Só este time</option>
+            <option value="organizacao">Todos os times da organização</option>
+          </Select>
+          {escopo === "organizacao" && tipoSel === "enviar_telegram" && (
+            <span className="text-xs font-normal text-muted-foreground">
+              Um bot da organização só envia avisos e pedidos de aprovação — para conversar
+              com clientes, use um bot do time.
+            </span>
+          )}
+        </Label>
+      )}
+
       <div className="flex gap-2">
-        <Button onClick={salvar} disabled={salvando}>
+        <Button onClick={salvar} disabled={salvando || bloqueado}>
           {salvando ? "Salvando…" : "Salvar"}
         </Button>
         <Button variant="ghost" onClick={onCancelar} disabled={salvando}>

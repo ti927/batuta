@@ -155,6 +155,7 @@ próximo — foi exatamente o que aconteceu nas correções anteriores.
 | E7 | aprovador nunca responde | cutucada + despedida + estacionar/cancelar conforme o Tipo de fluxo | 🟢 | — (só vale quando há canal — ver E2) |
 | E8 | conversa assumida por uma pessoa de verdade | o pedido é enviado e a resposta é engolida | 🟡 | avisar na tela que aquele portão está com o canal surdo |
 | E9 | destinatário nunca deu `/start` no bot | o envio falha; o motivo aparece no rastro | 🟡 | detectar na hora de amarrar e avisar antes de o fluxo parar |
+| E11 | **duas execuções esperam a MESMA pessoa no MESMO bot** | até 29/09 a resposta era roteada pela conversa (bot + chat), que guarda uma execução: ia para a mais recente, a outra ficava órfã — ou recebia a aprovação dada à outra | 🟢 | **resolvido 2026-09-29**: `pedidos_aprovacao` (execução + código + id da mensagem); botões Aprovar/Recusar e "Responder" apontam o pedido; sem apontar só vale com UM aberto, senão o bot pergunta; pedido substituído não aprova a pergunta nova; turno de outro pedido rodando → "reenvie". Pré-requisito do bot da organização |
 | E10 | dois nós pedem aprovação na mesma onda (fan-out) | o segundo vira pendência e só é apresentado depois | 🟡 | documentar na tela; hoje parece que "sumiu" |
 
 ### F. A retomada

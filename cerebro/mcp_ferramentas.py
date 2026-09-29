@@ -262,6 +262,8 @@ def _instrumento_resumido(sessao, inst) -> dict:
         "segredos_preenchidos": sorted(segredos_instrumento.resumo(sessao, inst.id)),
         "credencial_id": str(inst.credencial_id) if inst.credencial_id else None,
         "acao_irreversivel": acao_irreversivel(inst.tipo, inst.configuracao or {}),
+        # "time" ou "organizacao" (todos os times encaixam; só admin configura).
+        "escopo": inst.escopo or "time",
     }
 
 
@@ -281,8 +283,11 @@ def listar_instrumentos(sessao, usuario, time_id) -> str:
     if tid is None:
         return f"Id de time inválido: {time_id}."
     time = mcp_escopo.time_acessivel(sessao, usuario, tid)
+    import escopo_instrumento
+
+    # Os do time e os da organização (que qualquer time encaixa).
     insts = sessao.scalars(
-        select(Instrumento).where(Instrumento.time_id == time.id).order_by(Instrumento.nome)
+        select(Instrumento).where(escopo_instrumento.filtro_visiveis(time)).order_by(Instrumento.nome)
     ).all()
     if not insts:
         return f"O time '{time.nome}' ainda não tem instrumentos."
@@ -302,6 +307,10 @@ def ver_instrumento(sessao, usuario, instrumento_id) -> str:
     dados = _instrumento_resumido(sessao, inst)
     time = sessao.get(Time, inst.time_id)
     dados["time"] = {"id": str(inst.time_id), "nome": time.nome if time else None}
+    import escopo_instrumento
+
+    # Quem depende dele (antes de excluir ou mudar a configuração, mostre ao consultor).
+    dados["usado_por"] = escopo_instrumento.usado_por(sessao, inst)
     # O que ainda falta para o instrumento funcionar (nenhuma das fontes cobre).
     dados["segredos_pendentes"] = segredos_instrumento.pendentes(
         inst.tipo,
@@ -474,14 +483,12 @@ def ver_uso(sessao, usuario, time_id) -> str:
         .join(Automacao, Automacao.id == Execucao.automacao_id)
         .where(Automacao.time_id == time.id)
     ).all()
-    mensagens = sessao.scalars(
-        select(MensagemConversa)
-        .join(Conversa, Conversa.id == MensagemConversa.conversa_id)
-        .join(Instrumento, Instrumento.id == Conversa.instrumento_id)
-        .where(Instrumento.time_id == time.id)
-    ).all()
-    resumo = precos.resumir_uso(passos=passos, mensagens=mensagens)
     import custos_time
+
+    # Fonte única com o resumo do time: inclui as respostas de aprovação deste time
+    # que passaram por um bot da organização.
+    mensagens = [linha[0] for linha in custos_time.mensagens_do_time(sessao, time.id)]
+    resumo = precos.resumir_uso(passos=passos, mensagens=mensagens)
 
     custos = custos_time.custos_do_time(sessao, time.id)
     return json.dumps(

@@ -133,8 +133,23 @@ def duplicar_time(
     # 2) Instrumentos → mapa {instrumento_velho → instrumento_novo}. Canais nascem
     #    desconectados (sem token/segredo/webhook/credencial).
     map_inst_obj: dict[uuid.UUID, Instrumento] = {}
+    # Instrumentos da ORGANIZAÇÃO usados pelo original (morem onde morarem): a cópia
+    # os REFERENCIA — mesmo id, nada copiado, a identificação feita uma vez vale.
+    import escopo_instrumento
+
+    for org_inst in sessao.scalars(
+        select(Instrumento)
+        .join(AgenteInstrumento, AgenteInstrumento.instrumento_id == Instrumento.id)
+        .join(Agente, Agente.id == AgenteInstrumento.agente_id)
+        .where(Agente.time_id == original.id, Instrumento.escopo == escopo_instrumento.ORGANIZACAO)
+        .distinct()
+    ):
+        map_inst_obj[org_inst.id] = org_inst
     for inst in sessao.scalars(
-        select(Instrumento).where(Instrumento.time_id == original.id)
+        select(Instrumento).where(
+            Instrumento.time_id == original.id,
+            Instrumento.escopo != escopo_instrumento.ORGANIZACAO,
+        )
     ):
         eh_canal = inst.tipo in CANAIS_TIPOS
         config = copy.deepcopy(inst.configuracao or {})
@@ -163,7 +178,9 @@ def duplicar_time(
         )
     )
     novo.instrumentos_a_conectar = sorted(
-        map_inst_obj[i].nome for i in com_segredo if map_inst_obj[i].tipo not in CANAIS_TIPOS
+        map_inst_obj[i].nome for i in com_segredo
+        if map_inst_obj[i].tipo not in CANAIS_TIPOS
+        and map_inst_obj[i].time_id == novo.id  # o da organização segue conectado
     )
 
     # 4) Cinto (N:N): recria cada ligação com os ids novos.
@@ -226,7 +243,8 @@ def duplicar_time(
     #     a cópia reprograma a si mesma, não o original (footgun do id stale, análogo ao
     #     canal que nasce sem token).
     for novo_i in map_inst_obj.values():
-        if novo_i.tipo != "agendar_automacao":
+        # O da organização é o MESMO objeto do original: nunca reescrever o dele.
+        if novo_i.tipo != "agendar_automacao" or novo_i.time_id != novo.id:
             continue
         alvo = (novo_i.configuracao or {}).get("automacao_alvo_id")
         if alvo and str(alvo) in map_auto_str:

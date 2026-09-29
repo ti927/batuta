@@ -7,6 +7,8 @@ num agente do mesmo time — é o que mantém o isolamento e a coerência.
 
 import uuid
 
+import escopo_instrumento
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -52,8 +54,8 @@ def vincular(
 ):
     agente = agente_acessivel(sessao, usuario, agente_id, minimo="operador")
     inst = sessao.get(Instrumento, dados.instrumento_id)
-    # O instrumento precisa existir e ser do mesmo time do agente.
-    if inst is None or inst.time_id != agente.time_id:
+    # O instrumento precisa existir e ser do time do agente — ou da organização dele.
+    if inst is None or not escopo_instrumento.visivel_para_o_time(sessao, inst, agente.time_id):
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, "Instrumento não encontrado neste time"
         )

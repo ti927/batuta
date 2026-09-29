@@ -2,8 +2,8 @@
 titulo: "Pedir aprovação e aguardar"
 area: "automacoes"
 slug: "pedir-aprovacao"
-tags: ["aprovacao", "aprovar", "esperar", "humano", "instrumento", "pausa", "confirmar"]
-revisado_em: "2026-09-21"
+tags: ["aprovacao", "aprovar", "esperar", "humano", "instrumento", "pausa", "confirmar", "botão aprovar", "recusar", "dois pedidos", "mesmo bot"]
+revisado_em: "2026-09-29"
 fontes: ["cerebro/instrumentos/pedir_aprovacao.py", "cerebro/mensageria/retoma.py", "cerebro/orquestracao/dono.py", "cerebro/orquestracao/espera.py", "PRODUTO.md §19", "docs/FALHAS-DO-MOTOR.md"]
 ---
 
@@ -142,6 +142,14 @@ de "continue esperando". Escrever no markdown que **declarar é a última coisa 
   é do fluxo e responde ao *Teto de custo por execução*. Sem essa separação, um carrossel
   de três imagens estourava sozinho o teto de uma conversa inteira na primeira
   reprovação.
+- **Botões Aprovar / Recusar, e cada resposta vai para o pedido certo.** Pelo Telegram, o pedido chega
+  com dois botões; tocar num deles responde **aquele** pedido. Também dá para responder em texto
+  **arrastando a mensagem do pedido** ("Responder"). Uma resposta solta vale para o pedido aberto
+  daquela pessoa — e, se houver **dois ou mais** abertos no mesmo bot, o bot pergunta qual, em vez de
+  adivinhar. Um botão de um pedido que já foi respondido (ou trocado por um mais novo da mesma
+  execução) não aprova a pergunta seguinte. Antes (até 29/09/2026) a resposta ia sempre para o pedido
+  mais recente daquele bot, e com dois esperando um deles ficava órfão — ou recebia a aprovação dada
+  ao outro.
 - **Uma porta de cada vez.** A mesma aprovação pode ser respondida na **tela** ou pelo
   **canal**, e as duas conversam com a mesma execução. Enquanto uma está processando, a
   outra é recusada com um aviso claro ("esta aprovação está sendo respondida pelo Telegram
@@ -161,7 +169,9 @@ de "continue esperando". Escrever no markdown que **declarar é a última coisa 
 
 ## Para a IA
 Tipo `pedir_aprovacao`. Config: `canal_instrumento_id` (id de um instrumento de
-mensageria do MESMO time; vazio = só pela tela). Args: `mensagem` — é o texto
+mensageria do time — ou da ORGANIZAÇÃO, que vários times compartilham; vazio = só pela tela).
+Vários times podem pedir aprovação pelo mesmo bot da organização: a resposta volta pela execução
+(botões e "Responder"), não pela conversa. Args: `mensagem` — é o texto
 apresentado, e é ele que segue adiante como "o aprovado".
 
 No motor, o instrumento tem `pausa_para_humano = True`: ao ser acionado com sucesso, o

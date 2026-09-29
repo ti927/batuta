@@ -221,14 +221,17 @@ def _snapshot_time(ctx: ContextoCriacao) -> dict:
         .where(Agente.time_id == time.id)
     ).all():
         cinto.setdefault(str(aid), []).append(str(iid))
+    import escopo_instrumento
+
+    # Os do time e os da ORGANIZAÇÃO (que qualquer time encaixa).
     instrumentos = sess.scalars(
-        select(Instrumento).where(Instrumento.time_id == time.id).order_by(Instrumento.criado_em)
+        select(Instrumento).where(escopo_instrumento.filtro_visiveis(time)).order_by(Instrumento.criado_em)
     ).all()
     guardados: dict[str, set[str]] = {}
     for iid, campo in sess.execute(
         select(SegredoInstrumento.instrumento_id, SegredoInstrumento.campo)
         .join(Instrumento, Instrumento.id == SegredoInstrumento.instrumento_id)
-        .where(Instrumento.time_id == time.id)
+        .where(escopo_instrumento.filtro_visiveis(time))
     ).all():
         guardados.setdefault(str(iid), set()).add(campo)
     # Cobertura de segredos pelas OUTRAS fontes além do inline: credenciais nomeadas

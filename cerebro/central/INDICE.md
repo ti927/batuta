@@ -51,7 +51,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Quando um passo dá erro | `automacoes/erros-no-fluxo` | Saída de erro, saída "se nenhuma", aviso da falha; `ok:false` de leitura × de ação irreversível; o teto de passos nomeia o nó em laço | ✅ | ✍️ |
 | A ficha da execução | `automacoes/ficha-da-execucao` | Os dados que atravessam o fluxo; `anotar`; regra exata na seta; "Para cada item" | ✅ | ✍️ |
 | Gatilhos | `automacoes/gatilhos` | Manual, agendamento, webhook, comentário do Instagram; a "entrada" ao 1º agente | ✅ | ✍️ |
-| Pedir aprovação e aguardar | `automacoes/pedir-aprovacao` | O instrumento que para o fluxo até uma pessoa responder; por tela e por canal; quem recebe é quem aprova; **o agente precisa declarar o caminho depois da decisão**; uma porta de cada vez (tela × canal); prazo da espera; converter time que pedia aprovação na mão | ✅ | ✍️ |
+| Pedir aprovação e aguardar | `automacoes/pedir-aprovacao` | O instrumento que para o fluxo até uma pessoa responder; por tela e por canal; quem recebe é quem aprova; **o agente precisa declarar o caminho depois da decisão**; uma porta de cada vez (tela × canal); botões Aprovar/Recusar e a resposta vai para o pedido certo (vários pedidos no mesmo bot); prazo da espera; converter time que pedia aprovação na mão | ✅ | ✍️ |
 | O passo Esperar | `automacoes/esperar` | Segura o fluxo por minutos/horas/dias e continua daqui, com a ficha intacta | ✅ | ✍️ |
 | O passo Chamar outra automação | `automacoes/chamar-automacao` | Roda outra automação inteira e ESPERA o resultado dela; a ficha vai e volta | ✅ | ✍️ |
 | Execuções e inspeção | `automacoes/execucoes-e-inspecao` | Ver o fluxo rodar; feedback ao vivo; diagnóstico; a tela diz quando a aprovação está sendo respondida pelo canal | ✅ | ✍️ |
@@ -60,6 +60,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Capítulo | slug | O que cobre | Recurso | Escrita |
 |---|---|---|---|---|
 | O cinto e os instrumentos | `instrumentos/cinto` | Conceito: encaixe, config × args, ação irreversível, segredos | ✅ | ✍️ |
+| Instrumento do time ou da organização | `instrumentos/escopo-do-instrumento` | "Quem pode usar": da organização (todos os times encaixam, identificação uma vez, só admin configura); Usado por; excluir/rebaixar bloqueado em uso; bot da organização só avisa e aprova | ✅ | ✍️ |
 | **Conteúdo & mídia** | | | | |
 | Gerar imagem | `instrumentos/gerar-imagem` | Texto→imagem; modelo/tamanho/qualidade; proporção | ✅ | ✍️ |
 | Montar imagem | `instrumentos/montar-imagem` | Composição a partir de fotos | ✅ | ✍️ |

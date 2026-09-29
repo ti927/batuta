@@ -137,9 +137,18 @@ def execucao_parada_do_contato(
     contato = (contato_chave or "").strip()
     if not contato:
         return None
-    auto_ids = sessao.scalars(
-        select(Automacao.id).where(Automacao.time_id == instrumento.time_id)
-    ).all()
+    import escopo_instrumento
+    from modelos import Time
+
+    if escopo_instrumento.da_organizacao(instrumento):
+        # Canal da organização: pode ter pedido de QUALQUER time dela.
+        casa = sessao.get(Time, instrumento.time_id)
+        times = select(Time.id).where(Time.organizacao_id == casa.organizacao_id) if casa else []
+        auto_ids = sessao.scalars(select(Automacao.id).where(Automacao.time_id.in_(times))).all()
+    else:
+        auto_ids = sessao.scalars(
+            select(Automacao.id).where(Automacao.time_id == instrumento.time_id)
+        ).all()
     if not auto_ids:
         return None
     execs = sessao.scalars(
@@ -162,7 +171,11 @@ def execucao_parada_do_contato(
 
 def _agente_atendente_id(sessao: Session, instrumento_id: uuid.UUID) -> uuid.UUID | None:
     """O agente que atende este canal (tem o instrumento no cinto), se houver — para
-    a conversa do aprovador voltar ao modo conversacional depois da aprovação."""
+    a conversa do aprovador voltar ao modo conversacional depois da aprovação.
+    Bot da ORGANIZAÇÃO não tem atendente: ele só envia avisos e pedidos de aprovação."""
+    inst = sessao.get(Instrumento, instrumento_id)
+    if inst is not None and (inst.escopo or "time") == "organizacao":
+        return None
     return sessao.scalars(
         select(Agente.id)
         .join(AgenteInstrumento, AgenteInstrumento.agente_id == Agente.id)
@@ -187,8 +200,11 @@ def vincular_pausa(sessao: Session, execucao: Execucao) -> None:
     auto = sessao.get(Automacao, execucao.automacao_id)
     if inst is None or inst.tipo not in CANAIS_TIPOS:
         return
-    if auto is not None and inst.time_id != auto.time_id:
-        return  # o canal precisa ser do mesmo time da automação
+    if auto is not None:
+        import escopo_instrumento
+
+        if not escopo_instrumento.visivel_para_o_time(sessao, inst, auto.time_id):
+            return  # o canal precisa ser do time da automação — ou da organização
     destinatario = _destino_efetivo(inst, cfg)
     if not destinatario:
         return  # sem destinatário não há como correlacionar a resposta

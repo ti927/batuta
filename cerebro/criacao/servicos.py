@@ -169,7 +169,7 @@ def _limpar_agente_das_cadeias(sessao: Session, time_id: uuid.UUID, agente_id: s
 
 def configurar_instrumento(
     sessao: Session, time: Time, *, nome: str, tipo: str, configuracao: dict | None = None,
-    usuario: Usuario | None = None,
+    usuario: Usuario | None = None, escopo: str = "time",
 ) -> tuple[Instrumento, list[str]]:
     """Cria um instrumento, separando os segredos (cifrados no cofre) da config
     pública. Devolve `(instrumento, segredos_pendentes)` — os pendentes são campos
@@ -181,7 +181,9 @@ def configurar_instrumento(
         )
     except ValueError as e:
         raise ConflitoDominio(str(e))
-    inst = Instrumento(time_id=time.id, nome=nome, tipo=tipo, configuracao=config_publica)
+    inst = Instrumento(
+        time_id=time.id, nome=nome, tipo=tipo, configuracao=config_publica, escopo=escopo
+    )
     sessao.add(inst)
     sessao.flush()
     if segredos_novos:
@@ -223,8 +225,10 @@ def editar_instrumento(
 # ─────────────────────────────── Cinto ──────────────────────────────
 
 def encaixar(sessao: Session, agente: Agente, instrumento: Instrumento) -> None:
-    if instrumento.time_id != agente.time_id:
-        raise ConflitoDominio("O instrumento é de outro time.")
+    import escopo_instrumento
+
+    if not escopo_instrumento.visivel_para_o_time(sessao, instrumento, agente.time_id):
+        raise ConflitoDominio("O instrumento é de outro time (e não é da organização).")
     if sessao.get(AgenteInstrumento, (agente.id, instrumento.id)) is not None:
         return  # idempotente: já está no cinto
     sessao.add(AgenteInstrumento(agente_id=agente.id, instrumento_id=instrumento.id))

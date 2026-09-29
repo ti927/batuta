@@ -315,8 +315,9 @@ async def listar_tipos_instrumento() -> str:
 
 @mcp.tool()
 async def listar_instrumentos(time_id: str) -> str:
-    """Lista os instrumentos JÁ CRIADOS num time — id, nome, tipo, configuração pública,
-    quais segredos estão preenchidos e se a ação é irreversível. Use para saber o que
+    """Lista os instrumentos que um time pode usar — os DELE e os da ORGANIZAÇÃO (campo
+    `escopo`) — com id, nome, tipo, configuração pública, quais segredos estão
+    preenchidos e se a ação é irreversível. Use para saber o que
     cada id do `cinto` de um agente é, e para conferir um instrumento feito pela tela.
     (Diferente de `listar_tipos_instrumento`, que mostra o catálogo do que dá para criar.)"""
     return await anyio.to_thread.run_sync(mcp_ferramentas.listar_instrumentos, _sub(), time_id)
@@ -325,8 +326,9 @@ async def listar_instrumentos(time_id: str) -> str:
 @mcp.tool()
 async def ver_instrumento(instrumento_id: str) -> str:
     """Mostra um instrumento a fundo: configuração pública, credencial apontada, segredos
-    preenchidos e os que ainda FALTAM para ele funcionar. Nunca devolve o valor de um
-    segredo."""
+    preenchidos e os que ainda FALTAM para ele funcionar, o `escopo` (time ou
+    organização) e `usado_por` (times, agentes, automações e pedidos de aprovação que
+    dependem dele). Nunca devolve o valor de um segredo."""
     return await anyio.to_thread.run_sync(
         mcp_ferramentas.ver_instrumento, _sub(), instrumento_id
     )
@@ -449,7 +451,8 @@ async def remover_agente(agente_id: str) -> str:
 
 @mcp.tool()
 async def configurar_instrumento(
-    time_id: str, nome: str, tipo: str, configuracao: dict | None = None
+    time_id: str, nome: str, tipo: str, configuracao: dict | None = None,
+    escopo: str = "time",
 ) -> str:
     """Cria um instrumento (uma ferramenta do cinto) de um `tipo` do catálogo (veja
     `listar_tipos_instrumento` para os tipos e campos). Os campos secretos NÃO são
@@ -471,21 +474,32 @@ async def configurar_instrumento(
     `irreversivel` (altera algo lá fora?) decidido por você — a sugestão do servidor não é
     garantia. `irreversivel` NÃO faz a ferramenta parar para aprovação: quem pede aprovação
     é sempre o agente, com `pedir_aprovacao` no cinto e a regra no markdown.
-    Em dúvida, `consultar_conhecimento` 'mcp'."""
+    Em dúvida, `consultar_conhecimento` 'mcp'.
+    ESCOPO: 'time' (padrão) ou 'organizacao' — o instrumento da organização aparece para
+    TODOS os times dela e vai para o cinto de qualquer agente; a identificação é feita uma
+    vez e serve a todos. Só admin cria. Use para o que é da empresa inteira (o WordPress
+    do site, um bot só de avisos e aprovações); o que é de um fluxo só, deixe 'time'. Bot
+    de Telegram da organização NÃO atende conversa — só envia e recebe aprovação.
+    Em dúvida, `consultar_conhecimento` 'escopo do instrumento'."""
     return await anyio.to_thread.run_sync(
-        escrita.configurar_instrumento, _sub(), time_id, nome, tipo, configuracao
+        escrita.configurar_instrumento, _sub(), time_id, nome, tipo, configuracao, escopo
     )
 
 
 @mcp.tool()
 async def editar_instrumento(
-    instrumento_id: str, nome: str | None = None, configuracao: dict | None = None
+    instrumento_id: str, nome: str | None = None, configuracao: dict | None = None,
+    escopo: str | None = None,
 ) -> str:
-    """Edita o nome e/ou a configuração pública de um instrumento (o tipo não muda). A
-    `configuracao` passada SUBSTITUI a pública atual — leia com `ver_instrumento` e mande
-    completa. Segredos vindos aqui são ignorados (o consultor cola na tela)."""
+    """Edita o nome, a configuração pública e/ou o ESCOPO de um instrumento (o tipo não
+    muda). A `configuracao` passada SUBSTITUI a pública atual — leia com `ver_instrumento`
+    e mande completa. Segredos vindos aqui são ignorados (o consultor cola na tela).
+    `escopo`: 'organizacao' promove (todos os times encaixam), 'time' rebaixa — só admin,
+    e rebaixar é recusado enquanto outro time o usa. Instrumento da organização: mudar a
+    configuração afeta TODOS os times que o usam — veja `usado_por` em `ver_instrumento`
+    e avise o consultor antes."""
     return await anyio.to_thread.run_sync(
-        escrita.editar_instrumento, _sub(), instrumento_id, nome, configuracao
+        escrita.editar_instrumento, _sub(), instrumento_id, nome, configuracao, escopo
     )
 
 
@@ -571,7 +585,8 @@ async def testar_instrumento(instrumento_id: str, argumentos: dict | None = None
 
 @mcp.tool()
 async def encaixar_instrumento(agente_id: str, instrumento_id: str) -> str:
-    """Pendura um instrumento no cinto de um agente (ambos do mesmo time)."""
+    """Pendura um instrumento no cinto de um agente: um do time do agente, ou um da
+    ORGANIZAÇÃO dele (escopo 'organizacao' — operador pode encaixar)."""
     return await anyio.to_thread.run_sync(
         escrita.encaixar_instrumento, _sub(), agente_id, instrumento_id
     )
@@ -787,7 +802,9 @@ async def excluir_automacao(automacao_id: str) -> str:
 
 @mcp.tool()
 async def excluir_instrumento(instrumento_id: str) -> str:
-    """EXCLUI um instrumento. AÇÃO IRREVERSÍVEL. Exige ser admin. Confirme antes."""
+    """EXCLUI um instrumento. AÇÃO IRREVERSÍVEL. Exige ser admin. Confirme antes. É
+    recusado enquanto algum agente ou pedido de aprovação o usa (veja `usado_por` em
+    `ver_instrumento`)."""
     return await anyio.to_thread.run_sync(escrita.excluir_instrumento, _sub(), instrumento_id)
 
 

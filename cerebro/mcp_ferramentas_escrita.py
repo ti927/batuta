@@ -184,17 +184,24 @@ def _aviso_ignorados(ignorados: list[str]) -> str:
 
 
 @_ferramenta_escrita
-def configurar_instrumento(sessao, usuario, time_id, nome, tipo, configuracao) -> str:
+def configurar_instrumento(sessao, usuario, time_id, nome, tipo, configuracao, escopo="time") -> str:
     tid = _uuid(time_id)
     if tid is None:
         return f"Id de time inválido: {time_id}."
     nome = (nome or "").strip()
     if not nome or not tipo:
         return "Instrumento precisa de nome e tipo (veja os tipos em listar_tipos_instrumento)."
-    time = mcp_escopo.time_acessivel(sessao, usuario, tid, "operador")
+    escopo = (escopo or "time").strip()
+    if escopo not in ("time", "organizacao"):
+        return "escopo deve ser 'time' ou 'organizacao'."
+    # Da organização: vale para todos os times — só admin cria.
+    time = mcp_escopo.time_acessivel(
+        sessao, usuario, tid, "admin" if escopo == "organizacao" else "operador"
+    )
     configuracao, ignorados = _sem_segredos(tipo, configuracao)
     inst, pendentes = servicos.configurar_instrumento(
-        sessao, time, nome=nome, tipo=tipo, configuracao=configuracao, usuario=usuario
+        sessao, time, nome=nome, tipo=tipo, configuracao=configuracao, usuario=usuario,
+        escopo=escopo,
     )
     return json.dumps(
         {
@@ -212,18 +219,45 @@ def configurar_instrumento(sessao, usuario, time_id, nome, tipo, configuracao) -
 
 
 @_ferramenta_escrita
-def editar_instrumento(sessao, usuario, instrumento_id, nome, configuracao) -> str:
+def editar_instrumento(sessao, usuario, instrumento_id, nome, configuracao, escopo=None) -> str:
+    import escopo_instrumento
+
     iid = _uuid(instrumento_id)
     if iid is None:
         return f"Id de instrumento inválido: {instrumento_id}."
     inst = mcp_escopo.instrumento_acessivel(sessao, usuario, iid, "operador")
+    muda_escopo = escopo is not None and escopo != inst.escopo
+    if muda_escopo and escopo not in ("time", "organizacao"):
+        return "escopo deve ser 'time' ou 'organizacao'."
+    if escopo_instrumento.da_organizacao(inst) or muda_escopo:
+        # Configuração e escopo de instrumento da organização: só admin.
+        inst = mcp_escopo.instrumento_acessivel(sessao, usuario, iid, "admin")
+    if muda_escopo and escopo == "time":
+        outros = escopo_instrumento.outros_times(
+            escopo_instrumento.usado_por(sessao, inst), inst.time_id
+        )
+        if outros:
+            return (
+                "Não mudei: este instrumento é usado por " + ", ".join(outros)
+                + ". Tire-o do cinto desses agentes antes de deixá-lo só do time."
+            )
     ignorados: list[str] = []
     if configuracao is not None:
         configuracao, ignorados = _sem_segredos(inst.tipo, configuracao)
     campos = _campos(nome=(nome or None), configuracao=configuracao)
-    if not campos:
-        return "Nada para mudar — passe um novo nome e/ou configuração."
-    servicos.editar_instrumento(sessao, inst, usuario=usuario, **campos)
+    if not campos and not muda_escopo:
+        return "Nada para mudar — passe um novo nome, configuração e/ou escopo."
+    if campos:
+        servicos.editar_instrumento(sessao, inst, usuario=usuario, **campos)
+    if muda_escopo:
+        auditoria.registrar(
+            sessao, usuario=usuario, acao="instrumento.escopo_alterado",
+            recurso_tipo="instrumento", recurso_id=inst.id,
+            organizacao_id=auditoria.org_do_time(sessao, inst.time_id),
+            detalhe={"de": inst.escopo, "para": escopo, "origem": "mcp"},
+        )
+        inst.escopo = escopo
+        sessao.flush()
     return f"Instrumento '{inst.nome}' atualizado." + _aviso_ignorados(ignorados)
 
 
@@ -706,6 +740,9 @@ def excluir_time(sessao, usuario, time_id) -> str:
     if tid is None:
         return f"Id de time inválido: {time_id}."
     time = mcp_escopo.time_acessivel(sessao, usuario, tid, "admin")
+    import escopo_instrumento
+
+    escopo_instrumento.rehospedar_antes_de_excluir_time(sessao, time)
     nome = time.nome
     auditoria.registrar(
         sessao, usuario=usuario, acao="time.removido", recurso_tipo="time",
@@ -740,6 +777,15 @@ def excluir_instrumento(sessao, usuario, instrumento_id) -> str:
     if iid is None:
         return f"Id de instrumento inválido: {instrumento_id}."
     inst = mcp_escopo.instrumento_acessivel(sessao, usuario, iid, "admin")
+    import escopo_instrumento
+
+    uso = escopo_instrumento.usado_por(sessao, inst)
+    if escopo_instrumento.em_uso(uso):
+        return (
+            f"Não excluí: '{inst.nome}' está em uso por "
+            + escopo_instrumento.resumo_do_uso(uso)
+            + ". Tire-o do cinto (desencaixar_instrumento) antes — e confirme com o consultor."
+        )
     nome = inst.nome
     auditoria.registrar(
         sessao, usuario=usuario, acao="instrumento.removido", recurso_tipo="instrumento",
