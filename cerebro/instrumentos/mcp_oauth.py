@@ -11,8 +11,12 @@ Segue a especificação de autorização do MCP:
      client_id É a URL pública do documento do Batuta (`/mcp/oauth/cliente.json`),
      que precisa ser HTTPS — em ambiente local cai para o registro dinâmico;
    - registro dinâmico (RFC 7591) no `registration_endpoint`.
-3. **Login** com PKCE (S256) e o parâmetro `resource` (RFC 8707). O `code_verifier`
-   viaja DENTRO do `state` cifrado (com prazo): não fica guardado em lugar nenhum.
+3. **Login** com PKCE (S256) e o parâmetro `resource` (RFC 8707). O `state` é CURTO
+   (`<id do instrumento>.<código aleatório>`): a primeira versão levava tudo cifrado
+   dentro dele (~340 caracteres) e o WordPress recusou com "Invalid or expired state" —
+   plugins guardam o state em registros com limite de tamanho. O `code_verifier` fica
+   cifrado no próprio instrumento (`conexao.oauth.pendente`), vale 10 minutos e só uma
+   vez.
 4. **Renovação** antes de vencer, com TRAVA POR INSTRUMENTO (advisory lock do
    Postgres): duas execuções ao mesmo tempo não renovam juntas. Isso importa porque
    muitos servidores GIRAM o refresh token — quem renovasse em segundo lugar usaria um
@@ -272,7 +276,8 @@ def iniciar_login(inst, config, segredos: dict, usuario_id) -> tuple[str, dict, 
         )
 
     verificador, desafio = _pkce()
-    state = cofre.cifrar(json.dumps({"i": str(inst.id), "u": str(usuario_id), "v": verificador}))
+    codigo_aleatorio = secrets.token_urlsafe(24)
+    state = f"{uuid_hex(inst.id)}.{codigo_aleatorio}"
     params = {
         "response_type": "code",
         "client_id": client_id,
@@ -292,20 +297,58 @@ def iniciar_login(inst, config, segredos: dict, usuario_id) -> tuple[str, dict, 
         "escopo": escopo,
         "metodo": metodo,
         "registro": registro,
+        # O login em andamento: quem pediu e o verificador do PKCE (cifrado). Uso único.
+        "pendente": {
+            "codigo": hashlib.sha256(codigo_aleatorio.encode()).hexdigest(),
+            "verificador": cofre.cifrar(verificador),
+            "usuario": str(usuario_id),
+            "criado_em": datetime.now(timezone.utc).isoformat(),
+        },
     }
     return d.url_autorizacao + separador + urlencode(params), oauth, novos
 
 
-def ler_state(state: str) -> dict:
-    import cofre
+def uuid_hex(valor) -> str:
+    import uuid as _uuid
+
+    return valor.hex if isinstance(valor, _uuid.UUID) else _uuid.UUID(str(valor)).hex
+
+
+def _state_invalido() -> FalhaInstrumento:
+    return _falha(
+        "o pedido de login expirou ou não é válido. Clique em “Conectar” de novo.",
+        "mcp.oauth_state_invalido",
+    )
+
+
+def instrumento_do_state(state: str):
+    """O id do instrumento que está no começo do `state`."""
+    import uuid as _uuid
 
     try:
-        return json.loads(cofre.decifrar_temporario(state, TTL_STATE_S))
-    except Exception:  # noqa: BLE001
-        raise _falha(
-            "o pedido de login expirou ou não é válido. Clique em “Conectar” de novo.",
-            "mcp.oauth_state_invalido",
-        )
+        return _uuid.UUID(hex=(state or "").split(".", 1)[0])
+    except ValueError:
+        raise _state_invalido()
+
+
+def conferir_state(state: str, oauth: dict) -> tuple[str, str]:
+    """Confere o `state` contra o login pendente do instrumento. Devolve (usuario_id,
+    verificador). Levanta se não bate, se passou de 10 minutos ou se já foi usado."""
+    import cofre
+
+    pendente = (oauth or {}).get("pendente") or {}
+    codigo = (state or "").split(".", 1)[1] if "." in (state or "") else ""
+    if not pendente or not codigo:
+        raise _state_invalido()
+    if not secrets.compare_digest(hashlib.sha256(codigo.encode()).hexdigest(), pendente.get("codigo", "")):
+        raise _state_invalido()
+    try:
+        criado = datetime.fromisoformat(pendente["criado_em"])
+    except (KeyError, ValueError):
+        raise _state_invalido()
+    if datetime.now(timezone.utc) - criado > timedelta(seconds=TTL_STATE_S):
+        raise _state_invalido()
+    return pendente["usuario"], cofre.decifrar(pendente["verificador"])
 
 
 # ───────────────────────────── chamadas ao endpoint de token ─────────────────────

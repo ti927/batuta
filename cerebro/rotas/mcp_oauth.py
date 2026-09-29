@@ -5,7 +5,7 @@ Três pontas:
   registra o Batuta como cliente (CIMD ou registro dinâmico) e devolve `{url}`. A tela
   abre essa URL num pop-up (ou na página inteira, se o pop-up for bloqueado).
 - GET /mcp/oauth/callback (PÚBLICA — quem chama é o navegador na volta do login):
-  valida o `state` cifrado, confere de novo o papel de quem pediu, troca o código por
+  valida o `state` (curto; o login pendente mora no instrumento), confere de novo o papel de quem pediu, troca o código por
   tokens, guarda no cofre do instrumento e devolve uma página mínima que avisa a tela
   (postMessage) e se fecha — ou redireciona para a tela, se não houver quem avisar.
 - GET /mcp/oauth/cliente.json (PÚBLICA): o documento do Batuta como cliente OAuth
@@ -109,15 +109,27 @@ def callback(
     sessao: Session = Depends(obter_sessao),
 ):
     try:
-        dados = mcp_oauth.ler_state(state or "")
+        inst = sessao.get(Instrumento, mcp_oauth.instrumento_do_state(state or ""))
     except FalhaInstrumento as e:
         return _pagina(False, str(e), None, None, "state")
-    inst = sessao.get(Instrumento, uuid.UUID(dados["i"]))
-    usuario = sessao.get(Usuario, uuid.UUID(dados["u"]))
-    if inst is None or usuario is None:
+    if inst is None:
         return _pagina(False, "Instrumento não encontrado.", None, None, "instrumento")
     time = sessao.get(Time, inst.time_id)
     inst_id, time_id = str(inst.id), str(inst.time_id)
+    conexao = dict(inst.conexao or {})
+    oauth = dict(conexao.get("oauth") or {})
+    try:
+        usuario_id, verificador = mcp_oauth.conferir_state(state or "", oauth)
+    except FalhaInstrumento as e:
+        return _pagina(False, str(e), inst_id, time_id, "state")
+    # Uso único: a partir daqui o login pendente some, dê certo ou não.
+    oauth.pop("pendente", None)
+    conexao["oauth"] = oauth
+    inst.conexao = conexao
+    sessao.commit()
+    usuario = sessao.get(Usuario, uuid.UUID(usuario_id))
+    if usuario is None:
+        return _pagina(False, "Quem pediu o login não existe mais.", inst_id, time_id, "usuario")
     try:
         # Quem pediu ainda pode mexer neste instrumento? (o papel pode ter mudado)
         exigir_papel(sessao, usuario, time.organizacao_id, "operador")
@@ -129,12 +141,10 @@ def callback(
         return _pagina(False, "O login não foi concluído"
                        + (f" ({error_description[:120]})." if error_description else "."),
                        inst_id, time_id, motivo)
-    conexao = dict(inst.conexao or {})
-    oauth = dict(conexao.get("oauth") or {})
     cofre_inst = segredos.decifrar(sessao, inst.id)
     client_secret = cofre_inst.get(mcp_oauth.CAMPO_CLIENT_SECRET) or cofre_inst.get("auth_segredo") or ""
     try:
-        novos, oauth_novo = mcp_oauth.trocar_codigo(oauth, code, dados["v"], client_secret)
+        novos, oauth_novo = mcp_oauth.trocar_codigo(oauth, code, verificador, client_secret)
     except (FalhaInstrumento, KeyError) as e:
         conexao["oauth"] = {**oauth, "estado": "precisa_conectar", "motivo": str(e)[:200]}
         inst.conexao = conexao

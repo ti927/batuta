@@ -75,7 +75,10 @@ def test_inicio_com_registro_dinamico_e_pkce(oauth, monkeypatch):
     assert p["code_challenge_method"] == "S256" and len(p["code_challenge"]) >= 43
     assert p["resource"] == oauth.url_mcp and p["scope"] == "mcp"
     assert p["redirect_uri"] == "http://localhost:8000/mcp/oauth/callback"
-    assert "code_verifier" not in url  # o verificador só viaja cifrado no state
+    assert "code_verifier" not in url  # o verificador fica cifrado no instrumento
+    # CURTO: o WordPress recusou o state de ~340 caracteres ("Invalid or expired state").
+    assert len(p["state"]) < 80
+    assert dados["pendente"]["verificador"] and dados["pendente"]["codigo"]
     assert novos == {}
 
 
@@ -348,3 +351,29 @@ def test_diagnostico_manda_conectar_de_novo():
     avisos: list = []
     diag._verificar_erros_instrumentos(None, [passo], avisos)
     assert "Conectar" in avisos[0]["detalhe"]
+
+
+def test_state_de_uso_unico_e_com_prazo(oauth, cliente, entrar, dados, sessao):
+    inst = _criar_inst(sessao, dados["timeA"].id, {"auth_modo": "oauth_login"}, {"url": oauth.url_mcp})
+    entrar(dados["operador"])
+    url = cliente.post(f"/instrumentos/{inst.id}/mcp/oauth/iniciar").json()["url"]
+    volta = httpx.get(url, follow_redirects=False).headers["location"]
+    q = {k: v[0] for k, v in parse_qs(urlparse(volta).query).items()}
+    primeira = cliente.get("/mcp/oauth/callback", params={"code": q["code"], "state": q["state"]})
+    assert "Conta conectada" in primeira.text
+    # A mesma volta de novo (ex.: alguém reenviando o endereço) é recusada.
+    repetida = cliente.get("/mcp/oauth/callback", params={"code": q["code"], "state": q["state"]})
+    assert "expirou" in repetida.text and '"ok": false' in repetida.text
+    # Um login pedido há mais de 10 minutos também.
+    url = cliente.post(f"/instrumentos/{inst.id}/mcp/oauth/iniciar").json()["url"]
+    state = parse_qs(urlparse(url).query)["state"][0]
+    sessao.refresh(inst)
+    conexao = dict(inst.conexao)
+    conexao["oauth"] = {**conexao["oauth"], "pendente": {
+        **conexao["oauth"]["pendente"],
+        "criado_em": (datetime.now(timezone.utc) - timedelta(minutes=11)).isoformat(),
+    }}
+    inst.conexao = conexao
+    sessao.flush()
+    velha = cliente.get("/mcp/oauth/callback", params={"code": "x", "state": state})
+    assert "expirou" in velha.text
