@@ -560,14 +560,14 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
           corta MUITO custo em buscas que voltam listas. Vazio = resposta inteira.
         - `custo_por_chamada_usd`: se a API COBRA por chamada (ex.: Gemini), o valor em
           US$ — sem isso o custo dela não aparece no custo do time. 0 = gratuita.
-        - Operação que ESCREVE (POST/PUT/PATCH/DELETE) para e pede aprovação — POR
-          OPERAÇÃO, não pelo conector inteiro: as de leitura correm livres ao lado.
-          Não há portão no desenho: dê ao agente o instrumento `pedir_aprovacao` e
-          escreva no skill_md dele que confirma com uma pessoa antes de escrever fora.
+        - Operação que ESCREVE (POST/PUT/PATCH/DELETE) NÃO para sozinha: a aprovação
+          é sempre do AGENTE. Dê a ele o instrumento `pedir_aprovacao` e escreva no
+          skill_md que confirma com uma pessoa antes de escrever fora. (Escrita que
+          FALHA faz o passo parar; leitura que falha deixa o agente seguir.)
         - NEM TODO POST ESCREVE. Há API que CONSULTA por POST porque o filtro não cabe
           na URL (o `searchAnalytics/query` do Google Search Console é assim). Aí marque
-          `"somente_leitura": true` NAQUELA operação — sem isso, cada consulta pararia
-          para pedir aprovação e o instrumento fica inutilizável. Só marque quando tiver
+          `"somente_leitura": true` NAQUELA operação — sem isso, uma falha na consulta
+          derruba o passo como se fosse uma escrita. Só marque quando tiver
           certeza de que a chamada não muda nada lá fora.
         - APIs DO GOOGLE: use `auth_tipo: "google_conta_servico"` (NÃO `oauth2`). É
           identidade de máquina: sem tela de consentimento, sem app verificado, sem

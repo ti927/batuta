@@ -362,7 +362,7 @@ function CampoConfigInput({
       </div>
     );
   } else if (campo.ui === "ferramentas_mcp") {
-    // Quais ferramentas de um servidor MCP entram no cinto, e quais pedem aprovação.
+    // Quais ferramentas de um servidor MCP entram no cinto, e quais alteram algo lá fora.
     // O formulário genérico desenharia este `array` como uma caixa pedindo JSON — o
     // que é a mesma coisa que não ter escolha nenhuma.
     entrada = (

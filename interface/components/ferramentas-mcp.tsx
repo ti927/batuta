@@ -7,9 +7,12 @@
 // agente, e por isso nunca foi usado: o cinto entope, o custo por passo sobe e o agente
 // escolhe errado. Aqui a pessoa marca quais entram.
 //
-// E marca também o que cada uma é: **só lê** ou **pede aprovação**. Nasce pedindo,
+// E marca também o que cada uma é: **só lê** ou **altera algo**. Nasce "altera algo",
 // porque o servidor é de terceiro e o Batuta não tem como saber o que cada ferramenta
-// faz — liberar é ato consciente, por ferramenta, nunca no atacado.
+// faz. A marcação NÃO faz ninguém aprovar antes (decisão do maestro, 2026-09-29: a
+// trava é sempre do agente, com "Pedir aprovação"). O que ela muda: uma ferramenta que
+// altera algo e falha faz o passo parar e mostrar a falha, em vez de o agente seguir
+// como se tivesse dado certo.
 //
 // O campo no formulário é um `array` de objetos; sem esta tela ele viraria uma caixa de
 // texto pedindo JSON, o que é a mesma coisa que não ter escolha nenhuma.
@@ -132,7 +135,7 @@ export function SeletorFerramentasMCP({
   }
 
   // Ao MARCAR uma ferramenta que o servidor diz que só lê, a escolha já vem em "só
-  // lê"; nas demais, em "pede aprovação". A pessoa pode trocar — é pré-marcação.
+  // lê"; nas demais, em "altera algo". A pessoa pode trocar — é pré-marcação.
   function marcar(f: DoServidor, usar: boolean) {
     const atual = escolhidas.find((x) => x.nome === f.nome);
     if (usar && !atual?.usar) {
@@ -287,7 +290,7 @@ export function SeletorFerramentasMCP({
                       }
                     >
                       <ShieldAlert className="size-3" />
-                      pede aprovação
+                      altera algo
                     </button>
                   </div>
                 )}
@@ -321,10 +324,9 @@ export function SeletorFerramentasMCP({
       )}
 
       <p className="text-[11px] leading-snug text-muted-foreground">
-        Uma ferramenta marcada como <strong>pede aprovação</strong> para a execução e
-        espera uma pessoa antes de rodar. Só marque <strong>só lê</strong> quando tiver
-        certeza de que ela não muda nada lá fora — o Batuta não tem como conferir isso
-        por você.
+        Marque <strong>altera algo</strong> em toda ferramenta que publica, envia, grava ou
+        apaga: se ela falhar, o passo para e mostra o erro. Isto não faz ninguém aprovar
+        antes — para isso, ponha <strong>Pedir aprovação</strong> no cinto do agente.
       </p>
     </div>
   );

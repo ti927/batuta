@@ -465,7 +465,9 @@ async def configurar_instrumento(
     consultor. Deixe `transport` em 'automatico'. Depois que o consultor colar,
     `testar_instrumento` lista as ferramentas do servidor (com a sugestão 'so_le'/'altera'
     que o servidor declara); marque em `ferramentas` só as necessárias, cada uma com
-    `irreversivel` decidido por você — a sugestão do servidor não é garantia.
+    `irreversivel` (altera algo lá fora?) decidido por você — a sugestão do servidor não é
+    garantia. `irreversivel` NÃO faz a ferramenta parar para aprovação: quem pede aprovação
+    é sempre o agente, com `pedir_aprovacao` no cinto e a regra no markdown.
     Em dúvida, `consultar_conhecimento` 'mcp'."""
     return await anyio.to_thread.run_sync(
         escrita.configurar_instrumento, _sub(), time_id, nome, tipo, configuracao
@@ -504,8 +506,9 @@ async def montar_conector(
     consentimento, sem app verificado, sem expirar; o segredo é o JSON da chave e o
     consultor precisa dar acesso ao E-MAIL da conta de serviço no serviço de destino.
     NEM TODO POST ESCREVE: API que consulta por POST (o searchAnalytics/query do Search
-    Console) leva `somente_leitura: true` NAQUELA operação, senão cada consulta para e
-    pede aprovação. A aprovação é por OPERAÇÃO, não pelo conector inteiro.
+    Console) leva `somente_leitura: true` NAQUELA operação (conta como leitura: se falhar,
+    o agente segue). Nenhuma operação para sozinha para aprovação: quem pede aprovação é
+    SEMPRE o agente, com `pedir_aprovacao` no cinto e a regra no markdown dele.
     No destino 'corpo', texto começando com [ ou { (JSON válido) e true/false/null viram
     lista/objeto/booleano; número NÃO converte (ids viram outra coisa).
     Em dúvida do formato (sobretudo Bubble), chame consultar_conhecimento 'construir

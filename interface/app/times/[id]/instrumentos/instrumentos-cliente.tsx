@@ -96,7 +96,7 @@ export function InstrumentosCliente({
                     </span>
                     {inst.acao_irreversivel && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-[#FDF1E3] px-2 py-0.5 text-xs text-[#A05E16]">
-                        <ShieldCheck className="size-3" /> exige aprovação
+                        <ShieldCheck className="size-3" /> altera algo
                       </span>
                     )}
                   </span>

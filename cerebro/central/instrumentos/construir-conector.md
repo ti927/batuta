@@ -151,10 +151,11 @@ Se a API que o conector chama **cobra por chamada** (o Gemini, por exemplo), inf
 time: o Batuta não tem como saber o preço de uma API qualquer. Vazio ou `0` = gratuita.
 
 ## Limites e cuidados
-- **Escrita pede aprovação — por OPERAÇÃO, não pelo conector inteiro.** O método é o sinal
-  (GET lê; POST/PUT/PATCH/DELETE escrevem), e cada operação que escreve para e pede aprovação; as de
-  leitura correm livres no mesmo instrumento. Para alguém confirmar antes, dê ao agente o instrumento
-  **Pedir aprovação e aguardar** e escreva a regra no markdown dele.
+- **Nenhuma operação para sozinha para aprovação.** Quem pede aprovação é sempre o **agente**: dê a
+  ele o instrumento **Pedir aprovação e aguardar** e escreva a regra no markdown dele. O método só diz
+  o que é escrita (GET lê; POST/PUT/PATCH/DELETE escrevem), e isso muda o que acontece numa falha:
+  escrita que falha faz o passo parar e mostrar o erro; leitura que falha deixa o agente seguir sem o
+  resultado.
 - **Nem todo POST escreve.** Há API que CONSULTA por POST porque o filtro não cabe na URL — o
   `searchAnalytics/query` do Google Search Console é exatamente isso. Nesses casos marque
   `somente_leitura: true` na operação: sem isso, **cada consulta** pararia para pedir aprovação e o

@@ -2675,3 +2675,14 @@ Pedido do maestro: *"a Anthropic liberou ontem o Sonnet 5.5; precisamos da opç�
 - **Padrão da IA criadora segue Sonnet 5** até validar o 5.5 num agente real (decisão do maestro).
 
 **Em aberto:** a prova ao vivo — não há credencial Anthropic na máquina local (as chaves ficam no cofre de produção). Um agente de teste no Sonnet 5.5, com ferramenta e conversa longa, confirma; depois disso, tirar o "em validação" dos textos.
+
+## FASE — MCP: a identificação dentro do instrumento (Fase 1 de 6)  ✅ NO AR (2026-09-29, `d8d8493` + `951287a`, migração `cnx00conexao001`)
+Plano das 6 fases: `C:\Users\Julio\.claude\plans\polymorphic-hugging-crystal.md` e memória `project_mcp-auth-e-escopo-instrumento`.
+- Modos no próprio instrumento MCP: nenhuma, chave no endereço, token, cabeçalho próprio, parâmetro, usuário e senha, mais cabeçalhos extras protegidos. O antigo sem modo segue como estava.
+- Transporte "automático" (HTTP → SSE); "Conectar e listar" guarda o estado em `instrumentos.conexao` (protocolo, servidor, transporte, falha com código).
+- Erros `mcp.*` sem segredo: a mensagem da biblioteca trazia a URL inteira, que no Zapier/Make É a chave.
+- Diagnóstico: "o agente rodou sem o instrumento".
+- MCP do Batuta ignora segredo vindo da IA (antes quebrava).
+- **Prova ao vivo:** WordPress da Lure em usuário e senha (`claude.ia`, `/wp-json/mcp/mcp-adapter-default-server`) listou e leu 3 posts (`ewpa/get-posts`); Zapier antigo (Bearer via credencial) conectou.
+- **Achado:** "pede aprovação" por ferramenta MCP nunca parou nada (o portão morreu em 31/08, a marcação entrou em 21/09). Decisão do maestro: **a trava é sempre do agente**. A marcação virou "só lê / altera algo" (muda só a política de falha) e todos os textos que prometiam parada foram corrigidos (tela, Construtor, Central, criadora, MCP).
+- Próximas: Fase 2 (OAuth), 3 (mTLS + docs), 4 (escopo org/time), 5 (inventário), 6 (migração).

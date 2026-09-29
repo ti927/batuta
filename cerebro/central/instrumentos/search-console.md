@@ -47,8 +47,8 @@ caiu. É só leitura — bom para relatórios e para decidir a próxima pauta.
 Este instrumento usa o OAuth de uma pessoa, e em app não verificado o token de renovação morre a cada 7
 dias. Para automação que roda sozinha, o caminho estável é montar a mesma consulta no **Construtor de
 Instrumentos** com `auth_tipo: "google_conta_servico"` — identidade de máquina, que não expira.
-É um POST (`searchAnalytics/query`) que só CONSULTA: marque `somente_leitura: true` na operação, senão
-cada consulta para e pede aprovação. Ver [[instrumentos/construir-conector]] e [[segredos/conectar-google]].
+É um POST (`searchAnalytics/query`) que só CONSULTA: marque `somente_leitura: true` na operação, para
+ela contar como leitura (se falhar, o agente segue em vez de o passo parar). Ver [[instrumentos/construir-conector]] e [[segredos/conectar-google]].
 
 ## Para a IA
 Parâmetros no catálogo (`search_console`): `dias` (últimos N dias, padrão 28), `dimensoes`

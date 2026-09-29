@@ -28,7 +28,8 @@ no ar). A imagem destacada pode vir de um passo de [[instrumentos/gerar-imagem]]
 - Publicar como rascunho para revisão humana no próprio WordPress.
 
 ## Limites e cuidados
-- É `acao_irreversivel = true` → pede aprovação antes.
+- Publica de verdade e não para sozinho: para alguém confirmar antes, o **agente** usa **Pedir
+  aprovação e aguardar** (regra no markdown dele).
 - A **senha de aplicativo** é a do WordPress (não a senha de login); o usuário precisa de permissão para
   publicar e enviar mídia (papel Autor ou superior).
 - **Plugin Wordfence instalado?** Ele costuma **desligar as senhas de aplicativo** por padrão, e aí a

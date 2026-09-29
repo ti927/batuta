@@ -31,8 +31,8 @@ descrições de ferramenta escritas por terceiros.
    credencial na central.
 3. Salve e use **"Conectar e listar ferramentas"**: o Batuta conversa com o servidor, descobre o tipo
    de conexão e mostra o que ele oferece.
-4. **Marque as ferramentas que entram no cinto** e, em cada uma, escolha **só lê** ou **pede
-   aprovação**. Se o servidor declarar que uma ferramenta só lê ou que altera algo, isso aparece como
+4. **Marque as ferramentas que entram no cinto** e, em cada uma, escolha **só lê** ou **altera
+   algo**. Se o servidor declarar que uma ferramenta só lê ou que altera algo, isso aparece como
    **sugestão** — quem decide é você.
 5. Pendure no cinto do agente.
 
@@ -74,9 +74,11 @@ endereço nem o segredo.
 ## Limites e cuidados
 - Diferente dos outros instrumentos: **um** MCP vira **várias** ferramentas no cinto. Traga só as que
   o agente usa — cada ferramenta ocupa espaço no pedido e custa token em **todo** passo dele.
-- **Toda ferramenta nasce pedindo aprovação.** O servidor é de terceiro e o Batuta não tem como saber
-  o que cada uma faz. Marcar "só lê" é ato consciente de quem configura, e ninguém confere por você.
-- Um MCP em que **nenhuma** ferramenta escolhida é irreversível não exige parede de ativação.
+- **Nenhuma ferramenta para sozinha para aprovação.** Quem pede aprovação é sempre o **agente**, com o
+  instrumento **Pedir aprovação e aguardar** no cinto e a regra no markdown dele.
+- **Só lê / altera algo** muda o que acontece numa falha: ferramenta que altera algo e falha faz o
+  passo parar e mostrar o erro; a que só lê e falha deixa o agente seguir sem o resultado. Toda
+  ferramenta nasce "altera algo" — o servidor é de terceiro e o Batuta não sabe o que cada uma faz.
 - **Servidor fora do ar não derruba o passo.** O agente roda sem esse instrumento, o banco de logs
   recebe `instrumento.cinto_falhou` (com o código da causa), a IA é avisada — para ela dizer o que não
   deu, em vez de narrar sucesso sobre o que não teve — e o **diagnóstico da execução** acusa "o agente
@@ -96,13 +98,16 @@ endereço nem o segredo.
   colados pelo consultor na tela do instrumento — se vierem na configuração, são ignorados.
 - Ao acionar isolado (`testar_instrumento`), o instrumento **testa a conexão e lista** ferramentas,
   recursos e prompts — e **não** devolve a URL, que é segredo. Cada ferramenta traz `sugestao`
-  (`so_le`/`altera`/vazio): é o que o **servidor** declara. Use como pista ao decidir `irreversivel`,
-  nunca como garantia — na dúvida, pede aprovação.
+  (`so_le`/`altera`/vazio): é o que o **servidor** declara. Use como pista ao decidir `irreversivel`
+  (altera algo?), nunca como garantia — na dúvida, `true`.
 - Falhou? Leia o `codigo`: `mcp.auth_401` → a identificação está errada (peça ao consultor para
   conferir, não troque de modo às cegas); `mcp.segredo_faltando` → falta o consultor colar algo;
   `mcp.transporte_incompativel` → deixe `transport` em `automatico`.
-- Uma vez no cinto, as ferramentas do MCP aparecem como ferramentas normais do agente; as marcadas
-  como irreversíveis param e pedem aprovação, as de leitura correm livres.
+- Uma vez no cinto, as ferramentas do MCP aparecem como ferramentas normais do agente. **Nenhuma
+  para sozinha para aprovação**: se o time precisa de alguém confirmando antes de publicar/enviar/
+  apagar, ponha `pedir_aprovacao` no cinto do agente e escreva a regra no skill_md dele. Uma
+  ferramenta genérica como "executar habilidade" (WordPress) faz leitura E escrita — diga no
+  markdown quais habilidades o agente pode chamar.
 - Servidor de terceiro recém-criado costuma publicar **uma só** ferramenta, do tipo
   `get_configuration_url`: isso não é erro de conexão — é o servidor dizendo que ainda não tem ações
   configuradas. Não a ponha no cinto; ela não faz trabalho nenhum.

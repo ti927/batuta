@@ -96,8 +96,8 @@ class OperacaoConector(BaseModel):
     # o Batuta não tem como conferir se um POST escreve ou não.
     somente_leitura: bool = Field(
         default=False,
-        description="Este POST/PUT só CONSULTA (não muda nada lá fora) — então não "
-        "pede aprovação. Só marque se tiver certeza.",
+        description="Este POST/PUT só CONSULTA (não muda nada lá fora) — conta como "
+        "leitura: se falhar, o agente segue sem o resultado. Só marque se tiver certeza.",
     )
     # A API que o conector chama pode cobrar por chamada (ex.: o Gemini), e o Batuta
     # não tem como saber quanto. Quem monta informa; 0 = gratuita ou desconhecida.

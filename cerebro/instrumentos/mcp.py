@@ -58,7 +58,8 @@ class FerramentaMCP(BaseModel):
     usar: bool = Field(default=True, description="Entra no cinto do agente?")
     irreversivel: bool = Field(
         default=True,
-        description="Pede aprovação humana antes de rodar (ação que não dá para desfazer).",
+        description="Altera algo lá fora (publica, envia, grava, apaga). Se falhar, o "
+        "passo para. NÃO pede aprovação sozinha: quem pede é o agente (pedir_aprovacao).",
     )
 
 
@@ -117,8 +118,8 @@ class ConfigMCP(BaseModel):
     )
     ferramentas: list[FerramentaMCP] = Field(
         default_factory=list,
-        description="Quais ferramentas do servidor entram no cinto, e quais pedem "
-        "aprovação. Lista vazia = todas entram (e todas pedem aprovação).",
+        description="Quais ferramentas do servidor entram no cinto, e quais alteram "
+        "algo lá fora. Lista vazia = todas entram (e todas contam como 'altera algo').",
         # A tela desenha isto como uma LISTA DE ESCOLHA, não como um JSON cru: o
         # formulário genérico renderiza `array` num campo de texto, e pedir para alguém
         # digitar o JSON das ferramentas seria a mesma coisa que não ter a escolha.
@@ -212,7 +213,7 @@ def _envolver_sync(ferramenta, irreversivel: bool, modo: str = "") -> Structured
     conexão (stateless), via `asyncio.run`.
 
     O `metadata` carrega a irreversibilidade DESTA ferramenta — é por ele que o motor
-    sabe quais param e pedem aprovação. Sem isso, a decisão só existiria no atacado
+    sabe quais alteram algo (falha delas para o passo). Sem isso, a decisão só existiria no atacado
     (todo o instrumento), que é o que tornava o MCP inutilizável."""
 
     def acionar(**kwargs):
@@ -241,7 +242,7 @@ def _envolver_sync(ferramenta, irreversivel: bool, modo: str = "") -> Structured
 
 def _escolhidas(config: ConfigMCP) -> dict[str, FerramentaMCP] | None:
     """As ferramentas marcadas para entrar no cinto, por nome. `None` = a pessoa não
-    escolheu nada ainda → todas entram (e todas pedem aprovação), que é o
+    escolheu nada ainda → todas entram (e todas contam como "altera algo"), que é o
     comportamento antigo e o mais seguro dos dois."""
     escolhidas = [f for f in (config.ferramentas or []) if f.usar]
     if not escolhidas:

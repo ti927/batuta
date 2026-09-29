@@ -845,9 +845,9 @@ function SecaoOperacoes({
               </Aviso>
             )}
             {/* Nem todo POST escreve: há API que CONSULTA por POST porque o filtro não
-                cabe na URL. Sem esta declaração, cada consulta dessas pararia para
-                pedir aprovação — e o instrumento fica inutilizável. É declaração
-                consciente: o Batuta não tem como conferir se um POST escreve. */}
+                cabe na URL. A declaração muda a política de falha (leitura que falha
+                deixa o agente seguir; escrita que falha para o passo). Aprovação não
+                é daqui: é sempre do agente (decisão do maestro, 2026-09-29). */}
             {!SO_LEITURA.has(op.metodo) && (
               <label className="mt-2.5 flex items-start gap-2 rounded-md border border-border p-2.5">
                 <input
@@ -862,8 +862,9 @@ function SecaoOperacoes({
                   </span>
                   <span className="block text-xs leading-snug text-muted-foreground">
                     Algumas APIs consultam por POST porque o filtro não cabe no
-                    endereço (é o caso do Google Search Console). Marcando, a operação
-                    corre livre em vez de parar e pedir aprovação a cada uso.{" "}
+                    endereço (é o caso do Google Search Console). Marcando, ela conta
+                    como leitura: se falhar, o agente segue sem o resultado em vez de o
+                    passo parar.{" "}
                     <strong>Só marque se tiver certeza</strong> — o Batuta não tem como
                     conferir isso por você.
                   </span>
