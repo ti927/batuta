@@ -496,6 +496,10 @@ _O_QUE_FAZER_CONEXAO = {
     "mcp.limite_429": "O servidor de fora pediu para esperar (limite de uso).",
     "mcp.transporte_incompativel": "No instrumento, em “Avançado”, deixe o tipo de "
     "conexão em “Automático”.",
+    "mcp.precisa_conectar": "A conexão da conta não existe ou caiu — abra o instrumento "
+    "e clique em “Conectar” para entrar com a conta de novo.",
+    "mcp.oauth_recusado": "O servidor de login recusou as credenciais — confira o Client "
+    "ID e o Client Secret no instrumento.",
 }
 
 

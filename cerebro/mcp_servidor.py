@@ -460,8 +460,11 @@ async def configurar_instrumento(
     credencial na central). Escolha `auth_modo` pelo que o servidor pede: 'url_secreta'
     (Make/Zapier: a chave está no endereço), 'bearer' (token), 'cabecalho' (+ `auth_nome`,
     ex.: X-API-Key), 'query' (+ `auth_nome` do parâmetro), 'basic' (+ `auth_usuario`;
-    WordPress com senha de aplicativo — endereço /wp-json/mcp/mcp-adapter-default-server)
-    ou 'nenhuma'. O ENDEREÇO também é segredo (pode conter a chave): quem cola é o
+    WordPress com senha de aplicativo — endereço /wp-json/mcp/mcp-adapter-default-server),
+    'oauth_login' (entrar com a conta: depois de o consultor colar o endereço e salvar, ELE
+    clica "Conectar" na tela do instrumento — você não tem como fazer o login; o Batuta
+    se registra sozinho no servidor e renova o token), 'oauth_cliente' (OAuth entre
+    sistemas: + `oauth_client_id`; o Client Secret o consultor cola) ou 'nenhuma'. O ENDEREÇO também é segredo (pode conter a chave): quem cola é o
     consultor. Deixe `transport` em 'automatico'. Depois que o consultor colar,
     `testar_instrumento` lista as ferramentas do servidor (com a sugestão 'so_le'/'altera'
     que o servidor declara); marque em `ferramentas` só as necessárias, cada uma com

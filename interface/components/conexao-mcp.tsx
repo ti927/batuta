@@ -10,9 +10,19 @@
 // Os valores continuam no mesmo `valores` do formulário (texto por campo), para o
 // salvamento genérico não mudar: segredo em branco = manter o que está guardado.
 
-import { useState } from "react";
-import { ChevronDown, Lock, Plus, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CheckCircle2, ChevronDown, Lock, LogIn, Plus, RefreshCw, Trash2 } from "lucide-react";
 
+import {
+  api,
+  mensagemDeErro,
+  URL_CEREBRO,
+  type ConexaoInstrumento,
+  type Instrumento,
+  type OAuthInstrumento,
+} from "@/lib/api";
+import { Aviso } from "@/components/ui/aviso";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -28,6 +38,12 @@ export const CAMPOS_CONEXAO_MCP = new Set([
   "cabecalhos",
   "cabecalhos_secretos",
   "token_bearer",
+  "oauth_client_id",
+  "oauth_url_token",
+  "oauth_escopo",
+  "oauth_access_token",
+  "oauth_refresh_token",
+  "oauth_client_secret",
 ]);
 
 const MODOS = [
@@ -37,7 +53,115 @@ const MODOS = [
   { v: "cabecalho", rotulo: "Cabeçalho próprio (ex.: X-API-Key)" },
   { v: "query", rotulo: "Chave no endereço, como parâmetro" },
   { v: "basic", rotulo: "Usuário e senha" },
+  { v: "oauth_login", rotulo: "Entrar com a conta (login)" },
+  { v: "oauth_cliente", rotulo: "OAuth entre sistemas (Client ID e Secret)" },
 ] as const;
+
+function quando(iso?: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const dia = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return `${dia} às ${hora}`;
+}
+
+// O login acontece num pop-up; a página de volta (servida pelo cérebro) avisa por
+// postMessage. Sem pop-up (bloqueado), o navegador inteiro vai e volta.
+function EntrarComAConta({
+  instrumentoId,
+  oauthInicial,
+  salvoNesteModo,
+}: {
+  instrumentoId: string | null;
+  oauthInicial: OAuthInstrumento | undefined;
+  salvoNesteModo: boolean;
+}) {
+  const [oauth, setOauth] = useState<OAuthInstrumento | undefined>(oauthInicial);
+  const [conectando, setConectando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!instrumentoId) return;
+    const origem = new URL(URL_CEREBRO).origin;
+    async function aoVoltar(e: MessageEvent) {
+      const d = e.data as { tipo?: string; ok?: boolean; instrumento?: string; motivo?: string };
+      if (e.origin !== origem || d?.tipo !== "batuta-mcp-oauth" || d.instrumento !== instrumentoId) {
+        return;
+      }
+      setConectando(false);
+      if (!d.ok) setErro("O login não foi concluído. Tente de novo.");
+      try {
+        const atual = await api.get<Instrumento>(`/instrumentos/${instrumentoId}`);
+        setOauth((atual.conexao as ConexaoInstrumento | null)?.oauth);
+      } catch {
+        /* o estado aparece ao reabrir o instrumento */
+      }
+    }
+    window.addEventListener("message", aoVoltar);
+    return () => window.removeEventListener("message", aoVoltar);
+  }, [instrumentoId]);
+
+  async function conectar() {
+    if (!instrumentoId) return;
+    setConectando(true);
+    setErro(null);
+    try {
+      const { url } = await api.post<{ url: string }>(
+        `/instrumentos/${instrumentoId}/mcp/oauth/iniciar`,
+        {},
+      );
+      const janela = window.open(url, "batuta-mcp-login", "width=520,height=720");
+      if (!janela) {
+        window.location.href = url; // pop-up bloqueado: vai a página inteira
+        return;
+      }
+      // Fechou sem terminar o login: libera o botão.
+      const vigia = window.setInterval(() => {
+        if (janela.closed) {
+          window.clearInterval(vigia);
+          setConectando(false);
+        }
+      }, 800);
+    } catch (e) {
+      setErro(mensagemDeErro(e, "Não deu para começar o login"));
+      setConectando(false);
+    }
+  }
+
+  const estado = oauth?.estado;
+  return (
+    <div className="flex flex-col gap-2">
+      {estado === "conectado" && !erro && (
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+          <CheckCircle2 className="size-3.5 text-success" />
+          Conta conectada em {quando(oauth?.conectado_em)}
+        </span>
+      )}
+      {estado === "precisa_reconectar" && !erro && (
+        <Aviso>A conexão da conta caiu. Clique em “Conectar” para entrar de novo.</Aviso>
+      )}
+      {erro && <Aviso>{erro}</Aviso>}
+      {!instrumentoId || !salvoNesteModo ? (
+        <span className="text-xs text-muted-foreground">
+          Salve o instrumento com o endereço antes de conectar.
+        </span>
+      ) : (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="self-start"
+          onClick={conectar}
+          disabled={conectando}
+        >
+          {conectando ? <RefreshCw className="size-3.5 animate-spin" /> : <LogIn className="size-3.5" />}
+          {estado === "conectado" ? "Conectar de novo" : "Conectar"}
+        </Button>
+      )}
+    </div>
+  );
+}
 
 const TRANSPORTES = [
   { v: "automatico", rotulo: "Automático" },
@@ -80,6 +204,8 @@ export function ConexaoMCP({
   guardados,
   modoSalvo,
   cobertos,
+  instrumentoId,
+  conexao,
 }: {
   valores: Record<string, string>;
   mudar: (campo: string, valor: string) => void;
@@ -89,6 +215,9 @@ export function ConexaoMCP({
   modoSalvo: string;
   /** Campos que uma credencial antiga da central ainda fornece (não aparecem aqui). */
   cobertos: Set<string>;
+  /** O instrumento já salvo (o login precisa dele). */
+  instrumentoId: string | null;
+  conexao: ConexaoInstrumento | null;
 }) {
   const modo = valores.auth_modo || "nenhuma";
   const [linhas, setLinhas] = useState<Linha[]>(() =>
@@ -196,6 +325,41 @@ export function ConexaoMCP({
             "auth_segredo",
             "Senha",
             "No WordPress, use uma senha de aplicativo, não a senha de entrar.",
+          )}
+        </>
+      )}
+
+      {modo === "oauth_login" && (
+        <>
+          <EntrarComAConta
+            instrumentoId={instrumentoId}
+            oauthInicial={conexao?.oauth}
+            salvoNesteModo={modoSalvo === "oauth_login"}
+          />
+          <details className="text-xs">
+            <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
+              Client ID próprio (opcional)
+            </summary>
+            <div className="mt-2 flex flex-col gap-3">
+              <span className="text-muted-foreground">
+                Só se o servidor não aceitar o Batuta sozinho.
+              </span>
+              {campoAberto("oauth_client_id", "Client ID", "")}
+              {campoSecreto("auth_segredo", "Client Secret (se houver)")}
+              {campoAberto("oauth_escopo", "Escopo", "")}
+            </div>
+          </details>
+        </>
+      )}
+      {modo === "oauth_cliente" && (
+        <>
+          {campoAberto("oauth_client_id", "Client ID", "")}
+          {campoSecreto("auth_segredo", "Client Secret")}
+          {campoAberto("oauth_escopo", "Escopo (opcional)", "")}
+          {campoAberto(
+            "oauth_url_token",
+            "Endereço do token (opcional)",
+            "em branco, o Batuta descobre",
           )}
         </>
       )}

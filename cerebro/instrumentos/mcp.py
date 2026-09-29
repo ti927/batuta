@@ -83,13 +83,35 @@ class ConfigMCP(BaseModel):
         "Streamable HTTP ou SSE (servidores antigos).",
     )
     auth_modo: Literal[
-        "", "nenhuma", "url_secreta", "bearer", "cabecalho", "query", "basic"
+        "", "nenhuma", "url_secreta", "bearer", "cabecalho", "query", "basic",
+        "oauth_login", "oauth_cliente",
     ] = Field(
         default="",
         description="Como o servidor pede identificação: nenhuma, url_secreta (a chave "
         "está no endereço: Make, Zapier), bearer (token), cabecalho (nome + valor), "
         "query (parâmetro no endereço), basic (usuário + senha; WordPress com senha de "
-        "aplicativo). Vazio = instrumento antigo: bearer se tiver token, senão nenhuma.",
+        "aplicativo), oauth_login (entrar com a conta: o consultor clica em Conectar na "
+        "tela), oauth_cliente (OAuth entre sistemas: client_id + client secret). "
+        "Vazio = instrumento antigo: bearer se tiver token, senão nenhuma.",
+    )
+    oauth_client_id: str = Field(
+        default="",
+        description="OAuth: Client ID. No oauth_cliente é obrigatório; no oauth_login é "
+        "opcional (sem ele o Batuta se registra sozinho no servidor).",
+    )
+    oauth_url_token: str = Field(
+        default="",
+        description="OAuth entre sistemas: endereço que emite o token. Vazio = o Batuta "
+        "descobre pelo servidor MCP.",
+    )
+    oauth_escopo: str = Field(
+        default="", description="OAuth: escopo pedido (opcional; vazio = o que o servidor anuncia)."
+    )
+    # Preenchidos pelo Batuta (login e renovação), nunca digitados — segredos.
+    oauth_access_token: str = Field(default="", description="Token de acesso OAuth (automático).")
+    oauth_refresh_token: str = Field(default="", description="Token de renovação OAuth (automático).")
+    oauth_client_secret: str = Field(
+        default="", description="Client secret dado pelo registro automático (automático)."
     )
     auth_nome: str = Field(
         default="",
@@ -263,9 +285,15 @@ class ConectarMCP(TipoInstrumento):
     Args = ArgsMCP
     # A URL é segredo junto com o token: servidores como o do Zapier embutem a chave
     # no endereço, e ali a URL É a credencial.
-    campos_secretos = ("url", "token_bearer", "auth_segredo", "cabecalhos_secretos")
+    campos_secretos = (
+        "url", "token_bearer", "auth_segredo", "cabecalhos_secretos",
+        "oauth_access_token", "oauth_refresh_token", "oauth_client_secret",
+    )
     # Qual deles FALTA depende do modo de identificação — ver `segredos_exigidos`.
-    campos_secretos_opcionais = ("token_bearer", "auth_segredo", "cabecalhos_secretos")
+    campos_secretos_opcionais = (
+        "token_bearer", "auth_segredo", "cabecalhos_secretos",
+        "oauth_access_token", "oauth_refresh_token", "oauth_client_secret",
+    )
     tipos_credencial_aceitos = ("mcp", "token_bearer")
     # Baseline do TIPO. A irreversibilidade real é por instância (e, aqui, por
     # ferramenta) — ver `irreversivel_para`.
@@ -299,8 +327,9 @@ class ConectarMCP(TipoInstrumento):
         modo = mcp_conexao.modo_efetivo(config)
         if modo == "bearer" and config.auth_modo:
             return ("url", "token_bearer")
-        if modo in ("cabecalho", "query", "basic"):
+        if modo in ("cabecalho", "query", "basic", "oauth_cliente"):
             return ("url", "auth_segredo")
+        # oauth_login: o token vem do "Conectar", não de um campo colado.
         # Instrumento antigo (sem modo) não passa a acusar pendência que não tinha.
         return ("url",)
 

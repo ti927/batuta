@@ -270,14 +270,24 @@ export type Instrumento = {
   atualizado_em: string;
 };
 
+export type OAuthInstrumento = {
+  estado?: "conectado" | "precisa_conectar" | "precisa_reconectar";
+  registro?: "cimd" | "dcr" | "manual";
+  conectado_em?: string;
+  expira_em?: string;
+  motivo?: string | null;
+};
+
 export type ConexaoInstrumento = {
-  estado: "conectado" | "falhou";
+  estado?: "conectado" | "falhou";
+  // O login OAuth do instrumento (MCP): estado da conta, sem segredo.
+  oauth?: OAuthInstrumento;
   transporte?: "streamable_http" | "sse";
   protocolo?: string;
   servidor?: { nome: string; versao?: string } | null;
   codigo?: string | null;
   mensagem?: string;
-  verificado_em: string;
+  verificado_em?: string;
 };
 
 export type TipoInstrumento = {

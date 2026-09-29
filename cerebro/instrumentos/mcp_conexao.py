@@ -33,7 +33,10 @@ import httpx
 
 from instrumentos.base import FalhaInstrumento, validar_cabecalhos_ascii
 
-MODOS_AUTH = ("nenhuma", "url_secreta", "bearer", "cabecalho", "query", "basic")
+MODOS_AUTH = (
+    "nenhuma", "url_secreta", "bearer", "cabecalho", "query", "basic",
+    "oauth_login", "oauth_cliente",
+)
 TRANSPORTES = ("automatico", "streamable_http", "sse")
 
 # Tetos (CLAUDE.md §12-A: nenhuma ligação sem limite). O servidor é de terceiro.
@@ -140,6 +143,20 @@ def montar_destino(config) -> Destino:
             raise _faltou("a senha")
         par = base64.b64encode(f"{usuario}:{segredo}".encode("utf-8")).decode("ascii")
         cab["Authorization"] = f"Basic {par}"
+    elif modo in ("oauth_login", "oauth_cliente"):
+        # O token chega pronto: a borda (`anexar_aos_instrumentos`) o renova antes.
+        token = (getattr(config, "oauth_access_token", "") or "").strip()
+        if not token:
+            raise FalhaInstrumento(
+                "este instrumento não está conectado (ou a conexão da conta caiu). Abra "
+                "o instrumento e clique em “Conectar”."
+                if modo == "oauth_login"
+                else "o servidor não entregou o token de acesso — confira o Client ID e "
+                "o Client Secret em “Como o Batuta se conecta”.",
+                retentavel=False,
+                codigo="mcp.precisa_conectar" if modo == "oauth_login" else "mcp.oauth_recusado",
+            )
+        cab["Authorization"] = f"Bearer {token}"
     elif modo not in ("nenhuma", "url_secreta"):
         raise FalhaInstrumento(
             f"modo de identificação desconhecido: {modo!r}.",
@@ -197,6 +214,9 @@ def _msg_auth(modo: str) -> str:
         "(gerar um endereço novo invalida o antigo).",
         "nenhuma": "Este servidor pede identificação — escolha como ele pede em "
         "“Como o Batuta se conecta”.",
+        "oauth_login": "A conexão da conta caiu — abra o instrumento e clique em "
+        "“Conectar” de novo.",
+        "oauth_cliente": "Confira o Client ID, o Client Secret e o escopo.",
     }.get(modo, "Confira a identificação do instrumento.")
 
 

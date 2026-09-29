@@ -336,16 +336,27 @@ def acionar_instrumento(sessao: Session, inst, argumentos: dict | None) -> dict:
     # deu certo ou não — no estado da conexão do instrumento. Quem chama faz o commit.
     from datetime import datetime, timezone
 
+    # O estado do OAuth (endereço do token, vencimento, "precisa reconectar") mora na
+    # mesma coluna e NÃO pode ser apagado por um teste de conexão. Relido do banco: a
+    # renovação acabou de gravá-lo numa sessão própria (`mcp_oauth.garantir_token`).
+    def _oauth_atual() -> dict:
+        if inst.id is not None and inst in sessao:
+            sessao.refresh(inst, attribute_names=["conexao"])
+        atual = (inst.conexao or {}).get("oauth")
+        return {"oauth": atual} if atual else {}
+
     try:
         resultado = tipo.executar(config, args)
     except FalhaInstrumento as e:
+        oauth = _oauth_atual()
         inst.conexao = {
             "estado": "falhou",
             "codigo": getattr(e, "codigo", None),
             "mensagem": str(e)[:300],
             "verificado_em": datetime.now(timezone.utc).isoformat(),
+            **oauth,
         }
         raise
     if isinstance(resultado, dict) and isinstance(resultado.get("conexao"), dict):
-        inst.conexao = resultado["conexao"]
+        inst.conexao = {**resultado["conexao"], **_oauth_atual()}
     return resultado

@@ -200,6 +200,7 @@ const SEGREDO_DO_MODO_MCP: Record<string, [string, string] | undefined> = {
   cabecalho: ["auth_segredo", "o valor do cabeçalho"],
   query: ["auth_segredo", "o valor da chave"],
   basic: ["auth_segredo", "a senha"],
+  oauth_cliente: ["auth_segredo", "o Client Secret"],
 };
 
 // As opções ATIVAS de um campo: se ele depende de outro (controlado_por), só as
@@ -666,6 +667,10 @@ export function FormularioInstrumento({
         setErro("Preencha o endereço do servidor.");
         return;
       }
+      if (valores.auth_modo === "oauth_cliente" && !valores.oauth_client_id?.trim()) {
+        setErro("Preencha o Client ID em “Como o Batuta se conecta”.");
+        return;
+      }
       const exigido = SEGREDO_DO_MODO_MCP[valores.auth_modo ?? ""];
       if (exigido && !camposCobertos.has(exigido[0]) && !valores[exigido[0]]?.trim()) {
         if (valores.auth_modo !== modoSalvoMCP || !guardados[exigido[0]]) {
@@ -845,6 +850,8 @@ export function FormularioInstrumento({
           guardados={instrumento?.segredos ?? {}}
           modoSalvo={modoSalvoMCP}
           cobertos={camposCobertos}
+          instrumentoId={instrumento?.id ?? null}
+          conexao={instrumento?.conexao ?? null}
         />
       )}
 

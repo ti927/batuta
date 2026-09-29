@@ -155,6 +155,27 @@ def anexar_aos_instrumentos(sessao: Session, instrumentos: list) -> None:
         # renova antes de vencer, apresentando o certificado se houver um. Nunca
         # levanta — no pior caso o instrumento recebe o token velho e o serviço
         # responde 401 com recado claro.
+        # (5) MCP com OAuth (login com a conta, ou entre sistemas): o token é
+        # renovado antes de vencer, com trava por instrumento. Nunca levanta; sem
+        # token, o instrumento acusa "precisa conectar" com recado claro.
+        if inst.tipo == "conectar_mcp" and (inst.configuracao or {}).get("auth_modo") in (
+            "oauth_login", "oauth_cliente",
+        ):
+            from instrumentos import mcp_oauth
+            from instrumentos.mcp import ConfigMCP
+
+            modo = inst.configuracao["auth_modo"]
+            try:
+                config = ConfigMCP.model_validate({**(inst.configuracao or {}), **valores})
+            except Exception:  # noqa: BLE001
+                config = None
+            if config is not None:
+                valores = {
+                    **valores,
+                    mcp_oauth.CAMPO_ACCESS: mcp_oauth.garantir_token(
+                        inst.id, modo, config, conexao=inst.conexao
+                    ),
+                }
         if (inst.configuracao or {}).get("auth_tipo") == "oauth2":
             import oauth_mtls
 

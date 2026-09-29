@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Pencil, Plus, ShieldCheck, Wrench } from "lucide-react";
 
 import {
@@ -14,6 +15,7 @@ import { ConstrutorInstrumento } from "@/components/construtor-instrumento";
 import { DrawerInstrumento } from "@/components/drawer-instrumento";
 import { IconeInstrumento } from "@/components/icone-instrumento";
 import { Button } from "@/components/ui/button";
+import { Aviso } from "@/components/ui/aviso";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
 
 export function InstrumentosCliente({
@@ -31,21 +33,37 @@ export function InstrumentosCliente({
 }) {
   const souOperador = podeOperar(meuPapel);
   // null = fechado; "novo" = criando; instrumento = editando.
-  const [aberto, setAberto] = useState<null | "novo" | Instrumento>(null);
+  // Volta do login de um instrumento MCP quando o pop-up foi bloqueado e o login
+  // aconteceu na página inteira: avisa e já reabre o instrumento.
+  const busca = useSearchParams();
+  const voltaLogin = busca.get("mcp_oauth");
+  const [aberto, setAberto] = useState<null | "novo" | Instrumento>(() => {
+    const id = busca.get("instrumento");
+    return (voltaLogin && id && inicial.find((i) => i.id === id)) || null;
+  });
   // Construtor de Instrumento (conector): overlay de tela cheia, separado do
   // formulário genérico. "novo" = criar; instrumento = editar um conector.
   const [construtor, setConstrutor] = useState<null | "novo" | Instrumento>(null);
 
   return (
     <main className="mx-auto w-full max-w-[1000px] px-5 py-8 sm:px-8">
+      {voltaLogin === "ok" && (
+        <Aviso variant="sucesso" className="mb-4">
+          Conta conectada.
+        </Aviso>
+      )}
+      {voltaLogin === "erro" && (
+        <Aviso className="mb-4">
+          O login não foi concluído. Abra o instrumento e clique em “Conectar” de novo.
+        </Aviso>
+      )}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-sm font-medium text-foreground">
             Instrumentos do time
           </h2>
           <p className="text-sm text-muted-foreground">
-            As ferramentas que os agentes podem usar. Um instrumento pode exigir sua
-            aprovação antes de agir.
+            As ferramentas que os agentes podem usar.
           </p>
         </div>
         {souOperador && (

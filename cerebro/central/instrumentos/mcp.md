@@ -47,6 +47,8 @@ para você decidir.
 | **Usuário e senha** | **WordPress** (plugin MCP Adapter) e sistemas com login simples | Endereço + usuário + senha. No WordPress, uma **senha de aplicativo** (Usuários → Perfil → Senhas de aplicativo), nunca a senha de entrar |
 | **Cabeçalho próprio** | A documentação pede um cabeçalho com nome próprio, ex.: `X-API-Key` | Endereço + nome do cabeçalho + valor |
 | **Chave no endereço (parâmetro)** | A documentação pede `?api_key=...` no endereço | Endereço + nome do parâmetro + valor |
+| **Entrar com a conta (login)** | O servidor pede login com a conta (OAuth) — é o que o claude.ai usa. Ex.: WordPress em `/wp-json/mcp/mcp-oauth-server` | Só o endereço; depois de salvar, clique **Conectar** e entre com a conta no pop-up |
+| **OAuth entre sistemas** | Integração de máquina a máquina (client credentials) | Endereço + Client ID + Client Secret (o endereço do token o Batuta descobre) |
 | **Não pede identificação** | Servidor público ou interno aberto | Só o endereço |
 
 Além do modo, há **cabeçalhos extras** (ex.: `X-Tenant`), cada um podendo ser marcado como protegido.
@@ -62,13 +64,26 @@ estavam (token = Bearer; sem token = sem identificação).
   oferece login próprio do Claude e não serve aqui.
 - **Make**: o endereço já traz a chave → modo **A chave já está no endereço**.
 - **WordPress da Lure** (MCP Adapter): endereço `https://<site>/wp-json/mcp/mcp-adapter-default-server`
-  + modo **Usuário e senha** com o usuário do WordPress e uma **senha de aplicativo** dele.
+  + modo **Usuário e senha** com o usuário do WordPress e uma **senha de aplicativo** dele. **Ou** o
+  endereço `https://<site>/wp-json/mcp/mcp-oauth-server` + modo **Entrar com a conta**: salve, clique
+  **Conectar** e entre com o usuário do WordPress no pop-up.
+
+### Entrar com a conta: o que o Batuta faz sozinho
+Descobre o servidor de login pelo próprio servidor MCP, registra o Batuta como cliente (sem você criar
+app nenhum — só em servidor que não aceita isso aparece "Client ID próprio"), faz o login seguro e
+**renova o acesso antes de vencer**, mesmo com várias execuções ao mesmo tempo. Se a renovação for
+recusada (a conta foi desconectada lá no servidor), o instrumento mostra **"A conexão da conta caiu"**,
+o diagnóstico da execução diz para clicar em **Conectar** de novo e o banco de logs registra
+`mcp.oauth_renovacao_falhou`. Se o navegador bloquear o pop-up, o login acontece na página inteira e
+volta para a tela de instrumentos.
 
 ### Quando a conexão falha
 A tela diz o que houve e o que fazer, com um código para o diagnóstico. Os mais comuns:
 `mcp.auth_401` (identificação recusada: confira token/senha/chave), `mcp.auth_403` (a conta não tem
 permissão), `mcp.endereco_404` (endereço errado), `mcp.fora_do_ar`, `mcp.tempo_esgotado`,
-`mcp.segredo_faltando` (falta preencher um pedaço do modo escolhido). A mensagem **nunca** mostra o
+`mcp.segredo_faltando` (falta preencher um pedaço do modo escolhido), `mcp.precisa_conectar` (entrar
+com a conta: falta clicar em Conectar, ou a conexão caiu), `mcp.oauth_recusado` (o servidor de login
+recusou o Client ID/Secret). A mensagem **nunca** mostra o
 endereço nem o segredo.
 
 ## Limites e cuidados
@@ -93,7 +108,9 @@ endereço nem o segredo.
 - **Ao criar** (`configurar_instrumento` tipo `conectar_mcp`): a identificação mora **no instrumento**
   — não crie credencial na central. Escolha `auth_modo` pelo que o servidor pede: `url_secreta`
   (Make/Zapier com a chave no endereço), `bearer`, `cabecalho` (+ `auth_nome`), `query` (+
-  `auth_nome`), `basic` (+ `auth_usuario`; WordPress) ou `nenhuma`. Deixe `transport` em
+  `auth_nome`), `basic` (+ `auth_usuario`; WordPress), `oauth_login` (o consultor clica
+  **Conectar** na tela depois de salvar — você não faz login), `oauth_cliente` (+
+  `oauth_client_id`) ou `nenhuma`. Deixe `transport` em
   `automatico`. **Você não passa segredo**: o endereço, o token, a senha e o valor da chave são
   colados pelo consultor na tela do instrumento — se vierem na configuração, são ignorados.
 - Ao acionar isolado (`testar_instrumento`), o instrumento **testa a conexão e lista** ferramentas,

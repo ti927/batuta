@@ -187,7 +187,7 @@ export function SeletorFerramentasMCP({
       {conexao?.estado === "conectado" && !erro && (
         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
           <CheckCircle2 className="size-3.5 text-success" />
-          Conectado em {quando(conexao.verificado_em)}
+          Conectado em {quando(conexao.verificado_em ?? "")}
           {conexao.servidor?.nome ? ` · Servidor: ${conexao.servidor.nome}` : ""}
         </span>
       )}

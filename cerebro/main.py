@@ -29,6 +29,7 @@ from rotas import (
     instrumentos,
     interno,
     logs,
+    mcp_oauth,
     membros,
     mensageria,
     organizacoes,
@@ -132,6 +133,7 @@ app.include_router(membros.rotas)
 app.include_router(times.rotas)
 app.include_router(agentes.rotas)
 app.include_router(instrumentos.rotas)
+app.include_router(mcp_oauth.rotas)
 app.include_router(cinto.rotas)
 app.include_router(automacoes.rotas)
 app.include_router(chaves_api.rotas)

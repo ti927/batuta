@@ -51,9 +51,12 @@ def test_mcp_registrado_com_url_e_token_secretos():
     chave no endereço, e ali quem tem a URL tem a conta."""
     t = encaixe.obter_tipo("conectar_mcp")
     assert t is not None
-    assert t.campos_secretos == ("url", "token_bearer", "auth_segredo", "cabecalhos_secretos")
+    assert t.campos_secretos == (
+        "url", "token_bearer", "auth_segredo", "cabecalhos_secretos",
+        "oauth_access_token", "oauth_refresh_token", "oauth_client_secret",
+    )
     # o que FALTA depende do modo de identificação (ver test_mcp_conexao.py)
-    assert set(t.campos_secretos_opcionais) == {"token_bearer", "auth_segredo", "cabecalhos_secretos"}
+    assert set(t.campos_secretos_opcionais) == set(t.campos_secretos) - {"url"}
     assert "mcp" in t.tipos_credencial_aceitos
     assert "conectar_mcp" in [x.tipo for x in encaixe.tipos_disponiveis()]
 
