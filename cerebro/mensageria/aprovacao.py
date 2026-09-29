@@ -37,6 +37,7 @@ from modelos import (
     Instrumento,
     MensagemConversa,
     PassoExecucao,
+    PedidoAprovacao,
 )
 from observabilidade.escritor import registrar_evento
 from orquestracao import grafo
@@ -93,6 +94,8 @@ def config_aprovacao(sessao: Session, execucao: Execucao) -> dict | None:
         return {
             "instrumento_id": do_passo["canal_instrumento_id"],
             "destinatario": do_passo.get("destinatario") or "",
+            "codigo": do_passo.get("codigo"),
+            "mensagem_id": do_passo.get("mensagem_id"),
         }
     no = no_pausado(sessao, execucao) or {}
     legado = no.get("aprovacao") or {}
@@ -190,6 +193,8 @@ def vincular_pausa(sessao: Session, execucao: Execucao) -> None:
     if not destinatario:
         return  # sem destinatário não há como correlacionar a resposta
 
+    registrar_pedido(sessao, execucao, inst.id, destinatario, cfg)
+
     conversa = _conversa_viva(sessao, inst.id, destinatario)
     if conversa is None:
         agente_id = _agente_atendente_id(sessao, inst.id)
@@ -249,6 +254,83 @@ def vincular_pausa(sessao: Session, execucao: Execucao) -> None:
         conversa.nudge_enviado = False
         sessao.flush()
         _avisar_expectativa(sessao, conversa, inst, conf, execucao)
+
+
+def registrar_pedido(
+    sessao: Session, execucao: Execucao, instrumento_id: uuid.UUID, contato: str, cfg: dict
+) -> None:
+    """Guarda o pedido apresentado e a execução dele (idempotente pelo código). Um
+    pedido NOVO da mesma execução desativa os anteriores: um botão velho não pode
+    aprovar a pergunta seguinte."""
+    codigo = cfg.get("codigo")
+    if codigo and sessao.scalars(
+        select(PedidoAprovacao.id).where(PedidoAprovacao.codigo == codigo)
+    ).first():
+        return
+    sessao.execute(
+        update(PedidoAprovacao)
+        .where(PedidoAprovacao.execucao_id == execucao.id)
+        .values(ativo=False)
+    )
+    mensagem_id = cfg.get("mensagem_id")
+    sessao.add(PedidoAprovacao(
+        execucao_id=execucao.id, instrumento_id=instrumento_id, contato_chave=contato,
+        mensagem_id=int(mensagem_id) if mensagem_id else None, codigo=codigo, ativo=True,
+    ))
+    sessao.flush()
+
+
+def _aberto(sessao: Session, pedido: PedidoAprovacao | None) -> Execucao | None:
+    """A execução do pedido, se ele ainda vale: ativo e a execução esperando."""
+    if pedido is None or not pedido.ativo:
+        return None
+    ex = sessao.get(Execucao, pedido.execucao_id)
+    return ex if ex is not None and ex.estado == "aguardando_humano" else None
+
+
+def alvo_da_resposta(
+    sessao: Session, instrumento: Instrumento, contato: str,
+    *, codigo: str | None = None, responde_a: int | None = None,
+) -> tuple[str, Execucao | list[Execucao] | None]:
+    """A QUAL execução esta resposta pertence — pela execução, não pela conversa.
+
+    Devolve (como, alvo):
+    - ("botao", ex) / ("resposta", ex): o toque num botão, ou a resposta arrastada
+      sobre a mensagem do pedido, apontam o pedido exato;
+    - ("vencido", None): apontou um pedido que já foi respondido ou substituído;
+    - ("unico", ex): nada apontado e só UM pedido aberto desta pessoa neste canal;
+    - ("ambiguo", [ex…]): nada apontado e DOIS ou mais abertos — perguntar, não adivinhar;
+    - ("nenhum", None): nenhum pedido registrado (inclui pedidos de antes desta versão,
+      que seguem pelo caminho antigo)."""
+    base = select(PedidoAprovacao).where(PedidoAprovacao.instrumento_id == instrumento.id)
+    if codigo:
+        pedido = sessao.scalars(base.where(PedidoAprovacao.codigo == codigo)).first()
+        ex = _aberto(sessao, pedido)
+        return ("botao", ex) if ex else ("vencido", None)
+    if responde_a:
+        pedido = sessao.scalars(
+            base.where(PedidoAprovacao.contato_chave == contato)
+            .where(PedidoAprovacao.mensagem_id == int(responde_a))
+        ).first()
+        if pedido is not None:
+            ex = _aberto(sessao, pedido)
+            return ("resposta", ex) if ex else ("vencido", None)
+        # Respondeu a outra mensagem do bot (ex.: uma pergunta do agente no meio da
+        # conversa de aprovação): não aponta pedido — segue a regra geral abaixo.
+    abertos: dict[uuid.UUID, Execucao] = {}
+    for pedido in sessao.scalars(
+        base.where(PedidoAprovacao.contato_chave == contato)
+        .where(PedidoAprovacao.ativo.is_(True))
+        .order_by(PedidoAprovacao.criado_em)
+    ):
+        ex = _aberto(sessao, pedido)
+        if ex is not None:
+            abertos[ex.id] = ex
+    if len(abertos) == 1:
+        return "unico", next(iter(abertos.values()))
+    if len(abertos) > 1:
+        return "ambiguo", list(abertos.values())
+    return "nenhum", None
 
 
 def _avisar_expectativa(

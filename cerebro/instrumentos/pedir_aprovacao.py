@@ -23,6 +23,7 @@ O canal é REFERENCIADO (id de um instrumento de mensageria do time), não recon
 tela da execução, como sempre pôde.
 """
 
+import secrets
 import uuid
 
 from pydantic import BaseModel, Field
@@ -122,6 +123,7 @@ class PedirAprovacao(TipoInstrumento):
                     retentavel=False,
                 )
             segredos = segredos_instrumento.decifrar(sessao, canal.id) or {}
+            com_botoes = _garantir_botoes(sessao, canal, segredos.get("token_bot") or "")
         finally:
             sessao.close()
 
@@ -132,9 +134,17 @@ class PedirAprovacao(TipoInstrumento):
         cfg_canal = tipo_canal.Config.model_validate(
             {**(canal.configuracao or {}), **segredos}
         )
-        resultado = tipo_canal.executar(
-            cfg_canal, tipo_canal.Args.model_validate({"mensagem": args.mensagem})
-        )
+        args_canal = tipo_canal.Args.model_validate({"mensagem": args.mensagem})
+        # O CÓDIGO do pedido vai nos botões Aprovar/Recusar e amarra a resposta a
+        # ESTA execução — sem ele, a resposta era roteada só pela conversa (bot +
+        # chat) e duas execuções esperando no mesmo bot se atropelavam.
+        codigo = secrets.token_urlsafe(9)
+        if com_botoes and hasattr(tipo_canal, "enviar"):
+            from mensageria.telegram import botoes_de_aprovacao
+
+            resultado = tipo_canal.enviar(cfg_canal, args_canal, botoes=botoes_de_aprovacao(codigo))
+        else:
+            resultado = tipo_canal.executar(cfg_canal, args_canal)
         if not resultado.get("ok"):
             raise FalhaInstrumento(
                 f"o pedido de aprovação não chegou a ninguém pelo canal "
@@ -148,7 +158,38 @@ class PedirAprovacao(TipoInstrumento):
             "mensagem": args.mensagem,
             "canal_instrumento_id": str(canal.id),
             "destinatario": destinatario,
+            "mensagem_id": resultado.get("mensagem_id"),
+            "codigo": codigo,
         }
+
+
+def _garantir_botoes(sessao, canal, token: str) -> bool:
+    """O bot recebe o TOQUE nos botões? Só se o webhook dele pedir `callback_query`
+    — os canais conectados antes de 2026-09-29 não pediam. Na primeira vez, refaz o
+    webhook (mesmo endereço, mesmo crachá) e marca no estado da conexão do canal.
+    Canal não conectado (sem crachá) não recebe nada: manda sem botões, como antes."""
+    if canal.tipo != "enviar_telegram" or not canal.webhook_secret or not token:
+        return False
+    if (canal.conexao or {}).get("botoes"):
+        return True
+    import os
+
+    from mensageria import telegram
+    from sqlalchemy.orm.attributes import flag_modified
+
+    base = os.environ.get("CEREBRO_PUBLIC_URL", "http://localhost:8000").rstrip("/")
+    try:
+        r = telegram.configurar_webhook(
+            token, f"{base}/mensageria/{canal.id}/entrada", canal.webhook_secret
+        )
+    except Exception:  # noqa: BLE001 — sem botões, o pedido sai em texto
+        return False
+    if not r.get("ok"):
+        return False
+    canal.conexao = {**(canal.conexao or {}), "botoes": True}
+    flag_modified(canal, "conexao")
+    sessao.commit()
+    return True
 
 
 registrar(PedirAprovacao())

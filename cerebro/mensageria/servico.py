@@ -274,6 +274,53 @@ def registrar_entrada(
     conversa.ultima_entrada_em = datetime.now(timezone.utc)
     conversa.nudge_enviado = False
 
+    # QUAL PEDIDO esta resposta atende — pela EXECUÇÃO, não pela conversa. Até
+    # 2026-09-29 a conversa (bot + chat) guardava uma execução só: com duas esperando
+    # no mesmo bot, a resposta ia para a mais recente e a outra ficava órfã, ou uma
+    # aprovação valia para o pedido errado. Agora o botão e a resposta arrastada
+    # apontam o pedido; sem apontar, só vale se houver UM aberto.
+    como, alvo = aprovacao.alvo_da_resposta(
+        sessao, instrumento, msg.contato_chave,
+        codigo=msg.botao_codigo, responde_a=msg.responde_a,
+    )
+    recado = None
+    if como in ("botao", "resposta", "unico"):
+        ocupada = (
+            conversa.estado == "bot_respondendo"
+            and conversa.execucao_id is not None
+            and conversa.execucao_id != alvo.id
+        )
+        if ocupada:
+            # Um turno de OUTRO pedido está rodando agora; trocar o alvo no meio
+            # juntaria as duas respostas num turno só.
+            recado = (
+                "⏳ Ainda estou processando sua resposta ao outro pedido. Reenvie esta "
+                "em instantes."
+            )
+        else:
+            conversa.execucao_id = alvo.id
+    elif como == "vencido":
+        recado = (
+            "Esse pedido já foi respondido (ou foi trocado por um mais novo). Responda "
+            "ao pedido mais recente."
+        )
+    elif como == "ambiguo":
+        recado = _qual_pedido(sessao, alvo)
+    if recado is not None:
+        token = segredos_instrumento.decifrar(sessao, instrumento.id).get("token_bot", "")
+        if token:
+            try:
+                _enviar_e_registrar(sessao, conversa, token, recado)
+            except Exception:  # noqa: BLE001 — o recado é cortesia; a mensagem já está gravada
+                pass
+        registrar_evento(
+            categoria="mensageria", acao="aprovacao.resposta_sem_destino", nivel="warning",
+            persistir=True, recurso_tipo="conversa", recurso_id=conversa.id,
+            detalhe={"motivo": como, "ocupada": como in ("botao", "resposta", "unico")},
+        )
+        sessao.commit()
+        return conversa, False
+
     # Retomada TARDIA de portão: se a conversa ainda não conduz uma execução pausada,
     # mas existe um portão parado (`aguardando_humano`) cujo aprovador (derivado do
     # instrumento) é ESTE contato, RELIGA — a resposta tardia retoma o portão em vez de
@@ -327,6 +374,22 @@ def registrar_entrada(
         conversa.estado = "bot_respondendo"
     sessao.commit()
     return conversa, deve_processar
+
+
+def _qual_pedido(sessao: Session, execucoes: list) -> str:
+    """Recado quando a pessoa tem 2+ pedidos abertos e a resposta não aponta um."""
+    linhas = []
+    for i, ex in enumerate(execucoes, 1):
+        auto = sessao.get(Automacao, ex.automacao_id)
+        quando = ex.iniciada_em.astimezone(timezone.utc) if ex.iniciada_em else None
+        rotulo = auto.nome if auto else "automação"
+        linhas.append(f"{i}. {rotulo}" + (f" (iniciada {quando:%d/%m %H:%M} UTC)" if quando else ""))
+    return (
+        f"Você tem {len(execucoes)} pedidos esperando resposta:\n"
+        + "\n".join(linhas)
+        + "\n\nPara eu saber qual é qual, toque em Aprovar ou Recusar no pedido certo, "
+        "ou responda arrastando a mensagem dele."
+    )
 
 
 def _carimbar_uso_agente(uso: list | None, origens: dict[str, str]) -> list:

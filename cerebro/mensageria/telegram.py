@@ -27,6 +27,43 @@ class MensagemEntrante:
     contato_nome: str | None
     texto: str | None
     midia: dict | None = None  # {tipo, file_id} quando não é texto (Fase H)
+    # A qual mensagem do bot esta responde (a pessoa arrastou/“Responder”): é o que
+    # amarra uma resposta em texto ao pedido de aprovação certo.
+    responde_a: int | None = None
+    # Botão tocado (Aprovar/Recusar de um pedido): o código do pedido e o id do
+    # clique (o Telegram quer uma confirmação do toque, senão o botão fica girando).
+    botao_codigo: str | None = None
+    botao_id: str | None = None
+
+
+# Botões do pedido de aprovação: `apv:<codigo>:s` (aprovar) / `apv:<codigo>:n` (recusar).
+TEXTO_DO_BOTAO = {"s": "Aprovado", "n": "Recusado"}
+
+
+def botoes_de_aprovacao(codigo: str) -> list:
+    return [[
+        {"text": "✅ Aprovar", "callback_data": f"apv:{codigo}:s"},
+        {"text": "⛔ Recusar", "callback_data": f"apv:{codigo}:n"},
+    ]]
+
+
+def _do_botao(corpo: dict) -> "MensagemEntrante | None":
+    cb = corpo.get("callback_query")
+    if not isinstance(cb, dict):
+        return None
+    partes = str(cb.get("data") or "").split(":")
+    if len(partes) != 3 or partes[0] != "apv" or partes[2] not in TEXTO_DO_BOTAO:
+        return None
+    chat = ((cb.get("message") or {}).get("chat") or {}).get("id")
+    if chat is None:
+        chat = (cb.get("from") or {}).get("id")
+    if chat is None:
+        return None
+    return MensagemEntrante(
+        str(chat), _nome_do_remetente(cb.get("from") or {}), TEXTO_DO_BOTAO[partes[2]],
+        None, responde_a=(cb.get("message") or {}).get("message_id"),
+        botao_codigo=partes[1], botao_id=str(cb.get("id") or ""),
+    )
 
 
 def _nome_do_remetente(frm: dict) -> str | None:
@@ -41,6 +78,8 @@ def extrair_update(corpo: dict) -> MensagemEntrante | None:
     updates que não são uma mensagem tratável (ex.: status, edição vazia)."""
     if not isinstance(corpo, dict):
         return None
+    if "callback_query" in corpo:
+        return _do_botao(corpo)
     msg = corpo.get("message") or corpo.get("edited_message")
     if not isinstance(msg, dict):
         return None
@@ -49,10 +88,11 @@ def extrair_update(corpo: dict) -> MensagemEntrante | None:
     if chat_id is None:
         return None
     nome = _nome_do_remetente(msg.get("from") or {})
+    responde_a = (msg.get("reply_to_message") or {}).get("message_id")
 
     texto = msg.get("text")
     if texto:
-        return MensagemEntrante(str(chat_id), nome, texto, None)
+        return MensagemEntrante(str(chat_id), nome, texto, None, responde_a=responde_a)
 
     # Voz/áudio: marca a mídia (a transcrição entra na Fase H). Guarda a duração
     # (segundos) — o custo do Whisper é por minuto, não por token. Outros tipos
@@ -111,10 +151,24 @@ def configurar_webhook(token: str, url: str, secret: str) -> dict:
             json={
                 "url": url,
                 "secret_token": secret,
-                "allowed_updates": ["message", "edited_message"],
+                # callback_query = o toque nos botões Aprovar/Recusar.
+                "allowed_updates": ["message", "edited_message", "callback_query"],
             },
         )
     return resposta.json() if resposta.content else {"ok": resposta.is_success}
+
+
+def responder_botao(token: str, botao_id: str, texto: str) -> None:
+    """Confirma o toque num botão (o Telegram mostra `texto` rapidinho e para o
+    ícone de carregando). Melhor esforço: falhar aqui não perde a resposta."""
+    try:
+        with httpx.Client(timeout=TIMEOUT_S) as cliente:
+            cliente.post(
+                f"{API_BASE}/bot{token}/answerCallbackQuery",
+                json={"callback_query_id": botao_id, "text": texto[:190]},
+            )
+    except httpx.HTTPError:
+        pass
 
 
 def info_webhook(token: str) -> dict:

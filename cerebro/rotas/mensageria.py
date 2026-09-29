@@ -74,6 +74,11 @@ async def entrada(
         return {"ok": True}  # update não tratável (status, edição vazia): ignora
 
     conversa, deve_processar = servico.registrar_entrada(sessao, instrumento, msg)
+    if msg.botao_id:
+        # Confirma o toque (sem isto o botão fica "carregando" no celular da pessoa).
+        token = segredos_instrumento.decifrar(sessao, instrumento.id).get("token_bot", "")
+        if token:
+            tarefas.add_task(telegram.responder_botao, token, msg.botao_id, "Recebido")
     if deve_processar:
         tarefas.add_task(servico.processar_turno, conversa.id)
     return {"ok": True}

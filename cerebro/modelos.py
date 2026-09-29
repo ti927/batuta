@@ -964,6 +964,39 @@ class Conversa(IdData, Base):
     )
 
 
+class PedidoAprovacao(IdData, Base):
+    """Um pedido de aprovação apresentado por um canal (Telegram) — e a EXECUÇÃO a
+    que ele pertence.
+
+    Existe porque a resposta do aprovador era roteada pela CONVERSA (bot + chat), que
+    só guarda UMA execução: com duas esperando no mesmo bot, a resposta ia para a
+    mais recente e a outra ficava órfã — ou pior, uma aprovação valia para o pedido
+    errado (2026-09-29). Agora cada pedido carrega um `codigo` (vai no botão
+    Aprovar/Recusar) e o `mensagem_id` da mensagem enviada (uma resposta arrastada
+    sobre ela aponta o pedido). `ativo=False` quando a mesma execução apresentou um
+    pedido mais novo — um botão velho não pode aprovar a pergunta seguinte."""
+
+    __tablename__ = "pedidos_aprovacao"
+    execucao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("execucoes.id", ondelete="CASCADE"), nullable=False
+    )
+    instrumento_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("instrumentos.id", ondelete="CASCADE"), nullable=False
+    )
+    contato_chave: Mapped[str] = mapped_column(String(120), nullable=False)
+    mensagem_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    codigo: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    ativo: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+
+    __table_args__ = (
+        Index("ix_pedido_aprovacao_contato", "instrumento_id", "contato_chave"),
+        Index("ix_pedido_aprovacao_codigo", "codigo"),
+        Index("ix_pedido_aprovacao_execucao", "execucao_id"),
+    )
+
+
 class MensagemConversa(IdData, Base):
     """Uma mensagem na thread de uma conversa (contato, agente, operador ou
     sistema). Guarda o texto e, opcionalmente, metadados de mídia (ex.: áudio

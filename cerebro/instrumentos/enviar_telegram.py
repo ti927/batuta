@@ -134,6 +134,12 @@ class EnviarTelegram(TipoInstrumento):
     campo_mensagem = "mensagem"  # o texto que o humano lê (usado pelo portão)
 
     def executar(self, config: ConfigTelegram, args: ArgsTelegram) -> dict:
+        return self.enviar(config, args)
+
+    def enviar(self, config: ConfigTelegram, args: ArgsTelegram, *, botoes: list | None = None) -> dict:
+        """Envia; `botoes` (opcional) vira um teclado sob a mensagem — é como o pedido
+        de aprovação leva Aprovar/Recusar com o código do pedido. Não é da IA: o
+        agente continua mandando só texto (`executar`)."""
         if not config.token_bot:
             raise FalhaInstrumento(
                 "token do bot do Telegram não configurado.", retentavel=False
@@ -152,6 +158,8 @@ class EnviarTelegram(TipoInstrumento):
 
         url = f"{API_BASE}/bot{config.token_bot}/sendMessage"
         corpo = {"chat_id": destino, "text": args.mensagem[:MAX_TEXTO]}
+        if botoes:
+            corpo["reply_markup"] = {"inline_keyboard": botoes}
         try:
             with httpx.Client(timeout=TIMEOUT_S) as cliente:
                 resposta = cliente.post(url, json=corpo)

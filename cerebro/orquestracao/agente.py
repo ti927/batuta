@@ -283,6 +283,9 @@ def _ferramenta_unica(
                     "instrumento_id": str(inst.id),
                     "canal_instrumento_id": resultado.get("canal_instrumento_id"),
                     "destinatario": resultado.get("destinatario"),
+                    # O que amarra a resposta a ESTA execução (botão / "Responder").
+                    "mensagem_id": resultado.get("mensagem_id"),
+                    "codigo": resultado.get("codigo"),
                 }
             )
         # Envio bem-sucedido por um canal: registra o texto apresentado ao humano.
