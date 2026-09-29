@@ -60,6 +60,20 @@ CAMPO_REFRESH = "oauth_refresh_token"
 CAMPO_CLIENT_SECRET = "oauth_client_secret"
 
 
+def gravar_conexao(inst, conexao: dict) -> None:
+    """Grava o estado da conexão SEMPRE como objeto novo e marcado como alterado.
+
+    Achado no teste ao vivo (2026-09-29): a volta do login reatribuía o MESMO dict
+    depois de um commit e o SQLAlchemy não gravava — os tokens entravam no cofre, mas
+    o estado "conectado" não; só uma renovação logo depois escondeu o defeito."""
+    import copy
+
+    from sqlalchemy.orm.attributes import flag_modified
+
+    inst.conexao = copy.deepcopy(conexao)
+    flag_modified(inst, "conexao")
+
+
 # ───────────────────────────── endereços do Batuta ─────────────────────────────
 
 def base_publica() -> str:
@@ -519,13 +533,13 @@ def garantir_token(
             conexao["oauth"] = {**oauth, "estado": "precisa_reconectar",
                                 "motivo": str(e)[:200],
                                 "desde": datetime.now(timezone.utc).isoformat()}
-            inst.conexao = conexao
+            gravar_conexao(inst, conexao)
             sessao.commit()
             _avisar(instrumento_id, inst.nome, e, nivel="error")
             return ""
         segredos_instrumento.salvar_segredos(sessao, instrumento_id, novos)
         conexao["oauth"] = oauth_novo
-        inst.conexao = conexao
+        gravar_conexao(inst, conexao)
         sessao.commit()
         return novos[CAMPO_ACCESS]
     except Exception:  # noqa: BLE001 — renovar nunca derruba o cinto inteiro

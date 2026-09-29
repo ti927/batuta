@@ -70,7 +70,7 @@ def iniciar(
     antigo = dict(conexao.get("oauth") or {})
     # Guarda o que o login vai precisar na volta; o estado só vira "conectado" lá.
     conexao["oauth"] = {**antigo, **oauth, "estado": antigo.get("estado") or "precisa_conectar"}
-    inst.conexao = conexao
+    mcp_oauth.gravar_conexao(inst, conexao)
     sessao.commit()
     return {"url": url}
 
@@ -125,7 +125,7 @@ def callback(
     # Uso único: a partir daqui o login pendente some, dê certo ou não.
     oauth.pop("pendente", None)
     conexao["oauth"] = oauth
-    inst.conexao = conexao
+    mcp_oauth.gravar_conexao(inst, conexao)
     sessao.commit()
     usuario = sessao.get(Usuario, uuid.UUID(usuario_id))
     if usuario is None:
@@ -147,12 +147,12 @@ def callback(
         novos, oauth_novo = mcp_oauth.trocar_codigo(oauth, code, verificador, client_secret)
     except (FalhaInstrumento, KeyError) as e:
         conexao["oauth"] = {**oauth, "estado": "precisa_conectar", "motivo": str(e)[:200]}
-        inst.conexao = conexao
+        mcp_oauth.gravar_conexao(inst, conexao)
         sessao.commit()
         return _pagina(False, f"Não deu para conectar: {e}", inst_id, time_id, "token")
     segredos.salvar_segredos(sessao, inst.id, novos)
     conexao["oauth"] = oauth_novo
-    inst.conexao = conexao
+    mcp_oauth.gravar_conexao(inst, conexao)
     auditoria.registrar(
         sessao, usuario=usuario, acao="instrumento.conectado", recurso_tipo="instrumento",
         recurso_id=inst.id, organizacao_id=time.organizacao_id,

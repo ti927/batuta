@@ -377,3 +377,57 @@ def test_state_de_uso_unico_e_com_prazo(oauth, cliente, entrar, dados, sessao):
     sessao.flush()
     velha = cliente.get("/mcp/oauth/callback", params={"code": "x", "state": state})
     assert "expirou" in velha.text
+
+
+def test_volta_do_login_grava_o_estado_com_commit_de_verdade(oauth):
+    """REGRESSÃO do teste ao vivo (29/09): com a sessão de verdade (o commit EXPIRA o
+    objeto), a volta do login reatribuía o mesmo dict e o SQLAlchemy não gravava o
+    estado "conectado" — só os tokens. A sessão dos outros testes não expira no commit,
+    por isso eles não pegaram."""
+    from modelos import Membro
+    from rotas import mcp_oauth as rota
+
+    s = CriadorDeSessao()
+    u = Usuario(nome="oauth", email=f"oauth-{uuid.uuid4().hex[:6]}@x.com", auth_id=uuid.uuid4(), ativo=True)
+    s.add(u)
+    s.flush()
+    org = Organizacao(nome="Org OAuth", dono_id=u.id)
+    s.add(org)
+    s.flush()
+    s.add(Membro(usuario_id=u.id, organizacao_id=org.id, papel="admin"))
+    t = Time(organizacao_id=org.id, nome="Time OAuth")
+    s.add(t)
+    s.flush()
+    inst = _criar_inst(s, t.id, {"auth_modo": "oauth_login"}, {"url": oauth.url_mcp})
+    config = ConfigMCP.model_validate({**inst.configuracao, "url": oauth.url_mcp})
+    url, dados_oauth, _ = mcp_oauth.iniciar_login(inst, config, {}, u.id)
+    inst.conexao = {"oauth": dados_oauth}
+    s.commit()
+    iid = inst.id
+    try:
+        volta = httpx.get(url, follow_redirects=False).headers["location"]
+        q = {k: v[0] for k, v in parse_qs(urlparse(volta).query).items()}
+        s2 = CriadorDeSessao()
+        try:
+            pagina = rota.callback(state=q["state"], code=q["code"], sessao=s2)
+            assert "Conta conectada" in pagina.body.decode()
+        finally:
+            s2.close()
+        s3 = CriadorDeSessao()
+        try:
+            gravado = s3.get(Instrumento, iid).conexao["oauth"]
+        finally:
+            s3.close()
+        assert gravado["estado"] == "conectado"
+        assert gravado.get("conectado_em") and gravado.get("expira_em")
+        assert "pendente" not in gravado
+    finally:
+        s.rollback()
+        s.delete(s.get(Instrumento, iid))
+        s.flush()
+        s.execute(Membro.__table__.delete().where(Membro.organizacao_id == org.id))
+        s.delete(s.get(Time, t.id))
+        s.delete(s.get(Organizacao, org.id))
+        s.delete(s.get(Usuario, u.id))
+        s.commit()
+        s.close()
