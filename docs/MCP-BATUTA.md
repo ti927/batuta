@@ -82,6 +82,10 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
   (`rotas.quadros_publico.ler_linhas`/`ler_totais`), pela URL inteira ou por `link_id` + `consulta`; não
   conta leitura nem gasta o limite do link. O risco aceito: o link fica na conversa do claude.ai. Trocar
   link segue só pela tela. **Total: 66 ferramentas.**
+- **Modelos (2026-09-29):** as docstrings de `criar_agente`/`editar_agente` passaram a listar os modelos
+  (inclusive `claude-sonnet-5-5` e `claude-opus-5-5`, em validação) e a mandar a IA ao capítulo
+  `times-agentes/agente` da Central, com preços e quando usar cada um. Antes diziam só "senão usa o padrão"
+  — a IA externa não sabia quais modelos existiam.
 - **Testar (2026-09-26):** a IA testa o que monta, em vez de o consultor testar por ela —
   `testar_operacao_conector` (cada operação de um conector) e `testar_instrumento` (os outros tipos,
   pelo mesmo caminho do botão de testar da tela). O teste é **real, inclusive quando grava** (decisão

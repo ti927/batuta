@@ -63,27 +63,50 @@ MAX_RETENTATIVAS_IA = 6
 TIMEOUT_IA_CHAT_S = 60
 MAX_RETENTATIVAS_IA_CHAT = 1
 
-# Modelos que NÃO aceitam o parâmetro `temperature` (a API responde 400
-# "temperature is deprecated for this model"). Para eles, omitimos o parâmetro.
-# São da geração de "adaptive thinking" (sempre ligado, com parâmetro `effort`):
-# Opus 4.8 e Sonnet 5. Centralizado aqui para valer tanto para a IA de conversa
-# quanto para qualquer agente que rode num desses modelos.
-MODELOS_SEM_TEMPERATURA = {"claude-opus-4-8", "claude-sonnet-5"}
+def _claude_aceita_temperatura(m: str) -> bool:
+    """Os Claude que AINDA aceitam `temperature`: os anteriores à geração do adaptive
+    thinking — a família 3, os Haiku, os Sonnet 4.x e os Opus até o 4.6. Do Opus 4.7
+    em diante (Opus 4.8, Opus 5/5.5, Sonnet 5/5.5, Fable…) a API responde 400.
+
+    A regra é por GERAÇÃO, listando quem aceita, de propósito. Até 2026-09-29 era uma
+    lista de quem NÃO aceita, e cada modelo novo nascia quebrado até alguém lembrar de
+    incluí-lo (o Sonnet 5.5 teria dado erro em todo agente). Agora o modelo novo já
+    nasce certo."""
+    if m.startswith(("claude-3", "claude-haiku", "claude-sonnet-4")):
+        return True
+    if m.startswith("claude-opus-4-"):
+        versao = m.removeprefix("claude-opus-4-").split("-", 1)[0]
+        return versao.isdigit() and int(versao) <= 6
+    return False
 
 
 def _envia_temperatura(modelo: str) -> bool:
     """Se devemos enviar `temperature` a este modelo. Os modelos de RACIOCÍNIO
     rejeitam o parâmetro com HTTP 400 e, para eles, omitimos (a API usa o padrão):
-    na Anthropic, os de adaptive thinking (MODELOS_SEM_TEMPERATURA); na OpenAI, a
-    série `o` (o1/o3/o4) e a família GPT-5+ (inclui o GPT-5.6 Sol/Terra/Luna). Os
-    demais (GPT-4o/4.1, Gemini, Claude antigos) aceitam. Ponto único, vale para a
+    na Anthropic, todo Claude do Opus 4.7 em diante (`_claude_aceita_temperatura`);
+    na OpenAI, a série `o` (o1/o3/o4) e a família GPT-5+ (inclui o GPT-5.6
+    Sol/Terra/Luna). Os demais (GPT-4o/4.1, Gemini) aceitam. Ponto único, vale para a
     conversa e para qualquer agente."""
-    if modelo in MODELOS_SEM_TEMPERATURA:
-        return False
     m = (modelo or "").lower()
+    if m.startswith("claude"):
+        return _claude_aceita_temperatura(m)
     if m.startswith(("o1", "o3", "o4")) or m.startswith("gpt-5"):
         return False
     return True
+
+
+# Modelos cujo "pensamento" fica PRESO à conversa que o gerou (Sonnet 5.5, Opus 5.5):
+# se algo ANTES de um bloco de pensamento muda — e o Batuta muda, ao resumir o começo
+# das conversas longas (memória entre turnos dos agentes, resumo da IA criadora) —, a
+# API responde 400 nas contas criadas a partir de 2026-08-31. A chave pode ser de um
+# CLIENTE, com conta nova. A saída oficial é pedir que o bloco afetado seja DESCARTADO
+# em vez de recusado: perde-se o raciocínio de turnos antigos, não o turno.
+MODELOS_PENSAMENTO_VINCULADO = {"claude-sonnet-5-5", "claude-opus-5-5"}
+BETA_VINCULO_PENSAMENTO = "thinking-binding-controls-2026-08-01"
+PENSAMENTO_TOLERANTE_A_RESUMO = {
+    "type": "adaptive",
+    "block_binding": {"prefix_mismatch_behavior": "drop_block"},
+}
 
 # Mapa {provedor: chave} resolvido para a execução em curso (Fases 7.3/7-A). É um
 # contextvar para atravessar o stack do motor sem mudar a assinatura de nenhuma
@@ -141,10 +164,13 @@ def construir_modelo(
             "timeout": espera,
             "max_retries": tentativas,
         }
-        # Opus 4.8 (e afins) rejeitam `temperature`; só enviamos quando o modelo
-        # aceita.
+        # Do Opus 4.7 em diante a Anthropic rejeita `temperature`; só enviamos quando
+        # o modelo aceita.
         if _envia_temperatura(modelo):
             parametros["temperature"] = temperatura
+        if modelo in MODELOS_PENSAMENTO_VINCULADO:
+            parametros["thinking"] = PENSAMENTO_TOLERANTE_A_RESUMO
+            parametros["betas"] = [BETA_VINCULO_PENSAMENTO]
         if chave:
             parametros["api_key"] = chave
         elif not os.environ.get("ANTHROPIC_API_KEY"):

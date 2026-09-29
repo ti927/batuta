@@ -64,12 +64,12 @@ def test_sonnet_5_omite_temperature():
     # Mesma geração do Opus 4.8 (adaptive thinking) → a API rejeita `temperature`.
     from orquestracao import llm
 
-    assert "claude-sonnet-5" in llm.MODELOS_SEM_TEMPERATURA
+    assert llm._envia_temperatura("claude-sonnet-5") is False
 
 
-def test_sonnet_5_preco_cai_na_familia_sonnet():
-    # 1M entrada + 1M saída na família sonnet (US$3 + US$15) = 18.0.
-    assert precos.custo_usd("claude-sonnet-5", 1_000_000, 1_000_000) == 18.0
+def test_sonnet_5_preco_e_2_e_10():
+    # Sonnet 5 custa US$2/US$10 (antes caía na família sonnet, US$3/US$15 — ~50% a mais).
+    assert precos.custo_usd("claude-sonnet-5", 1_000_000, 1_000_000) == 12.0
 
 
 def test_padrao_da_conversa_e_sonnet_5():
@@ -301,3 +301,51 @@ def test_definir_modelo_criadora_valida_chave(cliente, entrar, dados, sessao):
     # Voltar ao padrão (nulo) sempre passa.
     volta = cliente.put(f"/organizacoes/{org}/modelo-criadora", json={"modelo": None})
     assert volta.status_code == 200 and volta.json()["modelo_criadora"] is None
+
+
+# ───────────── Sonnet 5.5 e Opus 5.5 (2026-09-29): regra por GERAÇÃO ─────────────
+
+
+def test_temperatura_por_geracao_modelo_novo_ja_nasce_certo():
+    """Quem aceita `temperature` é listado; qualquer Claude novo omite sozinho."""
+    from orquestracao import llm
+
+    for aceita in ("claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-6",
+                   "claude-opus-4-5", "claude-3-5-sonnet-latest"):
+        assert llm._envia_temperatura(aceita) is True, aceita
+    for recusa in ("claude-opus-4-7", "claude-opus-4-8", "claude-opus-5", "claude-opus-5-5",
+                   "claude-sonnet-5", "claude-sonnet-5-5", "claude-fable-5-1",
+                   "claude-sonnet-6"):
+        assert llm._envia_temperatura(recusa) is False, recusa
+
+
+def test_novos_no_catalogo_e_na_visao():
+    from instrumentos.descrever_imagem import MODELOS_VISAO
+    from orquestracao import modelos_ia
+
+    anthropic = modelos_ia.MODELOS_POR_PROVEDOR[modelos_ia.PROVEDOR_ANTHROPIC]
+    for m in ("claude-sonnet-5-5", "claude-opus-5-5", "claude-opus-5"):
+        assert m in anthropic and m in MODELOS_VISAO
+        assert modelos_ia.provedor_do_modelo(m) == "anthropic"
+
+
+def test_precos_sonnet_5_5_e_opus_5_5():
+    assert precos.custo_usd("claude-sonnet-5-5", 1_000_000, 1_000_000) == 12.0
+    assert precos.custo_usd("claude-opus-5-5", 1_000_000, 1_000_000) == 24.0
+    assert precos.custo_usd("claude-opus-5", 1_000_000, 1_000_000) == 30.0
+    assert precos.custo_usd("claude-sonnet-4-6", 1_000_000, 1_000_000) == 18.0
+
+
+def test_pensamento_vinculado_descarta_em_vez_de_recusar(monkeypatch):
+    """Sonnet 5.5/Opus 5.5: o Batuta resume o começo das conversas longas; sem isto, a
+    API recusaria (400) em conta criada depois de 31/08/2026."""
+    from orquestracao import llm
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-teste")
+    m = llm.construir_modelo("claude-sonnet-5-5")
+    assert m.thinking == {"type": "adaptive",
+                          "block_binding": {"prefix_mismatch_behavior": "drop_block"}}
+    assert m.betas == ["thinking-binding-controls-2026-08-01"]
+    assert m.temperature is None
+    antigo = llm.construir_modelo("claude-sonnet-5")
+    assert antigo.thinking is None and not antigo.betas

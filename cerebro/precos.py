@@ -12,8 +12,13 @@ desatualizados — a tela deixa claro que é uma estimativa.
 # das mais genéricas (ex.: "gpt-4o-mini" antes de "gpt-4o", que é prefixo dele).
 # Espelhado no seletor de modelo da interface (interface/lib/modelos.ts).
 PRECOS_USD_POR_MTOK = {
-    # Anthropic (por família)
+    # Anthropic (por família; as versões específicas ANTES da família genérica).
+    # Opus 5.5 custa menos que os outros Opus. Sonnet 5 e 5.5 custam $2/$10 — até
+    # 2026-09-29 o Sonnet 5 caía em "sonnet" ($3/$15) e o custo mostrado ficava ~50%
+    # acima do real.
+    "opus-5-5": (4.0, 20.0),
     "opus": (5.0, 25.0),
+    "sonnet-5": (2.0, 10.0),
     "sonnet": (3.0, 15.0),
     "haiku": (1.0, 5.0),
     # OpenAI GPT-5.6 (Luna teve corte de 80% em 30/jul/2026)

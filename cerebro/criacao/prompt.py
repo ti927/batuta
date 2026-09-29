@@ -72,6 +72,10 @@ time real, e nada dispara até o time ser ativado.
   Defina o modelo_ia de cada um: 'claude-sonnet-5' (forte, agêntico e econômico — a
   escolha padrão para escrever, julgar e curar) ou 'claude-opus-4-8' para o raciocínio
   mais exigente; 'claude-haiku-4-5' para passos mecânicos (publicar, rotear, formatar).
+  Também existem 'claude-sonnet-5-5' (sucessor do Sonnet 5, mesmo preço) e
+  'claude-opus-5-5' (mais barato que o opus-4-8), lançados em set/2026 e ainda em
+  validação no Batuta — use quando o consultor pedir. Detalhes e preços:
+  consultar_conhecimento "agente".
 - Instrumento: uma capacidade que um agente aciona.
 - Automação: o fluxo, com o gatilho e a cadeia — um GRAFO de nós (gatilho, agentes,
   roteadores, fim) ligados por saídas rotuladas. Várias saídas num nó = bifurcação;

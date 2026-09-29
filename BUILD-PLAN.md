@@ -2661,3 +2661,17 @@ Pedido do maestro: *"verifique a possibilidade da IA externa compartilhar regist
 - **Defeito achado no caminho:** o evento `quadro.link_lido`, prometido a cada leitura, **nunca foi gravado** — a categoria `quadro` não é persistida por padrão (mesma classe do `interno` de 26/09). Em 3 dias, ~385 leituras dos 7 links sem nenhum evento (o contador `usos` do link funcionava). Agora `persistir=True`.
 
 **Provado ao vivo (conferido em 2026-09-29):** 500 eventos `quadro.link_lido` gravados depois do deploy; a `testar_instrumento` foi usada 22 vezes pelo maestro (20 em gerar imagem, 1 REST, 1 quadro — nenhuma gravação; os testes de imagem custam de verdade). **Ainda não usados de verdade:** `criar_link_quadro`, `testar_link_quadro` e um teste de gravação marcado TESTES.
+
+## FASE — Sonnet 5.5 e Opus 5.5 no seletor  ✅ (2026-09-29, sem migração)
+
+Pedido do maestro: *"a Anthropic liberou ontem o Sonnet 5.5; precisamos da opção nos agentes e em instrumento que use a Anthropic"*. ID conferido na documentação oficial: `claude-sonnet-5-5` (lançado 28/09, US$ 2/10, mesmo preço do Sonnet 5). Com aval, entrou junto o `claude-opus-5-5` (US$ 4/20, mais barato que o Opus 4.8) e o `claude-opus-5`.
+
+- **Catálogo** (`modelos_ia.py` + `interface/lib/modelos.ts`): uma lista só alimenta o seletor do agente, o da IA de conversa e o instrumento "Ler/Descrever imagem".
+- **`temperature` por geração** (`llm._claude_aceita_temperatura`): lista de quem ACEITA (família 3, Haiku, Sonnet 4.x, Opus ≤ 4.6); todo Claude novo omite. A lista antiga, de quem recusa, teria dado 400 em todo agente no Sonnet 5.5.
+- **Pensamento vinculado** (Sonnet 5.5, Opus 5.5): o Batuta resume o começo das conversas longas; em conta Anthropic criada a partir de 31/08/2026 isso dá 400. Envia-se `block_binding.prefix_mismatch_behavior: "drop_block"` (beta `thinking-binding-controls-2026-08-01`) — o raciocínio antigo é descartado, o turno segue.
+- **Preço corrigido:** o Sonnet 5 caía na família "sonnet" (US$ 3/15) e custa US$ 2/10 — os custos mostrados de agentes em Sonnet 5 estavam ~50% acima do real (cérebro e tela).
+- **Não afetados** (verificado): o único `tool_choice` forçado é o roteador, que roda no Haiku; o Batuta usa só a última mensagem do agente (o texto entre ferramentas, que o 5.5 esconde, não era usado); não usa computer use nem advisor.
+- **Textos:** Central `times-agentes/agente` ganhou "Qual modelo de IA escolher" (tabela com preços); prompt da IA criadora e docstrings `criar_agente`/`editar_agente` do MCP listam os modelos; ARQUITETURA §7 corrigida (a criadora usa Sonnet 5, não Opus).
+- **Padrão da IA criadora segue Sonnet 5** até validar o 5.5 num agente real (decisão do maestro).
+
+**Em aberto:** a prova ao vivo — não há credencial Anthropic na máquina local (as chaves ficam no cofre de produção). Um agente de teste no Sonnet 5.5, com ferramenta e conversa longa, confirma; depois disso, tirar o "em validação" dos textos.

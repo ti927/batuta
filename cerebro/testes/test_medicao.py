@@ -80,7 +80,9 @@ def test_custo_usd_desconta_cache():
         "modelo": "claude-sonnet-5", "tokens_entrada": 1_000_000, "tokens_saida": 0,
         "tokens_cache_read": 1_000_000,
     }
-    assert precos.custo_de_entrada(e) == pytest.approx(0.30)  # sonnet entrada 3.0 × 10%
+    # Sonnet 5 entrada 2.0 × 10% (a leitura de cache oficial é $0,20/MTok; o teste
+    # dizia 3.0 × 10% — o mesmo preço errado que a tabela tinha até 2026-09-29).
+    assert precos.custo_de_entrada(e) == pytest.approx(0.20)
     # Sem campos de cache, nada muda (compat. com uso antigo).
     assert precos.custo_de_entrada(
         {"modelo": "haiku", "tokens_entrada": 1_000_000, "tokens_saida": 0}

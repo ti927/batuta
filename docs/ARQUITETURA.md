@@ -288,7 +288,23 @@ capítulo `segredos/certificado-digital-mtls` da Central.
 Existem **três papéis de IA** (o cofre modela os três), mas hoje só dois operam:
 
 - **IA executora** = os **agentes** do time. Cada agente escolhe seu `modelo_ia` (Anthropic/OpenAI/Google; padrão `claude-haiku-4-5`). É o que roda nos fluxos.
-- **IA de conversa (criadora = companheira)** = **uma única conversa que nunca termina** (`criacao/loop.py`), na qual o consultor monta e ajusta o time conversando. Ela escreve no **time real** via `criacao/servicos.py` (cria/edita Time/Agente/Instrumento/cinto/Automação). Modelo padrão **Opus** (`MODELO_CRIADORA`), configurável por organização (`organizacoes.modelo_criadora`). Tem **memória de longo prazo** (`memorias_projeto`) que ela mesma cura (ferramentas `lembrar`/`recordar`/`esquecer`).
+- **IA de conversa (criadora = companheira)** = **uma única conversa que nunca termina** (`criacao/loop.py`), na qual o consultor monta e ajusta o time conversando. Ela escreve no **time real** via `criacao/servicos.py` (cria/edita Time/Agente/Instrumento/cinto/Automação). Modelo padrão **Sonnet 5** (`MODELO_CRIADORA = "claude-sonnet-5"`), configurável por organização (`organizacoes.modelo_criadora`). Tem **memória de longo prazo** (`memorias_projeto`) que ela mesma cura (ferramentas `lembrar`/`recordar`/`esquecer`).
+
+**Catálogo de modelos — fonte única** (`orquestracao/modelos_ia.py`, espelhado em `interface/lib/modelos.ts`):
+alimenta o seletor do agente, o da IA de conversa e o instrumento de visão. Anthropic desde 2026-09-29:
+`claude-sonnet-5-5`, `claude-opus-5-5`, `claude-opus-5`, `claude-opus-4-8`, `claude-sonnet-5`,
+`claude-sonnet-4-6`, `claude-haiku-4-5`. Tudo passa por **um só construtor de cliente**
+(`orquestracao/llm.py::construir_modelo`), com duas regras que valem para agentes, criadora, resumos e visão:
+- **`temperature` por GERAÇÃO** (`_claude_aceita_temperatura`): só a família 3, os Haiku, os Sonnet 4.x e os
+  Opus até o 4.6 recebem; do Opus 4.7 em diante a API recusa (400). Lista de quem ACEITA, para modelo novo
+  já nascer certo (antes era uma lista de quem recusa, e cada lançamento nascia quebrado).
+- **Pensamento vinculado à conversa** (`MODELOS_PENSAMENTO_VINCULADO`: Sonnet 5.5, Opus 5.5): o Batuta
+  RESUME o começo das conversas longas (memória entre turnos, resumo da criadora), o que invalida os blocos
+  de pensamento; em contas Anthropic criadas a partir de 2026-08-31 a API responderia 400. Envia-se
+  `thinking: {type: "adaptive", block_binding: {prefix_mismatch_behavior: "drop_block"}}` + beta
+  `thinking-binding-controls-2026-08-01`: o bloco afetado é descartado, o turno segue.
+- O único "forçar ferramenta" (`tool_choice`), que os modelos 5.5 recusam, é o `with_structured_output` do
+  roteador (`cadeia.py`), que roda sempre no modelo padrão (Haiku).
 
 **Cofre de chaves multi-provedor** (`chaves.py`): resolve a chave na ordem **chave da organização →
 chave-mãe da consultoria → `ANTHROPIC_API_KEY` legada do ambiente**. A interface tem tela para

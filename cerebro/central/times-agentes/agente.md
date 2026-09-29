@@ -2,8 +2,8 @@
 titulo: "O Agente e os 4 markdowns"
 area: "times-agentes"
 slug: "agente"
-tags: ["agente", "markdown", "agent", "skill", "tools", "soul", "modelo", "personalidade"]
-revisado_em: "2026-09-02"
+tags: ["agente", "markdown", "agent", "skill", "tools", "soul", "modelo", "modelo de ia", "qual modelo", "sonnet", "opus", "haiku", "preço do modelo", "personalidade"]
+revisado_em: "2026-09-29"
 fontes: ["PRODUTO.md §11", "cerebro/modelos.py (Agente)", "feedback_sem-prompt-base-agentes"]
 ---
 
@@ -28,6 +28,28 @@ Além dos markdowns, o agente tem um **modelo de IA** (qual "cérebro" usa) e, o
 2. Escolha o **modelo de IA** (a escolha do provedor é feita aqui).
 3. Pendure os **instrumentos** no cinto dele e explique no `tools.md` quando usá-los.
 4. Salve — o popup mantém o que você digitou; marcadores mostram o que ainda não foi salvo.
+
+## Qual modelo de IA escolher
+O modelo é o "cérebro" que o agente usa para pensar e escrever. O custo da IA do agente depende dele (o
+custo dos instrumentos é à parte — veja [[operacao/uso-e-custos]]). Preços por milhão de tokens, entrada /
+saída:
+
+| Modelo | Para quê | Preço |
+|---|---|---|
+| `claude-haiku-4-5` | passos mecânicos: publicar, rotear, formatar (é o padrão de quem não escolhe) | US$ 1 / 5 |
+| `claude-sonnet-5` | o padrão para escrever, julgar e curar | US$ 2 / 10 |
+| `claude-sonnet-5-5` | sucessor do Sonnet 5, mesmo preço (set/2026 — em validação no Batuta) | US$ 2 / 10 |
+| `claude-opus-5-5` | raciocínio mais exigente; mais barato que os outros Opus (set/2026 — em validação) | US$ 4 / 20 |
+| `claude-opus-5`, `claude-opus-4-8` | raciocínio mais exigente | US$ 5 / 25 |
+| `claude-sonnet-4-6` | geração anterior do Sonnet | US$ 3 / 15 |
+
+Há também modelos da OpenAI (GPT-5.6 Luna/Terra/Sol e GPT-4) e do Google (Gemini) — só aparecem na tela
+quando a organização tem a chave daquele provedor.
+
+Nos modelos mais novos da Anthropic (do Opus 4.7 em diante: Opus 4.8, Opus 5/5.5, Sonnet 5/5.5) o Batuta
+não envia "temperatura" (eles recusam) e deixa o raciocínio do modelo ligado. No Sonnet 5.5 e no Opus 5.5,
+quando uma conversa longa é resumida, o raciocínio dos turnos antigos é descartado em vez de dar erro — o
+agente segue normalmente.
 
 ## Exemplos
 - Um "Redator": `agent.md` diz que escreve artigos SEO; `skill.md` traz o processo; `tools.md` explica

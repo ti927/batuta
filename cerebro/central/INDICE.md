@@ -37,7 +37,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 |---|---|---|---|---|
 | O Time | `times-agentes/time` | Unidade de trabalho; o que vive dentro | ✅ | ✍️ |
 | O Líder | `times-agentes/lider` | O agente especial (ponte com humanos) | ✅ | ✍️ |
-| O Agente e os 4 markdowns | `times-agentes/agente` | agent.md / skill.md / tools.md / soul.md; modelo de IA; os 4 são lidos juntos — instrução contraditória vence a regra nova | ✅ | ✍️ |
+| O Agente e os 4 markdowns | `times-agentes/agente` | agent.md / skill.md / tools.md / soul.md; modelo de IA (qual escolher e preços, inclusive Sonnet 5.5/Opus 5.5); os 4 são lidos juntos — instrução contraditória vence a regra nova | ✅ | ✍️ |
 | Memória do agente | `times-agentes/memoria-do-agente` | Fichas por assunto; recall sempre/sob demanda | ✅ | ✍️ |
 | Criar com a IA | `times-agentes/criar-com-a-ia` | A IA criadora (conversa que monta o time) | ✅ | ✍️ |
 | Editar pelo dashboard | `times-agentes/editar-agente` | Popup, abas, cinto, salvar sem perder; **Ritmo e espera** (o que o agente faz diferente do padrão da automação) | ✅ | ✍️ |

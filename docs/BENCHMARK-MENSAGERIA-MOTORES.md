@@ -66,6 +66,6 @@ Um agente simples em **Opus custa 5× mais** que em Haiku pelo mesmo trabalho. O
 - LangGraph — persistence & interrupts: <https://docs.langchain.com/oss/python/langgraph/interrupts> (+ `PostgresSaver` recomendado em produção).
 - OpenAI — Conversation state / Assistants Threads (persistem mensagens + tool state por thread); prompt caching automático (retenção 24h nos modelos novos).
 - Gemini — context caching implícito (padrão, ~90% off) × explícito (com armazenagem): <https://ai.google.dev/gemini-api/docs/caching>.
-- Anthropic — prompt caching (leitura ~0,1×, escrita 1,25×/2×; TTL 5 min/1h) + preços (Opus 4.8 $5/$25, Sonnet 5 $3/$15, Haiku 4.5 $1/$5) pela referência oficial do SDK (skill `claude-api`).
+- Anthropic — prompt caching (leitura ~0,1×, escrita 1,25×/2×; TTL 5 min/1h) + preços (Opus 4.8 $5/$25, Sonnet 5 $3/$15 — **corrigido em 2026-09-29: o Sonnet 5 custa $2/$10**, Haiku 4.5 $1/$5) pela referência oficial do SDK (skill `claude-api`).
 - Comparativos de cache 2026 (Anthropic × OpenAI × Azure/Gemini): <https://technspire.com/en/blog/prompt-caching-2026-real-cost-wins>.
 - OpenClaw — arquitetura de memória (sessões + `MEMORY.md` + sqlite-vec + compactação por turno silencioso).

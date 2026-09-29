@@ -394,7 +394,13 @@ async def criar_agente(
     """Cria um agente num time. `papel` é 'agente' (padrão) ou 'lider' (um por time). O
     comportamento do agente vem dos 4 textos (markdowns): `agent_md` (quem ele é e faz),
     `skill_md` (o passo a passo), `tools_md` (como usar os instrumentos), `soul_md` (tom/
-    voz). `modelo_ia` é opcional (senão usa o padrão)."""
+    voz). `modelo_ia` é opcional (senão usa o padrão, `claude-haiku-4-5`). Anthropic:
+    `claude-haiku-4-5` (passos mecânicos), `claude-sonnet-5` (o padrão para escrever e
+    julgar), `claude-sonnet-5-5` e `claude-opus-5-5` (set/2026, em validação no Batuta —
+    use quando o consultor pedir; o Opus 5.5 é mais barato que o `claude-opus-4-8`),
+    `claude-opus-5`, `claude-opus-4-8`, `claude-sonnet-4-6`. OpenAI/Gemini só funcionam se
+    a organização tiver a chave (veja `ver_chaves_de_ia`). Preços e quando usar cada um:
+    `consultar_conhecimento` "agente"."""
     return await anyio.to_thread.run_sync(
         escrita.criar_agente, _sub(), time_id, nome, papel,
         agent_md, skill_md, tools_md, soul_md, modelo_ia,
@@ -413,7 +419,8 @@ async def editar_agente(
     modelo_ia: str | None = None,
 ) -> str:
     """Edita um agente (só os campos informados). Para ver o que já está escrito antes de
-    reescrever, use `ver_agente`.
+    reescrever, use `ver_agente`. `modelo_ia` troca o modelo (as opções estão em
+    `criar_agente`); trocar o modelo não muda os markdowns.
 
     Os quatro markdowns são lidos JUNTOS pelo agente. Ao trocar o JEITO de fazer algo
     (outro instrumento, outro caminho), leia todos antes e APAGUE a instrução antiga no

@@ -49,7 +49,16 @@ export const USADA_POR: Record<Servico, string> = {
 };
 
 export const MODELOS_POR_PROVEDOR: Record<Provedor, string[]> = {
-  anthropic: ["claude-opus-4-8", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5"],
+  // Sonnet 5.5 e Opus 5.5 entraram em 2026-09-29 (Opus 5.5 custa MENOS que o 4.8).
+  anthropic: [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5",
+    "claude-opus-5",
+    "claude-opus-4-8",
+    "claude-sonnet-5",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5",
+  ],
   // OpenAI GPT-5.6 (tiers Sol/Terra/Luna = par de Opus/Sonnet/Haiku); Luna teve
   // corte de 80% em 30/jul/2026. Mantidos os GPT-4 legados abaixo.
   openai: ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-4.1", "gpt-4o", "gpt-4o-mini"],
@@ -60,8 +69,11 @@ export const MODELOS_POR_PROVEDOR: Record<Provedor, string[]> = {
 // cerebro/precos.py (informativo, não cobrança). Alimenta o rótulo do seletor de
 // modelo, para o usuário escolher já vendo o custo (pedido do maestro).
 export const CUSTO_POR_MODELO: Record<string, [number, number]> = {
+  "claude-sonnet-5-5": [2, 10],
+  "claude-opus-5-5": [4, 20],
+  "claude-opus-5": [5, 25],
   "claude-opus-4-8": [5, 25],
-  "claude-sonnet-5": [3, 15],
+  "claude-sonnet-5": [2, 10], // era [3, 15] — o Sonnet 5 custa $2/$10
   "claude-sonnet-4-6": [3, 15],
   "claude-haiku-4-5": [1, 5],
   "gpt-5.6-luna": [0.2, 1.2],
