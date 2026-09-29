@@ -15,9 +15,9 @@
 // texto pedindo JSON, o que é a mesma coisa que não ter escolha nenhuma.
 
 import { useState } from "react";
-import { AlertTriangle, RefreshCw, ShieldAlert, Unplug } from "lucide-react";
+import { AlertTriangle, CheckCircle2, RefreshCw, ShieldAlert, Unplug } from "lucide-react";
 
-import { api, mensagemDeErro } from "@/lib/api";
+import { api, mensagemDeErro, type ConexaoInstrumento, type Instrumento } from "@/lib/api";
 import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
 
@@ -27,7 +27,27 @@ export type FerramentaMCP = {
   irreversivel: boolean;
 };
 
-type DoServidor = { nome: string; descricao?: string | null };
+// `sugestao` é o que o SERVIDOR diz da ferramenta — só pista, quem decide é a pessoa.
+type DoServidor = {
+  nome: string;
+  descricao?: string | null;
+  sugestao?: "so_le" | "altera" | null;
+};
+
+type Inventario = {
+  ferramentas?: DoServidor[];
+  recursos?: { nome: string; uri: string; descricao?: string }[];
+  prompts?: { nome: string; descricao?: string }[];
+  conexao?: ConexaoInstrumento;
+};
+
+function quando(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const dia = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return `${dia} às ${hora}`;
+}
 
 function lerValor(valor: string): FerramentaMCP[] {
   if (!valor.trim()) return [];
@@ -49,15 +69,20 @@ function lerValor(valor: string): FerramentaMCP[] {
 export function SeletorFerramentasMCP({
   valor,
   instrumentoId,
+  conexaoInicial,
   onChange,
 }: {
   valor: string;
   /** Sem id, o instrumento ainda não foi salvo — e sem ele não há o que perguntar. */
   instrumentoId: string | null;
+  /** O que o último "Conectar" descobriu (guardado no instrumento). */
+  conexaoInicial: ConexaoInstrumento | null;
   onChange: (v: string) => void;
 }) {
   const escolhidas = lerValor(valor);
   const [doServidor, setDoServidor] = useState<DoServidor[] | null>(null);
+  const [extras, setExtras] = useState<Pick<Inventario, "recursos" | "prompts"> | null>(null);
+  const [conexao, setConexao] = useState<ConexaoInstrumento | null>(conexaoInicial);
   const [buscando, setBuscando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -66,12 +91,14 @@ export function SeletorFerramentasMCP({
     setBuscando(true);
     setErro(null);
     try {
-      const r = await api.post<{ ferramentas?: DoServidor[] }>(
+      const r = await api.post<Inventario>(
         `/instrumentos/${instrumentoId}/acionar`,
         { argumentos: {} },
       );
       const lista = r?.ferramentas ?? [];
       setDoServidor(lista);
+      setExtras({ recursos: r?.recursos ?? [], prompts: r?.prompts ?? [] });
+      if (r?.conexao) setConexao(r.conexao);
       // Primeira busca: semeia a escolha com TUDO DESMARCADO. Marcar tudo sozinho
       // seria decidir pela pessoa justamente o que esta tela existe para ela decidir.
       if (!escolhidas.length && lista.length) {
@@ -79,6 +106,13 @@ export function SeletorFerramentasMCP({
       }
     } catch (e) {
       setErro(mensagemDeErro(e, "Não foi possível falar com o servidor MCP"));
+      // O código da falha fica guardado no instrumento (a mensagem já veio acima).
+      try {
+        const atual = await api.get<Instrumento>(`/instrumentos/${instrumentoId}`);
+        setConexao(atual.conexao ?? null);
+      } catch {
+        /* sem o código: a mensagem basta */
+      }
     } finally {
       setBuscando(false);
     }
@@ -95,6 +129,17 @@ export function SeletorFerramentasMCP({
         ? escolhidas.map((f) => (f.nome === nome ? { ...f, ...patch } : f))
         : [...escolhidas, { nome, usar: true, irreversivel: true, ...patch }],
     );
+  }
+
+  // Ao MARCAR uma ferramenta que o servidor diz que só lê, a escolha já vem em "só
+  // lê"; nas demais, em "pede aprovação". A pessoa pode trocar — é pré-marcação.
+  function marcar(f: DoServidor, usar: boolean) {
+    const atual = escolhidas.find((x) => x.nome === f.nome);
+    if (usar && !atual?.usar) {
+      alterar(f.nome, { usar: true, irreversivel: f.sugestao !== "so_le" });
+    } else {
+      alterar(f.nome, { usar });
+    }
   }
 
   // O que mostrar: o que o servidor publica agora; e, se ainda não perguntamos, o que
@@ -136,6 +181,22 @@ export function SeletorFerramentasMCP({
         </span>
       </div>
 
+      {conexao?.estado === "conectado" && !erro && (
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+          <CheckCircle2 className="size-3.5 text-success" />
+          Conectado em {quando(conexao.verificado_em)}
+          {conexao.servidor?.nome ? ` · Servidor: ${conexao.servidor.nome}` : ""}
+        </span>
+      )}
+      {conexao?.estado === "falhou" && !erro && conexao.mensagem && (
+        <Aviso>
+          A última tentativa falhou: {conexao.mensagem}
+          {conexao.codigo && (
+            <span className="mt-1 block text-[11px] opacity-70">{conexao.codigo}</span>
+          )}
+        </Aviso>
+      )}
+
       {!instrumentoId && (
         <p className="text-xs text-muted-foreground">
           Salve o instrumento primeiro (com o endereço do servidor). Só então dá para
@@ -143,7 +204,14 @@ export function SeletorFerramentasMCP({
         </p>
       )}
 
-      {erro && <Aviso>{erro}</Aviso>}
+      {erro && (
+        <Aviso>
+          {erro}
+          {conexao?.estado === "falhou" && conexao.codigo && (
+            <span className="mt-1 block text-[11px] opacity-70">{conexao.codigo}</span>
+          )}
+        </Aviso>
+      )}
 
       {linhas.length > 0 && (
         <div className="flex flex-col gap-1.5 rounded-md border border-border p-2">
@@ -162,7 +230,7 @@ export function SeletorFerramentasMCP({
                     className="mt-0.5 size-3.5 flex-none accent-primary"
                     checked={usar}
                     disabled={f.sumiu}
-                    onChange={(e) => alterar(f.nome, { usar: e.target.checked })}
+                    onChange={(e) => marcar(f, e.target.checked)}
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-mono text-[12px] text-foreground">
@@ -171,6 +239,11 @@ export function SeletorFerramentasMCP({
                     {f.descricao && (
                       <span className="block text-[11px] leading-snug text-muted-foreground">
                         {f.descricao}
+                      </span>
+                    )}
+                    {f.sugestao && (
+                      <span className="mt-0.5 inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                        o servidor diz: {f.sugestao === "so_le" ? "só lê" : "apaga ou altera"}
                       </span>
                     )}
                     {f.sumiu && (
@@ -222,6 +295,29 @@ export function SeletorFerramentasMCP({
             );
           })}
         </div>
+      )}
+
+      {extras && ((extras.recursos?.length ?? 0) > 0 || (extras.prompts?.length ?? 0) > 0) && (
+        <details className="text-xs">
+          <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
+            O que mais o servidor oferece
+          </summary>
+          <div className="mt-1.5 flex flex-col gap-1 pl-4 text-muted-foreground">
+            <span className="italic">O agente ainda não usa estes itens.</span>
+            {(extras.recursos ?? []).map((r) => (
+              <span key={r.uri}>
+                <span className="font-mono text-foreground">{r.nome}</span>
+                {r.descricao ? ` — ${r.descricao}` : ""}
+              </span>
+            ))}
+            {(extras.prompts ?? []).map((p) => (
+              <span key={p.nome}>
+                <span className="font-mono text-foreground">{p.nome}</span> (prompt)
+                {p.descricao ? ` — ${p.descricao}` : ""}
+              </span>
+            ))}
+          </div>
+        </details>
       )}
 
       <p className="text-[11px] leading-snug text-muted-foreground">

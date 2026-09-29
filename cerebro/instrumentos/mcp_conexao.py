@@ -262,8 +262,8 @@ def classificar(e: BaseException, modo: str = "") -> FalhaInstrumento:
     # Sem o texto original: só o NOME do erro, que não carrega segredo.
     nomes = ", ".join(sorted({type(f).__name__ for f in folhas}))
     return FalhaInstrumento(
-        f"a conversa com o servidor MCP falhou ({nomes}). Use “Conectar e listar "
-        "ferramentas” para testar de novo.",
+        "a conversa com o servidor MCP falhou de um jeito inesperado. Use “Conectar e "
+        f"listar ferramentas” para testar de novo. (detalhe técnico: {nomes})",
         retentavel=True, codigo="mcp.falha_protocolo",
     )
 

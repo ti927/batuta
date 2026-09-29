@@ -264,8 +264,20 @@ export type Instrumento = {
   acao_irreversivel: boolean;
   // Caixa-forte: credencial nomeada da central que este instrumento usa (ou null).
   credencial_id: string | null;
+  // O que o último "Conectar" descobriu (servidor MCP). Null = nunca testado.
+  conexao?: ConexaoInstrumento | null;
   criado_em: string;
   atualizado_em: string;
+};
+
+export type ConexaoInstrumento = {
+  estado: "conectado" | "falhou";
+  transporte?: "streamable_http" | "sse";
+  protocolo?: string;
+  servidor?: { nome: string; versao?: string } | null;
+  codigo?: string | null;
+  mensagem?: string;
+  verificado_em: string;
 };
 
 export type TipoInstrumento = {

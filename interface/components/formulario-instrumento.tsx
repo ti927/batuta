@@ -25,6 +25,11 @@ import { IlustracaoProporcao } from "@/components/ilustracao-proporcao";
 import { SeletorIcone } from "@/components/seletor-icone";
 import { Aviso } from "@/components/ui/aviso";
 import { SeletorFerramentasMCP } from "@/components/ferramentas-mcp";
+import {
+  CAMPOS_CONEXAO_MCP,
+  ConexaoMCP,
+  modoInicialMCP,
+} from "@/components/conexao-mcp";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -175,6 +180,28 @@ function valoresIniciais(
   return v;
 }
 
+// MCP: o modo de identificação de um instrumento salvo antes do campo existir é
+// deduzido (token = Bearer), para a tela mostrar o que ele de fato faz.
+function semearMCP(
+  v: Record<string, string>,
+  tipo: string | undefined,
+  instrumento: Instrumento | null,
+): Record<string, string> {
+  if (tipo !== "conectar_mcp") return v;
+  return {
+    ...v,
+    auth_modo: modoInicialMCP(v.auth_modo, instrumento?.segredos, instrumento === null),
+  };
+}
+
+// O segredo que cada modo de identificação do MCP exige (além do endereço).
+const SEGREDO_DO_MODO_MCP: Record<string, [string, string] | undefined> = {
+  bearer: ["token_bearer", "o token"],
+  cabecalho: ["auth_segredo", "o valor do cabeçalho"],
+  query: ["auth_segredo", "o valor da chave"],
+  basic: ["auth_segredo", "a senha"],
+};
+
 // As opções ATIVAS de um campo: se ele depende de outro (controlado_por), só as
 // válidas para o valor atual do controlador; senão, as opções fixas do schema.
 function opcoesAtivas(
@@ -194,6 +221,7 @@ function CampoConfigInput({
   campo,
   valor,
   instrumentoId,
+  conexao,
   jaGuardado,
   disponiveis,
   automacoes,
@@ -206,6 +234,7 @@ function CampoConfigInput({
   // O instrumento JÁ SALVO (null enquanto é criação): o seletor de ferramentas MCP
   // precisa dele para perguntar ao servidor o que ele publica.
   instrumentoId: string | null;
+  conexao?: Instrumento["conexao"]; // o que o último "Conectar" descobriu (MCP)
   jaGuardado: string | undefined; // 4 últimos dígitos, se já há segredo guardado
   disponiveis: ProvedoresDisponiveis | undefined; // p/ o seletor de modelo de IA
   automacoes: AutomacaoOrg[]; // p/ o seletor de automação-alvo (agendar_automacao)
@@ -340,6 +369,7 @@ function CampoConfigInput({
       <SeletorFerramentasMCP
         valor={valor}
         instrumentoId={instrumentoId}
+        conexaoInicial={conexao ?? null}
         onChange={onChange}
       />
     );
@@ -484,8 +514,12 @@ export function FormularioInstrumento({
   // em branco = manter o que já está guardado. Ao criar, semeia os padrões do
   // schema (ver `valoresIniciais`).
   const [valores, setValores] = useState<Record<string, string>>(() =>
-    valoresIniciais(
-      tipos.find((t) => t.tipo === (instrumento?.tipo ?? tipos[0]?.tipo)),
+    semearMCP(
+      valoresIniciais(
+        tipos.find((t) => t.tipo === (instrumento?.tipo ?? tipos[0]?.tipo)),
+        instrumento,
+      ),
+      instrumento?.tipo ?? tipos[0]?.tipo,
       instrumento,
     ),
   );
@@ -598,6 +632,13 @@ export function FormularioInstrumento({
   }, [time.organizacao_id]);
 
   const tipoAtual = tipos.find((t) => t.tipo === tipoSel);
+  const ehMCP = tipoSel === "conectar_mcp";
+  // O modo que está salvo (para saber se a pessoa trocou de modo nesta edição).
+  const modoSalvoMCP = modoInicialMCP(
+    (instrumento?.configuracao?.auth_modo as string | undefined) || undefined,
+    instrumento?.segredos,
+    criando,
+  );
   const deps = tipoAtual?.dependencias ?? null;
   const aceitos = tipoAtual?.tipos_credencial_aceitos ?? [];
   const aceitaCredencial = aceitos.length > 0;
@@ -616,6 +657,22 @@ export function FormularioInstrumento({
     if (!nome.trim()) {
       setErro("O nome é obrigatório.");
       return;
+    }
+    if (ehMCP) {
+      // Trocar de modo sem preencher o segredo do modo novo faria o Batuta usar o
+      // segredo do modo anterior (a senha virando valor de cabeçalho, por exemplo).
+      const guardados = instrumento?.segredos ?? {};
+      if (!camposCobertos.has("url") && !valores.url?.trim() && !guardados.url) {
+        setErro("Preencha o endereço do servidor.");
+        return;
+      }
+      const exigido = SEGREDO_DO_MODO_MCP[valores.auth_modo ?? ""];
+      if (exigido && !camposCobertos.has(exigido[0]) && !valores[exigido[0]]?.trim()) {
+        if (valores.auth_modo !== modoSalvoMCP || !guardados[exigido[0]]) {
+          setErro(`Preencha ${exigido[1]} em “Como o Batuta se conecta”.`);
+          return;
+        }
+      }
     }
     // Monta a configuração a partir dos campos, coagindo cada um pelo seu tipo.
     // Segredo preenchido vai cifrado; segredo em branco é OMITIDO (mantém).
@@ -711,7 +768,9 @@ export function FormularioInstrumento({
             setTipoSel(novo);
             setCredencialId(null); // credencial pode não servir ao novo tipo
             // Tipo novo → semeia os padrões dele (some o estado do tipo anterior).
-            setValores(valoresIniciais(tipos.find((t) => t.tipo === novo), null));
+            setValores(
+              semearMCP(valoresIniciais(tipos.find((t) => t.tipo === novo), null), novo, null),
+            );
           }}
           disabled={!criando}
         >
@@ -730,7 +789,14 @@ export function FormularioInstrumento({
         <p className="text-xs text-muted-foreground">{tipoAtual.descricao}</p>
       )}
 
-      {aceitaCredencial && (
+      {ehMCP && credSelecionada && (
+        <Aviso variant="info" className="text-xs">
+          Usa a credencial “{credSelecionada.nome}” da central (vai para dentro do
+          instrumento na migração).
+        </Aviso>
+      )}
+
+      {aceitaCredencial && !ehMCP && (
         <Label className="flex-col items-start gap-1">
           <span className="flex items-center gap-1.5">
             <Lock className="size-3 text-muted-foreground" />
@@ -772,14 +838,26 @@ export function FormularioInstrumento({
         </Aviso>
       )}
 
+      {ehMCP && (
+        <ConexaoMCP
+          valores={valores}
+          mudar={(campo, v) => setValores((atual) => ({ ...atual, [campo]: v }))}
+          guardados={instrumento?.segredos ?? {}}
+          modoSalvo={modoSalvoMCP}
+          cobertos={camposCobertos}
+        />
+      )}
+
       {camposDoTipo(tipoAtual)
         .filter((campo) => !camposCobertos.has(campo.nome))
+        .filter((campo) => !(ehMCP && CAMPOS_CONEXAO_MCP.has(campo.nome)))
         .map((campo) => (
           <CampoConfigInput
             key={campo.nome}
             campo={{ ...campo, opcoes: opcoesAtivas(campo, deps, valores) }}
             valor={valores[campo.nome] ?? ""}
             instrumentoId={instrumento?.id ?? null}
+            conexao={instrumento?.conexao ?? null}
             jaGuardado={instrumento?.segredos?.[campo.nome]}
             disponiveis={disponiveis}
             automacoes={automacoesOrg}
