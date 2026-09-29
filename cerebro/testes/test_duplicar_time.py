@@ -189,14 +189,41 @@ def test_remapeia_cadeia_legada(cliente, entrar, dados, sessao, time_rico):
     assert str(time_rico["lider_id"]) not in str(auto.cadeia)
 
 
-def test_segredo_nao_canal_copiado(cliente, entrar, dados, sessao, time_rico):
+def test_segredos_nao_vao_para_a_copia(cliente, entrar, dados, sessao, time_rico):
+    """Decisão do maestro (2026-09-29): a cópia nasce com os segredos PENDENTES e a
+    resposta diz em quais instrumentos colar de novo. (Antes eram copiados — e a
+    Central já dizia que não.)"""
     entrar(dados["admin"])
     novo = cliente.post(
         f"/times/{time_rico['time'].id}/duplicar", json={"nome": "C"}
     ).json()
     insts = _instrumentos(sessao, uuid.UUID(novo["id"]))
-    decifrado = segredos_instrumento.decifrar(sessao, insts["Busca"].id)
-    assert decifrado.get("chave_api") == "SECRET123"  # copiado e decifrável
+    assert segredos_instrumento.decifrar(sessao, insts["Busca"].id) == {}
+    # o original continua com o dele
+    assert segredos_instrumento.decifrar(sessao, time_rico["comum"].id).get("chave_api") == "SECRET123"
+    assert novo["instrumentos_a_conectar"] == ["Busca"]  # o canal tem aviso próprio
+
+
+def test_login_oauth_nunca_vai_para_a_copia(cliente, entrar, dados, sessao):
+    from modelos import Instrumento
+
+    time_id = dados["timeA"].id
+    inst = Instrumento(time_id=time_id, nome="WP login", tipo="conectar_mcp",
+                       configuracao={"auth_modo": "oauth_login"},
+                       conexao={"oauth": {"estado": "conectado", "client_id": "x"}})
+    sessao.add(inst)
+    sessao.flush()
+    segredos_instrumento.salvar_segredos(sessao, inst.id, {
+        "url": "https://wp/mcp", "oauth_access_token": "AT", "oauth_refresh_token": "RT",
+    })
+    sessao.flush()
+    entrar(dados["admin"])
+    novo = cliente.post(f"/times/{time_id}/duplicar", json={"nome": "C"}).json()
+    copia = _instrumentos(sessao, uuid.UUID(novo["id"]))["WP login"]
+    assert segredos_instrumento.decifrar(sessao, copia.id) == {}
+    assert copia.conexao is None  # nasce "precisa conectar"
+    assert copia.configuracao["auth_modo"] == "oauth_login"
+    assert "WP login" in novo["instrumentos_a_conectar"]
 
 
 def test_canal_nasce_desconectado(cliente, entrar, dados, sessao, time_rico):

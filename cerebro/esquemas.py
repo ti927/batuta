@@ -112,6 +112,13 @@ class TimeLer(BaseModel):
     atualizado_em: datetime
 
 
+class TimeDuplicadoLer(TimeLer):
+    """O time recém-duplicado + os instrumentos cujos segredos (ou login) precisam ser
+    colados de novo — a cópia não leva segredo nenhum."""
+
+    instrumentos_a_conectar: list[str] = Field(default_factory=list)
+
+
 class CustoDoAgente(BaseModel):
     agente_id: str | None  # None = agente removido ou não identificado
     nome: str | None

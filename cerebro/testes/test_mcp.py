@@ -54,6 +54,7 @@ def test_mcp_registrado_com_url_e_token_secretos():
     assert t.campos_secretos == (
         "url", "token_bearer", "auth_segredo", "cabecalhos_secretos",
         "oauth_access_token", "oauth_refresh_token", "oauth_client_secret",
+        "certificado", "chave_privada", "arquivo", "chave_arquivo", "senha_certificado",
     )
     # o que FALTA depende do modo de identificação (ver test_mcp_conexao.py)
     assert set(t.campos_secretos_opcionais) == set(t.campos_secretos) - {"url"}

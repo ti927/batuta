@@ -688,7 +688,16 @@ def duplicar_time(sessao, usuario, time_id, novo_nome) -> str:
         copia = duplicacao_time.duplicar_time(sessao, original, novo_nome, usuario.id)
     except ValueError as e:
         return f"Não deu para duplicar: {e}"
-    return f"Time '{original.nome}' duplicado como '{copia.nome}' (id {copia.id})."
+    pendentes = getattr(copia, "instrumentos_a_conectar", []) or []
+    aviso = (
+        " Os segredos NÃO vão para a cópia: peça ao consultor para colar de novo (ou "
+        "clicar em Conectar) em: " + ", ".join(pendentes) + "."
+        if pendentes else ""
+    )
+    return (
+        f"Time '{original.nome}' duplicado como '{copia.nome}' (id {copia.id}). As "
+        f"automações nascem desligadas e os canais desconectados.{aviso}"
+    )
 
 
 @_ferramenta_escrita

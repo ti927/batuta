@@ -56,6 +56,48 @@ _STATUS_LEGADO = {400, 404, 405}
 class Destino:
     url: str
     cabecalhos: dict[str, str] = field(default_factory=dict)
+    # Contexto SSL da conexão (com o certificado do cliente, se houver — mTLS).
+    ssl: object | None = None
+
+
+def _contexto_base():
+    """O contexto SSL padrão (verifica o servidor). Separado para os testes poderem
+    confiar numa autoridade local."""
+    return httpx.create_ssl_context()
+
+
+def contexto_mtls(certificado: str, chave_privada: str):
+    """Contexto SSL que APRESENTA o certificado do cliente. O `ssl` só carrega de
+    arquivo: o par vira arquivo temporário só durante o `load_cert_chain`."""
+    import certificados
+
+    contexto = _contexto_base()
+    if not (certificado or "").strip() or not (chave_privada or "").strip():
+        return contexto  # sem certificado: a verificação normal do servidor
+    try:
+        with certificados.material_mtls(certificado, chave_privada) as par:
+            contexto.load_cert_chain(*par)
+    except Exception:  # noqa: BLE001 — PEM corrompido, par que não bate
+        raise FalhaInstrumento(
+            "o certificado guardado neste instrumento não abre (ou a chave não é dele). "
+            "Envie o arquivo do certificado de novo em “Avançado”.",
+            retentavel=False,
+            codigo="mcp.certificado_invalido",
+        )
+    return contexto
+
+
+def fabrica_http(contexto):
+    """Fábrica de cliente HTTP no formato que a biblioteca MCP espera, com o
+    certificado do cliente — usada no SSE e nas ferramentas do cinto."""
+
+    def criar(headers=None, timeout=None, auth=None):
+        return httpx.AsyncClient(
+            headers=headers, timeout=timeout or httpx.Timeout(TIMEOUT_HTTP_S),
+            auth=auth, follow_redirects=True, verify=contexto if contexto is not None else True,
+        )
+
+    return criar
 
 
 def modo_efetivo(config) -> str:
@@ -164,7 +206,12 @@ def montar_destino(config) -> Destino:
             codigo="mcp.config_invalida",
         )
     validar_cabecalhos_ascii(cab)
-    return Destino(url=url, cabecalhos=cab)
+    return Destino(
+        url=url, cabecalhos=cab,
+        ssl=contexto_mtls(
+            getattr(config, "certificado", "") or "", getattr(config, "chave_privada", "") or ""
+        ),
+    )
 
 
 # ───────────────────────────── erros sem segredo ─────────────────────────────
@@ -268,6 +315,28 @@ def classificar(e: BaseException, modo: str = "") -> FalhaInstrumento:
             "o servidor pode estar fora do ar.",
             retentavel=True, codigo="mcp.tempo_esgotado",
         )
+    import ssl as _ssl
+
+    if any(
+        isinstance(f, _ssl.SSLError)
+        or (isinstance(f, httpx.ConnectError) and ("ssl" in str(f).lower() or "certificate" in str(f).lower()))
+        for f in folhas
+    ):
+        return FalhaInstrumento(
+            "a conexão segura com o servidor MCP falhou — ou ele exige o certificado do "
+            "cliente (envie-o em “Avançado”), ou recusou o certificado enviado.",
+            retentavel=False, codigo="mcp.certificado_recusado",
+        )
+    if any(isinstance(f, (httpx.RemoteProtocolError, httpx.ReadError)) for f in folhas):
+        # Um servidor que EXIGE certificado do cliente e não recebe nenhum derruba a
+        # conexão sem responder (TLS 1.3) — indistinguível de um servidor que caiu no
+        # meio. A mensagem diz as duas coisas, em vez de chutar uma.
+        return FalhaInstrumento(
+            "o servidor MCP encerrou a conexão sem responder. Se ele exige certificado "
+            "do cliente (bancos, por exemplo), envie-o em “Avançado”; senão, ele pode "
+            "estar fora do ar — tente de novo mais tarde.",
+            retentavel=True, codigo="mcp.conexao_encerrada",
+        )
     if any(isinstance(f, (httpx.ConnectError, httpx.NetworkError)) for f in folhas):
         return FalhaInstrumento(
             "não foi possível alcançar o servidor MCP — ele pode estar fora do ar, ou o "
@@ -297,17 +366,17 @@ async def _com_sessao(transporte: str, destino: Destino, trabalho):
     if transporte == "sse":
         from mcp.client.sse import sse_client
 
+        extra = {"httpx_client_factory": fabrica_http(destino.ssl)} if destino.ssl else {}
         async with sse_client(
             destino.url, headers=destino.cabecalhos or None,
-            timeout=TIMEOUT_HTTP_S, sse_read_timeout=TIMEOUT_LEITURA_SSE_S,
+            timeout=TIMEOUT_HTTP_S, sse_read_timeout=TIMEOUT_LEITURA_SSE_S, **extra,
         ) as (leitura, escrita):
             async with ClientSession(leitura, escrita) as sessao:
                 init = await sessao.initialize()
                 return await trabalho(sessao, init)
     from mcp.client.streamable_http import streamable_http_client
-    from mcp.shared._httpx_utils import create_mcp_http_client
 
-    cliente_http = create_mcp_http_client(
+    cliente_http = fabrica_http(destino.ssl)(
         headers=destino.cabecalhos or None,
         timeout=httpx.Timeout(TIMEOUT_HTTP_S, read=TIMEOUT_LEITURA_SSE_S),
     )

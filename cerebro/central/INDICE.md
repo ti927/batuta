@@ -127,7 +127,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 |---|---|---|---|---|
 | Papéis e permissões | `admin/papeis-e-permissoes` | Admin / Operador / Observador | ✅ | ✍️ |
 | Membros e convites | `admin/membros-e-convites` | Convidar por e-mail; aceitar; desativar | ✅ | ✍️ |
-| Duplicar time | `admin/duplicar-time` | Cópia com remapeamento; canais nascem desconectados | ✅ | ✍️ |
+| Duplicar time | `admin/duplicar-time` | Cópia com remapeamento; segredos e logins NÃO vão (a tela lista o que preencher); canais desconectados | ✅ | ✍️ |
 
 ## 9. O cérebro da organização (`docs/CEREBRO-PLANO.md` — Quadros no ar; Arquivos e Biblioteca a construir)
 | Capítulo | slug | O que cobre | Recurso | Escrita |

@@ -85,6 +85,11 @@ pessoa **marca quais entram no cinto**. A escolha fica na config.
 - **Lista vazia = todas** (compatibilidade com instâncias antigas; hoje não há nenhuma).
 
 ### Fatia 2 — A parede por ferramenta
+> **Corrigido em 2026-09-29:** esta fatia nunca parou nada — o portão morreu em 31/08 e o mapa
+> `irreversivel_por_ferramenta` ficou sem quem o lesse. O maestro decidiu: **a trava é sempre do
+> agente** (`pedir_aprovacao` + markdown). A marcação virou *só lê / altera algo* e hoje decide só a
+> política de falha. Ver §11.
+
 Cada ferramenta escolhida tem seu próprio interruptor: *só lê* ou *pede aprovação*.
 
 - A ferramenta expandida carrega `metadata={"irreversivel": bool}`.
@@ -220,3 +225,26 @@ as contas próprias sem App Review (o Acesso Padrão é aprovado automaticamente
 cliente, falta testar se compartilhar o ativo com o nosso Business basta, ou se cai num app do
 próprio cliente. Quando entrar, marcar a credencial como "não expira" — senão o job noturno que
 renova o token do Instagram tenta renovar à toa e, desde `50c0525`, isso **vira alarme**.
+
+## 11. A identificação mora no instrumento (2026-09-29, Fases 1–3)
+
+Decisão do maestro: **toda autenticação de instrumento mora no instrumento**; a central fica para as
+chaves de IA e de serviço. O MCP foi o primeiro a mudar. Código: `instrumentos/mcp_conexao.py`
+(identificação, transporte, erros), `instrumentos/mcp_oauth.py` (OAuth), `rotas/mcp_oauth.py`.
+
+- **Modos** (`auth_modo`): nenhuma, url_secreta, bearer, cabecalho, query, basic, oauth_login,
+  oauth_cliente; cabeçalhos extras protegidos; certificado do cliente (mTLS). Instrumento antigo sem
+  modo = bearer se tiver token, senão nenhuma — sem migração.
+- **Transporte** "automático": Streamable HTTP, caindo para SSE com 400/404/405. O "Conectar e
+  listar" guarda em `instrumentos.conexao` o protocolo, o servidor e o transporte (o cinto reusa o
+  transporte descoberto).
+- **OAuth com login**: descoberta pelo 401 (RFC 9728 → RFC 8414), cliente por client_id à mão > CIMD
+  (`https://api.batuta.team/mcp/oauth/cliente.json`) > registro dinâmico; PKCE S256; `resource`;
+  retorno fixo `https://api.batuta.team/mcp/oauth/callback`; `state` CURTO (o WordPress recusou um de
+  ~340 caracteres). Renovação com advisory lock por instrumento; recusa → "precisa reconectar".
+- **Erros** com código `mcp.*` e sem o texto da biblioteca (que trazia a URL — a chave, no Zapier).
+- **Provado ao vivo** no WordPress da Lure: senha de aplicativo (`/mcp-adapter-default-server`) e login
+  (`/mcp-oauth-server`, CIMD — exigiu liberar o callback em WP › Settings › WP Abilities › Connection);
+  Zapier antigo seguiu funcionando.
+- **Duplicar time** não copia segredo nenhum (todo instrumento), nem login.
+- A trava é do agente: ver o aviso na Fatia 2.

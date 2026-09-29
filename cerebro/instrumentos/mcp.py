@@ -113,6 +113,14 @@ class ConfigMCP(BaseModel):
     oauth_client_secret: str = Field(
         default="", description="Client secret dado pelo registro automático (automático)."
     )
+    # Certificado do cliente (mTLS), para servidores que exigem se identificar com um
+    # certificado (bancos). Mesmo mecanismo do Construtor: a tela manda o ARQUIVO (e a
+    # senha) só na hora de salvar; o Batuta guarda o par PEM no cofre do instrumento.
+    certificado: str = Field(default="", description="Certificado do cliente em PEM (automático).")
+    chave_privada: str = Field(default="", description="Chave do certificado em PEM (automático).")
+    arquivo: str = Field(default="", description="Arquivo do certificado (.pfx/.p12/.pem), em base64 — só na hora de salvar.")
+    chave_arquivo: str = Field(default="", description="Arquivo da chave (.key), se vier separado — só na hora de salvar.")
+    senha_certificado: str = Field(default="", description="Senha do arquivo do certificado — não fica guardada.")
     auth_nome: str = Field(
         default="",
         description="Nome do cabeçalho (modo cabecalho, ex.: X-API-Key) ou do parâmetro "
@@ -161,6 +169,9 @@ def _conexao(destino: mcp_conexao.Destino, transporte: str) -> dict:
         "url": destino.url,
         "headers": destino.cabecalhos or None,
     }
+    if destino.ssl is not None:
+        # Certificado do cliente (mTLS): o contexto SSL já vem com ele carregado.
+        conexao["httpx_client_factory"] = mcp_conexao.fabrica_http(destino.ssl)
     if transporte == "streamable_http":
         conexao["timeout"] = timedelta(seconds=mcp_conexao.TIMEOUT_HTTP_S)
         conexao["sse_read_timeout"] = timedelta(seconds=mcp_conexao.TIMEOUT_LEITURA_SSE_S)
@@ -175,7 +186,8 @@ def _chave_cache(config: ConfigMCP, transporte: str) -> str:
     segredo, e uma chave de dicionário vaza em qualquer dump de memória ou log.
     Entra tudo o que muda a conexão (endereço, identificação, transporte)."""
     destino = mcp_conexao.montar_destino(config)
-    cru = f"{transporte}|{destino.url}|{sorted(destino.cabecalhos.items())}"
+    cert = hashlib.sha256((config.certificado or "").encode()).hexdigest()
+    cru = f"{transporte}|{destino.url}|{sorted(destino.cabecalhos.items())}|{cert}"
     return hashlib.sha256(cru.encode("utf-8")).hexdigest()
 
 
@@ -288,12 +300,16 @@ class ConectarMCP(TipoInstrumento):
     campos_secretos = (
         "url", "token_bearer", "auth_segredo", "cabecalhos_secretos",
         "oauth_access_token", "oauth_refresh_token", "oauth_client_secret",
+        "certificado", "chave_privada", "arquivo", "chave_arquivo", "senha_certificado",
     )
     # Qual deles FALTA depende do modo de identificação — ver `segredos_exigidos`.
     campos_secretos_opcionais = (
         "token_bearer", "auth_segredo", "cabecalhos_secretos",
         "oauth_access_token", "oauth_refresh_token", "oauth_client_secret",
+        "certificado", "chave_privada", "arquivo", "chave_arquivo", "senha_certificado",
     )
+    # Só existem na hora de salvar (viram o par PEM em `normalizar_config`).
+    _TRANSITORIOS = ("arquivo", "chave_arquivo", "senha_certificado")
     tipos_credencial_aceitos = ("mcp", "token_bearer")
     # Baseline do TIPO. A irreversibilidade real é por instância (e, aqui, por
     # ferramenta) — ver `irreversivel_para`.
@@ -317,6 +333,26 @@ class ConectarMCP(TipoInstrumento):
         if escolhidas is None:
             return True
         return any(f.irreversivel for f in escolhidas.values())
+
+    def normalizar_config(self, bruta: dict) -> dict:
+        """Converte o ARQUIVO de certificado no par PEM (igual ao Construtor). Sem
+        arquivo, não mexe: o certificado guardado antes é preservado. A senha só abre
+        o arquivo e não é guardada."""
+        import certificados
+
+        limpa = {k: v for k, v in bruta.items() if k not in self._TRANSITORIOS}
+        arquivo = str(bruta.get("arquivo", "") or "").strip()
+        if not arquivo:
+            return limpa
+        try:
+            cert_pem, chave_pem, _titular, _expira = certificados.normalizar(
+                arquivo,
+                senha=str(bruta.get("senha_certificado", "") or ""),
+                chave_b64=str(bruta.get("chave_arquivo", "") or ""),
+            )
+        except certificados.CertificadoInvalido as e:
+            raise ValueError(f"Certificado: {e}")
+        return {**limpa, "certificado": cert_pem, "chave_privada": chave_pem}
 
     def segredos_exigidos(self, configuracao: dict) -> tuple[str, ...]:
         """O endereço sempre; e a parte secreta do modo escolhido."""

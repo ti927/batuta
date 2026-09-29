@@ -4,7 +4,7 @@ area: "instrumentos"
 slug: "mcp"
 tags: ["mcp", "model-context-protocol", "integracao", "ferramentas", "servidor", "instrumento", "zapier", "make", "wordpress", "senha de aplicativo", "basic", "x-api-key", "autenticação", "sse", "composio", "connection token", "escolher ferramentas"]
 revisado_em: "2026-09-29"
-fontes: ["cerebro/instrumentos/mcp.py", "cerebro/instrumentos/mcp_conexao.py", "cerebro/orquestracao/agente.py", "docs/MCP-AGENTES.md"]
+fontes: ["cerebro/instrumentos/mcp.py", "cerebro/instrumentos/mcp_conexao.py", "cerebro/instrumentos/mcp_oauth.py", "cerebro/orquestracao/agente.py", "docs/MCP-AGENTES.md"]
 ---
 
 # Instrumento — Conectar a servidor MCP
@@ -51,7 +51,10 @@ para você decidir.
 | **OAuth entre sistemas** | Integração de máquina a máquina (client credentials) | Endereço + Client ID + Client Secret (o endereço do token o Batuta descobre) |
 | **Não pede identificação** | Servidor público ou interno aberto | Só o endereço |
 
-Além do modo, há **cabeçalhos extras** (ex.: `X-Tenant`), cada um podendo ser marcado como protegido.
+Além do modo, há **cabeçalhos extras** (ex.: `X-Tenant`), cada um podendo ser marcado como protegido,
+e, em **Avançado**, o **certificado do cliente** (mTLS) — só para servidores que exigem se identificar
+com certificado, como os de bancos. Envie o arquivo `.pfx`/`.p12` (com a senha, que não fica guardada)
+ou `.pem`/`.crt` (com o `.key` separado, se for o caso); ele vale junto com qualquer modo.
 Em **Avançado**, o tipo de conexão fica em **Automático**: o Batuta tenta o formato atual do MCP e,
 se o servidor for antigo (SSE), troca sozinho. Instrumentos criados antes deste ajuste seguem como
 estavam (token = Bearer; sem token = sem identificação).
@@ -81,10 +84,17 @@ volta para a tela de instrumentos.
 A tela diz o que houve e o que fazer, com um código para o diagnóstico. Os mais comuns:
 `mcp.auth_401` (identificação recusada: confira token/senha/chave), `mcp.auth_403` (a conta não tem
 permissão), `mcp.endereco_404` (endereço errado), `mcp.fora_do_ar`, `mcp.tempo_esgotado`,
-`mcp.segredo_faltando` (falta preencher um pedaço do modo escolhido), `mcp.precisa_conectar` (entrar
+`mcp.segredo_faltando` (falta preencher um pedaço do modo escolhido), `mcp.conexao_encerrada` (o
+servidor desligou sem responder: exige certificado do cliente, ou caiu), `mcp.certificado_recusado` /
+`mcp.certificado_invalido` (o certificado), `mcp.precisa_conectar` (entrar
 com a conta: falta clicar em Conectar, ou a conexão caiu), `mcp.oauth_recusado` (o servidor de login
 recusou o Client ID/Secret). A mensagem **nunca** mostra o
 endereço nem o segredo.
+
+## Ao duplicar o time
+A cópia **não leva segredo nenhum**: endereço, token, senha, chave, certificado e o login OAuth ficam
+**pendentes** — a tela avisa em quais instrumentos preencher de novo, e o instrumento com login nasce
+"precisa conectar". Isso vale para todo instrumento do time, não só o MCP.
 
 ## Limites e cuidados
 - Diferente dos outros instrumentos: **um** MCP vira **várias** ferramentas no cinto. Traga só as que
@@ -103,6 +113,8 @@ endereço nem o segredo.
 - Uma ferramenta escolhida que **sumiu** do servidor é ignorada (não derruba nada), e reaparece como
   "não existe mais no servidor" quando você lista de novo.
 - Cada acionamento abre a própria conexão (sem estado entre chamadas).
+- O certificado do cliente vale para a conversa com o servidor MCP; o pedido de token do OAuth sai
+  sem ele (servidor que exija certificado também no token ainda não é coberto).
 
 ## Para a IA
 - **Ao criar** (`configurar_instrumento` tipo `conectar_mcp`): a identificação mora **no instrumento**

@@ -12,6 +12,7 @@ import {
   type Organizacao,
   type PapelAcesso,
   type Time,
+  type TimeDuplicado,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { Aviso } from "@/components/ui/aviso";
@@ -67,10 +68,16 @@ export function TimesCliente({
     setSalvandoDupla(true);
     setErroDupla(null);
     try {
-      const novo = await api.post<Time>(`/times/${duplicando.id}/duplicar`, {
+      const novo = await api.post<TimeDuplicado>(`/times/${duplicando.id}/duplicar`, {
         nome: nomeDupla.trim(),
       });
-      toast.success(`Time copiado: “${novo.nome}”.`);
+      const aConectar = novo.instrumentos_a_conectar ?? [];
+      toast.success(`Time copiado: “${novo.nome}”.`, {
+        description: aConectar.length
+          ? `Senhas, tokens e logins não vão para a cópia. Preencha de novo em: ${aConectar.join(", ")}.`
+          : undefined,
+        duration: aConectar.length ? 15000 : undefined,
+      });
       router.push(`/times/${novo.id}`);
     } catch (e) {
       const msg = mensagemDeErro(e, "Falha ao duplicar o time");

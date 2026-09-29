@@ -766,7 +766,9 @@ async def apontar_credencial(instrumento_id: str, credencial_id: str | None = No
 @mcp.tool()
 async def duplicar_time(time_id: str, novo_nome: str) -> str:
     """Cria uma cópia independente de um time inteiro (agentes, instrumentos, automações)
-    na mesma organização, com um novo nome. Exige ser admin da organização."""
+    na mesma organização, com um novo nome. Exige ser admin da organização. A cópia NÃO
+    leva segredos nem login OAuth: a resposta lista os instrumentos em que o consultor
+    precisa colar de novo (ou clicar em Conectar)."""
     return await anyio.to_thread.run_sync(escrita.duplicar_time, _sub(), time_id, novo_nome)
 
 

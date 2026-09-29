@@ -2693,3 +2693,9 @@ Plano das 6 fases: `C:\Users\Julio\.claude\plans\polymorphic-hugging-crystal.md`
 - Renovação antes de vencer com trava por instrumento (advisory lock): 5 renovações simultâneas = 1. Renovação recusada → "precisa reconectar" + `mcp.oauth_renovacao_falhou` + diagnóstico "clique em Conectar".
 - Dois defeitos achados AO VIVO e corrigidos: (1) o WordPress recusava o `state` de ~340 caracteres → state curto, login pendente cifrado no instrumento (10 min, uso único); (2) a volta do login não gravava o estado "conectado" (mesmo dict reatribuído após commit) → objeto novo + flag_modified, com teste de sessão real.
 - **Prova ao vivo:** WordPress da Lure em `/wp-json/mcp/mcp-oauth-server` — CIMD aceito (após liberar o callback em WP Abilities › Connection), login, renovação por refresh token e leitura de 3 posts pelo agente de TESTES.
+
+## FASE — MCP: certificado, duplicar sem segredos e documentação (Fase 3 de 6)  ✅ (2026-09-29, sem migração)
+- **mTLS no instrumento MCP**, pelo mesmo caminho do Construtor (arquivo `.pfx`/`.pem` enviado ao salvar → par PEM no cofre do instrumento). Contexto SSL com o certificado já carregado, usado na listagem, no SSE e nas ferramentas do cinto. Provado contra um servidor HTTPS local que EXIGE certificado do cliente. Limite: o pedido de token OAuth sai sem certificado.
+- Servidor que exige certificado e não recebe derruba a conexão sem responder (TLS 1.3) — indistinguível de queda: código `mcp.conexao_encerrada`, com a mensagem dizendo as duas causas.
+- **Duplicar time não copia segredo nenhum** (todo instrumento), nem o login OAuth nem o estado da conexão. A resposta lista os instrumentos a preencher (tela, toast; MCP, texto). A Central já dizia isso — o código copiava.
+- Docs: Central `instrumentos/mcp` (tabela completa, mTLS, duplicar, códigos), `admin/duplicar-time`, INDICE; `docs/MCP-AGENTES.md` §11 (e a Fatia 2 corrigida); `docs/MCP-BATUTA.md` (segredo da IA ignorado, MCP, duplicar).

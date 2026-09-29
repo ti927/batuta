@@ -131,6 +131,12 @@ erros de domínio/acesso em texto humano (nunca stack trace — §12-A).
 - **Ações irreversíveis** (`excluir_*`) têm docstring que orienta o Claude a confirmar
   antes.
 - **Auditoria:** as escritas passam `usuario=` real; os eventos levam `origem="mcp"`.
+- **Segredo que a IA manda é ignorado** (2026-09-29): `configurar_instrumento`/`editar_instrumento`
+  tiram os campos secretos da configuração e avisam ("Ignorei …"). Antes, um segredo ali ia para o
+  cofre — e sem a chave-mestra a criação quebrava com erro genérico.
+- **Instrumento MCP**: a IA escolhe `auth_modo` e os campos não secretos; o consultor cola endereço,
+  senha, token e certificado na tela, e clica em **Conectar** no modo de login. `duplicar_time`
+  devolve a lista de instrumentos da cópia que precisam dos segredos de novo.
 
 ## Agendador (a única mudança aditiva no cérebro)
 

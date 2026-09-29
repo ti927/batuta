@@ -18,6 +18,11 @@ Princípios herdados do molde:
 - Instrumentos de **canal** (Telegram/WhatsApp) nascem **desconectados** — sem
   token, sem `webhook_secret`, sem credencial — para dois times nunca brigarem pelo
   mesmo bot (um webhook por bot). O usuário pluga um bot novo na cópia.
+- **Segredos NÃO são copiados** (decisão do maestro, 2026-09-29): todo instrumento da
+  cópia nasce com os segredos PENDENTES e o login OAuth nunca vai junto (a cópia
+  "precisa conectar"). O estado da conexão também não. Quem precisa colar de novo
+  sai em `novo.instrumentos_a_conectar`. (Até então os segredos eram copiados, apesar
+  de a Central já dizer que não.)
 
 Tudo em UMA transação (a rota dá o commit): se um passo falhar, nada é gravado.
 Não toca o núcleo de orquestração — só reusa `grafo.normalizar`/`validar_cadeia`.
@@ -148,26 +153,18 @@ def duplicar_time(
         map_inst_obj[inst.id] = copia
     sessao.flush()
 
-    # 3) Segredos inline (cifrados): copia o `valor_cifrado` direto (a chave-mestra é
-    #    a mesma → decifra). PULA os de canal (a cópia do canal fica sem token).
-    velhos_canal = {
-        i_id for i_id, novo_i in map_inst_obj.items() if novo_i.tipo in CANAIS_TIPOS
-    }
-    ids_nao_canal = [i for i in map_inst_obj if i not in velhos_canal]
-    if ids_nao_canal:
-        for seg in sessao.scalars(
-            select(SegredoInstrumento).where(
-                SegredoInstrumento.instrumento_id.in_(ids_nao_canal)
+    # 3) Segredos: NÃO são copiados — a cópia nasce com eles pendentes (e sem login
+    #    OAuth). Guarda quais instrumentos precisam ser reconectados, para avisar.
+    com_segredo = set(
+        sessao.scalars(
+            select(SegredoInstrumento.instrumento_id).where(
+                SegredoInstrumento.instrumento_id.in_(list(map_inst_obj))
             )
-        ):
-            sessao.add(
-                SegredoInstrumento(
-                    instrumento_id=map_inst_obj[seg.instrumento_id].id,
-                    campo=seg.campo,
-                    valor_cifrado=seg.valor_cifrado,
-                    ultimos4=seg.ultimos4,
-                )
-            )
+        )
+    )
+    novo.instrumentos_a_conectar = sorted(
+        map_inst_obj[i].nome for i in com_segredo if map_inst_obj[i].tipo not in CANAIS_TIPOS
+    )
 
     # 4) Cinto (N:N): recria cada ligação com os ids novos.
     for aid, iid in sessao.execute(

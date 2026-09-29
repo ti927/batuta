@@ -278,6 +278,9 @@ export type OAuthInstrumento = {
   motivo?: string | null;
 };
 
+// Resposta do "duplicar time": a cópia não leva segredos nem login.
+export type TimeDuplicado = Time & { instrumentos_a_conectar?: string[] };
+
 export type ConexaoInstrumento = {
   estado?: "conectado" | "falhou";
   // O login OAuth do instrumento (MCP): estado da conta, sem segredo.

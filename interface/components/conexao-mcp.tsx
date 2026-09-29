@@ -44,7 +44,26 @@ export const CAMPOS_CONEXAO_MCP = new Set([
   "oauth_access_token",
   "oauth_refresh_token",
   "oauth_client_secret",
+  "certificado",
+  "chave_privada",
+  "arquivo",
+  "chave_arquivo",
+  "senha_certificado",
 ]);
+
+/** Lê um arquivo escolhido e devolve o conteúdo em base64 (o cérebro o abre ao salvar). */
+function lerBase64(arquivo: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      const res = String(leitor.result ?? "");
+      const virgula = res.indexOf(",");
+      resolve(virgula >= 0 ? res.slice(virgula + 1) : res);
+    };
+    leitor.onerror = () => reject(leitor.error);
+    leitor.readAsDataURL(arquivo);
+  });
+}
 
 const MODOS = [
   { v: "nenhuma", rotulo: "Não pede identificação" },
@@ -223,6 +242,25 @@ export function ConexaoMCP({
   const [linhas, setLinhas] = useState<Linha[]>(() =>
     lerCabecalhosPublicos(valores.cabecalhos ?? ""),
   );
+  const [nomeCertificado, setNomeCertificado] = useState<string | null>(null);
+  const [nomeChave, setNomeChave] = useState<string | null>(null);
+  const [erroArquivo, setErroArquivo] = useState<string | null>(null);
+
+  async function escolher(
+    arquivo: File | undefined,
+    campo: "arquivo" | "chave_arquivo",
+    guardarNome: (n: string) => void,
+  ) {
+    if (!arquivo) return;
+    try {
+      mudar(campo, await lerBase64(arquivo));
+      guardarNome(arquivo.name);
+      setErroArquivo(null);
+    } catch {
+      setErroArquivo("Não consegui ler o arquivo. Tente escolher de novo.");
+    }
+  }
+
   const [extrasAbertos, setExtrasAbertos] = useState(
     () => linhas.length > 0 || Boolean(guardados.cabecalhos_secretos),
   );
@@ -442,7 +480,44 @@ export function ConexaoMCP({
         <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
           Avançado
         </summary>
-        <Label className="mt-2 flex-col items-start gap-1">
+        <div className="mt-2 flex flex-col gap-2">
+          <span className="font-medium text-foreground">Certificado do cliente (opcional)</span>
+          <span className="text-muted-foreground">
+            Só para servidores que exigem certificado, como os de bancos.
+            {guardados.certificado && " Já há um certificado guardado; envie outro só para trocar."}
+          </span>
+          <Input
+            type="file"
+            accept=".pfx,.p12,.pem,.crt,.cer"
+            onChange={(e) => escolher(e.target.files?.[0], "arquivo", setNomeCertificado)}
+          />
+          {nomeCertificado && (
+            <span className="text-muted-foreground">
+              {nomeCertificado} — vai ser guardado ao salvar.
+            </span>
+          )}
+          <Input
+            type="password"
+            autoComplete="new-password"
+            value={valores.senha_certificado ?? ""}
+            onChange={(e) => mudar("senha_certificado", e.target.value)}
+            placeholder="senha do arquivo, se houver (não fica guardada)"
+          />
+          <details>
+            <summary className="cursor-pointer text-muted-foreground">
+              Minha chave está num arquivo .key separado
+            </summary>
+            <Input
+              className="mt-1.5"
+              type="file"
+              accept=".key,.pem"
+              onChange={(e) => escolher(e.target.files?.[0], "chave_arquivo", setNomeChave)}
+            />
+            {nomeChave && <span className="text-muted-foreground">{nomeChave}</span>}
+          </details>
+          {erroArquivo && <Aviso>{erroArquivo}</Aviso>}
+        </div>
+        <Label className="mt-3 flex-col items-start gap-1">
           Tipo de conexão
           <Select
             value={valores.transport || "automatico"}

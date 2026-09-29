@@ -14,7 +14,7 @@ import auditoria
 import custos_time
 import duplicacao_time
 from auth import usuario_atual
-from esquemas import DuplicarTime, TimeCriar, TimeEditar, TimeLer, TimeResumoLer
+from esquemas import DuplicarTime, TimeCriar, TimeDuplicadoLer, TimeEditar, TimeLer, TimeResumoLer
 from modelos import (
     Agente,
     Automacao,
@@ -73,7 +73,7 @@ def criar(
 
 @rotas.post(
     "/times/{time_id}/duplicar",
-    response_model=TimeLer,
+    response_model=TimeDuplicadoLer,
     status_code=status.HTTP_201_CREATED,
 )
 def duplicar(
@@ -84,7 +84,8 @@ def duplicar(
 ):
     """Cria uma cópia independente de um time na MESMA organização (agentes,
     instrumentos, cinto, automações e a memória da IA). As automações nascem
-    inativas e os canais, desconectados. Acesso: admin (duplicar cria um time)."""
+    inativas, os canais desconectados e os segredos PENDENTES (a resposta lista os
+    instrumentos a reconectar). Acesso: admin (duplicar cria um time)."""
     original = time_acessivel(sessao, usuario, time_id, minimo="admin")
     nome = dados.nome.strip()
     if not nome:
