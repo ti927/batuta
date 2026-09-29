@@ -2686,3 +2686,10 @@ Plano das 6 fases: `C:\Users\Julio\.claude\plans\polymorphic-hugging-crystal.md`
 - **Prova ao vivo:** WordPress da Lure em usuário e senha (`claude.ia`, `/wp-json/mcp/mcp-adapter-default-server`) listou e leu 3 posts (`ewpa/get-posts`); Zapier antigo (Bearer via credencial) conectou.
 - **Achado:** "pede aprovação" por ferramenta MCP nunca parou nada (o portão morreu em 31/08, a marcação entrou em 21/09). Decisão do maestro: **a trava é sempre do agente**. A marcação virou "só lê / altera algo" (muda só a política de falha) e todos os textos que prometiam parada foram corrigidos (tela, Construtor, Central, criadora, MCP).
 - Próximas: Fase 2 (OAuth), 3 (mTLS + docs), 4 (escopo org/time), 5 (inventário), 6 (migração).
+
+## FASE — MCP: OAuth no instrumento (Fase 2 de 6)  ✅ NO AR (2026-09-29, `873d6ff` · `66b624e` · `c0b2298`, sem migração)
+- "Entrar com a conta" (código + PKCE S256 + `resource`): descoberta pelo 401/RFC 9728 → RFC 8414; cliente por client_id à mão > CIMD (`/mcp/oauth/cliente.json`, público em HTTPS) > registro dinâmico. Retorno fixo `https://api.batuta.team/mcp/oauth/callback` (pop-up com postMessage; sem pop-up, volta à página de instrumentos).
+- "OAuth entre sistemas" (client credentials), com o endereço do token descoberto.
+- Renovação antes de vencer com trava por instrumento (advisory lock): 5 renovações simultâneas = 1. Renovação recusada → "precisa reconectar" + `mcp.oauth_renovacao_falhou` + diagnóstico "clique em Conectar".
+- Dois defeitos achados AO VIVO e corrigidos: (1) o WordPress recusava o `state` de ~340 caracteres → state curto, login pendente cifrado no instrumento (10 min, uso único); (2) a volta do login não gravava o estado "conectado" (mesmo dict reatribuído após commit) → objeto novo + flag_modified, com teste de sessão real.
+- **Prova ao vivo:** WordPress da Lure em `/wp-json/mcp/mcp-oauth-server` — CIMD aceito (após liberar o callback em WP Abilities › Connection), login, renovação por refresh token e leitura de 3 posts pelo agente de TESTES.
