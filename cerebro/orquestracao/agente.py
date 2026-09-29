@@ -318,10 +318,14 @@ def _cinto_sem(inst, erro: Exception, erros: list[dict], falhas: list[str]) -> N
         "ferramenta": None,
         "tipo": inst.tipo,
         "instrumento_id": str(inst.id),
+        "instrumento": inst.nome,
         "erro": texto[:500],
         "retentavel": None,
         "irreversivel": None,
         "origem": "cinto",
+        # Rótulo estável da causa (ex.: mcp.auth_401, mcp.fora_do_ar) — o diagnóstico
+        # usa para dizer o que fazer sem depender do texto.
+        "codigo": getattr(erro, "codigo", None),
     })
     falhas.append(texto)
     try:
@@ -338,6 +342,7 @@ def _cinto_sem(inst, erro: Exception, erros: list[dict], falhas: list[str]) -> N
             detalhe={
                 "instrumento": inst.nome,
                 "tipo": inst.tipo,
+                "codigo": getattr(erro, "codigo", None),
                 "o_que_fazer": (
                     "O agente rodou SEM este instrumento. Abra-o e use “Acionar” para "
                     "testar a conexão — se for um servidor MCP, confira se o endereço "

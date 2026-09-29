@@ -11,6 +11,7 @@ para a sessão do teste — que a fixture reverte no fim.
 """
 
 import json
+import uuid
 
 import pytest
 from sqlalchemy import select
@@ -194,6 +195,26 @@ def test_instrumento_com_chave_no_cofre_e_sem_chave_mestra(
     )
     assert escrita.ERRO_INESPERADO not in r, f"ferramenta quebrada: {r}"
     assert "criado" in r.lower()
+
+
+def test_mcp_com_segredo_passado_pela_ia_ignora_e_deixa_pendente(
+    mcp, dados, como_o_mcp_em_producao
+):
+    """A IA nunca pluga segredo. Antes, um segredo na configuração ia para o cofre — e
+    sem a chave-mestra (o MCP roda assim) a criação quebrava com erro genérico."""
+    r = escrita.configurar_instrumento(
+        _sub(dados), str(dados["timeA"].id), "WordPress da Lure", "conectar_mcp",
+        {"auth_modo": "basic", "auth_usuario": "claude.ia", "auth_segredo": "senha-app",
+         "url": "https://lure.example/wp-json/mcp/mcp-adapter-default-server"},
+    )
+    assert escrita.ERRO_INESPERADO not in r, r
+    corpo = json.loads(r)
+    assert "Ignorei" in corpo["mensagem"] and "auth_segredo" in corpo["mensagem"]
+    assert corpo["segredos_pendentes"] == ["url", "auth_segredo"]
+    inst = mcp.get(Instrumento, uuid.UUID(corpo["id"]))
+    assert inst.configuracao["auth_modo"] == "basic"
+    assert inst.configuracao["auth_usuario"] == "claude.ia"
+    assert "auth_segredo" not in inst.configuracao and "url" not in inst.configuracao
 
 
 def test_credencial_com_chave_no_cofre_e_sem_chave_mestra(

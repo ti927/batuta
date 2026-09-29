@@ -445,6 +445,9 @@ def _verificar_erros_instrumentos(d, passos, avisos) -> None:
     onde essa falha aparece, então ele SEMPRE sai."""
     for p in passos:
         for e in (p.saida or {}).get("erros_instrumentos") or []:
+            if e.get("origem") == "cinto":
+                avisos.append(_aviso_fora_do_cinto(p, e))
+                continue
             de_resposta = e.get("origem") == "resposta"
             if e.get("irreversivel") and not de_resposta:
                 continue
@@ -471,6 +474,57 @@ def _verificar_erros_instrumentos(d, passos, avisos) -> None:
                 ),
                 instrumento_id=_coagir_uuid(e.get("instrumento_id")),
             ))
+
+
+# O que fazer, por código de falha da conexão (instrumento MCP). Sem código (falhas
+# antigas ou de outro tipo), vale a orientação geral.
+_O_QUE_FAZER_CONEXAO = {
+    "mcp.auth_401": "Abra o instrumento e confira a identificação em “Como o Batuta se "
+    "conecta” (token, senha ou chave); depois use “Conectar e listar ferramentas”.",
+    "mcp.auth_403": "A identificação foi aceita, mas a conta não tem permissão — ajuste "
+    "a permissão no servidor de origem.",
+    "mcp.segredo_faltando": "Falta preencher a identificação do instrumento — abra-o e "
+    "complete “Como o Batuta se conecta”.",
+    "mcp.sem_endereco": "Falta o endereço do servidor — abra o instrumento e preencha.",
+    "mcp.endereco_404": "Confira o endereço do servidor no instrumento.",
+    "mcp.fora_do_ar": "O servidor de fora não respondeu. Se voltar, a próxima execução "
+    "segue normal; se persistir, confira o endereço.",
+    "mcp.tempo_esgotado": "O servidor de fora demorou demais. Se persistir, ele pode "
+    "estar fora do ar.",
+    "mcp.servidor_5xx": "O servidor de fora está com problema — não é a configuração "
+    "do Batuta. Tente mais tarde.",
+    "mcp.limite_429": "O servidor de fora pediu para esperar (limite de uso).",
+    "mcp.transporte_incompativel": "No instrumento, em “Avançado”, deixe o tipo de "
+    "conexão em “Automático”.",
+}
+
+
+def _aviso_fora_do_cinto(p, e: dict) -> dict:
+    """O instrumento nem entrou no cinto (servidor MCP fora do ar, identificação
+    recusada…): o agente rodou SEM ele. Antes este caso saía como «None» não concluiu."""
+    nome = e.get("instrumento") or e.get("tipo") or "instrumento"
+    codigo = e.get("codigo")
+    o_que_fazer = _O_QUE_FAZER_CONEXAO.get(
+        codigo or "",
+        "Abra o instrumento e use “Acionar” para testar a conexão.",
+    )
+    detalhe = (
+        f"No passo {p.ordem}, o agente rodou SEM «{nome}»: {_trunc(e.get('erro'), 240)}. "
+        f"{o_que_fazer}"
+    )
+    if codigo:
+        detalhe += f" (código {codigo})"
+    return _aviso(
+        "instrumento_fora_do_cinto", "alerta",
+        f"O agente rodou sem o instrumento «{nome}»",
+        detalhe,
+        acao=(
+            {"tipo": "editar_instrumento", "instrumento_id": e.get("instrumento_id"),
+             "codigo": codigo}
+            if e.get("instrumento_id") else {"tipo": "aguardar"}
+        ),
+        instrumento_id=_coagir_uuid(e.get("instrumento_id")),
+    )
 
 
 def _verificar_memoria_legado(ex, passos, avisos) -> None:

@@ -147,7 +147,10 @@ def testar_instrumento_interno(
         saida = {"ok": False, "erro": str(e)}
     except FalhaInstrumento as e:
         saida = {"ok": False, "erro": str(e)}
+        if getattr(e, "codigo", None):
+            saida["codigo"] = e.codigo
     saida["escreve"] = escreve
+    sessao.commit()  # o estado da conexão (MCP) que o teste descobriu
 
     registrar_evento(
         categoria="interno",

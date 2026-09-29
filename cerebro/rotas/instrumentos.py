@@ -292,12 +292,16 @@ def acionar(
     base do que a Fase 4 fará durante a orquestração."""
     inst = instrumento_acessivel(sessao, usuario, instrumento_id, minimo="operador")
     try:
-        return acionar_instrumento(sessao, inst, dados.argumentos)
+        resultado = acionar_instrumento(sessao, inst, dados.argumentos)
+        sessao.commit()  # o estado da conexão (MCP) que o teste descobriu
+        return resultado
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
     except FalhaInstrumento as e:
+        sessao.commit()  # guarda que a conexão falhou, com o código
         # O instrumento não conseguiu operar (sistema externo recusou, config
         # incompleta…). Devolve a mensagem REAL para a tela, em vez de um 500 cru.
+        # O código (ex.: mcp.auth_401) fica no estado da conexão do instrumento.
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
 
 
@@ -326,4 +330,22 @@ def acionar_instrumento(sessao: Session, inst, argumentos: dict | None) -> dict:
     }
     config = tipo.Config.model_validate(config_efetiva)
     args = tipo.Args.model_validate(argumentos or {})
-    return tipo.executar(config, args)
+    if not getattr(tipo, "guarda_conexao", False):
+        return tipo.executar(config, args)
+    # Tipos que falam com um servidor de fora (MCP) guardam o que o teste descobriu —
+    # deu certo ou não — no estado da conexão do instrumento. Quem chama faz o commit.
+    from datetime import datetime, timezone
+
+    try:
+        resultado = tipo.executar(config, args)
+    except FalhaInstrumento as e:
+        inst.conexao = {
+            "estado": "falhou",
+            "codigo": getattr(e, "codigo", None),
+            "mensagem": str(e)[:300],
+            "verificado_em": datetime.now(timezone.utc).isoformat(),
+        }
+        raise
+    if isinstance(resultado, dict) and isinstance(resultado.get("conexao"), dict):
+        inst.conexao = resultado["conexao"]
+    return resultado

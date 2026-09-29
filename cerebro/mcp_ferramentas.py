@@ -310,6 +310,7 @@ def ver_instrumento(sessao, usuario, instrumento_id) -> str:
         servicos_resolviveis=segredos_instrumento.servicos_resolviveis(
             sessao, time.organizacao_id if time else None
         ),
+        configuracao=inst.configuracao,
     )
     return json.dumps(dados, ensure_ascii=False)
 

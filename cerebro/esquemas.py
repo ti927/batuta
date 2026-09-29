@@ -288,6 +288,8 @@ class InstrumentoLer(BaseModel):
     segredos: dict[str, str] = Field(default_factory=dict)
     acao_irreversivel: bool = False
     credencial_id: uuid.UUID | None = None
+    # O que o último teste de conexão descobriu (servidor MCP). Sem segredo.
+    conexao: dict | None = None
     criado_em: datetime
     atualizado_em: datetime
 

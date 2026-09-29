@@ -453,9 +453,20 @@ async def configurar_instrumento(
 ) -> str:
     """Cria um instrumento (uma ferramenta do cinto) de um `tipo` do catálogo (veja
     `listar_tipos_instrumento` para os tipos e campos). Os campos secretos NÃO são
-    plugados aqui — ficam pendentes para o consultor colar no cofre. Para uma integração
-    de API com várias operações, use `montar_conector`. Depois de criar, TESTE você mesmo
-    com `testar_instrumento`."""
+    plugados aqui — se vierem, são ignorados e ficam pendentes para o consultor colar
+    na tela do instrumento. Para uma integração de API com várias operações, use
+    `montar_conector`. Depois de criar, TESTE você mesmo com `testar_instrumento`.
+    SERVIDOR MCP (`conectar_mcp`): a identificação mora NO INSTRUMENTO (não crie
+    credencial na central). Escolha `auth_modo` pelo que o servidor pede: 'url_secreta'
+    (Make/Zapier: a chave está no endereço), 'bearer' (token), 'cabecalho' (+ `auth_nome`,
+    ex.: X-API-Key), 'query' (+ `auth_nome` do parâmetro), 'basic' (+ `auth_usuario`;
+    WordPress com senha de aplicativo — endereço /wp-json/mcp/mcp-adapter-default-server)
+    ou 'nenhuma'. O ENDEREÇO também é segredo (pode conter a chave): quem cola é o
+    consultor. Deixe `transport` em 'automatico'. Depois que o consultor colar,
+    `testar_instrumento` lista as ferramentas do servidor (com a sugestão 'so_le'/'altera'
+    que o servidor declara); marque em `ferramentas` só as necessárias, cada uma com
+    `irreversivel` decidido por você — a sugestão do servidor não é garantia.
+    Em dúvida, `consultar_conhecimento` 'mcp'."""
     return await anyio.to_thread.run_sync(
         escrita.configurar_instrumento, _sub(), time_id, nome, tipo, configuracao
     )
@@ -465,7 +476,9 @@ async def configurar_instrumento(
 async def editar_instrumento(
     instrumento_id: str, nome: str | None = None, configuracao: dict | None = None
 ) -> str:
-    """Edita o nome e/ou a configuração pública de um instrumento (o tipo não muda)."""
+    """Edita o nome e/ou a configuração pública de um instrumento (o tipo não muda). A
+    `configuracao` passada SUBSTITUI a pública atual — leia com `ver_instrumento` e mande
+    completa. Segredos vindos aqui são ignorados (o consultor cola na tela)."""
     return await anyio.to_thread.run_sync(
         escrita.editar_instrumento, _sub(), instrumento_id, nome, configuracao
     )

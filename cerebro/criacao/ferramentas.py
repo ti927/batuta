@@ -289,6 +289,7 @@ def _snapshot_time(ctx: ContextoCriacao) -> dict:
                     guardados=guardados.get(str(i.id), set()),
                     cobertos_por_credencial=_cobertos_por_credencial(i),
                     servicos_resolviveis=servicos_resolviveis,
+                    configuracao=i.configuracao,
                 ),
             }
             for i in instrumentos

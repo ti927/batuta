@@ -51,8 +51,9 @@ def test_mcp_registrado_com_url_e_token_secretos():
     chave no endereço, e ali quem tem a URL tem a conta."""
     t = encaixe.obter_tipo("conectar_mcp")
     assert t is not None
-    assert t.campos_secretos == ("url", "token_bearer")
-    assert t.campos_secretos_opcionais == ("token_bearer",)
+    assert t.campos_secretos == ("url", "token_bearer", "auth_segredo", "cabecalhos_secretos")
+    # o que FALTA depende do modo de identificação (ver test_mcp_conexao.py)
+    assert set(t.campos_secretos_opcionais) == {"token_bearer", "auth_segredo", "cabecalhos_secretos"}
     assert "mcp" in t.tipos_credencial_aceitos
     assert "conectar_mcp" in [x.tipo for x in encaixe.tipos_disponiveis()]
 
@@ -66,10 +67,18 @@ def test_expandir_em_varias_ferramentas(monkeypatch):
     assert [t.name for t in tools] == ["buscar", "criar"]
 
 
+def _inventario_fake(*nomes):
+    return lambda c: {
+        "transporte": "streamable_http", "protocolo": "2025-11-25",
+        "servidor": {"nome": "falso", "versao": "1"},
+        "ferramentas": [{"nome": n, "descricao": "", "sugestao": None} for n in nomes],
+        "recursos": [], "prompts": [],
+        "conexao": {"estado": "conectado", "transporte": "streamable_http"},
+    }
+
+
 def test_executar_testa_conexao_e_lista(monkeypatch):
-    monkeypatch.setattr(
-        mcp_mod, "_carregar_sync", lambda c, **kw: [_ferramenta_fake("buscar")]
-    )
+    monkeypatch.setattr(mcp_mod.mcp_conexao, "descobrir_sync", _inventario_fake("buscar"))
     r = ConectarMCP().executar(ConfigMCP(url="https://mcp.x.com"), ArgsMCP())
     assert r["ok"] is True
     assert [f["nome"] for f in r["ferramentas"]] == ["buscar"]
@@ -94,7 +103,10 @@ def test_seam_instrumento_normal_uma_ferramenta():
 
 
 def test_token_vira_authorization_bearer():
-    conexao = mcp_mod._conexao(ConfigMCP(url="https://x", token_bearer="segredo123"))
+    destino = mcp_mod.mcp_conexao.montar_destino(
+        ConfigMCP(url="https://x", token_bearer="segredo123")
+    )
+    conexao = mcp_mod._conexao(destino, "streamable_http")
     assert conexao["headers"]["Authorization"] == "Bearer segredo123"
     assert conexao["transport"] == "streamable_http" and conexao["url"] == "https://x"
 
@@ -195,9 +207,7 @@ def test_instrumento_so_de_leitura_nao_exige_portao():
 def test_acionar_nao_devolve_a_url(monkeypatch):
     """Defeito 3: o retorno do instrumento vai inteiro para o rastro da execução.
     Com a chave na URL, devolvê-la ali era vazar a credencial."""
-    monkeypatch.setattr(
-        mcp_mod, "_carregar_sync", lambda c, **kw: [_ferramenta_fake("ler")]
-    )
+    monkeypatch.setattr(mcp_mod.mcp_conexao, "descobrir_sync", _inventario_fake("ler"))
     r = ConectarMCP().executar(_config(), ArgsMCP())
     assert "CHAVE" not in str(r)
     assert r["ferramentas"][0]["no_cinto"] is True
@@ -209,7 +219,8 @@ def test_sem_url_a_falha_diz_o_que_fazer():
     try:
         mcp_mod._carregar_sync(ConfigMCP())
     except FalhaInstrumento as e:
-        assert "credencial" in str(e).lower()
+        assert "endereço" in str(e).lower()
+        assert e.codigo == "mcp.sem_endereco" and e.retentavel is False
     else:  # pragma: no cover
         raise AssertionError("deveria ter recusado sem endereço")
 
@@ -219,19 +230,27 @@ def test_lista_de_ferramentas_fica_em_cache(monkeypatch):
     servidor de terceiro antes de todo trabalho útil."""
     idas = []
 
-    async def _falso(config):
+    async def _falso(config, transporte):
         idas.append(1)
-        return [_ferramenta_fake("ler")]
+        return transporte, [_ferramenta_fake("ler")]
+
+    descobertas = []
+
+    def _descobrir(config):
+        descobertas.append(1)
+        return _inventario_fake("ler")(config)
 
     mcp_mod._CACHE.clear()
     monkeypatch.setattr(mcp_mod, "_carregar_ferramentas", _falso)
+    monkeypatch.setattr(mcp_mod.mcp_conexao, "descobrir_sync", _descobrir)
     c = _config()
     mcp_mod._carregar_sync(c)
     mcp_mod._carregar_sync(c)
     assert idas == [1], "a segunda chamada deveria ter vindo do cache"
     # "Acionar" ignora o cache de propósito: quem clica quer a verdade de agora
     ConectarMCP().executar(c, ArgsMCP())
-    assert idas == [1, 1]
+    ConectarMCP().executar(c, ArgsMCP())
+    assert descobertas == [1, 1]
     mcp_mod._CACHE.clear()
 
 

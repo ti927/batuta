@@ -197,6 +197,7 @@ def pendentes(
     guardados: set[str],
     cobertos_por_credencial: frozenset[str] | set[str] = frozenset(),
     servicos_resolviveis: frozenset[str] | set[str] = frozenset(),
+    configuracao: dict | None = None,
 ) -> list[str]:
     """Campos secretos de um instrumento que NENHUMA das três fontes de resolução
     cobre — só esses faltam de verdade. As fontes são as mesmas (e na mesma ordem)
@@ -214,8 +215,14 @@ def pendentes(
     # (4) segredos OPCIONAIS do tipo: vazio é o estado normal, não pendência (ex.:
     # o certificado mTLS, que só APIs bancárias exigem). Ver TipoInstrumento.
     opcionais = set(getattr(tipo_obj, "campos_secretos_opcionais", ()) or ())
+    candidatos = campos_secretos(tipo)
+    # (5) Tipos cujo segredo exigido depende da configuração (o MCP: o modo de
+    # identificação decide se falta token, senha ou nada) respondem por instância.
+    exigidos = tipo_obj.segredos_exigidos(configuracao or {}) if tipo_obj else None
+    if exigidos is not None:
+        candidatos, opcionais = exigidos, set()
     faltando: list[str] = []
-    for campo in campos_secretos(tipo):
+    for campo in candidatos:
         if campo in cobertos or campo in opcionais:
             continue
         if compart and campo == compart[0] and compart[1] in servicos_resolviveis:

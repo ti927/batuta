@@ -32,11 +32,15 @@ class FalhaInstrumento(Exception):
     `retentavel` diz se vale tentar de novo: oscilações de rede e erros de
     servidor (5xx/429) são retentáveis; falhas de autenticação (chave expirada)
     não são — tentar de novo não resolve.
+
+    `codigo` é um rótulo estável e sem segredo (ex.: `mcp.auth_401`) para o
+    diagnóstico e o banco de logs acharem a causa sem depender do texto.
     """
 
-    def __init__(self, mensagem: str, *, retentavel: bool = True):
+    def __init__(self, mensagem: str, *, retentavel: bool = True, codigo: str | None = None):
         super().__init__(mensagem)
         self.retentavel = retentavel
+        self.codigo = codigo
 
 
 def acionar_com_retentativa(
@@ -172,6 +176,15 @@ class TipoInstrumento(ABC):
         escreve); SQL, do `somente_leitura`. É o que evita exigir portão de
         aprovação para uma simples consulta."""
         return self.acao_irreversivel
+
+    def segredos_exigidos(self, configuracao: dict) -> tuple[str, ...] | None:
+        """Os segredos que ESTA instância precisa, quando isso depende da configuração.
+
+        O MCP é o caso: com usuário e senha, falta a senha; com token, falta o token;
+        sem identificação, só o endereço. Uma lista fixa por tipo cobraria o que o modo
+        escolhido nem usa. `None` (padrão) = vale a regra fixa do tipo
+        (`campos_secretos` menos `campos_secretos_opcionais`)."""
+        return None
 
     @abstractmethod
     def executar(self, config: BaseModel, args: BaseModel) -> dict:

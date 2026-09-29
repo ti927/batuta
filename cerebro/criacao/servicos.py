@@ -193,6 +193,7 @@ def configurar_instrumento(
         tipo,
         guardados=set(segredos_novos),
         servicos_resolviveis=segredos.servicos_resolviveis(sessao, time.organizacao_id),
+        configuracao=config_publica,
     )
     return inst, pendentes
 

@@ -161,6 +161,12 @@ class Instrumento(IdData, Base):
     # pela IA de conversa — NUNCA o apaga (senão o canal "desconecta" a cada ajuste).
     # NULL = canal ainda não conectado. Escrito só por `ativar-canal`.
     webhook_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Estado da CONEXÃO com o sistema de fora (hoje: servidor MCP) — o que o último
+    # teste descobriu: conectado/falhou, transporte, versão do protocolo, servidor,
+    # quando. Coluna própria pelo mesmo motivo do `webhook_secret`: o formulário
+    # regrava a `configuracao` inteira a cada salvamento e apagaria este estado.
+    # Nunca guarda segredo. NULL = nunca testado.
+    conexao: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
 class AgenteInstrumento(Base):

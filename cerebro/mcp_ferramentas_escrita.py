@@ -26,6 +26,7 @@ _log = logging.getLogger("batuta.mcp")
 import auditoria
 import credenciais_cofre as cofre_cred
 import duplicacao_time
+import instrumentos as encaixe
 import mcp_escopo
 import segredos_instrumento as segredos
 import tipos_credencial as tc
@@ -161,6 +162,27 @@ def remover_agente(sessao, usuario, agente_id) -> str:
 
 # ───────────────────────────── Instrumentos ─────────────────────────────
 
+def _sem_segredos(tipo: str, configuracao: dict | None) -> tuple[dict, list[str]]:
+    """Tira da configuração os campos SECRETOS do tipo — a IA nunca pluga segredo.
+
+    Antes, um segredo passado aqui ia para o cofre, e o serviço MCP roda SEM a
+    chave-mestra de propósito: a criação quebrava com erro genérico no claude.ai. Agora
+    o campo é ignorado, a IA é avisada e o campo fica pendente para o consultor."""
+    config = dict(configuracao or {})
+    ignorados = [
+        c for c in encaixe.campos_secretos(tipo) if str(config.pop(c, "") or "").strip()
+    ]
+    return config, ignorados
+
+
+def _aviso_ignorados(ignorados: list[str]) -> str:
+    return (
+        f" Ignorei {', '.join(ignorados)}: são segredos, e segredo quem cola é o "
+        "consultor, na tela do instrumento."
+        if ignorados else ""
+    )
+
+
 @_ferramenta_escrita
 def configurar_instrumento(sessao, usuario, time_id, nome, tipo, configuracao) -> str:
     tid = _uuid(time_id)
@@ -170,12 +192,13 @@ def configurar_instrumento(sessao, usuario, time_id, nome, tipo, configuracao) -
     if not nome or not tipo:
         return "Instrumento precisa de nome e tipo (veja os tipos em listar_tipos_instrumento)."
     time = mcp_escopo.time_acessivel(sessao, usuario, tid, "operador")
+    configuracao, ignorados = _sem_segredos(tipo, configuracao)
     inst, pendentes = servicos.configurar_instrumento(
-        sessao, time, nome=nome, tipo=tipo, configuracao=(configuracao or {}), usuario=usuario
+        sessao, time, nome=nome, tipo=tipo, configuracao=configuracao, usuario=usuario
     )
     return json.dumps(
         {
-            "mensagem": f"Instrumento '{inst.nome}' criado.",
+            "mensagem": f"Instrumento '{inst.nome}' criado." + _aviso_ignorados(ignorados),
             "id": str(inst.id),
             "segredos_pendentes": pendentes,
             "lembrete": (
@@ -194,11 +217,14 @@ def editar_instrumento(sessao, usuario, instrumento_id, nome, configuracao) -> s
     if iid is None:
         return f"Id de instrumento inválido: {instrumento_id}."
     inst = mcp_escopo.instrumento_acessivel(sessao, usuario, iid, "operador")
+    ignorados: list[str] = []
+    if configuracao is not None:
+        configuracao, ignorados = _sem_segredos(inst.tipo, configuracao)
     campos = _campos(nome=(nome or None), configuracao=configuracao)
     if not campos:
         return "Nada para mudar — passe um novo nome e/ou configuração."
     servicos.editar_instrumento(sessao, inst, usuario=usuario, **campos)
-    return f"Instrumento '{inst.nome}' atualizado."
+    return f"Instrumento '{inst.nome}' atualizado." + _aviso_ignorados(ignorados)
 
 
 @_ferramenta_escrita
