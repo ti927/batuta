@@ -35,6 +35,12 @@ Um instrumento é uma peça plugável, sempre com o mesmo encaixe. Duas coisas i
   automação, pedir aprovação, quadro do Cérebro, gerar e descrever imagem…). Fica em **Instrumento
   pronto** e abre no painel lateral.
 - A **chamada de API avulsa** não se cria mais: virou conector. As que já existem seguem valendo.
+- A aba **Instrumentos** mostra as duas listas separadas (**Personalizados** e **Prontos do Batuta**,
+  com os quadros do Cérebro num grupo à parte), com busca, filtros (tipo, alcance, situação,
+  categoria, agente) e selos no cartão: **precisa de atenção** (falta a chave, a conta caiu ou a
+  última conexão falhou), **sem agente**, **do time** / **da organização**, **API** / **MCP**,
+  **altera algo** / **só lê** e **pago**. Personalizado sem ícone escolhido ganha o ícone do serviço
+  (o que o servidor MCP anuncia, ou o do site da API), buscado pelo Batuta.
 
 ## Exemplos
 - "Gerar imagem" no cinto do redator; "Publicar no Instagram" no cinto do publicador.

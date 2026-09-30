@@ -437,11 +437,28 @@ async def _inventario(sessao, init) -> dict:
     info = init.serverInfo
     return {
         "protocolo": init.protocolVersion,
-        "servidor": {"nome": info.name, "versao": info.version} if info else None,
+        "servidor": _servidor(info),
         "ferramentas": ferramentas,
         "recursos": recursos,
         "prompts": prompts,
     }
+
+
+def _servidor(info) -> dict | None:
+    """Quem é o servidor: nome, versão e, se anunciar, título, site e ícones (o
+    protocolo prevê `icons`; o Batuta usa o primeiro como ícone do instrumento)."""
+    if not info:
+        return None
+    saida = {"nome": info.name, "versao": info.version}
+    if getattr(info, "title", None):
+        saida["titulo"] = info.title
+    if getattr(info, "websiteUrl", None):
+        saida["site"] = str(info.websiteUrl)
+    icones = [str(i.src) for i in (getattr(info, "icons", None) or []) if getattr(i, "src", None)]
+    if icones:
+        # Um `data:` enorme não vai para o estado da conexão: só endereços e data curtos.
+        saida["icones"] = [i for i in icones if len(i) <= 60_000][:3]
+    return saida
 
 
 async def com_transporte(transporte: str, tentar) -> tuple[str, object]:

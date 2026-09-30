@@ -365,6 +365,16 @@ _COMO_CRIAR = {
 }
 
 
+def eh_personalizado(tipo: str) -> bool:
+    """Instrumento PERSONALIZADO: nasce e se edita no Construtor (a chamada a uma API =
+    conector; o servidor MCP). Os demais são os PRONTOS do Batuta. Fonte única da regra
+    — a lista de instrumentos da tela separa as duas por aqui."""
+    if tipo == "conector":
+        return True
+    t = obter_tipo(tipo)
+    return bool(getattr(t, "criado_no_construtor", False)) if t else False
+
+
 def motivo_para_nao_criar(tipo: str) -> str | None:
     """Se criar um instrumento NOVO deste tipo é recusado, o porquê e o caminho certo."""
     t = obter_tipo(tipo)

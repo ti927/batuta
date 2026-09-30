@@ -268,6 +268,18 @@ export type Instrumento = {
   conexao?: ConexaoInstrumento | null;
   // "time" (só o time dono) ou "organizacao" (todos os times da organização usam).
   escopo?: "time" | "organizacao";
+  // Ícone do serviço (personalizados), já como data: — vale quando não há `icone`.
+  icone_auto?: string | null;
+  // Só na lista do time (aba Instrumentos): o que o cartão mostra.
+  personalizado?: boolean;
+  ligacao?: "api" | "mcp" | null;
+  qtd_acoes?: number | null;
+  usado_por_agentes?: string[];
+  usado_em_outros_times?: number;
+  pago?: boolean;
+  time_casa_nome?: string | null;
+  situacao?: "falta_chave" | "reconectar" | "falhou" | null;
+  situacao_motivo?: string | null;
   criado_em: string;
   atualizado_em: string;
 };

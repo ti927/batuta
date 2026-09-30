@@ -148,6 +148,14 @@ class Instrumento(IdData, Base):
     # Ícone escolhido pelo usuário (id no catálogo da UI, ex.: "fab:whatsapp").
     # NULL = sem escolha → a interface mostra o ícone genérico. Só apresentação.
     icone: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    # Ícone do SERVIÇO (personalizados): o que o servidor MCP anuncia ou o do site da
+    # API, baixado pelo cérebro e guardado como `data:` (a tela não busca nada fora).
+    # Só vale quando não há `icone` escolhido. `icone_auto_em` = quando se tentou
+    # (mesmo sem achar), para não tentar de novo a cada abertura da lista.
+    icone_auto: Mapped[str | None] = mapped_column(Text, nullable=True)
+    icone_auto_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Caixa-forte de credenciais: aponta para uma credencial nomeada da central
     # (da organização ou da consultoria) em vez de guardar o segredo inline. NULL
     # = sem referência (usa segredo próprio inline / pool, como antes). A borda

@@ -130,3 +130,15 @@ def dados(sessao):
         "orgB": orgB,
         "timeA": timeA,
     }
+
+
+@pytest.fixture(autouse=True)
+def _sem_busca_de_icone(monkeypatch):
+    """A busca do ícone do serviço roda em segundo plano depois das respostas e sai
+    para a internet; nos testes ela não roda (a lógica é testada em test_icone_servico
+    chamando as funções direto). Os chamados ficam registrados para quem quiser conferir."""
+    import icone_servico
+
+    chamados: list = []
+    monkeypatch.setattr(icone_servico, "atualizar", lambda iid: chamados.append(iid))
+    return chamados

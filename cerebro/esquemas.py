@@ -303,6 +303,19 @@ class InstrumentoLer(BaseModel):
     conexao: dict | None = None
     # "time" ou "organizacao" (todos os times da organização encaixam).
     escopo: str = "time"
+    # Ícone do serviço (personalizados), já como `data:` — vale se não há `icone`.
+    icone_auto: str | None = None
+    # ── Só na LISTA do time (`painel_instrumentos.enriquecer`); nas outras leituras,
+    # os padrões. O que o cartão da aba Instrumentos mostra.
+    personalizado: bool = False  # nasce no Construtor (API/servidor MCP)
+    ligacao: str | None = None  # "api" | "mcp" (personalizados)
+    qtd_acoes: int | None = None  # operações do conector / ferramentas do MCP no cinto
+    usado_por_agentes: list[str] = Field(default_factory=list)  # agentes DESTE time
+    usado_em_outros_times: int = 0
+    pago: bool = False
+    time_casa_nome: str | None = None  # da organização, morando em outro time
+    situacao: str | None = None  # falta_chave | reconectar | falhou (None = ok)
+    situacao_motivo: str | None = None
     criado_em: datetime
     atualizado_em: datetime
 

@@ -18,9 +18,12 @@ import { MAPA_ICONES } from "@/lib/icones-instrumento";
  */
 export function IconeInstrumento({
   icone,
+  auto,
   className,
 }: {
   icone?: string | null;
+  /** Ícone do serviço (data:), usado só quando não há `icone` escolhido. */
+  auto?: string | null;
   className?: string;
 }) {
   const curado = icone ? MAPA_ICONES.get(icone) : undefined;
@@ -48,6 +51,11 @@ export function IconeInstrumento({
   const def = curado ?? externo;
   if (def) {
     return <FontAwesomeIcon icon={def} className={className} />;
+  }
+  if (!icone && auto?.startsWith("data:image/")) {
+    // Guardado pelo cérebro como data: — não busca nada fora.
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={auto} alt="" className={`${className ?? ""} rounded-sm object-contain`} />;
   }
   return <Wrench className={className} />;
 }

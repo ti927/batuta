@@ -7,13 +7,15 @@ operador cria/edita/aciona; só admin apaga.
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import auditoria
 import escopo_instrumento
+import icone_servico
 import instrumentos as encaixe
+import painel_instrumentos
 import segredos_instrumento as segredos
 from auth import usuario_atual
 from instrumentos.base import FalhaInstrumento
@@ -132,6 +134,7 @@ def listar_tipos(usuario: Usuario = Depends(usuario_atual)):
 @rotas.get("/times/{time_id}/instrumentos", response_model=list[InstrumentoLer])
 def listar(
     time_id: uuid.UUID,
+    tarefas: BackgroundTasks,
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
@@ -142,7 +145,18 @@ def listar(
         .where(escopo_instrumento.filtro_visiveis(time))
         .order_by(Instrumento.criado_em)
     )
-    return [_ler(sessao, inst) for inst in sessao.scalars(consulta).all()]
+    lista = [_ler(sessao, inst) for inst in sessao.scalars(consulta).all()]
+    # O que o cartão da aba Instrumentos mostra (quem usa, situação, selos) — em lote.
+    painel_instrumentos.enriquecer(sessao, time, lista)
+    # Personalizados que nunca tiveram o ícone do serviço buscado: busca em segundo
+    # plano (poucos por vez), e a próxima abertura da lista já mostra.
+    faltando = [
+        i.id for i in lista
+        if i.personalizado and i.icone_auto_em is None and not i.icone
+    ]
+    for iid in faltando[:5]:
+        tarefas.add_task(icone_servico.atualizar, iid)
+    return lista
 
 
 @rotas.get("/instrumentos/{instrumento_id}/uso")
@@ -165,6 +179,7 @@ def uso(
 def criar(
     time_id: uuid.UUID,
     dados: InstrumentoCriar,
+    tarefas: BackgroundTasks,
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
@@ -207,6 +222,8 @@ def criar(
     )
     sessao.commit()
     sessao.refresh(inst)
+    if encaixe.eh_personalizado(inst.tipo):
+        tarefas.add_task(icone_servico.atualizar, inst.id)
     return _ler(sessao, inst)
 
 
@@ -223,6 +240,7 @@ def obter(
 def editar(
     instrumento_id: uuid.UUID,
     dados: InstrumentoEditar,
+    tarefas: BackgroundTasks,
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
@@ -276,6 +294,8 @@ def editar(
         )
     sessao.commit()
     sessao.refresh(inst)
+    if encaixe.eh_personalizado(inst.tipo):
+        tarefas.add_task(icone_servico.atualizar, inst.id)  # o endereço pode ter mudado
     return _ler(sessao, inst)
 
 
@@ -337,6 +357,7 @@ def remover(
 def acionar(
     instrumento_id: uuid.UUID,
     dados: AcionarInstrumento,
+    tarefas: BackgroundTasks,
     sessao: Session = Depends(obter_sessao),
     usuario: Usuario = Depends(usuario_atual),
 ):
@@ -346,6 +367,9 @@ def acionar(
     try:
         resultado = acionar_instrumento(sessao, inst, dados.argumentos)
         sessao.commit()  # o estado da conexão (MCP) que o teste descobriu
+        if inst.tipo == "conectar_mcp" and not inst.icone:
+            # O "Conectar" acabou de ler quem é o servidor (e os ícones que anuncia).
+            tarefas.add_task(icone_servico.atualizar, inst.id)
         return resultado
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))

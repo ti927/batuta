@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Pencil, Plus, ShieldCheck, Wrench } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import {
   type Instrumento,
@@ -14,22 +14,19 @@ import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { ConstrutorInstrumento } from "@/components/construtor-instrumento";
 import { ConstrutorMCP } from "@/components/construtor-mcp";
 import { DrawerInstrumento } from "@/components/drawer-instrumento";
-import { IconeInstrumento } from "@/components/icone-instrumento";
+import { ListaInstrumentos } from "@/components/lista-instrumentos";
 import { Button } from "@/components/ui/button";
 import { Aviso } from "@/components/ui/aviso";
-import { EstadoVazio } from "@/components/ui/estado-vazio";
 
 export function InstrumentosCliente({
   time,
   inicial,
   tipos,
-  usadoPor,
   meuPapel,
 }: {
   time: Time;
   inicial: Instrumento[];
   tipos: TipoInstrumento[];
-  usadoPor: Record<string, string[]>;
   meuPapel: PapelAcesso | null;
 }) {
   const souOperador = podeOperar(meuPapel);
@@ -87,66 +84,18 @@ export function InstrumentosCliente({
         )}
       </div>
 
-      {inicial.length === 0 ? (
-        <EstadoVazio icone={Wrench} titulo="Nenhum instrumento ainda.">
-          {souOperador
-            ? "Crie instrumentos para os agentes usarem (APIs, banco, web…)."
-            : "Os instrumentos deste time aparecerão aqui."}
-        </EstadoVazio>
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {inicial.map((inst, i) => {
-            const usos = usadoPor[inst.id] ?? [];
-            return (
-              <button
-                key={inst.id}
-                onClick={() =>
-                  souOperador &&
-                  (inst.tipo === "conector"
-                    ? setConstrutor(inst)
-                    : inst.tipo === "conectar_mcp"
-                      ? setConstrutorMcp(inst)
-                      : setAberto(inst))
-                }
-                disabled={!souOperador}
-                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
-                  souOperador ? "hover:bg-accent/50" : "cursor-default"
-                } ${i > 0 ? "border-t border-border" : ""}`}
-              >
-                <span className="flex size-8 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                  <IconeInstrumento icone={inst.icone} className="size-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium text-foreground">
-                      {inst.nome}
-                    </span>
-                    {inst.escopo === "organizacao" && (
-                      <span className="rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground">
-                        da organização
-                      </span>
-                    )}
-                    {inst.acao_irreversivel && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-[#FDF1E3] px-2 py-0.5 text-xs text-[#A05E16]">
-                        <ShieldCheck className="size-3" /> altera algo
-                      </span>
-                    )}
-                  </span>
-                  <span className="block truncate font-mono text-xs text-muted-foreground">
-                    {inst.tipo}
-                    {usos.length > 0 && (
-                      <span className="font-sans"> · usado por {usos.join(", ")}</span>
-                    )}
-                  </span>
-                </span>
-                {souOperador && (
-                  <Pencil className="size-4 shrink-0 text-muted-foreground/60" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <ListaInstrumentos
+        instrumentos={inicial}
+        tipos={tipos}
+        souOperador={souOperador}
+        onAbrir={(inst) =>
+          inst.tipo === "conector"
+            ? setConstrutor(inst)
+            : inst.tipo === "conectar_mcp"
+              ? setConstrutorMcp(inst)
+              : setAberto(inst)
+        }
+      />
 
       {aberto && (
         <DrawerInstrumento
