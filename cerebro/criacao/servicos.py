@@ -26,6 +26,7 @@ from sqlalchemy.orm.attributes import flag_modified
 import auditoria
 import instrumentos as encaixe
 import segredos_instrumento as segredos
+import webhook_entrada
 from mensageria.config import configuracao_inicial
 from modelos import Agente, AgenteInstrumento, Automacao, Instrumento, Time, Usuario
 from orquestracao import grafo
@@ -367,6 +368,13 @@ def definir_cadeia(
     return auto
 
 
+def _sem_segredo_de_gatilho(configuracao_gatilho: dict | None) -> dict:
+    """A IA nunca pluga segredo: um `segredo` de assinatura de webhook vindo por aqui é
+    descartado (o consultor cola na tela do gatilho). Também não apaga o que já existe."""
+    limpa, _segredo, _apagar = webhook_entrada.separar_segredo(configuracao_gatilho)
+    return limpa
+
+
 def definir_gatilho(
     sessao: Session, time: Time, *, tipo_gatilho: str,
     configuracao_gatilho: dict | None = None,
@@ -376,7 +384,7 @@ def definir_gatilho(
     a cadeia e o nome."""
     auto = resolver_automacao(sessao, time, automacao_id)
     auto.tipo_gatilho = tipo_gatilho
-    auto.configuracao_gatilho = configuracao_gatilho or {}
+    auto.configuracao_gatilho = _sem_segredo_de_gatilho(configuracao_gatilho)
     # O nó `gatilho` do grafo é projeção deste campo — sem espelhar aqui, a tela
     # continuava mostrando o gatilho antigo (duas fontes para o mesmo dado).
     auto.cadeia = grafo.sincronizar_gatilho(auto.cadeia, tipo_gatilho)
@@ -407,14 +415,15 @@ def definir_automacao(
     if auto is None:
         auto = Automacao(
             time_id=time.id, nome=nome, tipo_gatilho=tipo_gatilho,
-            configuracao_gatilho=configuracao_gatilho or {}, cadeia=cadeia, ativa=False,
+            configuracao_gatilho=_sem_segredo_de_gatilho(configuracao_gatilho),
+            cadeia=cadeia, ativa=False,
             configuracao=configuracao_inicial(),  # nasce com números sensatos à vista
         )
         sessao.add(auto)
     else:
         auto.nome = nome
         auto.tipo_gatilho = tipo_gatilho
-        auto.configuracao_gatilho = configuracao_gatilho or {}
+        auto.configuracao_gatilho = _sem_segredo_de_gatilho(configuracao_gatilho)
         auto.cadeia = cadeia
     sessao.flush()
     _audit(sessao, usuario, "automacao.definida", "automacao", auto.id, time.organizacao_id)

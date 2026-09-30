@@ -3,8 +3,8 @@ titulo: "Gatilhos (o que inicia um fluxo)"
 area: "automacoes"
 slug: "gatilhos"
 tags: ["gatilho", "manual", "agendamento", "webhook", "comentario", "instagram", "entrada"]
-revisado_em: "2026-07-17"
-fontes: ["PRODUTO.md §12", "cerebro/agendador.py", "cerebro/rotas/webhooks.py", "cerebro/rotas/instagram_webhook.py"]
+revisado_em: "2026-09-30"
+fontes: ["PRODUTO.md §12", "cerebro/agendador.py", "cerebro/rotas/webhooks.py", "cerebro/webhook_entrada.py", "cerebro/rotas/instagram_webhook.py"]
 ---
 
 # Gatilhos (o que inicia um fluxo)
@@ -23,16 +23,30 @@ O gatilho diz **como** a automação começa; há quatro tipos, e cada automaç�
 2. **Agendamento:** defina frequência + horário, e (opcional) a **"Mensagem que o gatilho envia ao
    fluxo"** — esse texto chega ao **primeiro agente** como a entrada dele.
 3. **Webhook:** salve a automação para gerar a URL; ela só dispara com a automação **ativa**.
+   Para um serviço que avisa por webhook (rede social, ERP, pagamento), preencha também:
+   - **Segredo (o mesmo cadastrado no serviço):** você inventa um segredo, cola aqui e no
+     painel do serviço. Com ele, aviso sem a assinatura certa é recusado (ninguém mais
+     dispara o fluxo pela URL). Em branco ao editar = mantém o guardado.
+   - **Só dispara para o aviso:** o tipo de aviso que interessa (ex.: `comment.received`); os
+     outros chegam, respondem "ok" e não disparam.
+   - **Teto de disparos por hora** (0 = sem limite).
 4. **Comentário do Instagram:** defina os filtros (posts, palavra-chave, teto/hora); a **conta** é
    escolhida pelo humano na tela do gatilho (a IA não pluga o token).
 
 ## Exemplos
 - Lembrete todo dia 1º às 9h (agendamento) com a mensagem "Gere o lembrete mensal de fechamento."
 - Um CRM externo chama o webhook do time a cada novo lead.
+- Comentários do Instagram vindos de um serviço de redes sociais: webhook com segredo, aviso
+  `comment.received`; o corpo (comentário, autor, post) vira a entrada do agente que responde.
 
 ## Limites e cuidados
 - **A URL do webhook** aparece ao abrir aquela automação (ou no nó Gatilho), não no painel do time.
 - Um **gatilho recém-criado ou duplicado** pode nascer "a conectar" (webhook/conta pendente) — avise.
+- **Webhook — sempre ligado, sem configurar:** o mesmo aviso reentregue (mesmo id) dispara
+  **uma vez só**; e aviso sobre algo que a **própria conta** fez (`isOwnAccount: true` e
+  parecidos) **não dispara** — é o que impede o agente de responder a si mesmo em loop.
+- **Webhook — filtros por campo** (`so_quando` / `nunca_quando`, só pela IA): aparecem na tela
+  do gatilho e são preservados ao salvar.
 - **Passar parâmetros ao 1º agente:** é um **texto livre** (a "entrada"), não campos nomeados. Para
   vários "parâmetros", escreva-os no texto e instrua o agente a lê-los.
 - **A entrada não morre no primeiro passo.** Ela entra na **ficha da execução** (no campo
@@ -42,7 +56,10 @@ O gatilho diz **como** a automação começa; há quatro tipos, e cada automaç�
 ## Para a IA
 Nunca afirme o tipo de gatilho de memória — confira no retrato do time (`tipo_gatilho` por automação).
 Gatilho/webhook é **por automação**, nunca "do time". Ao montar comentário do Instagram, avise que falta
-o humano escolher a conta. Para agendamento por um AGENTE (disparo futuro), veja
+o humano escolher a conta. No **webhook**, a config aceita `evento`, `so_quando`/`nunca_quando`
+(`[{campo: "a.b", valor}]`), `teto_por_hora` e `cabecalho_assinatura`; o **segredo você nunca manda**
+(é recusado) — peça ao consultor para colá-lo na tela do gatilho e no painel do serviço. O endereço
+a cadastrar no serviço aparece em `ver_automacao` (`endereco_webhook`). Para agendamento por um AGENTE (disparo futuro), veja
 [[instrumentos/agendar-automacao]] — o alvo deve ser **manual + ativa**.
 
 ## Relacionado

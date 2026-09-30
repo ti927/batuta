@@ -78,7 +78,18 @@ function gatilhoDe(a: Automacao | null): ConfigGatilho {
     midiasModo: Array.isArray(midias) ? "especificas" : "todas",
     midiasIds: Array.isArray(midias) ? (midias as string[]).join(", ") : "",
     palavraChave: (cfg.palavra_chave as string) ?? "",
+    // O teto do comentário do Instagram nasce em 50; o do webhook, sem teto — cada
+    // gatilho lê o seu, do mesmo campo.
     tetoPorHora: Number(cfg.teto_por_hora ?? 50),
+    webhookEvento: (cfg.evento as string) ?? "",
+    webhookTeto: Number(cfg.teto_por_hora ?? 0),
+    webhookSegredo: "",
+    webhookRemoverSegredo: false,
+    webhookExtras: Object.fromEntries(
+      ["so_quando", "nunca_quando", "cabecalho_assinatura"]
+        .filter((k) => cfg[k] !== undefined)
+        .map((k) => [k, cfg[k]]),
+    ),
   };
 }
 
@@ -485,6 +496,16 @@ function EditorEstudio({
       if (gatilho.palavraChave.trim()) cfg.palavra_chave = gatilho.palavraChave.trim();
       return cfg;
     }
+    if (gatilho.tipo === "webhook") {
+      const cfg: Record<string, unknown> = { ...gatilho.webhookExtras };
+      if (gatilho.webhookEvento.trim()) cfg.evento = gatilho.webhookEvento.trim();
+      if (gatilho.webhookTeto > 0) cfg.teto_por_hora = gatilho.webhookTeto;
+      // O segredo vai só quando digitado (em branco = manter); o cérebro o tira daqui
+      // e guarda cifrado fora da configuração.
+      if (gatilho.webhookSegredo.trim()) cfg.segredo = gatilho.webhookSegredo.trim();
+      if (gatilho.webhookRemoverSegredo) cfg.remover_segredo = true;
+      return cfg;
+    }
     if (gatilho.tipo !== "agendamento") return {};
     const [h, m] = gatilho.horario.split(":").map(Number);
     const cfg: Record<string, unknown> = {
@@ -531,6 +552,8 @@ function EditorEstudio({
         configuracao: configFluxo,
       });
       onAtualizou(atual);
+      // O segredo digitado já foi guardado: o campo volta a ficar vazio ("manter").
+      setGatilhoEstado((g) => ({ ...g, webhookSegredo: "", webhookRemoverSegredo: false }));
       setErro(null);
       toast.success("Desenho salvo.");
       router.refresh();
@@ -801,6 +824,7 @@ function EditorEstudio({
             webhookUrl={
               automacao ? `${URL_CEREBRO}/webhooks/automacoes/${automacao.id}` : null
             }
+            segredoWebhookUltimos4={automacao?.segredo_webhook_ultimos4 ?? null}
             credenciaisInstagram={credenciaisInstagram}
             automacoesOrg={automacoesOrg}
             onPatchNode={patchNode}

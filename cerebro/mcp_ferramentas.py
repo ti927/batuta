@@ -13,6 +13,7 @@ vem por parâmetro porque o contextvar do token não atravessa a thread).
 
 import functools
 import json
+import os
 import logging
 import uuid
 
@@ -357,6 +358,14 @@ def ver_automacao(sessao, usuario, automacao_id) -> str:
             "nome": auto.nome,
             "tipo_gatilho": auto.tipo_gatilho,
             "configuracao_gatilho": auto.configuracao_gatilho,
+            # Webhook: só SE há segredo de assinatura guardado — o valor nunca sai.
+            "segredo_da_assinatura_guardado": bool(auto.segredo_webhook_cifrado),
+            # O endereço que o serviço de fora chama (só faz sentido no gatilho webhook).
+            "endereco_webhook": (
+                os.environ.get("CEREBRO_PUBLIC_URL", "http://localhost:8000").rstrip("/")
+                + f"/webhooks/automacoes/{auto.id}"
+                if auto.tipo_gatilho == "webhook" else None
+            ),
             "cadeia": grafo.normalizar(auto.cadeia or {}),
             "ativa": auto.ativa,
         },

@@ -460,6 +460,9 @@ class AutomacaoLer(BaseModel):
     # explicar por que a automação está desligada — desligar sem dizer por quê seria
     # trocar uma falha barulhenta por um mistério.
     desligada_por_falhas_em: datetime | None = None
+    # Gatilho webhook: os 4 últimos caracteres do segredo da assinatura (null = sem
+    # segredo). O segredo em si nunca sai do cérebro.
+    segredo_webhook_ultimos4: str | None = None
     criado_em: datetime
     atualizado_em: datetime
 

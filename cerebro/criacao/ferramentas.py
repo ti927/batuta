@@ -170,6 +170,33 @@ def _inteiro_no_intervalo(valor, minimo: int, maximo: int) -> bool:
         return False
 
 
+def _validar_gatilho_webhook(config: dict) -> str | None:
+    """O gatilho webhook aceita filtros e teto; o SEGREDO da assinatura, nunca — quem
+    cola é o consultor, na tela do gatilho (a IA não pluga segredo)."""
+    if config.get("segredo") or config.get("remover_segredo"):
+        return (
+            "Não mande o segredo da assinatura: peça ao consultor para colá-lo na tela "
+            "do gatilho (Automações › o gatilho › Segredo da assinatura)."
+        )
+    for chave in ("evento", "cabecalho_assinatura"):
+        if config.get(chave) is not None and not isinstance(config[chave], str):
+            return f"{chave}, se informado, deve ser um texto."
+    for chave in ("so_quando", "nunca_quando"):
+        regras = config.get(chave)
+        if regras is None:
+            continue
+        if not isinstance(regras, list) or not all(
+            isinstance(r, dict) and isinstance(r.get("campo"), str) and r["campo"].strip()
+            and "valor" in r
+            for r in regras
+        ):
+            return f"{chave} deve ser uma lista de {{campo: 'a.b', valor: ...}}."
+    teto = config.get("teto_por_hora")
+    if teto is not None and not _inteiro_no_intervalo(teto, 0, 100000):
+        return "teto_por_hora, se informado, deve ser um inteiro (0 = sem teto)."
+    return None
+
+
 def _validar_gatilho(tipo: str, config: dict) -> str | None:
     """Devolve uma mensagem de erro se o gatilho estiver malformado (None = ok)."""
     if tipo not in TIPOS_GATILHO:
@@ -192,6 +219,8 @@ def _validar_gatilho(tipo: str, config: dict) -> str | None:
         if teto is not None and not _inteiro_no_intervalo(teto, 1, 100000):
             return "teto_por_hora, se informado, deve ser um inteiro positivo."
         return None
+    if tipo == "webhook":
+        return _validar_gatilho_webhook(config)
     if tipo != "agendamento":
         return None
     freq = config.get("frequencia")
@@ -785,7 +814,11 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
     ) -> str:
         """Define o gatilho de UMA automação. Tipos e formato EXATO:
         - 'manual': sem config (o consultor dispara quando quiser).
-        - 'webhook': sem config (uma chamada externa dispara).
+        - 'webhook': um serviço de fora chama o endereço da automação. Config opcional:
+          {evento?: 'comment.received', so_quando?: [{campo: 'a.b', valor}],
+          nunca_quando?: [{campo: 'a.b', valor}], teto_por_hora?: int}. Aviso repetido e
+          aviso da própria conta são ignorados sozinhos. O SEGREDO da assinatura o
+          consultor cola na tela — não mande.
         - 'agendamento': config = {frequencia: 'diaria'|'semanal'|'mensal',
           hora: 0-23, minuto: 0-59, dia_semana: 0-6 (0=segunda, só semanal),
           dia_mes: 1-31 (só mensal), entrada?: texto}. Use INTEIROS.

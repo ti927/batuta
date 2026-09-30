@@ -723,6 +723,8 @@ export type Automacao = {
   // sozinha. Nulo = não foi o disjuntor (ou já foi religada). Serve para a tela
   // distinguir "eu desliguei" de "o Batuta desligou".
   desligada_por_falhas_em: string | null;
+  // Gatilho webhook: 4 últimos caracteres do segredo da assinatura (null = sem).
+  segredo_webhook_ultimos4?: string | null;
   criado_em: string;
   atualizado_em: string;
 };

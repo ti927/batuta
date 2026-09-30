@@ -231,6 +231,38 @@ class Automacao(IdData, Base):
     falhas_contam_desde: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # ── Gatilho webhook: o segredo com que o serviço de fora ASSINA o aviso ─────
+    # Fica FORA do `configuracao_gatilho` de propósito: aquela config é lida pela tela,
+    # pela IA e copiada na duplicação; o segredo não pode ir a nenhum desses lugares.
+    # Cifrado pelo cofre; a tela só vê os 4 últimos caracteres.
+    segredo_webhook_cifrado: Mapped[str | None] = mapped_column(Text, nullable=True)
+    segredo_webhook_ultimos4: Mapped[str | None] = mapped_column(String(8), nullable=True)
+
+
+class EventoWebhook(IdData, Base):
+    """Aviso recebido pelo gatilho webhook de uma automação — camada de BORDA.
+
+    - **DEDUPE:** serviços que entregam "pelo menos uma vez" reenviam o mesmo aviso. O
+      índice único `(automacao_id, evento_id)` faz cada aviso virar UMA execução só.
+    - **TETO:** contar quantos avisos dispararam a automação na última hora.
+    - **AUDITORIA:** qual aviso disparou qual execução.
+
+    `evento_id` é o id que o serviço dá ao aviso (cabeçalho ou campo `id`); sem ele,
+    o hash do corpo — o mesmo corpo repetido é o mesmo aviso."""
+
+    __tablename__ = "eventos_webhook"
+    automacao_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("automacoes.id", ondelete="CASCADE"), nullable=False
+    )
+    evento_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    execucao_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("execucoes.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (
+        Index("uq_evento_webhook", "automacao_id", "evento_id", unique=True),
+        Index("ix_evento_webhook_automacao", "automacao_id", "criado_em"),
+    )
 
 
 class Execucao(IdData, Base):

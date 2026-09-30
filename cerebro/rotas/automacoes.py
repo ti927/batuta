@@ -37,9 +37,11 @@ from esquemas import (
 )
 import agendador
 import auditoria
+import cofre
 import duplicacao_comum
 import fila
 import precos
+import webhook_entrada
 from auth import usuario_atual
 from modelos import (
     Agendamento,
@@ -105,6 +107,19 @@ def _ler_automacao(auto: Automacao) -> AutomacaoLer:
     return dados
 
 
+def _aplicar_segredo_webhook(auto: Automacao, cfg: dict | None) -> None:
+    """O segredo da assinatura chega na config do gatilho (campo só de escrita) e vai
+    para a coluna cifrada; a config gravada nunca o carrega. Em branco = mantém."""
+    limpa, segredo, apagar = webhook_entrada.separar_segredo(cfg)
+    auto.configuracao_gatilho = limpa
+    if apagar:
+        auto.segredo_webhook_cifrado = None
+        auto.segredo_webhook_ultimos4 = None
+    if segredo:
+        auto.segredo_webhook_cifrado = cofre.cifrar(segredo)
+        auto.segredo_webhook_ultimos4 = cofre.ultimos4(segredo)
+
+
 def _validar_cadeia_ou_422(
     sessao: Session, time_id: uuid.UUID, cadeia: dict, *, exigir_condicao: bool = True
 ) -> None:
@@ -149,6 +164,7 @@ def criar(
     time_acessivel(sessao, usuario, time_id, minimo="operador")
     _validar_cadeia_ou_422(sessao, time_id, dados.cadeia)
     auto = Automacao(time_id=time_id, **dados.model_dump())
+    _aplicar_segredo_webhook(auto, dados.configuracao_gatilho)
     auto.cadeia = grafo.normalizar(auto.cadeia or {})  # grava no formato canônico
     # Nasce com os números à vista, não com uma etiqueta. Um corpo que traga `perfil`
     # (a tela antiga manda assim) é respeitado como MODELO ESCOLHIDO — descartá-lo
@@ -223,6 +239,7 @@ def editar(
     estava_ativa = auto.ativa
     for campo, valor in dados.model_dump().items():
         setattr(auto, campo, valor)
+    _aplicar_segredo_webhook(auto, dados.configuracao_gatilho)
     auto.cadeia = grafo.normalizar(auto.cadeia or {})  # grava no formato canônico
     # Religar pela tela zera a contagem do disjuntor, igual a religar pela IA/MCP
     # (`criacao.servicos.ativar`): são as DUAS portas que ligam uma automação, e a

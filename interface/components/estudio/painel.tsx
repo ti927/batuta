@@ -461,6 +461,7 @@ export type PainelProps = {
   gatilho: ConfigGatilho;
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
   webhookUrl?: string | null;
+  segredoWebhookUltimos4?: string | null;
   credenciaisInstagram: Credencial[];
   automacoesOrg: AutomacaoDaOrg[];
   onPatchNode: (id: string, patch: Partial<NoCadeia>) => void;
@@ -496,6 +497,7 @@ export function PainelEstudio({
   gatilho,
   setGatilho,
   webhookUrl,
+  segredoWebhookUltimos4,
   credenciaisInstagram,
   automacoesOrg,
   onPatchNode,
@@ -588,6 +590,7 @@ export function PainelEstudio({
             gatilho={gatilho}
             setGatilho={setGatilho}
             webhookUrl={webhookUrl}
+            segredoWebhookUltimos4={segredoWebhookUltimos4}
             credenciaisInstagram={credenciaisInstagram}
             cadeia={cadeia}
             agentes={agentes}
@@ -851,10 +854,105 @@ export function PainelEstudio({
   );
 }
 
+/** O que protege um gatilho webhook: segredo da assinatura, tipo de aviso e teto. */
+function ConfigWebhook({
+  gatilho,
+  setGatilho,
+  ultimos4,
+  podeEditar,
+}: {
+  gatilho: ConfigGatilho;
+  setGatilho: (patch: Partial<ConfigGatilho>) => void;
+  ultimos4?: string | null;
+  podeEditar: boolean;
+}) {
+  const guardado = ultimos4 && !gatilho.webhookRemoverSegredo;
+  const extras = gatilho.webhookExtras;
+  const regras = (chave: string) =>
+    (Array.isArray(extras[chave]) ? (extras[chave] as { campo: string; valor: unknown }[]) : []);
+  const soQuando = regras("so_quando");
+  const nuncaQuando = regras("nunca_quando");
+  return (
+    <div className="mt-2.5 flex flex-col gap-2.5">
+      <div>
+        <label className={rotuloCls}>Segredo (o mesmo cadastrado no serviço)</label>
+        <input
+          type="password"
+          autoComplete="new-password"
+          className={campo}
+          value={gatilho.webhookSegredo}
+          disabled={!podeEditar}
+          placeholder={guardado ? `guardado •••• ${ultimos4} — deixe em branco para manter` : ""}
+          onChange={(e) => setGatilho({ webhookSegredo: e.target.value })}
+        />
+        <p className="mt-1 text-[11px] leading-snug text-[#6B6880]">
+          Com ele, só o serviço que conhece o segredo consegue disparar este fluxo.
+          {guardado && podeEditar && (
+            <>
+              {" "}
+              <button
+                type="button"
+                className="underline"
+                onClick={() => setGatilho({ webhookRemoverSegredo: true, webhookSegredo: "" })}
+              >
+                Remover o segredo
+              </button>
+            </>
+          )}
+        </p>
+      </div>
+      <div>
+        <label className={rotuloCls}>Só dispara para o aviso (opcional)</label>
+        <input
+          className={`${campo} font-mono`}
+          value={gatilho.webhookEvento}
+          disabled={!podeEditar}
+          placeholder="ex.: comment.received"
+          onChange={(e) => setGatilho({ webhookEvento: e.target.value })}
+        />
+        <p className="mt-1 text-[11px] leading-snug text-[#6B6880]">
+          Em branco, todo aviso dispara.
+        </p>
+      </div>
+      {(soQuando.length > 0 || nuncaQuando.length > 0) && (
+        <div className="text-[11px] leading-snug text-[#6B6880]">
+          {soQuando.map((r) => (
+            <div key={`s-${r.campo}`}>
+              Só quando <span className="font-mono">{r.campo}</span> ={" "}
+              <span className="font-mono">{String(r.valor)}</span>
+            </div>
+          ))}
+          {nuncaQuando.map((r) => (
+            <div key={`n-${r.campo}`}>
+              Não dispara quando <span className="font-mono">{r.campo}</span> ={" "}
+              <span className="font-mono">{String(r.valor)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div>
+        <label className={rotuloCls}>Teto de disparos por hora</label>
+        <input
+          type="number"
+          min={0}
+          className={`${campo} w-24`}
+          value={gatilho.webhookTeto}
+          disabled={!podeEditar}
+          onChange={(e) => setGatilho({ webhookTeto: Number(e.target.value) })}
+        />
+        <p className="mt-1 text-[11px] leading-snug text-[#6B6880]">
+          Protege seu custo num pico de avisos. <strong>0 = sem limite.</strong>
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function ConfigGatilhoBloco({
   gatilho,
   setGatilho,
   webhookUrl,
+  segredoWebhookUltimos4,
   credenciaisInstagram,
   cadeia,
   agentes,
@@ -864,6 +962,7 @@ function ConfigGatilhoBloco({
   gatilho: ConfigGatilho;
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
   webhookUrl?: string | null;
+  segredoWebhookUltimos4?: string | null;
   credenciaisInstagram: Credencial[];
   cadeia: Cadeia;
   agentes: Agente[];
@@ -988,6 +1087,12 @@ function ConfigGatilhoBloco({
               aparece depois de salvar a automação
             </div>
           )}
+          <ConfigWebhook
+            gatilho={gatilho}
+            setGatilho={setGatilho}
+            ultimos4={segredoWebhookUltimos4}
+            podeEditar={podeEditar}
+          />
         </div>
       )}
 

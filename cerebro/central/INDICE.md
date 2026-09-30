@@ -50,7 +50,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Condições e ramos | `automacoes/condicoes-e-ramos` | A condição de cada seta; o fluxo segue TODAS as atendidas; junção; **o markdown do agente precisa citar os rótulos das saídas** | ✅ | ✍️ |
 | Quando um passo dá erro | `automacoes/erros-no-fluxo` | Saída de erro, saída "se nenhuma", aviso da falha; `ok:false` de leitura × de ação irreversível; o teto de passos nomeia o nó em laço | ✅ | ✍️ |
 | A ficha da execução | `automacoes/ficha-da-execucao` | Os dados que atravessam o fluxo; `anotar`; regra exata na seta; "Para cada item" | ✅ | ✍️ |
-| Gatilhos | `automacoes/gatilhos` | Manual, agendamento, webhook, comentário do Instagram; a "entrada" ao 1º agente | ✅ | ✍️ |
+| Gatilhos | `automacoes/gatilhos` | Manual, agendamento, webhook (segredo, tipo de aviso, repetidos, eco da própria conta, teto), comentário do Instagram; a "entrada" ao 1º agente | ✅ | ✍️ |
 | Pedir aprovação e aguardar | `automacoes/pedir-aprovacao` | O instrumento que para o fluxo até uma pessoa responder; por tela e por canal; quem recebe é quem aprova; **o agente precisa declarar o caminho depois da decisão**; uma porta de cada vez (tela × canal); botões Aprovar/Recusar e a resposta vai para o pedido certo (vários pedidos no mesmo bot); prazo da espera; converter time que pedia aprovação na mão | ✅ | ✍️ |
 | O passo Esperar | `automacoes/esperar` | Segura o fluxo por minutos/horas/dias e continua daqui, com a ficha intacta | ✅ | ✍️ |
 | O passo Chamar outra automação | `automacoes/chamar-automacao` | Roda outra automação inteira e ESPERA o resultado dela; a ficha vai e volta | ✅ | ✍️ |

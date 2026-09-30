@@ -148,4 +148,12 @@ export type ConfigGatilho = {
   midiasIds: string; // texto: media_ids separados por vírgula
   palavraChave: string;
   tetoPorHora: number;
+  // gatilho webhook
+  webhookEvento: string; // "" = qualquer aviso dispara
+  webhookTeto: number; // 0 = sem teto
+  webhookSegredo: string; // só de escrita: "" = manter o guardado
+  webhookRemoverSegredo: boolean;
+  // Filtros por campo (so_quando/nunca_quando) e cabeçalho da assinatura, que a IA
+  // pode configurar: a tela os mostra e os devolve intactos ao salvar.
+  webhookExtras: Record<string, unknown>;
 };

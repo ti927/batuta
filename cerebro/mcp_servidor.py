@@ -679,10 +679,19 @@ async def montar_cadeia(automacao_id: str, cadeia: dict) -> str:
 async def definir_gatilho(
     automacao_id: str, tipo_gatilho: str, configuracao_gatilho: dict | None = None
 ) -> str:
-    """Define o gatilho de uma automação. Tipos: 'manual' (sem config), 'webhook' (sem
-    config — uma chamada externa dispara), 'agendamento' (config = {frequencia:
+    """Define o gatilho de uma automação. Tipos: 'manual' (sem config), 'webhook' (um
+    serviço de fora chama o endereço da automação), 'agendamento' (config = {frequencia:
     'diaria'|'semanal'|'mensal', hora: 0-23, minuto: 0-59, dia_semana: 0-6 só semanal,
-    dia_mes: 1-31 só mensal, entrada?: texto}), 'comentario_instagram'."""
+    dia_mes: 1-31 só mensal, entrada?: texto}), 'comentario_instagram'.
+
+    'webhook' — config opcional: {evento?: 'comment.received' (só esse tipo de aviso
+    dispara; o nome vem do campo `event`/`type` do corpo), so_quando?: [{campo: 'a.b',
+    valor}], nunca_quando?: [{campo: 'a.b', valor}], teto_por_hora?: inteiro (0 = sem
+    teto), cabecalho_assinatura?: 'X-Foo-Signature'}. Sempre ligado: aviso repetido
+    (mesmo id) dispara uma vez só, e aviso sobre algo que a PRÓPRIA conta fez
+    (`isOwnAccount: true` etc.) é ignorado — é o que impede o agente de responder a si
+    mesmo. O SEGREDO da assinatura você NÃO manda: o consultor cola na tela do gatilho
+    (e o mesmo valor no painel do serviço). O corpo do aviso vira a entrada do fluxo."""
     return await anyio.to_thread.run_sync(
         escrita.definir_gatilho, _sub(), automacao_id, tipo_gatilho, configuracao_gatilho
     )
