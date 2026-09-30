@@ -912,6 +912,33 @@ function SecaoOperacoes({
                 className="h-8 w-28 shrink-0 text-right tabular-nums"
               />
             </label>
+            {/* Há serviço que só responde depois de terminar o trabalho (publicar um
+                carrossel leva ~1 min); com espera curta, o que deu certo virava "falhou". */}
+            <label className="mt-2.5 flex items-center gap-3 rounded-md border border-border p-2.5">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] text-foreground">
+                  Tempo de espera (segundos)
+                </span>
+                <span className="block text-xs leading-snug text-muted-foreground">
+                  Quanto esperar a resposta do serviço. Aumente se ele demora para concluir
+                  (até 300).
+                </span>
+              </span>
+              <Input
+                type="number"
+                min={1}
+                max={300}
+                inputMode="numeric"
+                value={op.tempo_limite_s ?? 15}
+                onChange={(e) => {
+                  const v = Math.round(Number(e.target.value));
+                  onAtualizar({
+                    tempo_limite_s: Number.isFinite(v) ? Math.min(300, Math.max(1, v)) : 15,
+                  });
+                }}
+                className="h-8 w-28 shrink-0 text-right tabular-nums"
+              />
+            </label>
           </div>
 
           {/* 4. testar e detectar */}

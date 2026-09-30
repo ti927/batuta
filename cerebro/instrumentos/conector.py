@@ -106,6 +106,14 @@ class OperacaoConector(BaseModel):
         description="Opcional. Quanto a API cobra por chamada desta operação, em US$ "
         "(entra no custo do time). 0 = gratuita ou não sabe.",
     )
+    # Quanto esperar a resposta. Há API que só responde depois de fazer o trabalho
+    # inteiro (publicar um carrossel leva ~1 min): com espera curta, o Batuta marcava
+    # "falhou" o que tinha dado certo lá (30/09). Limite visível e ajustável por operação.
+    tempo_limite_s: int = Field(
+        default=int(TIMEOUT_S), ge=1, le=300,
+        description="Quanto tempo esperar a resposta, em segundos (padrão 15, máx. 300). "
+        "Aumente em operações que só respondem depois de concluir um trabalho demorado.",
+    )
 
 
 class ConfigConector(BaseModel):
@@ -240,6 +248,7 @@ def _args_da_operacao(op: OperacaoConector) -> type[BaseModel]:
 def _chamar_http(
     metodo: str, url: str, cabecalhos: dict, params: dict, corpo: dict | None,
     campos_resposta: list[str], mtls: tuple[str, str] | None = None,
+    *, tempo_limite_s: float = TIMEOUT_S, escreve: bool = False,
 ) -> dict:
     """A chamada HTTP em si — espelha o núcleo provado do `rest.py`: erros de
     transporte e 5xx/429 viram falha retentável; 401/403 falha não-retentável;
@@ -248,10 +257,23 @@ def _chamar_http(
     `mtls` é o par (certificado, chave) já materializado em arquivo, quando o
     conector tem certificado de cliente; None = chamada sem certificado."""
     try:
-        with http_saida.cliente(timeout=TIMEOUT_S, cert=mtls) as cliente:
+        with http_saida.cliente(timeout=tempo_limite_s, cert=mtls) as cliente:
             resposta = cliente.request(
                 metodo, url, headers=cabecalhos or None, params=params or None, json=corpo
             )
+    except httpx.TimeoutException as e:
+        # Numa operação que ESCREVE, "não respondeu a tempo" depois de o pedido sair
+        # não quer dizer "não fez": o sistema pode ter feito (e fez, em 30/09 — o
+        # carrossel saiu). Repetir sozinho publicaria em dobro, então não repete, e a
+        # mensagem manda conferir antes. Sem conexão (o pedido nem saiu) segue retentável.
+        if escreve and not isinstance(e, httpx.ConnectTimeout):
+            raise FalhaInstrumento(
+                f"{url} não respondeu em {int(tempo_limite_s)} s. A ação PODE ter sido "
+                "feita lá — confira antes de repetir (repetir pode duplicar). Se essa "
+                "operação costuma demorar, aumente o tempo de espera dela no Construtor.",
+                retentavel=False, codigo="conector.sem_resposta_escrita",
+            )
+        raise FalhaInstrumento(http_saida.mensagem_de_rede(url, e), retentavel=True)
     except httpx.HTTPError as e:
         raise FalhaInstrumento(http_saida.mensagem_de_rede(url, e), retentavel=True)
 
@@ -421,7 +443,7 @@ def _executar_operacao(
     with certificados.material_mtls(config.certificado, config.chave_privada) as par:
         return _chamar_http(
             op.metodo, url, cabecalhos, params, corpo or None, op.campos_resposta,
-            mtls=par,
+            mtls=par, tempo_limite_s=op.tempo_limite_s, escreve=_operacao_escreve(op),
         )
 
 

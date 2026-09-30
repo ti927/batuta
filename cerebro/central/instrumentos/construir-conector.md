@@ -163,6 +163,10 @@ time: o Batuta não tem como saber o preço de uma API qualquer. Vazio ou `0` = 
   conferir se um POST escreve. Nunca marque por conveniência.
 - Respostas legítimas (2xx e até um 404) voltam ao agente como dado; 401/403 e 5xx viram falha do
   instrumento (a de servidor é retentável).
+- **Tempo de espera** (por operação, padrão 15 s, até 300): há serviço que só responde depois de
+  terminar o trabalho — publicar um carrossel numa rede social leva ~1 minuto. Com espera curta, o que
+  deu certo lá vira "falhou" aqui. Numa operação que **escreve**, "não respondeu a tempo" **não é
+  repetido sozinho** (repetir poderia duplicar) e a mensagem manda conferir no serviço antes de repetir.
 - Não coloque segredos nos cabeçalhos fixos — use a autenticação (o token vai ao cofre).
 - **⚠️ Destino errado é o erro mais caro daqui, porque ele é SILENCIOSO.** O agente manda o valor
   certo, o campo vai para o lugar errado da requisição, o serviço responde "criado com sucesso" — e o

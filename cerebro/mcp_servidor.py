@@ -519,7 +519,10 @@ async def montar_conector(
     escopo (oauth2 se pedir; OBRIGATÓRIO na conta de serviço), operacoes: [{nome,
     descricao, metodo, url (use [colchete] p/ trecho variável), campos: [{nome,
     papel: 'ia|fixo', destino: 'query|corpo|url', valor, descricao, obrigatorio}],
-    campos_resposta: [...], somente_leitura: false, custo_por_chamada_usd: 0}]}.
+    campos_resposta: [...], somente_leitura: false, custo_por_chamada_usd: 0,
+    tempo_limite_s: 15}]}. `tempo_limite_s` (1-300): operação que só responde depois de
+    concluir um trabalho demorado (publicar carrossel/vídeo numa rede social) precisa de mais
+    (ex.: 120) — com espera curta, o que deu certo lá vira "falhou" aqui.
     API PAGA (ex.: Gemini): informe `custo_por_chamada_usd` (US$ por chamada) na
     operação — é o único jeito de esse custo entrar no custo do time.
     APIs do GOOGLE: use 'google_conta_servico', não 'oauth2' — identidade de máquina, sem

@@ -456,3 +456,80 @@ def test_placeholder_com_destino_url_funciona(monkeypatch):
     _mock_http(monkeypatch, _Resp(200, {"ok": True}), capturas)
     _executar_operacao(ConfigConector(), _op_com_buraco("url"), {"id": "123"})
     assert capturas[0]["url"] == "https://api.exemplo/obj/Tbl.Reembolsos/123"
+
+
+# ───────────────────── tempo de espera e escrita sem resposta ─────────────────────
+
+
+def _mock_timeout(monkeypatch, erro, capturas):
+    class _Cliente:
+        def __init__(self, *a, timeout=None, **k):
+            capturas.append({"timeout": timeout})
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def request(self, *a, **k):
+            capturas.append({"chamou": True})
+            raise erro
+
+    monkeypatch.setattr("instrumentos.conector.http_saida.cliente", _Cliente)
+
+
+def _config_publicar(tempo=None, somente_leitura=False, metodo="POST"):
+    op = {"nome": "publicar", "url": "https://api.x.com/posts", "metodo": metodo,
+          "somente_leitura": somente_leitura,
+          "campos": [{"nome": "texto", "papel": "ia", "destino": "corpo"}]}
+    if tempo:
+        op["tempo_limite_s"] = tempo
+    return ConfigConector(auth_tipo="nenhuma", operacoes=[op])
+
+
+def test_tempo_de_espera_e_por_operacao(monkeypatch):
+    capturas: list = []
+    _mock_http(monkeypatch, _Resp(200, {"ok": True}), capturas)
+    import instrumentos.conector as mod
+
+    usados = []
+    original = mod.http_saida.cliente
+
+    def _espiao(*a, timeout=None, **k):
+        usados.append(timeout)
+        return original(*a, timeout=timeout, **k)
+
+    monkeypatch.setattr("instrumentos.conector.http_saida.cliente", _espiao)
+    Conector().expandir_ferramentas(_config_publicar(tempo=120))[0].invoke({"texto": "x"})
+    Conector().expandir_ferramentas(_config_publicar())[0].invoke({"texto": "x"})
+    assert usados == [120, 15]
+
+
+def test_escrita_sem_resposta_nao_repete_e_manda_conferir(monkeypatch):
+    """Caso real (30/09): o carrossel saiu no Instagram, mas a API só respondeu depois
+    do tempo de espera. Repetir sozinho publicaria em dobro."""
+    import httpx
+
+    capturas: list = []
+    _mock_timeout(monkeypatch, httpx.ReadTimeout("The read operation timed out"), capturas)
+    op = _config_publicar().operacoes[0]
+    with pytest.raises(FalhaInstrumento) as e:
+        _executar_operacao(_config_publicar(), op, {"texto": "x"})
+    assert e.value.retentavel is False
+    assert e.value.codigo == "conector.sem_resposta_escrita"
+    assert "confira antes de repetir" in str(e.value)
+
+
+def test_leitura_sem_resposta_e_sem_conexao_seguem_retentaveis(monkeypatch):
+    import httpx
+
+    for config, erro in (
+        (_config_publicar(metodo="GET"), httpx.ReadTimeout("t")),
+        (_config_publicar(somente_leitura=True), httpx.ReadTimeout("t")),
+        (_config_publicar(), httpx.ConnectTimeout("t")),  # o pedido nem saiu
+    ):
+        _mock_timeout(monkeypatch, erro, [])
+        with pytest.raises(FalhaInstrumento) as e:
+            _executar_operacao(config, config.operacoes[0], {"texto": "x"})
+        assert e.value.retentavel is True

@@ -371,6 +371,8 @@ export type OperacaoConector = {
   // Quanto a API cobra por chamada (US$) — informado por quem monta; entra no custo
   // do time. 0/ausente = gratuita ou desconhecida.
   custo_por_chamada_usd?: number;
+  // Quanto esperar a resposta, em segundos (padrão 15, máx. 300).
+  tempo_limite_s?: number;
 };
 
 export type ConfigConector = {
