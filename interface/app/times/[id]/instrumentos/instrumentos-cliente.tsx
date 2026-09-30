@@ -217,6 +217,7 @@ export function InstrumentosCliente({
           key={construtor === "novo" ? "novo" : construtor.id}
           time={time}
           instrumento={construtor === "novo" ? null : construtor}
+          souAdmin={podeAdmin(meuPapel)}
           onFechar={() => setConstrutor(null)}
           onSalvou={(salvo) => setConstrutor(salvo)}
         />

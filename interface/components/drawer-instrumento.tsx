@@ -66,6 +66,7 @@ export function DrawerInstrumento(props: PropsDrawer) {
       <ConstrutorInstrumento
         time={time}
         instrumento={instrumento}
+        souAdmin={podeAdmin(meuPapel)}
         onFechar={onFechar}
         onSalvou={onSalvou}
       />

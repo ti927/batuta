@@ -3,7 +3,7 @@ titulo: "Instrumento do time ou da organização"
 area: "instrumentos"
 slug: "escopo-do-instrumento"
 tags: ["escopo", "organização", "organizacao", "compartilhar instrumento", "todos os times", "usado por", "promover", "reutilizar", "bot de avisos", "aprovação compartilhada"]
-revisado_em: "2026-09-29"
+revisado_em: "2026-09-30"
 fontes: ["cerebro/escopo_instrumento.py", "cerebro/rotas/instrumentos.py", "cerebro/mensageria/aprovacao.py", "cerebro/duplicacao_time.py"]
 ---
 
@@ -23,7 +23,8 @@ todos.
 
 ## Como usar (na tela)
 1. Ao criar ou editar o instrumento, em **Quem pode usar**, escolha **Todos os times da organização**.
-   Só **administradores** veem essa opção.
+   Só **administradores** veem essa opção. No Construtor de uma API (conector), ela fica em
+   **Identidade**; no do servidor MCP, no fim do formulário.
 2. Nos outros times, ele aparece na lista de instrumentos com o selo **da organização** — é só pôr no
    cinto do agente. **Operador pode encaixar**; mudar a configuração ou os segredos é só com admin.
 3. A seção **Usado por** mostra quais times, agentes e automações dependem dele.
@@ -42,6 +43,9 @@ todos.
 - **Duplicar um time** não copia o instrumento da organização: a cópia usa o mesmo, já conectado.
 - **Excluir o time onde o instrumento foi criado** não o apaga: ele passa a morar num time que o usa.
 - **Custo e rastro** ficam com o time que executou, não com o time onde o instrumento mora.
+- **Um serviço, várias contas** (ex.: um serviço de redes sociais com a conta de cada marca): o
+  instrumento da organização não fixa a conta — cada agente diz, no texto dele, **em qual conta** age
+  (o id da conta no serviço). Assim um time não publica na conta de outro.
 
 ## Para a IA
 - `configurar_instrumento(..., escopo="organizacao")` cria da organização (exige admin);

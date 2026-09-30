@@ -111,11 +111,14 @@ export function ConstrutorInstrumento({
   instrumento,
   onFechar,
   onSalvou,
+  souAdmin = false,
 }: {
   time: Time;
   instrumento: Instrumento | null; // null = criar; conector existente = editar
   onFechar: () => void;
   onSalvou?: (salvo: Instrumento) => void;
+  /** Só admin escolhe "toda a organização" e mexe em instrumento da organização. */
+  souAdmin?: boolean;
 }) {
   const router = useRouter();
   const cfg = (instrumento?.configuracao ?? {}) as Partial<ConfigConector>;
@@ -134,7 +137,11 @@ export function ConstrutorInstrumento({
   const [authUsuario, setAuthUsuario] = useState(cfg.auth_usuario ?? "");
   const [authSegredo, setAuthSegredo] = useState(""); // vazio = manter o guardado (edição)
   const [urlToken, setUrlToken] = useState(cfg.url_token ?? "");
-  const [escopo, setEscopo] = useState(cfg.escopo ?? "");
+  const [escopo, setEscopo] = useState(cfg.escopo ?? ""); // escopo do OAuth (permissão pedida)
+  // Quem pode usar o instrumento: só o time dono, ou todos os times da organização.
+  const [alcance, setAlcance] = useState<"time" | "organizacao">(instrumento?.escopo ?? "time");
+  const daOrganizacao = (instrumento?.escopo ?? "time") === "organizacao";
+  const bloqueado = daOrganizacao && !souAdmin;
 
   // Certificado digital (mTLS): o arquivo vive só até salvar — o cérebro o
   // converte no par PEM guardado no cofre. `certArquivo` é o base64 do que a
@@ -298,7 +305,12 @@ export function ConstrutorInstrumento({
     setSalvando(true);
     setErro(null);
     try {
-      const base = { nome: nome.trim(), configuracao: montarConfig(), icone };
+      const base = {
+        nome: nome.trim(),
+        configuracao: montarConfig(),
+        icone,
+        ...(souAdmin ? { escopo: alcance } : {}),
+      };
       const salvo = salvoId
         ? await api.put<Instrumento>(`/instrumentos/${salvoId}`, base)
         : await api.post<Instrumento>(`/times/${time.id}/instrumentos`, {
@@ -405,7 +417,7 @@ export function ConstrutorInstrumento({
             "rascunho"
           )}
         </span>
-        <Button onClick={() => salvar()} disabled={salvando}>
+        <Button onClick={() => salvar()} disabled={salvando || bloqueado}>
           <Sparkles className="size-4" />
           {salvando ? "Salvando…" : salvoId ? "Salvar" : "Criar instrumento"}
         </Button>
@@ -509,6 +521,10 @@ export function ConstrutorInstrumento({
                 onIcone={setIcone}
                 onCategoria={setCategoria}
                 onDescricao={setDescricao}
+                souAdmin={souAdmin}
+                alcance={alcance}
+                daOrganizacao={daOrganizacao}
+                onAlcance={setAlcance}
               />
             )}
 
@@ -1086,6 +1102,10 @@ function SecaoIdentidade({
   onIcone,
   onCategoria,
   onDescricao,
+  souAdmin,
+  alcance,
+  daOrganizacao,
+  onAlcance,
 }: {
   nome: string;
   icone: string | null;
@@ -1095,6 +1115,10 @@ function SecaoIdentidade({
   onIcone: (v: string | null) => void;
   onCategoria: (v: string) => void;
   onDescricao: (v: string) => void;
+  souAdmin: boolean;
+  alcance: "time" | "organizacao";
+  daOrganizacao: boolean;
+  onAlcance: (v: "time" | "organizacao") => void;
 }) {
   return (
     <div>
@@ -1135,6 +1159,24 @@ function SecaoIdentidade({
             Referência sua. O que guia o agente em cada ação é a descrição de cada operação.
           </span>
         </Label>
+        {souAdmin ? (
+          <Label className="flex-col items-start gap-1">
+            Quem pode usar
+            <Select
+              value={alcance}
+              onChange={(e) => onAlcance(e.target.value as "time" | "organizacao")}
+            >
+              <option value="time">Só este time</option>
+              <option value="organizacao">Todos os times da organização</option>
+            </Select>
+          </Label>
+        ) : (
+          daOrganizacao && (
+            <span className="text-xs text-muted-foreground">
+              Este instrumento é da organização: só um administrador muda a configuração dele.
+            </span>
+          )
+        )}
       </div>
     </div>
   );
