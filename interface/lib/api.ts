@@ -321,6 +321,10 @@ export type TipoInstrumento = {
     string,
     { controlado_por: string; opcoes: Record<string, string[]> }
   > | null;
+  // Personalizado com Construtor próprio (fora da lista "Instrumento pronto").
+  criado_no_construtor?: boolean;
+  // Substituído na criação (ex.: chamar_api_rest → conector); os antigos seguem valendo.
+  substituido_por?: string | null;
 };
 
 // ───────── Conector (Framework de Instrumentos) — configuração declarativa ─────────

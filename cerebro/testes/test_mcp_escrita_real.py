@@ -522,10 +522,32 @@ class _ClienteFalso:
 
 
 def _instrumento(dados, tipo, configuracao=None):
+    if tipo == "chamar_api_rest":
+        # Não se cria mais (substituído pelo conector); as que JÁ EXISTEM seguem valendo
+        # — e é isso que estes testes exercitam: uma instância antiga que grava.
+        return _instrumento_existente(dados, tipo, configuracao)
     r = escrita.configurar_instrumento(
         _sub(dados), str(dados["timeA"].id), f"Teste {tipo}", tipo, configuracao or {}
     )
     return json.loads(r)["id"]
+
+
+def _instrumento_existente(dados, tipo, configuracao):
+    from sqlalchemy.orm import object_session
+
+    sessao = object_session(dados["timeA"])
+    inst = Instrumento(time_id=dados["timeA"].id, nome=f"Teste {tipo}", tipo=tipo,
+                       configuracao=configuracao or {})
+    sessao.add(inst)
+    sessao.flush()
+    return str(inst.id)
+
+
+def test_criar_chamada_de_api_nova_e_recusada_e_aponta_o_construtor(mcp, dados):
+    r = escrita.configurar_instrumento(
+        _sub(dados), str(dados["timeA"].id), "API", "chamar_api_rest", {"url": "https://x/y"}
+    )
+    assert "montar_conector" in r and "Construtor" in r
 
 
 def test_testar_instrumento_aciona_de_verdade(mcp, dados, monkeypatch):

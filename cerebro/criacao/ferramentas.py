@@ -95,6 +95,10 @@ def catalogo_de_instrumentos() -> list[dict]:
         # configurar_instrumento, para não dar sinal misto à IA.
         if getattr(tipo, "oculto_no_catalogo", False):
             continue
+        # Substituído na criação (a chamada de API avulsa → montar_conector): fora do
+        # catálogo, senão a IA o escolhe e a criação é recusada.
+        if getattr(tipo, "substituido_por", None):
+            continue
         esquema = tipo.Config.model_json_schema()
         obrigatorios = set(esquema.get("required", []))
         secretos = set(tipo.campos_secretos)
@@ -492,9 +496,10 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
         listar_tipos_instrumento para ver os CAMPOS). Em `configuracao` passe os
         campos PÚBLICOS que você coletou do consultor (ex.: WordPress → site_url,
         usuario). NÃO passe segredos (senhas, tokens): ficam pendentes para o cofre.
-        Para uma INTEGRAÇÃO com uma API (um conjunto de chamadas GET/POST de um mesmo
-        serviço), use montar_conector — não este. Devolve o `id` (para o cinto) e os
-        segredos pendentes."""
+        QUALQUER chamada a uma API de fora — UMA ou várias — é um conector: use
+        montar_conector, não este (é o instrumento personalizado, que o consultor edita no
+        Construtor; a chamada de API avulsa não se cria mais). Devolve o `id` (para o
+        cinto) e os segredos pendentes."""
         time = _exigir_time()
         if time is None:
             return _erro("Defina o time primeiro, com definir_time.")
@@ -526,7 +531,7 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
 
     def montar_conector(conector: dict, conector_id: str | None = None) -> str:
         """Cria (ou edita, se passar `conector_id`) um CONECTOR — um instrumento que
-        reúne VÁRIAS operações de uma mesma API, cada uma virando uma ação no cinto do
+        reúne UMA ou VÁRIAS operações de uma mesma API, cada uma virando uma ação no cinto do
         agente (ex.: "Busca Projetos", "Cria Reembolso"). É como dar ao time uma
         integração nova SEM código. Em dúvida do formato — sobretudo para APIs do
         Bubble —, consulte a Central antes (consultar_conhecimento "construir conector").

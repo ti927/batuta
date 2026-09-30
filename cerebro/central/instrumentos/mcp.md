@@ -25,7 +25,8 @@ deixa de ser problema do Batuta. O custo é a dependência: conta por pessoa, co
 descrições de ferramenta escritas por terceiros.
 
 ## Como usar (na tela)
-1. Crie o instrumento **Conectar a servidor MCP** no time.
+1. Em **Instrumentos → 🌟 Criar instrumento**, escolha **Um servidor MCP** (é um instrumento
+   personalizado, criado no Construtor — não está na lista de instrumentos prontos).
 2. Em **"Como o Batuta se conecta"**, cole o **endereço** do servidor e escolha **como ele pede
    identificação** (tabela abaixo). Tudo fica **dentro do instrumento** — não é mais preciso criar
    credencial na central.

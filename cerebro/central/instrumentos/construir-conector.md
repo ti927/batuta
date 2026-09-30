@@ -10,7 +10,7 @@ fontes: ["cerebro/instrumentos/conector.py", "cerebro/criacao/ferramentas.py"]
 # Construir um Conector
 
 ## Em uma frase
-Um **conector** é um instrumento que reúne VÁRIAS operações de uma mesma API (buscar, criar,
+Um **conector** é um instrumento que reúne UMA ou VÁRIAS operações de uma mesma API (buscar, criar,
 alterar…), cada operação virando uma ação no cinto do agente — declarado como DADO, sem código.
 
 ## Para que serve / quando usar

@@ -319,6 +319,10 @@ class TipoInstrumentoLer(BaseModel):
     esquema_config: dict
     esquema_args: dict
     campos_secretos: list[str] = Field(default_factory=list)
+    # Personalizado com Construtor próprio (fora da lista "Instrumento pronto").
+    criado_no_construtor: bool = False
+    # Substituído na criação por outro tipo (as instâncias existentes seguem valendo).
+    substituido_por: str | None = None
     # Se o tipo reusa uma chave de serviço compartilhada da organização: o par
     # (campo_secreto, serviço), ex.: ["chave_api", "openai"]. O front mostra esse
     # campo como OPCIONAL ("usa a chave de IA da organização por padrão").

@@ -457,8 +457,11 @@ async def configurar_instrumento(
     """Cria um instrumento (uma ferramenta do cinto) de um `tipo` do catálogo (veja
     `listar_tipos_instrumento` para os tipos e campos). Os campos secretos NÃO são
     plugados aqui — se vierem, são ignorados e ficam pendentes para o consultor colar
-    na tela do instrumento. Para uma integração de API com várias operações, use
-    `montar_conector`. Depois de criar, TESTE você mesmo com `testar_instrumento`.
+    na tela do instrumento. QUALQUER chamada a uma API de fora — UMA ou várias — é um
+    conector: use `montar_conector` (é o instrumento PERSONALIZADO, que o consultor edita no
+    Construtor; 'chamar_api_rest' não se cria mais e é recusado). Este `configurar_instrumento`
+    é para os tipos do catálogo e para o servidor MCP. Depois de criar, TESTE você mesmo com
+    `testar_instrumento`.
     SERVIDOR MCP (`conectar_mcp`): a identificação mora NO INSTRUMENTO (não crie
     credencial na central). Escolha `auth_modo` pelo que o servidor pede: 'url_secreta'
     (Make/Zapier: a chave está no endereço), 'bearer' (token), 'cabecalho' (+ `auth_nome`,
@@ -508,7 +511,7 @@ async def montar_conector(
     time_id: str, conector: dict, conector_id: str | None = None
 ) -> str:
     """Cria (ou edita, se passar `conector_id`) um CONECTOR — um instrumento que reúne
-    VÁRIAS operações de uma mesma API (cada operação vira uma ação no cinto), montado a
+    UMA ou VÁRIAS operações de uma mesma API (cada operação vira uma ação no cinto), montado a
     partir de uma documentação de API, SEM código. Você declara auth_tipo/auth_nome mas
     NÃO pluga o token (fica pendente no cofre). Formato do `conector`: {nome, descricao,
     auth_tipo: 'nenhuma|bearer|cabecalho|query|basic|oauth2|google_conta_servico',

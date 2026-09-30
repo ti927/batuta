@@ -190,6 +190,19 @@ LIGADA = {"X-Batuta-Interno": "segredo-interno-de-teste"}
 
 
 def _instrumento(cliente, entrar, dados, tipo="busca_web", configuracao=None):
+    if tipo == "chamar_api_rest":
+        # Não se cria mais pela rota (substituído pelo conector); uma instância que JÁ
+        # EXISTE segue valendo — é ela que estes testes exercitam.
+        from sqlalchemy.orm import object_session
+
+        from modelos import Instrumento
+
+        sessao = object_session(dados["timeA"])
+        inst = Instrumento(time_id=dados["timeA"].id, nome=f"Interno {tipo}", tipo=tipo,
+                           configuracao=configuracao or {})
+        sessao.add(inst)
+        sessao.flush()
+        return str(inst.id)
     entrar(dados["operador"])
     r = cliente.post(
         f"/times/{dados['timeA'].id}/instrumentos",

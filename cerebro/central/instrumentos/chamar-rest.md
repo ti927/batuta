@@ -3,11 +3,17 @@ titulo: "Instrumento — Chamar API REST"
 area: "instrumentos"
 slug: "chamar-rest"
 tags: ["rest", "api", "http", "integracao", "get", "post", "leitura", "escrita", "instrumento"]
-revisado_em: "2026-08-08"
+revisado_em: "2026-09-29"
 fontes: ["cerebro/instrumentos/rest.py"]
 ---
 
 # Instrumento — Chamar API REST
+
+> **Não se cria mais (desde 29/09/2026).** Chamada a uma API de fora é instrumento
+> **personalizado**: crie um **conector** em **🌟 Criar instrumento → Uma API** (pela IA:
+> `montar_conector`), que serve para **uma ou várias** operações e fica editável no Construtor.
+> Os instrumentos "Chamar API REST" que já existem seguem funcionando e editáveis — este capítulo
+> vale para eles. Ver [[instrumentos/construir-conector]].
 
 ## Em uma frase
 Faz uma requisição HTTP a uma API e devolve a resposta — para consultar ou enviar dados a um sistema

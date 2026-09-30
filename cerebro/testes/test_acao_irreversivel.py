@@ -11,8 +11,10 @@ from criacao.ferramentas import catalogo_de_instrumentos
 # Baseline por tipo (o que o catálogo expõe à IA): o tipo PODE escrever?
 # `disparar_webhook` é gatilho de automação em massa → NÃO exige portão (decisão
 # do maestro); por isso está no baseline FALSE, não no TRUE.
+# `chamar_api_rest` saiu do catálogo das IAs em 2026-09-29 (substituído na criação pelo
+# conector) — o baseline dele segue provado em `test_rest_deriva_do_metodo`.
 _BASELINE_TRUE = {
-    "publicar_wordpress", "chamar_api_rest", "banco_sql",
+    "publicar_wordpress", "banco_sql",
     "conectar_mcp",
 }
 _BASELINE_FALSE = {"busca_web", "gerar_pdf", "gerar_imagem", "disparar_webhook"}

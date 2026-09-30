@@ -498,12 +498,15 @@ export function FormularioInstrumento({
   onSalvo,
   onCancelar,
   souAdmin = false,
+  tipoFixo,
 }: {
   time: Time;
   instrumento: Instrumento | null;
   tipos: TipoInstrumento[];
   /** Só admin escolhe "toda a organização" e mexe em instrumento da organização. */
   souAdmin?: boolean;
+  /** Construtor de um tipo personalizado (ex.: servidor MCP): tipo fixo, sem seletor. */
+  tipoFixo?: string;
   onSalvo: (salvo: Instrumento) => void;
   onCancelar: () => void;
 }) {
@@ -511,22 +514,25 @@ export function FormularioInstrumento({
 
   const [nome, setNome] = useState(instrumento?.nome ?? "");
   const [icone, setIcone] = useState<string | null>(instrumento?.icone ?? null);
+  // Tipos PERSONALIZADOS nascem no Construtor ("Criar instrumento"), não na lista de
+  // prontos. Continuam no catálogo (a tela de edição precisa do esquema deles).
+  // A regra vem do cérebro (fonte única): personalizado com Construtor próprio, ou tipo
+  // substituído na criação (a chamada de API avulsa → conector).
+  const tiposProntos = tipos.filter((t) => !t.criado_no_construtor && !t.substituido_por);
   const [tipoSel, setTipoSel] = useState(
-    instrumento?.tipo ?? tipos[0]?.tipo ?? "",
+    instrumento?.tipo ?? tipoFixo ?? tiposProntos[0]?.tipo ?? "",
   );
   // Valor (texto) de cada campo. Secretos começam vazios — nunca reexibidos;
   // em branco = manter o que já está guardado. Ao criar, semeia os padrões do
   // schema (ver `valoresIniciais`).
-  const [valores, setValores] = useState<Record<string, string>>(() =>
-    semearMCP(
-      valoresIniciais(
-        tipos.find((t) => t.tipo === (instrumento?.tipo ?? tipos[0]?.tipo)),
-        instrumento,
-      ),
-      instrumento?.tipo ?? tipos[0]?.tipo,
+  const [valores, setValores] = useState<Record<string, string>>(() => {
+    const tipoInicial = instrumento?.tipo ?? tipoFixo ?? tiposProntos[0]?.tipo;
+    return semearMCP(
+      valoresIniciais(tipos.find((t) => t.tipo === tipoInicial), instrumento),
+      tipoInicial,
       instrumento,
-    ),
-  );
+    );
+  });
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [escopo, setEscopo] = useState<"time" | "organizacao">(
@@ -782,6 +788,7 @@ export function FormularioInstrumento({
           escolha, fica o ícone padrão.
         </span>
       </div>
+      {!tipoFixo && (
       <Label className="flex-col items-start gap-1">
         Tipo
         <Select
@@ -797,7 +804,7 @@ export function FormularioInstrumento({
           }}
           disabled={!criando}
         >
-          {agruparTiposPorCategoria(tipos).map(([grupo, lista]) => (
+          {agruparTiposPorCategoria(criando ? tiposProntos : tipos).map(([grupo, lista]) => (
             <optgroup key={grupo} label={grupo}>
               {lista.map((t) => (
                 <option key={t.tipo} value={t.tipo}>
@@ -808,7 +815,8 @@ export function FormularioInstrumento({
           ))}
         </Select>
       </Label>
-      {tipoAtual?.descricao && (
+      )}
+      {!tipoFixo && tipoAtual?.descricao && (
         <p className="text-xs text-muted-foreground">{tipoAtual.descricao}</p>
       )}
 

@@ -120,6 +120,8 @@ def listar_tipos(usuario: Usuario = Depends(usuario_atual)):
             tipos_credencial_aceitos=list(t.tipos_credencial_aceitos),
             acao_irreversivel=t.acao_irreversivel,
             dependencias=t.dependencias_ui(),
+            criado_no_construtor=bool(getattr(t, "criado_no_construtor", False)),
+            substituido_por=getattr(t, "substituido_por", None),
         )
         for t in encaixe.tipos_disponiveis()
         if not getattr(t, "oculto_no_catalogo", False)
@@ -170,6 +172,9 @@ def criar(
         sessao, usuario, time_id,
         minimo="admin" if dados.escopo == escopo_instrumento.ORGANIZACAO else "operador",
     )
+    motivo = encaixe.motivo_para_nao_criar(dados.tipo)
+    if motivo:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, motivo)
     try:
         # Fase 7-B: separa os segredos da config pública antes de gravar.
         config_limpa, segredos_novos = encaixe.preparar_config(

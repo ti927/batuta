@@ -2706,3 +2706,10 @@ Plano das 6 fases: `C:\Users\Julio\.claude\plans\polymorphic-hugging-crystal.md`
 - Tela: "Quem pode usar" (admin), selo "da organização", "Usado por", remover diz quem usa. MCP: `escopo` em criar/editar, `usado_por` em ver. Central: capítulo novo `instrumentos/escopo-do-instrumento`; `pedir-aprovacao` (botões, pedido certo).
 - Limite: o Construtor (conector) ainda não tem o campo "Quem pode usar" — promover um conector é pelo MCP (`editar_instrumento escopo`).
 
+
+## FASE — Personalizado × nativo: a porta fechada (etapa 1)  ✅ (2026-09-29, sem migração)
+Bronca justa do maestro: a decisão de 12/08 (o que só chama serviço de fora é PERSONALIZADO, criado e editado no Construtor; nativo = só o que mexe no interior do Batuta) nunca tinha sido aplicada à criação — a IA externa seguia criando "Chamar API REST" nativo (ex.: "Data de hoje"), que abria no painel lateral.
+- Regra numa fonte só (`instrumentos/base.py`): `substituido_por` (a chamada de API avulsa → conector; criar uma NOVA é recusado na tela, na IA criadora e no MCP, com o caminho certo) e `criado_no_construtor` (servidor MCP: fora da lista "Instrumento pronto", com Construtor próprio). Os existentes seguem funcionando e editáveis.
+- Tela: "🌟 Criar instrumento" pergunta "Uma API" ou "Um servidor MCP"; o painel lateral, aberto de QUALQUER tela (instrumentos, agentes, Estúdio, execução, cinto), manda conector e MCP para o Construtor.
+- IAs: catálogo sem a chamada de API avulsa; `montar_conector` para UMA ou várias operações (docstrings, prompt da criadora). Central: `cinto` (personalizado × pronto), `chamar-rest` (não se cria mais), `construir-conector`, `mcp`, INDICE.
+- **Etapa 2 (a desenhar):** migrar os nativos que só chamam serviço de fora — busca (chave da org + custo medido), ler site, WordPress (envio da imagem), Telegram (é canal, recebe), Instagram (→ Zernio), webhook de saída.

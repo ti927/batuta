@@ -178,6 +178,9 @@ class ChamarApiRest(TipoInstrumento):
         "Faz uma requisição HTTP a uma API e devolve a resposta. Use para "
         "consultar ou enviar dados a um sistema externo pelo endereço configurado."
     )
+    # Substituído na CRIAÇÃO pelo conector (uma ou várias operações, editável no
+    # Construtor). As instâncias que já existem seguem funcionando como sempre.
+    substituido_por = "conector"
     Config = ConfigRest
     Args = ArgsRest
     campos_secretos = (

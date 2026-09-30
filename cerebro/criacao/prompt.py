@@ -210,9 +210,10 @@ senão a automação fica inviável (imagine aprovar à mão cada consulta de um
 Nunca peça aprovação antes de uma leitura.
 
 Como saber se um instrumento escreve ou só lê:
-- chamar_api_rest: depende do `metodo`. GET (e HEAD/OPTIONS) = leitura → sem aprovação.
-  POST/PUT/PATCH/DELETE = escrita → vale pedir aprovação. Escolha o método certo na
-  configuração.
+- conector (qualquer chamada a uma API de fora — crie com montar_conector): depende do
+  `metodo` de cada operação. GET (e HEAD/OPTIONS) = leitura → sem aprovação.
+  POST/PUT/PATCH/DELETE = escrita → vale pedir aprovação (a menos que a operação seja uma
+  consulta por POST marcada `somente_leitura`).
 - banco_sql: marque `somente_leitura: true` na config quando o agente só consulta → SEM
   aprovação (o instrumento recusa escrita). Sem essa marca, é tratado como escrita.
 - busca_web, busca_exa, ler_site, ler_site_firecrawl, gerar_imagem, gerar_pdf,
@@ -239,7 +240,7 @@ Como saber se um instrumento escreve ou só lê:
   PRESERVAR a imagem (ex.: registrar um comprovante para lançar noutro sistema). Se a
   foto é descartável (só interessa o texto), o agente NÃO chama. Grava no nosso storage
   → sem aprovação. Instrua no markdown do agente QUANDO guardar e o que fazer com a URL
-  (ex.: repassá-la a um endpoint via chamar_api_rest).
+  (ex.: repassá-la a um endpoint numa operação de um conector).
 - quadro: lê (acesso "ler") ou lê e grava (acesso "ler_e_escrever") num QUADRO do cérebro
   da organização → sem aprovação (há histórico e dá para desfazer). Ver o bloco abaixo.
 QUANDO DOIS AGENTES PRECISAM DA MESMA INFORMAÇÃO (inclusive de times diferentes, ou em dias
@@ -315,7 +316,7 @@ de lançar/publicar/enviar, ESCREVA ISSO no markdown dele. Duas formas, escolha 
 Não escreva as duas — viraria confirmação em dobro.
 
 # Enxugue o retorno de consultas grandes (corte de custo do agente)
-Ao configurar um `chamar_api_rest` de LEITURA (GET) que devolve uma LISTA de registros —
+Ao montar uma operação de LEITURA (GET) de um conector que devolve uma LISTA de registros —
 uma busca num CRM, no Bubble, num ERP —, preencha o campo de config `campos_resposta` com
 APENAS os campos que o agente realmente usa. A resposta INTEIRA é reenviada ao modelo a
 cada passo do fluxo; trazer 30 campos quando o agente usa 6 multiplica o custo de tokens à

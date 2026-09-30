@@ -111,8 +111,8 @@ def test_configurar_instrumento_tipo_desconhecido_e_config_invalida(sessao, dado
     _ctx, f = _setup(sessao, dados)
     _chamar(f, "definir_time", nome="T")
     assert _chamar(f, "configurar_instrumento", nome="X", tipo="nao_existe")["ok"] is False
-    # chamar_api_rest exige 'url'
-    assert _chamar(f, "configurar_instrumento", nome="API", tipo="chamar_api_rest")["ok"] is False
+    # disparar_webhook exige 'url'
+    assert _chamar(f, "configurar_instrumento", nome="W", tipo="disparar_webhook")["ok"] is False
 
 
 def test_encaixar_instrumento(sessao, dados):
@@ -302,9 +302,21 @@ def test_listar_tipos_traz_campos_e_irreversivel(sessao, dados):
 
 def test_catalogo_marca_obrigatorio_e_secreto():
     catalogo = {c["tipo"]: c for c in catalogo_de_instrumentos()}
-    campos = {c["nome"]: c for c in catalogo["chamar_api_rest"]["campos"]}
+    campos = {c["nome"]: c for c in catalogo["disparar_webhook"]["campos"]}
     assert campos["url"]["obrigatorio"] is True and campos["url"]["secreto"] is False
     assert campos["token_bearer"]["secreto"] is True
+
+
+def test_chamada_de_api_avulsa_saiu_do_catalogo_e_a_criacao_aponta_o_construtor(sessao, dados):
+    """Decisão do maestro (12/08, reafirmada em 29/09): o que só chama um serviço de fora
+    é instrumento PERSONALIZADO (Construtor). A IA não vê mais a chamada de API avulsa, e
+    se tentar criar uma, ouve para onde ir."""
+    assert "chamar_api_rest" not in {c["tipo"] for c in catalogo_de_instrumentos()}
+    _ctx, f = _setup(sessao, dados)
+    _chamar(f, "definir_time", nome="T")
+    r = _chamar(f, "configurar_instrumento", nome="API", tipo="chamar_api_rest",
+                configuracao={"url": "https://x/y"})
+    assert r["ok"] is False and "montar_conector" in json.dumps(r, ensure_ascii=False)
 
 
 def test_sugerir_proximos_passos_corta_em_4(sessao, dados):

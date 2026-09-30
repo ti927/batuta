@@ -139,6 +139,16 @@ class TipoInstrumento(ABC):
     # dos quadros trazer o seletor). Diferente do `oculto_no_catalogo`, que esconde das
     # IAs também porque o tipo tem ferramenta de criação própria (o conector).
     oculto_na_tela: bool = False
+    # INSTRUMENTO PERSONALIZADO × NATIVO (decisão do maestro de 12/08, reafirmada em
+    # 29/09): o que só chama um serviço de fora é PERSONALIZADO — criado e editado no
+    # Construtor ("🌟 Criar instrumento"); nativo é só o que mexe no interior do Batuta.
+    # `criado_no_construtor`: o tipo é personalizado e tem Construtor próprio (a lista
+    # "Instrumento pronto" não o oferece; as IAs o criam normalmente).
+    criado_no_construtor: bool = False
+    # `substituido_por`: o tipo nativo foi SUBSTITUÍDO na criação por outro (ex.: a
+    # chamada de API avulsa → o conector). Instâncias existentes seguem funcionando e
+    # editáveis; criar uma NOVA é recusado em todo caminho (tela, IA criadora, MCP).
+    substituido_por: str | None = None
 
     def normalizar_config(self, bruta: dict) -> dict:
         """Chance de o tipo TRANSFORMAR a configuração crua antes de ela ser
@@ -343,3 +353,22 @@ def preparar_config(tipo: str, configuracao: dict | None) -> tuple[dict, dict]:
     for campo in secretos:
         config_publica.pop(campo, None)
     return config_publica, segredos
+
+
+# O que dizer a quem tenta criar um tipo substituído (tela, IA criadora, MCP).
+_COMO_CRIAR = {
+    "conector": (
+        "Chamada de API agora se cria como instrumento personalizado, no Construtor "
+        "(“🌟 Criar instrumento” → Uma API). Pela IA, use montar_conector — ele serve "
+        "para UMA ou várias operações."
+    ),
+}
+
+
+def motivo_para_nao_criar(tipo: str) -> str | None:
+    """Se criar um instrumento NOVO deste tipo é recusado, o porquê e o caminho certo."""
+    t = obter_tipo(tipo)
+    substituto = getattr(t, "substituido_por", None) if t else None
+    if not substituto:
+        return None
+    return _COMO_CRIAR.get(substituto, f"Este tipo foi substituído por '{substituto}'.")

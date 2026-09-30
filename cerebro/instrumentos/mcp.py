@@ -316,6 +316,9 @@ class ConectarMCP(TipoInstrumento):
     acao_irreversivel = True
     # O "Conectar e listar" guarda o que descobriu em `instrumentos.conexao`.
     guarda_conexao = True
+    # Servidor MCP é instrumento PERSONALIZADO: nasce no Construtor da tela (a lista de
+    # prontos não o oferece). As IAs seguem criando por configurar_instrumento.
+    criado_no_construtor = True
 
     def irreversivel_para(self, configuracao: dict) -> bool:
         """Esta instância faz ação irreversível?

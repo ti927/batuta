@@ -83,7 +83,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Busca na web | `instrumentos/busca-web` | Tavily; tópico/recência/domínios | ✅ | ✍️ |
 | Busca semântica (Exa) | `instrumentos/busca-exa` | Alternativa semântica | ✅ | ✍️ |
 | **Dados & integração** | | | | |
-| Chamar API REST | `instrumentos/chamar-rest` | GET/POST/…; leitura × escrita | ✅ | ✍️ |
+| Chamar API REST | `instrumentos/chamar-rest` | NÃO SE CRIA MAIS (29/09): chamada de API é conector (Construtor / montar_conector); vale para as instâncias antigas — GET/POST/…; leitura × escrita | ✅ | ✍️ |
 | Construir um conector | `instrumentos/construir-conector` | Criar instrumento SEM código: testar e detectar, operações, autenticação (inclusive conta de serviço do Google), POST que só consulta; **a armadilha do `campos_resposta`** (campos da linha × nome da lista) | ✅ | ✍️ |
 | Banco SQL | `instrumentos/banco-sql` | Ler/escrever em SQL; somente-leitura | ✅ | ✍️ |
 | Conectar MCP | `instrumentos/mcp` | Ferramentas de um servidor MCP (Zapier, Make, WordPress); a identificação mora NO instrumento (token, usuário e senha, cabeçalho, chave no endereço); ESCOLHER quais entram no cinto e quais alteram algo (aprovação é do agente) | ✅ | ✍️ |

@@ -10,8 +10,9 @@ import {
   type TipoInstrumento,
   type Time,
 } from "@/lib/api";
-import { podeOperar } from "@/lib/permissoes";
+import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { ConstrutorInstrumento } from "@/components/construtor-instrumento";
+import { ConstrutorMCP } from "@/components/construtor-mcp";
 import { DrawerInstrumento } from "@/components/drawer-instrumento";
 import { IconeInstrumento } from "@/components/icone-instrumento";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,10 @@ export function InstrumentosCliente({
   // Construtor de Instrumento (conector): overlay de tela cheia, separado do
   // formulário genérico. "novo" = criar; instrumento = editar um conector.
   const [construtor, setConstrutor] = useState<null | "novo" | Instrumento>(null);
+  // Servidor MCP: instrumento personalizado, com o seu próprio Construtor.
+  const [construtorMcp, setConstrutorMcp] = useState<null | "novo" | Instrumento>(null);
+  // "Criar instrumento": primeiro a pessoa diz o que quer conectar.
+  const [escolhendo, setEscolhendo] = useState(false);
 
   return (
     <main className="mx-auto w-full max-w-[1000px] px-5 py-8 sm:px-8">
@@ -68,7 +73,7 @@ export function InstrumentosCliente({
         </div>
         {souOperador && (
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => setConstrutor("novo")}>
+            <Button onClick={() => setEscolhendo(true)}>
               🌟 Criar instrumento
             </Button>
             <Button
@@ -97,7 +102,11 @@ export function InstrumentosCliente({
                 key={inst.id}
                 onClick={() =>
                   souOperador &&
-                  (inst.tipo === "conector" ? setConstrutor(inst) : setAberto(inst))
+                  (inst.tipo === "conector"
+                    ? setConstrutor(inst)
+                    : inst.tipo === "conectar_mcp"
+                      ? setConstrutorMcp(inst)
+                      : setAberto(inst))
                 }
                 disabled={!souOperador}
                 className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
@@ -148,6 +157,58 @@ export function InstrumentosCliente({
           meuPapel={meuPapel}
           onFechar={() => setAberto(null)}
           onSalvou={(salvo) => setAberto(salvo)}
+        />
+      )}
+
+      {escolhendo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            className="absolute inset-0 bg-foreground/20"
+            onClick={() => setEscolhendo(false)}
+            aria-label="Fechar"
+          />
+          <div className="relative w-full max-w-md rounded-lg border border-border bg-card p-5 shadow-xl">
+            <h3 className="mb-3 font-medium text-foreground">O que você quer conectar?</h3>
+            <div className="flex flex-col gap-2">
+              <button
+                className="rounded-md border border-border p-3 text-left hover:border-primary hover:bg-accent/40"
+                onClick={() => {
+                  setEscolhendo(false);
+                  setConstrutor("novo");
+                }}
+              >
+                <span className="block text-sm font-medium text-foreground">Uma API</span>
+                <span className="text-xs text-muted-foreground">
+                  Você descreve as operações (endereço, campos) a partir da documentação.
+                </span>
+              </button>
+              <button
+                className="rounded-md border border-border p-3 text-left hover:border-primary hover:bg-accent/40"
+                onClick={() => {
+                  setEscolhendo(false);
+                  setConstrutorMcp("novo");
+                }}
+              >
+                <span className="block text-sm font-medium text-foreground">Um servidor MCP</span>
+                <span className="text-xs text-muted-foreground">
+                  O serviço já publica as ferramentas (Zernio, Zapier, WordPress…); você escolhe
+                  quais entram no cinto.
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {construtorMcp && (
+        <ConstrutorMCP
+          key={construtorMcp === "novo" ? "novo" : construtorMcp.id}
+          time={time}
+          instrumento={construtorMcp === "novo" ? null : construtorMcp}
+          tipos={tipos}
+          souAdmin={podeAdmin(meuPapel)}
+          onFechar={() => setConstrutorMcp(null)}
+          onSalvou={(salvo) => setConstrutorMcp(salvo)}
         />
       )}
 

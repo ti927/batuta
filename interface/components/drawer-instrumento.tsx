@@ -16,6 +16,8 @@ import {
   type TipoInstrumento,
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
+import { ConstrutorInstrumento } from "@/components/construtor-instrumento";
+import { ConstrutorMCP } from "@/components/construtor-mcp";
 import { FormularioInstrumento } from "@/components/formulario-instrumento";
 import { buscarUso, emUso, quemUsa, UsadoPor } from "@/components/uso-instrumento";
 import { IconeInstrumento } from "@/components/icone-instrumento";
@@ -54,14 +56,38 @@ function lerJson(texto: string): [Record<string, unknown> | null, string | null]
  * lugar: editar a configuração, conectar o canal (Telegram) e testar o
  * instrumento isoladamente. `Esc` fecha. Reusado pela aba Instrumentos e Início.
  */
-export function DrawerInstrumento({
-  instrumento,
-  tipos,
-  time,
-  meuPapel,
-  onFechar,
-  onSalvou,
-}: {
+export function DrawerInstrumento(props: PropsDrawer) {
+  // Instrumento PERSONALIZADO abre no Construtor, venha de onde vier (aba Instrumentos,
+  // agentes, Estúdio, execução, cinto) — o drawer é dos nativos. Decisão do maestro
+  // (12/08, reafirmada em 29/09): o que a pessoa ou a IA cria é editável no Construtor.
+  const { instrumento, tipos, time, meuPapel, onFechar, onSalvou } = props;
+  if (instrumento?.tipo === "conector") {
+    return (
+      <ConstrutorInstrumento
+        time={time}
+        instrumento={instrumento}
+        onFechar={onFechar}
+        onSalvou={onSalvou}
+      />
+    );
+  }
+  const tipo = tipos.find((t) => t.tipo === instrumento?.tipo);
+  if (instrumento && tipo?.criado_no_construtor) {
+    return (
+      <ConstrutorMCP
+        time={time}
+        instrumento={instrumento}
+        tipos={tipos}
+        souAdmin={podeAdmin(meuPapel)}
+        onFechar={onFechar}
+        onSalvou={onSalvou}
+      />
+    );
+  }
+  return <DrawerNativo {...props} />;
+}
+
+type PropsDrawer = {
   instrumento: Instrumento | null;
   tipos: TipoInstrumento[];
   time: Time;
@@ -71,7 +97,16 @@ export function DrawerInstrumento({
   // (decisão do maestro: fica aberto até fechar manualmente). Ao criar, o pai
   // troca para o recém-criado e o drawer passa de "criar" para "editar".
   onSalvou: (salvo: Instrumento) => void;
-}) {
+};
+
+function DrawerNativo({
+  instrumento,
+  tipos,
+  time,
+  meuPapel,
+  onFechar,
+  onSalvou,
+}: PropsDrawer) {
   const router = useRouter();
   const souOperador = podeOperar(meuPapel);
   const souAdmin = podeAdmin(meuPapel);
