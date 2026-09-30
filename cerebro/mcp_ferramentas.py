@@ -346,6 +346,19 @@ def listar_automacoes(sessao, usuario, time_id) -> str:
     return f"Automações do time '{time.nome}':\n" + "\n".join(linhas)
 
 
+def _url_publica_cerebro() -> str:
+    """O endereço público do cérebro, visto do serviço do MCP (que roda em outro
+    lugar): `CEREBRO_PUBLIC_URL` no cérebro, `CEREBRO_URL` no serviço do MCP."""
+    padrao = (
+        "https://api.batuta.team"
+        if os.environ.get("RAILWAY_ENVIRONMENT")
+        else "http://localhost:8000"
+    )
+    return (
+        os.environ.get("CEREBRO_PUBLIC_URL") or os.environ.get("CEREBRO_URL") or padrao
+    ).rstrip("/")
+
+
 @_ferramenta
 def ver_automacao(sessao, usuario, automacao_id) -> str:
     aid = _uuid(automacao_id)
@@ -362,8 +375,7 @@ def ver_automacao(sessao, usuario, automacao_id) -> str:
             "segredo_da_assinatura_guardado": bool(auto.segredo_webhook_cifrado),
             # O endereço que o serviço de fora chama (só faz sentido no gatilho webhook).
             "endereco_webhook": (
-                os.environ.get("CEREBRO_PUBLIC_URL", "http://localhost:8000").rstrip("/")
-                + f"/webhooks/automacoes/{auto.id}"
+                _url_publica_cerebro() + f"/webhooks/automacoes/{auto.id}"
                 if auto.tipo_gatilho == "webhook" else None
             ),
             "cadeia": grafo.normalizar(auto.cadeia or {}),

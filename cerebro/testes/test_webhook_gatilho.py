@@ -209,3 +209,16 @@ def test_validacao_da_ia_recusa_segredo_e_filtro_malformado():
 ])
 def test_eco(dados_aviso, esperado):
     assert regras.eh_eco(dados_aviso) is esperado
+
+
+def test_ia_externa_ve_o_endereco_publico(monkeypatch):
+    """O serviço do MCP não tem CEREBRO_PUBLIC_URL; o endereço mostrado não pode sair
+    como localhost (saiu, em 2026-09-30)."""
+    import mcp_ferramentas
+
+    monkeypatch.delenv("CEREBRO_PUBLIC_URL", raising=False)
+    monkeypatch.setenv("CEREBRO_URL", "https://api.exemplo/")
+    assert mcp_ferramentas._url_publica_cerebro() == "https://api.exemplo"
+    monkeypatch.delenv("CEREBRO_URL")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    assert mcp_ferramentas._url_publica_cerebro() == "https://api.batuta.team"
