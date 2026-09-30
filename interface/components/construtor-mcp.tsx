@@ -5,9 +5,18 @@
 // lista de tipos prontos. Por dentro é o mesmo formulário (identificação, lista de
 // ferramentas, quem pode usar), com o tipo fixo e a moldura do Construtor.
 
-import { ArrowLeft, Check, ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Check, ChevronRight, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
-import { type Instrumento, type TipoInstrumento, type Time } from "@/lib/api";
+import {
+  api,
+  mensagemDeErro,
+  type Instrumento,
+  type TipoInstrumento,
+  type Time,
+} from "@/lib/api";
 import { FormularioInstrumento } from "@/components/formulario-instrumento";
 import { UsadoPor } from "@/components/uso-instrumento";
 import { Aviso } from "@/components/ui/aviso";
@@ -29,6 +38,38 @@ export function ConstrutorMCP({
   onSalvou: (salvo: Instrumento) => void;
 }) {
   const tipoMcp = tipos.find((t) => t.tipo === "conectar_mcp");
+  const router = useRouter();
+  // Abre sempre com o instrumento como está AGORA no Batuta. A cópia que chega de
+  // uma lista pode ser de antes da chave ser colada — e aí o formulário acha que o
+  // endereço e o token não existem e barra o salvar.
+  const [atual, setAtual] = useState<Instrumento | null>(null);
+  const [erroCarga, setErroCarga] = useState<string | null>(null);
+  const [tentativa, setTentativa] = useState(0);
+  const instrumentoId = instrumento?.id ?? null;
+  useEffect(() => {
+    if (!instrumentoId) return;
+    let vivo = true;
+    api
+      .get<Instrumento>(`/instrumentos/${instrumentoId}`)
+      .then((i) => {
+        if (vivo) setAtual(i);
+      })
+      .catch((e) => {
+        if (vivo) setErroCarga(mensagemDeErro(e, "Não consegui abrir este instrumento"));
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [instrumentoId, tentativa]);
+
+  function salvou(salvo: Instrumento) {
+    toast.success(instrumento ? "Instrumento salvo" : "Instrumento criado");
+    setAtual(salvo);
+    router.refresh();
+    onSalvou(salvo);
+  }
+
+  const carregando = instrumentoId !== null && atual?.id !== instrumentoId;
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4">
@@ -61,18 +102,36 @@ export function ConstrutorMCP({
             WordPress…). Salve com o endereço e a identificação, depois escolha quais
             ferramentas entram no cinto.
           </p>
-          {tipoMcp ? (
+          {!tipoMcp ? (
+            <Aviso>Não consegui carregar este tipo de instrumento. Recarregue a página.</Aviso>
+          ) : erroCarga && carregando ? (
+            <Aviso>
+              {erroCarga}{" "}
+              <button
+                type="button"
+                className="underline"
+                onClick={() => {
+                  setErroCarga(null);
+                  setTentativa((n) => n + 1);
+                }}
+              >
+                Tentar de novo
+              </button>
+            </Aviso>
+          ) : carregando ? (
+            <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+              <RefreshCw className="size-3.5 animate-spin" /> Abrindo o instrumento…
+            </p>
+          ) : (
             <FormularioInstrumento
               time={time}
-              instrumento={instrumento}
+              instrumento={atual}
               tipos={tipos}
               tipoFixo="conectar_mcp"
               souAdmin={souAdmin}
-              onSalvo={onSalvou}
+              onSalvo={salvou}
               onCancelar={onFechar}
             />
-          ) : (
-            <Aviso>Não consegui carregar este tipo de instrumento. Recarregue a página.</Aviso>
           )}
           {instrumento && <UsadoPor instrumentoId={instrumento.id} />}
         </div>

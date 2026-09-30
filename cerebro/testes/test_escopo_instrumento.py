@@ -201,3 +201,15 @@ def test_custo_da_aprovacao_vai_para_o_time_que_executou(sessao, dados, org):
     sessao.flush()
     assert len(custos_time.mensagens_do_time(sessao, org["time_b"].id)) == 1
     assert custos_time.mensagens_do_time(sessao, dados["timeA"].id) == []
+
+
+def test_cinto_do_agente_traz_o_resumo_dos_segredos(cliente, entrar, dados, org, sessao):
+    """O editor aberto a partir do cinto precisa saber o que já está guardado; sem o
+    resumo, ele pedia endereço e token de novo e barrava o salvar (Zernio, 29/09)."""
+    si.salvar_segredos(sessao, org["inst"].id, {"url": "https://mcp.exemplo/abcd"})
+    sessao.add(AgenteInstrumento(agente_id=org["ag_b"].id, instrumento_id=org["inst"].id))
+    sessao.flush()
+    entrar(dados["operador"])
+    cinto = cliente.get(f"/agentes/{org['ag_b'].id}/instrumentos").json()
+    lido = next(i for i in cinto if i["id"] == str(org["inst"].id))
+    assert lido["segredos"] == {"url": "abcd"}

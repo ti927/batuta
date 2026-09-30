@@ -8,6 +8,8 @@ num agente do mesmo time — é o que mantém o isolamento e a coerência.
 import uuid
 
 import escopo_instrumento
+import instrumentos as encaixe
+import segredos_instrumento
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -38,7 +40,14 @@ def listar_cinto(
         .where(AgenteInstrumento.agente_id == agente_id)
         .order_by(Instrumento.nome)
     )
-    return sessao.scalars(consulta).all()
+    # Igual às outras leituras de instrumento (rotas/instrumentos._ler): sem o resumo
+    # dos segredos, o editor aberto a partir do cinto acha que nada está guardado e
+    # barra o salvar pedindo endereço e token de novo.
+    lista = sessao.scalars(consulta).all()
+    for inst in lista:
+        inst.segredos = segredos_instrumento.resumo(sessao, inst.id)
+        inst.acao_irreversivel = encaixe.acao_irreversivel(inst.tipo, inst.configuracao)
+    return lista
 
 
 @rotas.post(

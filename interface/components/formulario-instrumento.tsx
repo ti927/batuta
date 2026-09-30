@@ -767,7 +767,6 @@ export function FormularioInstrumento({
 
   return (
     <div className="flex flex-col gap-3">
-      {erro && <Aviso>{erro}</Aviso>}
       {daOrganizacao && (
         <Aviso variant="info" className="text-xs">
           {bloqueado
@@ -941,6 +940,9 @@ export function FormularioInstrumento({
         </Label>
       )}
 
+      {/* O erro aparece junto do botão: no topo, num formulário longo, ficava fora
+          da vista e o "Salvar" parecia não fazer nada. */}
+      {erro && <Aviso>{erro}</Aviso>}
       <div className="flex gap-2">
         <Button onClick={salvar} disabled={salvando || bloqueado}>
           {salvando ? "Salvando…" : "Salvar"}
