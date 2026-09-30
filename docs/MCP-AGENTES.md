@@ -6,7 +6,8 @@
 > Não confundir com [`MCP-BATUTA.md`](MCP-BATUTA.md), que é o **sentido oposto**: lá o
 > Batuta é um **servidor** MCP que o claude.ai do consultor aciona. Aqui o Batuta é
 > **cliente**: o agente do time ganha, no cinto, as ferramentas de um servidor MCP de
-> terceiro (Zapier, Composio, ou um MCP nativo qualquer).
+> terceiro (Zapier, Composio, Zernio, o do WordPress, ou um servidor MCP próprio). É um instrumento
+> **personalizado** (criado no Construtor), não um pronto do Batuta.
 
 ---
 

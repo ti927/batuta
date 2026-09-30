@@ -197,18 +197,30 @@ Colar a especificação da API → o Batuta **gera as operações sozinho**. É 
 
 ### 5.8 Substituir os instrumentos existentes por este modelo — a meta e a fronteira honesta
 
-**Meta do maestro:** trocar os instrumentos de hoje por instrumentos personalizados; **nativos** só os que são
-**código fechado do motor** (ex.: o agendador). Direção correta — com uma **fronteira honesta em 3 grupos** (do
-estudo de §2, porque nem todo instrumento é "só uma chamada de API"):
+> **Vocabulário (vale para todo o projeto — `PRODUTO.md §13`):** **personalizado** = ligação com um serviço de
+> fora, montada sem código no **Construtor** (API = conector; servidor MCP). **Pronto do Batuta** (= "nativo") =
+> capacidade que vem com o Batuta, editada no painel lateral. Na tela: "Personalizados" e "Prontos do Batuta".
 
-- **(a) Nativos para sempre — tocam o interior do Batuta:** `agendar_automacao`, `arquivar_imagem`, `mcp`,
-  `descrever_imagem` (usa o motor de IA). São tripas, não "chamada de API".
-- **(b) Migram para o modelo personalizado (a MAIORIA — "só chamam API"):** busca web/Exa/Firecrawl, WordPress,
-  Search Console, Telegram, webhook de saída, os de Instagram, `chamar_api_rest`. Viram conectores declarativos.
-- **(c) Ficam nativos ATÉ o Nível 3 (precisam de código de verdade):** `gerar_pdf` (monta um PDF), `sql` (fala com
-  banco), `gerar_imagem`/`gerar_video`/`gerar_video_fal` (laço "ficou pronto?"). Um conector declarativo **não
-  expressa** essa lógica — ou esperam o **Nível 3** (código hospedado), ou um conector multi-passo mais esperto os
-  absorve depois. A fronteira é "**tem lógica além de chamar um endereço**".
+**Meta do maestro:** o que só conversa com um serviço de fora é **personalizado**; **pronto** fica só o que mexe no
+interior do Batuta ou precisa de código de verdade. Fronteira em 3 grupos:
+
+- **(a) Prontos para sempre — tocam o interior do Batuta:** `agendar_automacao`, `pedir_aprovacao`, `quadro`,
+  `arquivar_imagem`, `descrever_imagem` (usa o motor de IA), `enviar_telegram` (é CANAL: recebe mensagens, não só
+  envia). ⚠️ Correção de 2026-09-29: o **servidor MCP NÃO é pronto** — é **personalizado**, com Construtor próprio
+  (`conectar_mcp`, `criado_no_construtor = True`); esta seção o listava aqui por engano.
+- **(b) Migram para personalizado ("só chamam API") — estado em 2026-09-30:**
+  - `chamar_api_rest` → **conector** ✅ (não se cria mais; "Data de hoje" migrada nos 2 times);
+  - Instagram (publicar, comentários, métricas) → **Zernio** ✅ (conector REST "Zernio: publicar no Instagram" +
+    servidor MCP "Zernio (redes sociais)", os dois da organização). Todos os instrumentos e credenciais da Meta
+    foram **apagados** em 30/09 (backup em `C:\dev\batuta-backups\`);
+  - comentário do Instagram como gatilho → **gatilho webhook** genérico (assinatura, repetidos, eco) ✅;
+  - WordPress → servidor MCP do WordPress (provado ao vivo com login OAuth e com senha de aplicativo) — **a fazer**,
+    um time por vez;
+  - webhook de saída, Search Console → a fazer quando houver uso.
+- **(c) Ficam prontos (precisam de código ou de chave compartilhada medida):** `gerar_pdf`, `banco_sql`,
+  `gerar_imagem`/`gerar_video`/`gerar_video_fal` (laço "ficou pronto?"), e — **recomendação ainda sem decisão do
+  maestro** — a busca web/Exa e o ler site/Firecrawl, que usam a chave de serviço da organização com custo medido
+  (virar conector obrigaria a colar a chave em cada instrumento e perderia a medição exata).
 
 **Como migrar (sem quebrar):** instrumento por instrumento, a versão declarativa **provada equivalente** antes de
 trocar; as instâncias já configuradas (Instagram/WordPress plugados) **continuam funcionando** com caminho de

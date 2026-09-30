@@ -147,6 +147,26 @@ Instrumentos previstas:
 
 A forma de cada instrumento — se é um MCP, um plugin, ou uma instrução detalhada no markdown — não importa para o usuário. O que importa é que a possibilidade esteja disponível no cinto. Novos instrumentos entram com o tempo, sempre no mesmo encaixe, sem reescrever o que já existe.
 
+### Os dois tipos de instrumento: personalizado e pronto
+
+Decisão do maestro (12/08/2026, reafirmada em 29/09/2026). Todo instrumento é de **um** destes dois tipos, e a tela, a documentação e as IAs usam **estes nomes**:
+
+| | **Personalizado** | **Pronto do Batuta** (o "nativo") |
+|---|---|---|
+| O que é | Uma ligação com um **serviço de fora**, montada sem código: uma **API** (o "conector", com uma ou várias operações) ou um **servidor MCP** | Uma capacidade que **vem com o Batuta**: mexe no interior dele ou precisa de código de verdade |
+| Exemplos | Zernio (Instagram), WordPress por MCP, Search Console, "Data de hoje", qualquer API ou MCP de mercado | Agendar automação, Pedir aprovação, Quadro do Cérebro, Gerar imagem/vídeo, Descrever imagem, Telegram (canal), Busca na web, Banco SQL, Gerar PDF |
+| Onde nasce | **🌟 Criar instrumento** → "Uma API" ou "Um servidor MCP" | **Instrumento pronto** (lista do catálogo) |
+| Onde se edita | No **Construtor** — inclusive quando foi a IA quem criou | No **painel lateral** |
+| Quem pode criar | Pessoa (tela) e IAs (criadora e externa) | Pessoa (tela) e IAs |
+
+Regras que decorrem disso:
+- **Integração com serviço de mercado é sempre personalizado** (Zernio, Zapier, WordPress…). O Batuta não ganha código com nome de fornecedor; o que vira código é só o **genérico** (o conector, o cliente MCP, o gatilho webhook).
+- **A identificação** (chave, senha, login OAuth, certificado) **mora dentro do próprio instrumento**. A "Central de chaves" guarda só as chaves de IA e as de serviço compartilhadas (busca, imagem).
+- **A chamada de API avulsa** (o antigo "Chamar API REST") não se cria mais: virou conector. As que já existem seguem funcionando.
+- **Nativo = pronto.** "Nativo" é como se fala; na tela o nome é **"Prontos do Batuta"**.
+
+Qualquer instrumento, dos dois tipos, pode ser **só do time** ou **de toda a organização** (um instrumento, vários times) — ver o capítulo "Instrumento do time ou da organização" da Central.
+
 ## 14. Como um fluxo se comporta
 
 Um fluxo é o caminho de uma tarefa, do gatilho até a entrega. Comportamentos que o produto precisa ter:

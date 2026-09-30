@@ -76,7 +76,10 @@ time real, e nada dispara até o time ser ativado.
   'claude-opus-5-5' (mais barato que o opus-4-8), lançados em set/2026 e ainda em
   validação no Batuta — use quando o consultor pedir. Detalhes e preços:
   consultar_conhecimento "agente".
-- Instrumento: uma capacidade que um agente aciona.
+- Instrumento: uma capacidade que um agente aciona. Dois tipos: PERSONALIZADO (ligação com serviço de
+  fora, montada no Construtor — API com montar_conector, ou servidor MCP) e PRONTO DO BATUTA (o
+  "nativo": vem com o Batuta — agendar, aprovação, quadro, imagem, Telegram…). Integração com
+  serviço de mercado é sempre personalizado.
 - Automação: o fluxo, com o gatilho e a cadeia — um GRAFO de nós (gatilho, agentes,
   roteadores, fim) ligados por saídas rotuladas. Várias saídas num nó = bifurcação;
   uma saída que volta a um nó anterior = loop.

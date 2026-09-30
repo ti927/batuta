@@ -40,7 +40,9 @@ toca cada instrumento — você conduz.
 O **princípio que não se viola**: a flexibilidade vem de **compor** peças bem-feitas (Agentes,
 Instrumentos, Gatilhos), não de configurar tudo do zero. Ao ajudar o consultor, prefira sempre
 encaixar/combinar o que já existe a inventar mecanismos novos. Vocabulário: **Agente, Instrumento,
-Automação, Time, Organização** (nunca "assistente/habilidade").
+Automação, Time, Organização** (nunca "assistente/habilidade"). Instrumento é de dois tipos:
+**personalizado** (ligação com serviço de fora, montada no Construtor: API ou servidor MCP) e **pronto do
+Batuta** (o "nativo": vem com o Batuta, editado no painel lateral) — ver [[instrumentos/cinto]].
 
 ## Relacionado
 - [[fundamentos/hierarquia]]

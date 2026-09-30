@@ -27,13 +27,18 @@ Um instrumento é uma peça plugável, sempre com o mesmo encaixe. Duas coisas i
 3. Se ele tem **segredo** (token/senha), aponte para uma **credencial** ou preencha o segredo (cofre).
 4. Explique no `tools.md` do agente **quando** e **como** usar.
 
-## Personalizado ou pronto (nativo)
-- **Personalizado** — tudo o que só conversa com um serviço de fora: uma **API** (conector) ou um
-  **servidor MCP**. Nasce em **🌟 Criar instrumento** e se edita no **Construtor**, inclusive quando
-  foi a IA quem criou.
-- **Pronto (nativo)** — o que mexe no interior do Batuta ou precisa de código de verdade (agendar
-  automação, pedir aprovação, quadro do Cérebro, gerar e descrever imagem…). Fica em **Instrumento
-  pronto** e abre no painel lateral.
+## Os dois tipos: personalizado e pronto do Batuta
+Todo instrumento é de UM destes dois tipos. "Nativo" e "pronto" são a MESMA coisa; na tela o nome é
+**Prontos do Batuta**.
+
+| | **Personalizado** | **Pronto do Batuta** ("nativo") |
+|---|---|---|
+| O que é | Ligação com um **serviço de fora**, sem código: uma **API** (conector, com uma ou várias operações) ou um **servidor MCP** | Capacidade que **vem com o Batuta**: mexe no interior dele ou precisa de código de verdade |
+| Exemplos | Zernio (Instagram), WordPress por MCP, Search Console, "Data de hoje" | Agendar automação, Pedir aprovação, Quadro do Cérebro, Gerar imagem/vídeo, Descrever imagem, Telegram, Busca na web, Banco SQL, Gerar PDF |
+| Nasce em | **🌟 Criar instrumento** → "Uma API" ou "Um servidor MCP" | **Instrumento pronto** |
+| Edita em | **Construtor** (também quando foi a IA quem criou) | Painel lateral |
+| Identificação | Dentro do próprio instrumento (chave, senha, login, certificado) | Idem; busca e imagem podem usar a chave da organização |
+
 - A **chamada de API avulsa** não se cria mais: virou conector. As que já existem seguem valendo.
 - A aba **Instrumentos** mostra as duas listas separadas (**Personalizados** e **Prontos do Batuta**,
   com os quadros do Cérebro num grupo à parte), com busca, filtros (tipo, alcance, situação,
