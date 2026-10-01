@@ -148,7 +148,7 @@ def _uuid(valor: str) -> uuid.UUID | None:
 # Tipos de gatilho e o formato EXATO da config de agendamento que o `agendador`
 # espera. A IA erra por não conhecer este formato — por isso ele é documentado
 # aqui, injetado no prompt e validado em definir_gatilho.
-TIPOS_GATILHO = ("manual", "agendamento", "webhook", "comentario_instagram")
+TIPOS_GATILHO = ("manual", "agendamento", "webhook")
 FORMATO_GATILHO = (
     "Tipos de gatilho:\n"
     "- 'manual': sem config. Você dispara quando quiser.\n"
@@ -160,9 +160,6 @@ FORMATO_GATILHO = (
     "Comentário em rede social (Instagram etc.) chega por 'webhook': o serviço que "
     "cuida da conta (ex.: Zernio) chama o endereço da automação."
 )
-# Aposentado como opção nova (2026-10-01): a integração direta com a Meta saiu; o
-# comentário chega pelo gatilho webhook. Segue em TIPOS_GATILHO só até o código sair.
-GATILHOS_APOSENTADOS = ("comentario_instagram",)
 
 
 def _inteiro_no_intervalo(valor, minimo: int, maximo: int) -> bool:
@@ -201,32 +198,13 @@ def _validar_gatilho_webhook(config: dict) -> str | None:
 
 def _validar_gatilho(tipo: str, config: dict) -> str | None:
     """Devolve uma mensagem de erro se o gatilho estiver malformado (None = ok)."""
-    validos = [t for t in TIPOS_GATILHO if t not in GATILHOS_APOSENTADOS]
-    if tipo in GATILHOS_APOSENTADOS:
+    if tipo == "comentario_instagram":  # saiu em 2026-10-01
         return (
             "O gatilho 'comentario_instagram' não existe mais: comentário em rede social "
             "chega pelo gatilho 'webhook' (o serviço da conta chama o endereço da automação)."
         )
     if tipo not in TIPOS_GATILHO:
-        return f"Gatilho desconhecido: '{tipo}'. Use um de: {', '.join(validos)}."
-    if tipo == "comentario_instagram":
-        # A conta (credencial_id) é escolhida pelo HUMANO na tela (v1). Se a IA
-        # mandar algo, validamos; ausência é OK (o gatilho fica "a conectar").
-        cred = config.get("credencial_id")
-        if cred not in (None, "") and _uuid(cred) is None:
-            return "credencial_id, se informado, deve ser um id válido."
-        midias = config.get("midias", "todas")
-        if midias != "todas" and not (
-            isinstance(midias, list) and all(isinstance(m, str) for m in midias)
-        ):
-            return "midias deve ser 'todas' ou uma lista de ids de post (media_id)."
-        pc = config.get("palavra_chave")
-        if pc is not None and not isinstance(pc, str):
-            return "palavra_chave, se informada, deve ser um texto."
-        teto = config.get("teto_por_hora")
-        if teto is not None and not _inteiro_no_intervalo(teto, 1, 100000):
-            return "teto_por_hora, se informado, deve ser um inteiro positivo."
-        return None
+        return f"Gatilho desconhecido: '{tipo}'. Use um de: {', '.join(TIPOS_GATILHO)}."
     if tipo == "webhook":
         return _validar_gatilho_webhook(config)
     if tipo != "agendamento":

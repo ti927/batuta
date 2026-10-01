@@ -6,8 +6,8 @@
 // os 4 últimos dígitos; o valor nunca volta do cérebro) e permite cadastrar/
 // trocar/remover. A chave é UMA por serviço/provedor (unificação 2026-06-15):
 // salvar um serviço que já existe SUBSTITUI a chave — quem escolhe a IA é o
-// modelo (da conversa e de cada agente), não a chave. Inclui serviços não-modelo
-// compartilháveis (Tavily/busca), que os instrumentos reusam.
+// modelo (da conversa e de cada agente), não a chave. Os prontos de IA (imagem,
+// vídeo, ler imagem) reusam estas chaves.
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";

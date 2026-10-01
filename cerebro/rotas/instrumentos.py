@@ -395,7 +395,7 @@ def acionar_instrumento(sessao: Session, inst, argumentos: dict | None) -> dict:
     if tipo is None:
         raise ValueError(f"Tipo de instrumento desconhecido: {inst.tipo!r}")
     # Resolve os segredos como na execução real (borda): inline próprio +
-    # credencial da central + pool de serviço (gerar_imagem/busca_web reusam
+    # credencial da central + pool de serviço (os prontos de IA reusam
     # a chave da org). Sem isso, "Testar" não enxergaria credencial nem pool.
     import chaves
     from orquestracao.llm import usar_chaves

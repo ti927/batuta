@@ -39,9 +39,9 @@ def _ferramenta(tipo_str: str, configuracao: dict, monkeypatch):
 
 
 def test_falha_de_leitura_nao_derruba_execucao(monkeypatch):
-    # busca_web = leitura (acao_irreversivel False)
-    tool, falhas, erros = _ferramenta("busca_web", {}, monkeypatch)
-    saida = json.loads(tool.func(consulta="reforma tributária 2026"))
+    # gerar_pdf = só gera um arquivo (acao_irreversivel False)
+    tool, falhas, erros = _ferramenta("gerar_pdf", {}, monkeypatch)
+    saida = json.loads(tool.func(conteudo="Relatório"))
     assert saida["ok"] is False
     assert "dica" in saida  # o agente é orientado a seguir/tentar de novo
     assert falhas == []  # NÃO entra na lista que derruba a execução
@@ -71,9 +71,9 @@ def test_turno_misto_so_a_escrita_conta(monkeypatch):
     falhas: list[str] = []
     erros: list[dict] = []
 
-    busca = encaixe.obter_tipo("busca_web")
+    busca = encaixe.obter_tipo("gerar_pdf")
     inst_b = Instrumento(
-        time_id=uuid.uuid4(), nome="Busca", tipo="busca_web", configuracao={}
+        time_id=uuid.uuid4(), nome="PDF", tipo="gerar_pdf", configuracao={}
     )
     inst_b.id = uuid.uuid4()
     tool_b = agente_mod._ferramenta_unica(inst_b, busca, busca.Config(), falhas, {}, erros, {})
@@ -88,7 +88,7 @@ def test_turno_misto_so_a_escrita_conta(monkeypatch):
         inst_t, tg, tg.Config.model_validate({"token_bot": "x"}), falhas, {}, erros, {}
     )
 
-    json.loads(tool_b.func(consulta="x"))  # leitura falha → não conta
+    json.loads(tool_b.func(conteudo="x"))  # leitura falha → não conta
     json.loads(tool_t.func(destinatario="1", mensagem="oi"))  # escrita falha → conta
 
     assert len(falhas) == 1

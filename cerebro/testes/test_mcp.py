@@ -101,7 +101,7 @@ def test_seam_mcp_expande_no_cinto(monkeypatch):
 
 def test_seam_instrumento_normal_uma_ferramenta():
     """Instrumento comum continua com exatamente uma ferramenta."""
-    inst = _instrumento("busca_web", {})
+    inst = _instrumento("gerar_pdf", {})
     tools = _ferramentas_de_instrumento(inst, [], {}, [], {})
     assert len(tools) == 1
 

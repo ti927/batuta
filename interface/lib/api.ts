@@ -311,7 +311,7 @@ export type TipoInstrumento = {
   tipo: string;
   nome_exibicao: string;
   // Grupo do instrumento no catálogo (a UI agrupa o dropdown por isto, ex.:
-  // "Instagram", "Web (busca e leitura)"). Padrão "Outros".
+  // "Conteúdo", "Mensageria"). Padrão "Outros".
   categoria?: string;
   descricao: string;
   esquema_config: Record<string, unknown>;
@@ -587,11 +587,7 @@ export const OPERADORES_REGRA: { valor: OperadorRegra; rotulo: string }[] = [
 ];
 // Operadores que não pedem valor (a comparação é sobre a existência do campo).
 export const OPERADORES_SEM_VALOR: OperadorRegra[] = ["preenchido", "vazio"];
-export type TipoGatilho =
-  | "manual"
-  | "agendamento"
-  | "webhook"
-  | "comentario_instagram";
+export type TipoGatilho = "manual" | "agendamento" | "webhook";
 
 export type SaidaCadeia = {
   id?: string;

@@ -50,8 +50,8 @@ def test_servidor_mcp_segue_criavel_pelas_ias(sessao, dados):
 # ── Reorganização dos prontos (2026-10-01) ──────────────────────────────────────
 # Pronto do Batuta = o que é do Batuta por dentro + o que vem das IAs. Integração de
 # mercado (Instagram, busca/leitura de sites, WordPress, Search Console, fal.ai) e o
-# webhook de saída viraram personalizado: criar NOVO é recusado em toda porta; o que
-# já existe segue rodando. O banco de dados virou personalizado com Construtor.
+# webhook de saída viraram personalizado e o código deles saiu (Fase 3): quem ainda os
+# pedir ouve o caminho certo. O banco de dados virou personalizado com Construtor.
 
 APOSENTADOS = (
     "instagram_insights", "instagram_ler_comentarios", "instagram_ler_post",
@@ -104,14 +104,11 @@ def test_tela_recusa_tipo_aposentado(cliente, entrar, dados):
     assert r.status_code == 422 and "personalizado" in r.json()["detail"]
 
 
-def test_instrumento_aposentado_que_ja_existe_segue_editavel(cliente, entrar, dados, sessao):
-    inst = Instrumento(time_id=dados["timeA"].id, nome="Ler site", tipo="ler_site",
-                       configuracao={})
-    sessao.add(inst)
-    sessao.flush()
-    entrar(dados["operador"])
-    r = cliente.put(f"/instrumentos/{inst.id}", json={"nome": "Ler site (Tavily)"})
-    assert r.status_code == 200 and r.json()["nome"] == "Ler site (Tavily)"
+def test_os_tipos_removidos_nao_existem_mais():
+    import instrumentos as encaixe
+
+    for tipo in APOSENTADOS:
+        assert encaixe.obter_tipo(tipo) is None, tipo
 
 
 def test_banco_de_dados_e_personalizado_com_construtor(cliente, entrar, dados, sessao):

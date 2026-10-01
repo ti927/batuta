@@ -5,7 +5,7 @@ OpenAI (Sora) e devolve um link público para o MP4. Texto→vídeo; opcionalmen
 imagem→vídeo, animando a partir de um quadro inicial (ex.: uma imagem gerada
 antes). A chave é um SEGREDO reusado do pool da organização (a mesma chave OpenAI
 do gerar_imagem). O arquivo é salvo e servido pelo cérebro/Storage — a URL pública
-serve direto ao "Instagram: publicar" (reels, story de vídeo ou item de carrossel).
+serve direto a um instrumento de publicação (reels, story de vídeo ou carrossel).
 
 Ciclo ASSÍNCRONO da API (3 passos): CRIA o job (POST /v1/videos, multipart),
 ESPERA processar (GET /v1/videos/{id} até `status == completed` — leva minutos) e
@@ -247,7 +247,7 @@ class GerarVideo(TipoInstrumento):
         "OpenAI (Sora), e devolve um link público (MP4). Pode ANIMAR a partir de uma "
         "imagem (passe a URL da imagem como quadro inicial — ex.: uma arte gerada antes). "
         "O vídeo sai com a marca d'água da OpenAI e leva alguns minutos para ficar pronto. "
-        "Use o link no 'Instagram: publicar' para postar como reels, story de vídeo ou "
+        "Use o link no instrumento de publicação para postar como reels, story de vídeo ou "
         "item de carrossel."
     )
     Config = ConfigVideo

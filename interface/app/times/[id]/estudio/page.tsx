@@ -13,7 +13,6 @@ import { notFound } from "next/navigation";
 import {
   type Agente,
   type Automacao,
-  type Credencial,
   type Instrumento,
   type PapelAcesso,
   type Time,
@@ -43,13 +42,6 @@ async function carregar(timeId: string) {
   const time: Time = await respTime.json();
   const agentes: Agente[] = await respAg.json();
 
-  const respCred = await buscarCerebro(
-    `/organizacoes/${time.organizacao_id}/credenciais`,
-  );
-  const credenciaisInstagram = (await jsonOu<Credencial[]>(respCred, [])).filter(
-    (c) => c.tipo === "instagram",
-  );
-
   // O cinto de cada agente é o que diz se um passo PARA e pergunta a alguém — é
   // daqui que sai metade dos avisos do desenho. Sem ele a tela mentiria por omissão.
   const cintosPares = await Promise.all(
@@ -65,7 +57,6 @@ async function carregar(timeId: string) {
     agentes,
     cintos: Object.fromEntries(cintosPares) as Record<string, Instrumento[]>,
     instrumentos: (await respInst.json()) as Instrumento[],
-    credenciaisInstagram,
     tipos: await jsonOu<TipoInstrumento[]>(respTipos, []),
     meuPapel: (eu?.papeis[time.organizacao_id] ?? null) as PapelAcesso | null,
   };
@@ -109,7 +100,6 @@ export default async function EstudioPage({
       agentes={dados.agentes}
       cintos={dados.cintos}
       instrumentos={dados.instrumentos}
-      credenciaisInstagram={dados.credenciaisInstagram}
       tipos={dados.tipos}
       meuPapel={dados.meuPapel}
     />

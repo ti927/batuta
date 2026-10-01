@@ -26,23 +26,15 @@ from cofre import decifrar
 from modelos import ChaveApi, Time
 from orquestracao.modelos_ia import PROVEDOR_ANTHROPIC, PROVEDORES
 
-# Serviços de instrumento (NÃO são provedores de MODELO): chaves de serviço
-# COMPARTILHADAS que a organização cadastra uma vez e os instrumentos reusam do
-# pool (mesma lógica de queda org→consultoria→legado). Não entram em PROVEDORES
-# (que é só de modelos), mas entram no pool resolvido abaixo.
-SERVICO_TAVILY = "tavily"  # busca_web + ler_site (Tavily /search e /extract)
-SERVICO_EXA = "exa"  # busca_exa (busca semântica)
-SERVICO_FIRECRAWL = "firecrawl"  # ler_site_firecrawl (leitura de páginas, lê JS)
-SERVICO_FAL = "fal"  # gerar_video_fal (fila da fal.ai: Kling/Luma/Hailuo)
-
-# Todos os serviços resolvidos pelo pool da organização: provedores de IA +
-# serviços compartilháveis de instrumento.
-SERVICOS = (*PROVEDORES, SERVICO_TAVILY, SERVICO_EXA, SERVICO_FIRECRAWL, SERVICO_FAL)
+# Os serviços resolvidos pelo pool da organização são só os provedores de IA. As
+# chaves de serviço de instrumento (Tavily, Exa, Firecrawl, fal.ai) saíram em
+# 2026-10-01 junto com os instrumentos que as usavam: integração de mercado é
+# personalizada e leva a chave dentro do próprio instrumento.
+SERVICOS = PROVEDORES
 
 # Serviços com queda de legado no `.env` do cérebro (na prática, da consultoria):
-# Anthropic (ANTHROPIC_API_KEY) e Tavily (TAVILY_API_KEY). Os demais (Exa,
-# Firecrawl, OpenAI, Google) exigem chave do cofre — sem fallback de ambiente.
-SERVICOS_COM_LEGADO = frozenset({PROVEDOR_ANTHROPIC, SERVICO_TAVILY})
+# só a Anthropic (ANTHROPIC_API_KEY). OpenAI e Google exigem chave do cofre.
+SERVICOS_COM_LEGADO = frozenset({PROVEDOR_ANTHROPIC})
 
 
 def _condicoes(

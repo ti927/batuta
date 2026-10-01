@@ -1,8 +1,8 @@
 """OAuth do Google — conectar uma conta Google (Gmail/Agenda/Drive/Search Console)
 SEM colar token, com refresh automático.
 
-Espelha o `instagram_oauth.py`, mas para o Google, cuja autorização é diferente em
-um ponto central: o `access_token` dura ~1h e o que PERSISTE é o `refresh_token`.
+A autorização do Google tem um ponto central diferente do comum:
+o `access_token` dura ~1h e o que PERSISTE é o `refresh_token`.
 Por isso, além de `conectar` (troca o code por tokens), há `renovar` (troca o
 refresh_token por um access_token novo) e `garantir_token` (usado pela BORDA na
 execução: devolve um access_token válido, renovando sob demanda).

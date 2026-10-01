@@ -12,15 +12,15 @@ import tipos_credencial as tc
 
 def test_tipos_esperados_registrados():
     tipos = {t.tipo for t in tc.tipos_disponiveis()}
-    assert {"wordpress", "sql", "telegram_bot", "token_bearer"} <= tipos
+    assert {"sql", "sql", "telegram_bot", "token_bearer"} <= tipos
 
 
-def test_wordpress_carrega_usuario_e_senha_juntos():
-    wp = tc.obter_tipo("wordpress")
+def test_sql_carrega_usuario_e_senha_juntos():
+    wp = tc.obter_tipo("sql")
     assert wp is not None
-    assert wp.nomes_campos == ("usuario", "senha_app")
-    # usuario é identidade (visível); senha_app é segredo (mascarado).
-    assert wp.campos_secretos == ("senha_app",)
+    assert wp.nomes_campos == ("usuario", "senha")
+    # usuario é identidade (visível); senha é segredo (mascarado).
+    assert wp.campos_secretos == ("senha",)
 
 
 def test_obter_tipo_desconhecido_devolve_none():

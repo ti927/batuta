@@ -5,19 +5,18 @@ o sinal EXISTIR. Até aqui `atividade.registrar` era chamado UMA vez, antes de a
 o instrumento, e nunca mais: um vídeo de 20 minutos publicava "gerando…" no minuto
 zero e ficava mudo até o fim.
 
-Aqui provamos que os dois instrumentos que ESPERAM em laço (Sora e fal.ai) publicam
+Aqui provamos que o instrumento que ESPERA em laço (Sora) publica
 sinal de vida ao longo da espera, com o tempo decorrido — e que o teto deles deixou de
 ser refém do vigia.
 """
 
 import instrumentos.gerar_video as gv
-import instrumentos.gerar_video_fal as gvf
 from orquestracao import atividade
 
 
 def test_a_frase_ganha_cronometro_conforme_a_espera():
     """Sem número, uma espera de 20 minutos é indistinguível de um travamento."""
-    for mod in (gv, gvf):
+    for mod in (gv,):
         assert "minutos" in mod._frase_espera(0)  # começo: só a expectativa
         assert "60 s" in mod._frase_espera(12)  # 12 × 5 s
         assert "5 min" in mod._frase_espera(60)  # 60 × 5 s
@@ -29,7 +28,7 @@ def test_o_teto_dos_dois_instrumentos_deixou_de_ser_refem_do_vigia():
     corrigido, o teto passa a ser o que a geração pede."""
     from fila import TETO_INATIVIDADE_EXEC_MIN
 
-    for mod in (gv, gvf):
+    for mod in (gv,):
         minutos = mod.POLL_TENTATIVAS * mod.POLL_INTERVALO_S / 60
         assert minutos > TETO_INATIVIDADE_EXEC_MIN
 
@@ -39,7 +38,7 @@ def test_o_batimento_e_bem_mais_frequente_que_o_teto_do_vigia():
     mata a execução entre um batimento e outro."""
     from fila import TETO_INATIVIDADE_EXEC_MIN
 
-    for mod in (gv, gvf):
+    for mod in (gv,):
         seg_entre_batimentos = mod.VOLTAS_POR_AVISO * mod.POLL_INTERVALO_S
         assert seg_entre_batimentos < TETO_INATIVIDADE_EXEC_MIN * 60 / 10
 
@@ -83,15 +82,6 @@ def test_sora_publica_sinal_de_vida_durante_a_espera(monkeypatch):
     publicadas = _capturar(monkeypatch, gv, respostas)
 
     assert len(publicadas) >= 3  # publicou ao longo da espera, não só no começo
-    assert all("vídeo" in f for f in publicadas)
-
-
-def test_fal_publica_sinal_de_vida_durante_a_espera(monkeypatch):
-    respostas = [{"status": "IN_PROGRESS"}] * 20 + [{"status": "COMPLETED"}]
-
-    publicadas = _capturar(monkeypatch, gvf, respostas)
-
-    assert len(publicadas) >= 3
     assert all("vídeo" in f for f in publicadas)
 
 

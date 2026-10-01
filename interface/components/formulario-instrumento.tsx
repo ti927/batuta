@@ -94,14 +94,7 @@ function opcoesDoCampo(prop: Record<string, unknown>): string[] | undefined {
 // Campos da configuração de um tipo, com metadados para gerar o formulário.
 // Ordem dos grupos no dropdown de tipo de instrumento. Categorias não listadas
 // (instrumento novo, ou "Outros") caem no fim.
-const ORDEM_CATEGORIAS = [
-  "Instagram",
-  "Web (busca e leitura)",
-  "Conteúdo",
-  "Mensageria",
-  "Sites e blogs",
-  "Integrações e dados",
-];
+const ORDEM_CATEGORIAS = ["Conteúdo", "Mensageria", "Integrações e dados"];
 
 // Agrupa os tipos por categoria, na ORDEM_CATEGORIAS, alfabético dentro do grupo.
 function agruparTiposPorCategoria(

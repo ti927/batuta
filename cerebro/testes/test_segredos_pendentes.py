@@ -66,30 +66,29 @@ def test_pendentes_banco_credencial_cobre():
 # ──────────────────── unidade: servicos_resolviveis() ───────────────────
 
 def test_servicos_resolviveis_pelo_env_legado(sessao, dados, monkeypatch):
-    monkeypatch.setenv("TAVILY_API_KEY", "tav-env")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-env")
     res = segredos.servicos_resolviveis(sessao, dados["orgA"].id)
-    assert "tavily" in res
+    assert "anthropic" in res
 
 
 def test_servicos_resolviveis_vazio_sem_chave(sessao, dados, monkeypatch):
-    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     res = segredos.servicos_resolviveis(sessao, dados["orgA"].id)
-    assert "tavily" not in res
+    assert "anthropic" not in res
 
 
 def test_servicos_resolviveis_pela_chave_da_org(sessao, dados, monkeypatch):
-    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     sessao.add(
         ChaveApi(
             organizacao_id=dados["orgA"].id,
-            provedor="tavily",
-            valor_cifrado=cofre.cifrar("tav-cofre"),
+            provedor="openai",
+            valor_cifrado=cofre.cifrar("sk-cofre"),
             ativa=True,
         )
     )
     sessao.flush()
     res = segredos.servicos_resolviveis(sessao, dados["orgA"].id)
-    assert "tavily" in res
+    assert "openai" in res
 
 
 # ─────────────── integração: snapshot do time (ver_time) ────────────────

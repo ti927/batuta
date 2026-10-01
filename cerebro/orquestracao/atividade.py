@@ -1,6 +1,6 @@
 """Sinal de ATIVIDADE ao vivo de uma execução ("o que está acontecendo agora").
 
-Um instrumento lento (ex.: `montar_imagem` bloqueia até 10 min; `gerar_video_fal`
+Um instrumento lento (ex.: `montar_imagem` bloqueia até 10 min; `gerar_video`
 faz *poll* de minutos) prende o trabalhador SEM gravar passo nenhum — e a tela, que
 só mostra passos concluídos, parece TRAVADA. Este módulo dá à borda um jeito de
 publicar, a cada momento, uma frase curta do que o agente está fazendo, para a tela
@@ -60,22 +60,10 @@ MENSAGENS_ATIVIDADE: dict[str, str] = {
     "montar_imagem": "Montando a imagem — pode levar alguns minutos…",
     "gerar_imagem": "Gerando a imagem…",
     "gerar_video": "Gerando o vídeo — pode levar minutos…",
-    "gerar_video_fal": "Gerando o vídeo — pode levar minutos…",
     "gerar_pdf": "Gerando o PDF…",
-    "publicar_instagram": "Publicando no Instagram…",
-    "publicar_wordpress": "Publicando no WordPress…",
-    "instagram_responder_comentario": "Respondendo o comentário no Instagram…",
-    "instagram_ler_comentarios": "Lendo os comentários no Instagram…",
-    "instagram_ler_post": "Lendo o post do Instagram…",
-    "instagram_insights": "Consultando as métricas do Instagram…",
     "descrever_imagem": "Analisando a imagem…",
     "enviar_telegram": "Enviando no Telegram…",
-    "busca_web": "Pesquisando na web…",
-    "busca_exa": "Pesquisando na web…",
-    "ler_site": "Lendo a página…",
-    "ler_site_firecrawl": "Lendo a página…",
     "banco_sql": "Consultando o banco de dados…",
-    "disparar_webhook": "Acionando outra automação…",
     "agendar_automacao": "Agendando o próximo disparo…",
     # O quadro publica a própria frase por ação ("Gravando 20 linhas no quadro X…").
     "quadro": "Usando o quadro…",

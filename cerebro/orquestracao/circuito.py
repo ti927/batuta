@@ -43,7 +43,7 @@ from observabilidade.escritor import registrar_evento
 FALHAS_PARA_DESLIGAR = 3
 
 # Origens em que a automação roda SEM ninguém olhando — as únicas que contam.
-ORIGENS_SOZINHA = ("agendamento", "webhook", "comentario_instagram")
+ORIGENS_SOZINHA = ("agendamento", "webhook")
 
 # Estados em que a execução já deu seu veredito. `aguardando_humano` fica de fora de
 # propósito: ela ainda pode terminar bem.

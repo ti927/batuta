@@ -625,19 +625,9 @@ def resumo_dos_limites(conf: dict, contexto: dict | None = None) -> list[str]:
 
 def _limites_do_desenho(conf: dict, ctx: dict) -> list[str]:
     """Os limites que NÃO vêm da cascata — moram no gatilho, no desenho ou num
-    instrumento. Só aparecem quando o desenho os tem: listar um teto de Instagram num
-    fluxo manual seria ruído, e ruído esconde tanto quanto o silêncio."""
+    instrumento. Só aparecem quando o desenho os tem: listar um teto que o desenho não
+    usa seria ruído, e ruído esconde tanto quanto o silêncio."""
     fora: list[str] = []
-    if ctx.get("tipo_gatilho") == "comentario_instagram":
-        try:
-            teto = int((ctx.get("configuracao_gatilho") or {}).get("teto_por_hora", 50))
-        except (TypeError, ValueError):
-            teto = 50
-        fora.append(
-            f"Instagram: até {teto} disparos por hora — no cartão do gatilho."
-            if teto
-            else "Instagram: sem teto de disparos por hora — no cartão do gatilho."
-        )
     if ctx.get("tem_no_cada"):
         try:
             itens = int(conf.get("max_itens_cada") or 20)

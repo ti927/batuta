@@ -1,9 +1,9 @@
 """Testes do reuso de chave de serviço compartilhada (unificação de chaves).
 
-Um instrumento que declara `chave_compartilhada` (ex.: gerar_imagem→openai,
-busca_web→tavily) reusa a chave do pool da organização quando não tem chave
-própria. A injeção é na borda (`anexar_aos_instrumentos`), lendo o contexto
-`usar_chaves`. Também cobre a resolução do Tavily no pool (`chaves.py`)."""
+Um instrumento que declara `chave_compartilhada` (ex.: gerar_imagem→openai) reusa
+a chave do pool da organização quando não tem chave própria. A injeção é na borda
+(`anexar_aos_instrumentos`), lendo o contexto `usar_chaves`. Também cobre que o pool
+(`chaves.py`) é só de provedores de IA desde 2026-10-01."""
 
 import chaves as ch
 import cofre
@@ -46,35 +46,6 @@ def test_sem_pool_e_sem_propria_fica_sem_chave(sessao, dados):
     assert not inst.segredos_decifrados.get("chave_api")
 
 
-def test_busca_web_reusa_tavily_do_pool(sessao, dados):
-    inst = _instrumento(sessao, dados, tipo="busca_web")
-    with usar_chaves({"tavily": "TVLY-POOL"}):
-        si.anexar_aos_instrumentos(sessao, [inst])
-    assert inst.segredos_decifrados.get("chave_api") == "TVLY-POOL"
-
-
-def test_busca_exa_reusa_exa_do_pool(sessao, dados):
-    inst = _instrumento(sessao, dados, tipo="busca_exa")
-    with usar_chaves({"exa": "EXA-POOL"}):
-        si.anexar_aos_instrumentos(sessao, [inst])
-    assert inst.segredos_decifrados.get("chave_api") == "EXA-POOL"
-
-
-def test_ler_site_reusa_tavily_do_pool(sessao, dados):
-    # ler_site (Tavily /extract) reusa a MESMA chave Tavily do busca_web.
-    inst = _instrumento(sessao, dados, tipo="ler_site")
-    with usar_chaves({"tavily": "TVLY-POOL"}):
-        si.anexar_aos_instrumentos(sessao, [inst])
-    assert inst.segredos_decifrados.get("chave_api") == "TVLY-POOL"
-
-
-def test_ler_site_firecrawl_reusa_firecrawl_do_pool(sessao, dados):
-    inst = _instrumento(sessao, dados, tipo="ler_site_firecrawl")
-    with usar_chaves({"firecrawl": "FC-POOL"}):
-        si.anexar_aos_instrumentos(sessao, [inst])
-    assert inst.segredos_decifrados.get("chave_api") == "FC-POOL"
-
-
 def test_instrumento_sem_chave_compartilhada_nao_recebe_injecao(sessao, dados):
     # gerar_pdf não declara chave_compartilhada → nada é injetado.
     inst = _instrumento(sessao, dados, tipo="gerar_pdf")
@@ -83,44 +54,25 @@ def test_instrumento_sem_chave_compartilhada_nao_recebe_injecao(sessao, dados):
     assert inst.segredos_decifrados == {}
 
 
-# ───────────────── resolução do Tavily no pool (chaves.py) ─────────────────
+# ───────────────── o pool é só de provedores de IA (chaves.py) ─────────────────
 
 
-def test_resolve_tavily_do_cofre_da_org(sessao, dados):
+def test_pool_so_tem_provedores_de_ia():
+    from orquestracao.modelos_ia import PROVEDORES
+
+    assert tuple(ch.SERVICOS) == tuple(PROVEDORES)
+    assert ch.SERVICOS_COM_LEGADO == frozenset({"anthropic"})
+
+
+def test_chave_antiga_de_servico_nao_entra_no_pool(sessao, dados):
+    # Uma chave Tavily que tenha sobrado no cofre não é mais resolvida.
     org = dados["orgA"].id
     sessao.add(
         ChaveApi(
-            organizacao_id=org,
-            provedor="tavily",
-            valor_cifrado=cofre.cifrar("tvly-123"),
-            ultimos4="-123",
-            ativa=True,
+            organizacao_id=org, provedor="tavily",
+            valor_cifrado=cofre.cifrar("tvly-123"), ultimos4="-123", ativa=True,
         )
     )
     sessao.flush()
     chaves_map, origens = ch.resolver_chaves_por_organizacao(sessao, org)
-    assert chaves_map.get("tavily") == "tvly-123"
-    assert origens.get("tavily") == ch.ORIGEM_ORGANIZACAO
-
-
-def test_tavily_sem_chave_marca_legado(sessao, dados):
-    chaves_map, origens = ch.resolver_chaves_por_organizacao(sessao, dados["orgB"].id)
-    assert "tavily" not in chaves_map
-    assert origens.get("tavily") == ch.ORIGEM_LEGADO
-
-
-def test_exa_e_firecrawl_no_pool_e_resolvem_do_cofre(sessao, dados):
-    # Exa/Firecrawl entram em SERVICOS (logo, são cadastráveis e resolvíveis); sem
-    # chave NÃO marcam legado (exigem cofre, diferente do Tavily/Anthropic).
-    assert "exa" in ch.SERVICOS and "firecrawl" in ch.SERVICOS
-    org = dados["orgA"].id
-    sessao.add(
-        ChaveApi(
-            organizacao_id=org, provedor="firecrawl",
-            valor_cifrado=cofre.cifrar("fc-123"), ultimos4="-123", ativa=True,
-        )
-    )
-    sessao.flush()
-    chaves_map, origens = ch.resolver_chaves_por_organizacao(sessao, org)
-    assert chaves_map.get("firecrawl") == "fc-123"
-    assert "exa" not in chaves_map and "exa" not in origens  # sem legado
+    assert "tavily" not in chaves_map and "tavily" not in origens

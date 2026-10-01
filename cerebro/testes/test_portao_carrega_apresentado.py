@@ -46,10 +46,10 @@ def test_envio_por_canal_registra_a_mensagem_apresentada(monkeypatch):
 
 
 def test_instrumento_sem_campo_mensagem_nao_registra(monkeypatch):
-    # busca_web não apresenta mensagem a humano (campo_mensagem None) → nada a carregar.
-    busca = encaixe.obter_tipo("busca_web")
+    # gerar_pdf não apresenta mensagem a humano (campo_mensagem None) → nada a carregar.
+    busca = encaixe.obter_tipo("gerar_pdf")
     inst = Instrumento(
-        time_id=uuid.uuid4(), nome="Busca", tipo="busca_web", configuracao={}
+        time_id=uuid.uuid4(), nome="PDF", tipo="gerar_pdf", configuracao={}
     )
     inst.id = uuid.uuid4()
     monkeypatch.setattr(
@@ -57,7 +57,7 @@ def test_instrumento_sem_campo_mensagem_nao_registra(monkeypatch):
     )
     enviadas: dict[str, list[str]] = {}
     tool = agente_mod._ferramenta_unica(inst, busca, busca.Config(), [], enviadas, [], {})
-    tool.func(consulta="reforma tributária")
+    tool.func(conteudo="Relatório")
     assert enviadas == {}
 
 

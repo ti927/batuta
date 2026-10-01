@@ -25,7 +25,7 @@ def test_tipos_lista_os_esperados(cliente, entrar, dados):
     r = cliente.get("/credenciais/tipos")
     assert r.status_code == 200
     tipos = {t["tipo"] for t in r.json()}
-    assert {"wordpress", "sql", "telegram_bot", "token_bearer"} <= tipos
+    assert {"sql", "sql", "telegram_bot", "token_bearer"} <= tipos
 
 
 def test_criar_e_listar_credencial_da_org(cliente, entrar, dados):
@@ -33,14 +33,14 @@ def test_criar_e_listar_credencial_da_org(cliente, entrar, dados):
     org = dados["orgA"].id
     r = cliente.post(
         f"/organizacoes/{org}/credenciais",
-        json={"nome": "WP Blog", "tipo": "wordpress",
-              "dados": {"usuario": "editor", "senha_app": "segredo1234"}},
+        json={"nome": "WP Blog", "tipo": "sql",
+              "dados": {"usuario": "editor", "senha": "segredo1234"}},
     )
     assert r.status_code == 201, r.text
     body = r.json()
     assert body["nome"] == "WP Blog" and body["usado_por"] == 0
     assert body["resumo"]["usuario"] == {"secreto": False, "valor": "editor"}
-    assert body["resumo"]["senha_app"]["ultimos4"] == "1234"
+    assert body["resumo"]["senha"]["ultimos4"] == "1234"
     assert "segredo1234" not in r.text  # valor pleno nunca volta
 
     nomes = {c["nome"] for c in cliente.get(f"/organizacoes/{org}/credenciais").json()}
@@ -69,16 +69,16 @@ def test_editar_preserva_segredo_em_branco(cliente, entrar, dados):
     org = dados["orgA"].id
     cid = cliente.post(
         f"/organizacoes/{org}/credenciais",
-        json={"nome": "WP", "tipo": "wordpress",
-              "dados": {"usuario": "ed", "senha_app": "senhaAAAA"}},
+        json={"nome": "WP", "tipo": "sql",
+              "dados": {"usuario": "ed", "senha": "senhaAAAA"}},
     ).json()["id"]
     r = cliente.put(
         f"/credenciais/{cid}",
-        json={"nome": "WP2", "dados": {"usuario": "ed2", "senha_app": ""}},
+        json={"nome": "WP2", "dados": {"usuario": "ed2", "senha": ""}},
     )
     assert r.status_code == 200
     assert r.json()["nome"] == "WP2"
-    assert r.json()["resumo"]["senha_app"]["ultimos4"] == "AAAA"  # preservado
+    assert r.json()["resumo"]["senha"]["ultimos4"] == "AAAA"  # preservado
 
 
 def test_apagar_bloqueado_se_em_uso(cliente, entrar, dados, sessao):
@@ -119,15 +119,15 @@ def test_instrumento_recusa_credencial_de_tipo_errado(cliente, entrar, dados):
     org = dados["orgA"].id
     cid = cliente.post(
         f"/organizacoes/{org}/credenciais",
-        json={"nome": "WPx", "tipo": "wordpress",
-              "dados": {"usuario": "u", "senha_app": "s12345"}},
+        json={"nome": "WPx", "tipo": "sql",
+              "dados": {"usuario": "u", "senha": "s12345"}},
     ).json()["id"]
     r = cliente.post(
         f"/times/{dados['timeA'].id}/instrumentos",
         json={"nome": "bot", "tipo": "enviar_telegram", "configuracao": {},
               "credencial_id": cid},
     )
-    assert r.status_code == 422  # telegram não aceita credencial wordpress
+    assert r.status_code == 422  # telegram não aceita credencial de banco
 
 
 def test_instrumento_aceita_credencial_do_tipo_certo(cliente, entrar, dados):

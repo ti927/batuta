@@ -11,7 +11,7 @@ from criacao.prompt import (
     prompt_criadora,
 )
 
-PILOTO = "instrumentos/publicar-instagram"
+PILOTO = "instrumentos/gerar-video"
 
 
 def test_indice_lista_capitulos_e_exclui_meta():
@@ -26,7 +26,7 @@ def test_obter_capitulo_parseia_frontmatter():
     cap = conhecimento.obter(PILOTO)
     assert cap is not None
     assert cap.titulo and cap.area == "instrumentos"
-    assert "instagram" in cap.tags  # lista do frontmatter parseada
+    assert "sora" in cap.tags  # lista do frontmatter parseada
     assert "## Para a IA" in cap.corpo  # corpo sem frontmatter, com as seções
 
 
@@ -35,7 +35,7 @@ def test_obter_inexistente_devolve_none():
 
 
 def test_busca_encontra_e_vazio_nao_quebra():
-    achados = conhecimento.buscar("publicar story no instagram")
+    achados = conhecimento.buscar("gerar vídeo com a sora")
     assert achados and achados[0].slug == PILOTO
     assert conhecimento.buscar("zzxqwnadaaqui") == []
     assert conhecimento.buscar("") == []
@@ -70,7 +70,7 @@ def test_rota_indice_e_capitulo(cliente, entrar, dados):
 def test_prompt_da_criadora_referencia_a_central():
     prompt = montar_prompt_criadora()
     assert "consultar_conhecimento" in prompt
-    assert "Publicar no Instagram" in prompt  # o índice de títulos foi injetado
+    assert "Gerar vídeo (Sora)" in prompt  # o índice de títulos foi injetado
 
 
 def test_system_criadora_marca_o_cache():

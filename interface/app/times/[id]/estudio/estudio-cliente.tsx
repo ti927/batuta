@@ -31,7 +31,6 @@ import {
   type AutomacaoDaOrg,
   type Cadeia,
   type ConfiguracaoFluxo,
-  type Credencial,
   type Instrumento,
   type NoCadeia,
   type PapelAcesso,
@@ -64,9 +63,8 @@ function hhmm(h: unknown, m: unknown): string {
 function gatilhoDe(a: Automacao | null): ConfigGatilho {
   const tipo = (a?.tipo_gatilho ?? "manual") as ConfigGatilho["tipo"];
   const cfg = (a?.configuracao_gatilho ?? {}) as Record<string, unknown>;
-  const midias = cfg.midias;
   return {
-    tipo: ["agendamento", "webhook", "comentario_instagram"].includes(tipo)
+    tipo: ["agendamento", "webhook"].includes(tipo)
       ? tipo
       : "manual",
     frequencia: (cfg.frequencia as ConfigGatilho["frequencia"]) ?? "diaria",
@@ -74,13 +72,6 @@ function gatilhoDe(a: Automacao | null): ConfigGatilho {
     diaMes: Number(cfg.dia_mes ?? 1),
     horario: hhmm(cfg.hora, cfg.minuto),
     entrada: (cfg.entrada as string) ?? "",
-    credencialId: (cfg.credencial_id as string) ?? "",
-    midiasModo: Array.isArray(midias) ? "especificas" : "todas",
-    midiasIds: Array.isArray(midias) ? (midias as string[]).join(", ") : "",
-    palavraChave: (cfg.palavra_chave as string) ?? "",
-    // O teto do comentário do Instagram nasce em 50; o do webhook, sem teto — cada
-    // gatilho lê o seu, do mesmo campo.
-    tetoPorHora: Number(cfg.teto_por_hora ?? 50),
     webhookEvento: (cfg.evento as string) ?? "",
     webhookTeto: Number(cfg.teto_por_hora ?? 0),
     webhookSegredo: "",
@@ -100,7 +91,6 @@ export function EstudioCliente({
   agentes,
   cintos,
   instrumentos,
-  credenciaisInstagram,
   tipos,
   meuPapel,
 }: {
@@ -113,7 +103,6 @@ export function EstudioCliente({
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
-  credenciaisInstagram: Credencial[];
   tipos: TipoInstrumento[];
   meuPapel: PapelAcesso | null;
 }) {
@@ -200,7 +189,6 @@ export function EstudioCliente({
       agentes={agentes}
       cintos={cintos}
       instrumentos={instrumentos}
-      credenciaisInstagram={credenciaisInstagram}
       tipos={tipos}
       meuPapel={meuPapel}
       souOperador={souOperador}
@@ -229,7 +217,6 @@ function EditorEstudio({
   agentes,
   cintos,
   instrumentos,
-  credenciaisInstagram,
   tipos,
   meuPapel,
   souOperador,
@@ -248,7 +235,6 @@ function EditorEstudio({
   agentes: Agente[];
   cintos: Record<string, Instrumento[]>;
   instrumentos: Instrumento[];
-  credenciaisInstagram: Credencial[];
   tipos: TipoInstrumento[];
   meuPapel: PapelAcesso | null;
   souOperador: boolean;
@@ -481,21 +467,6 @@ function EditorEstudio({
 
   // ── salvar ──
   function montarConfigGatilho(): Record<string, unknown> {
-    if (gatilho.tipo === "comentario_instagram") {
-      const cfg: Record<string, unknown> = {
-        midias:
-          gatilho.midiasModo === "especificas"
-            ? gatilho.midiasIds
-                .split(/[\s,]+/)
-                .map((s) => s.trim())
-                .filter(Boolean)
-            : "todas",
-        teto_por_hora: gatilho.tetoPorHora,
-      };
-      if (gatilho.credencialId) cfg.credencial_id = gatilho.credencialId;
-      if (gatilho.palavraChave.trim()) cfg.palavra_chave = gatilho.palavraChave.trim();
-      return cfg;
-    }
     if (gatilho.tipo === "webhook") {
       const cfg: Record<string, unknown> = { ...gatilho.webhookExtras };
       if (gatilho.webhookEvento.trim()) cfg.evento = gatilho.webhookEvento.trim();
@@ -527,18 +498,6 @@ function EditorEstudio({
     }
     if (gatilho.tipo === "agendamento" && !gatilho.entrada.trim()) {
       setErro("No agendamento, escreva a mensagem que o gatilho entrega ao fluxo.");
-      return;
-    }
-    // Gatilho de comentário ATIVO sem conta escolhida não dispara nunca — e falha
-    // calado, que é o pior desfecho: a automação parece ligada e não é. A tela
-    // clássica já barrava isto; sem a mesma trava aqui, alternar entre as duas telas
-    // decidiria se o fluxo nasce quebrado.
-    if (
-      gatilho.tipo === "comentario_instagram" &&
-      automacao.ativa &&
-      !gatilho.credencialId
-    ) {
-      setErro("Escolha a conta do Instagram antes de ativar o gatilho de comentário.");
       return;
     }
     setSalvando(true);
@@ -825,8 +784,7 @@ function EditorEstudio({
               automacao ? `${URL_CEREBRO}/webhooks/automacoes/${automacao.id}` : null
             }
             segredoWebhookUltimos4={automacao?.segredo_webhook_ultimos4 ?? null}
-            credenciaisInstagram={credenciaisInstagram}
-            automacoesOrg={automacoesOrg}
+                  automacoesOrg={automacoesOrg}
             onPatchNode={patchNode}
             onPatchSaida={patchSaida}
             onAddSaida={addSaida}

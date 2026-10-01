@@ -24,8 +24,6 @@ from rotas import (
     criacao,
     elos,
     google,
-    instagram,
-    instagram_webhook,
     instrumentos,
     interno,
     logs,
@@ -140,8 +138,6 @@ app.include_router(chaves_api.rotas)
 app.include_router(credenciais.rotas)
 app.include_router(criacao.rotas)
 app.include_router(google.rotas)
-app.include_router(instagram.rotas)
-app.include_router(instagram_webhook.rotas)
 app.include_router(webhooks.rotas)
 app.include_router(mensageria.rotas)
 app.include_router(ajuda.rotas)

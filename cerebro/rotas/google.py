@@ -1,6 +1,6 @@
 """Conectar Google por OAuth — sem colar token à mão.
 
-Espelha `rotas/instagram.py`. Duas pontas:
+Duas pontas:
 - POST /organizacoes/{id}/google/iniciar  (operador+): devolve a URL de
   consentimento do Google, com um `state` CIFRADO (carrega de qual org/usuário é o
   pedido e tem prazo). A interface manda o navegador para essa URL.

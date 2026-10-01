@@ -190,7 +190,7 @@ def anexar_aos_instrumentos(sessao: Session, instrumentos: list) -> None:
 
 # Serviços de chave compartilhada com queda de legado no `.env` do cérebro
 # (espelha `chaves.SERVICOS_COM_LEGADO`): mapeia o serviço à variável de ambiente.
-_ENV_LEGADO_SERVICO = {"tavily": "TAVILY_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
+_ENV_LEGADO_SERVICO = {"anthropic": "ANTHROPIC_API_KEY"}
 
 
 def servicos_resolviveis(

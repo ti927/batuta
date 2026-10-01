@@ -103,7 +103,7 @@ class TipoInstrumento(ABC):
     acao_irreversivel: bool = False
     # CHAVE DE SERVIÇO COMPARTILHADA: alguns instrumentos consomem um serviço cuja
     # chave a organização já cadastra em "Chaves de IA" (ex.: gerar_imagem usa a
-    # chave OpenAI; busca_web, a Tavily). Em vez de pedir a chave de novo no cofre
+    # chave OpenAI). Em vez de pedir a chave de novo no cofre
     # do instrumento, ela é REUSADA do pool da organização (queda org→consultoria).
     # Declara `(campo_secreto, servico)`: se o campo próprio estiver vazio, a borda
     # injeta a chave do pool. None = o instrumento não reusa chave compartilhada.
@@ -369,8 +369,7 @@ _COMO_CRIAR = {
     ),
     # Integração com serviço de mercado deixou de ser pronta do Batuta (decisão do
     # maestro, 2026-10-01): pronto é só o que é do Batuta por dentro e o que vem das
-    # IAs. Instagram, busca/leitura de sites, WordPress, Search Console, fal.ai e o
-    # webhook de saída agora se montam como personalizado.
+    # IAs. Vale para os `TIPOS_REMOVIDOS`.
     "personalizado": (
         "Este instrumento não é mais um pronto do Batuta: monte-o como instrumento "
         "personalizado, no Construtor (“🌟 Criar instrumento” → Uma API ou Um servidor "
@@ -407,8 +406,20 @@ def falta_chave_de_ia(tipo: str, provedores_com_chave: set[str] | frozenset[str]
     )
 
 
+# Tipos que deixaram de existir em 2026-10-01 (integração de mercado → personalizado).
+# Quem ainda os pedir (uma IA com memória antiga) ouve o caminho certo, não "desconhecido".
+TIPOS_REMOVIDOS = frozenset({
+    "instagram_insights", "instagram_ler_comentarios", "instagram_ler_post",
+    "instagram_responder_comentario", "publicar_instagram", "busca_web", "busca_exa",
+    "ler_site", "ler_site_firecrawl", "publicar_wordpress", "search_console",
+    "gerar_video_fal", "disparar_webhook",
+})
+
+
 def motivo_para_nao_criar(tipo: str) -> str | None:
     """Se criar um instrumento NOVO deste tipo é recusado, o porquê e o caminho certo."""
+    if tipo in TIPOS_REMOVIDOS:
+        return _COMO_CRIAR["personalizado"]
     t = obter_tipo(tipo)
     substituto = getattr(t, "substituido_por", None) if t else None
     if not substituto:

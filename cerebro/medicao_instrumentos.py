@@ -29,12 +29,9 @@ from orquestracao.modelos_ia import provedor_do_modelo_seguro
 # agente): os de imagem (gerar do zero e montar a partir de fotos, cobrados por
 # imagem), o de VISÃO (`descrever_imagem`, que lê uma imagem com um modelo de chat)
 # e o de VÍDEO (`gerar_video`, Sora, cobrado por segundo).
-TIPOS_PAGOS = {
-    "gerar_imagem", "montar_imagem", "descrever_imagem", "gerar_video", "gerar_video_fal",
-    # Serviços pagos POR CHAMADA (2026-09-26): até aqui acionavam dezenas de vezes por
-    # mês sem que o custo aparecesse em lugar nenhum.
-    "busca_exa", "ler_site_firecrawl",
-}
+# Serviço pago de fora do Batuta é personalizado: o custo vem do preço que quem montou
+# o conector informou em cada operação (ver `_operacoes_com_preco`).
+TIPOS_PAGOS = {"gerar_imagem", "montar_imagem", "descrever_imagem", "gerar_video"}
 
 
 def _id8(nome_ferramenta: str) -> str:
@@ -81,37 +78,6 @@ def _custo_video(cfg: dict) -> dict:
     }
 
 
-def _custo_video_fal(cfg: dict) -> dict:
-    """Entrada de uso de UM vídeo da fal.ai (imagem→vídeo), a partir da config."""
-    modelo = cfg.get("modelo") or "kling"
-    return {
-        "modelo": modelo,
-        "videos": 1,
-        "custo_usd": round(precos.custo_por_video_fal(modelo), 6),
-    }
-
-
-def _custo_busca_exa(cfg: dict) -> dict:
-    """Entrada de uso de UMA busca na Exa (com o texto das páginas), pela config."""
-    from instrumentos.busca_exa import TIPOS_BUSCA
-
-    tipo_api = TIPOS_BUSCA.get(cfg.get("tipo_busca") or "equilibrada", "auto")
-    n = cfg.get("max_resultados") or 5
-    return {
-        "modelo": f"exa-{tipo_api}",
-        "chamadas": 1,
-        "custo_usd": round(precos.custo_por_busca_exa(tipo_api, n), 6),
-    }
-
-
-def _custo_pagina_firecrawl() -> dict:
-    return {
-        "modelo": "firecrawl-scrape",
-        "chamadas": 1,
-        "custo_usd": round(precos.PRECO_FIRECRAWL_POR_PAGINA, 6),
-    }
-
-
 def _entrada_e_servico(inst: Instrumento) -> tuple[dict, str | None]:
     """(entrada de uso, serviço p/ a origem) de um instrumento pago acionado. Para a
     visão, o serviço é o PROVEDOR do modelo escolhido (não há chave compartilhada
@@ -121,12 +87,6 @@ def _entrada_e_servico(inst: Instrumento) -> tuple[dict, str | None]:
         return _custo_descricao(cfg), provedor_do_modelo_seguro(cfg.get("modelo") or "")
     if inst.tipo == "gerar_video":
         return _custo_video(cfg), _servico_do_tipo(inst.tipo)
-    if inst.tipo == "gerar_video_fal":
-        return _custo_video_fal(cfg), _servico_do_tipo(inst.tipo)
-    if inst.tipo == "busca_exa":
-        return _custo_busca_exa(cfg), _servico_do_tipo(inst.tipo)
-    if inst.tipo == "ler_site_firecrawl":
-        return _custo_pagina_firecrawl(), _servico_do_tipo(inst.tipo)
     return _custo_imagem(cfg), _servico_do_tipo(inst.tipo)
 
 

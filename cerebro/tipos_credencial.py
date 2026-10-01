@@ -80,16 +80,6 @@ def tipos_disponiveis() -> list[TipoCredencial]:
 
 registrar(
     TipoCredencial(
-        "wordpress",
-        "WordPress (usuário + senha de aplicativo)",
-        (
-            CampoCredencial("usuario", "Usuário", secreto=False),
-            CampoCredencial("senha_app", "Senha de aplicativo"),
-        ),
-    )
-)
-registrar(
-    TipoCredencial(
         "sql",
         "Banco de dados SQL (usuário + senha)",
         (
@@ -131,31 +121,12 @@ registrar(
         ),
     )
 )
-# Instagram (API com login do Instagram). O maestro cola o token de longa duração
-# gerado no painel da Meta (Instagram → API setup → Gerar token); a borda valida,
-# descobre o `ig_user_id` sozinho (via /me) e o agendador o renova antes dos 60
-# dias. `ig_user_id` é identidade (não-secreto, preenchido automaticamente).
-registrar(
-    TipoCredencial(
-        "instagram",
-        "Instagram (token de acesso)",
-        (
-            CampoCredencial(
-                "token", "Token de acesso (gerado no painel da Meta)"
-            ),
-            CampoCredencial(
-                "ig_user_id", "ID da conta (preenchido automaticamente)",
-                secreto=False,
-            ),
-        ),
-    )
-)
 # Certificado digital de cliente (mTLS) — fundação das integrações bancárias
 # (Pix, boleto) e de qualquer API que exija certificado. O consultor SOBE o arquivo
 # (.pfx/.p12 ou .pem/.crt) na tela; a borda normaliza para PEM e guarda cifrado — a
 # IA NUNCA recebe o segredo (decisão do maestro). `certificado`/`chave_privada` não
 # são digitados: vêm do arquivo. `titular`/`validade` são derivados do próprio
-# certificado (preenchidos automaticamente), como o `ig_user_id` do Instagram.
+# certificado (preenchidos automaticamente).
 #
 # OAuth (opcional, mas é o que um banco de verdade exige): preenchidos
 # `client_id`/`client_secret`/`url_token`, a borda troca essas credenciais por um

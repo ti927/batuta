@@ -46,28 +46,6 @@ def test_registro_diz_qual_instrumento_gastou(sessao, dados):
     assert e["categoria"] == "instrumento"
 
 
-def test_busca_exa_passa_a_ser_medida(sessao, dados):
-    """US$7/mil buscas (até 10 resultados) + US$1/mil páginas de texto."""
-    ag = _agente(sessao, dados)
-    inst = _no_cinto(sessao, dados, ag, "exa", "busca_exa",
-                     {"tipo_busca": "equilibrada", "max_resultados": 5})
-    [e] = mi.uso_de_instrumentos_pagos(sessao, ag.id, [_ferramenta(inst)])
-    assert e["custo_usd"] == round(0.007 + 5 * 0.001, 6)
-    assert e["tipo"] == "busca_exa"
-
-
-def test_busca_exa_profunda_e_com_muitos_resultados_custa_mais():
-    # deep US$12/mil + 10 resultados além de 10 + 20 páginas de texto
-    assert round(precos.custo_por_busca_exa("deep", 20), 6) == round(0.012 + 0.010 + 0.020, 6)
-
-
-def test_leitura_firecrawl_passa_a_ser_medida(sessao, dados):
-    ag = _agente(sessao, dados)
-    inst = _no_cinto(sessao, dados, ag, "ler", "ler_site_firecrawl", {})
-    [e] = mi.uso_de_instrumentos_pagos(sessao, ag.id, [_ferramenta(inst)])
-    assert e["custo_usd"] == precos.PRECO_FIRECRAWL_POR_PAGINA
-
-
 def test_operacao_de_conector_com_preco_informado_entra(sessao, dados):
     """A ferramenta de uma operação se chama pelo NOME dela; só entra quem tem preço."""
     ag = _agente(sessao, dados)

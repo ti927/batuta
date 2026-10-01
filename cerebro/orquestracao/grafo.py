@@ -120,7 +120,7 @@ def separar_saidas(saidas: list[dict] | None) -> tuple[list[dict], list[dict], l
         alvo.append(s)
     return condicionais, erro, senao
 # Tipos de gatilho (espelham `automacoes.tipo_gatilho` e `criacao.ferramentas`).
-TIPOS_GATILHO = {"manual", "agendamento", "webhook", "comentario_instagram"}
+TIPOS_GATILHO = {"manual", "agendamento", "webhook"}
 
 # Sentinelas de "encerrar a cadeia" aceitas num `destino` (retrocompat com o
 # formato antigo, onde destino null/"" significava fim).

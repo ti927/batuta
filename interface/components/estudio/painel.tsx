@@ -28,7 +28,6 @@ import {
   type AutomacaoDaOrg,
   type Cadeia,
   type ConfiguracaoFluxo,
-  type Credencial,
   type Instrumento,
   type NoCadeia,
   type OperadorRegra,
@@ -462,7 +461,6 @@ export type PainelProps = {
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
   webhookUrl?: string | null;
   segredoWebhookUltimos4?: string | null;
-  credenciaisInstagram: Credencial[];
   automacoesOrg: AutomacaoDaOrg[];
   onPatchNode: (id: string, patch: Partial<NoCadeia>) => void;
   onPatchSaida: (id: string, sid: string, patch: Partial<SaidaCadeia>) => void;
@@ -498,7 +496,6 @@ export function PainelEstudio({
   setGatilho,
   webhookUrl,
   segredoWebhookUltimos4,
-  credenciaisInstagram,
   automacoesOrg,
   onPatchNode,
   onPatchSaida,
@@ -533,7 +530,7 @@ export function PainelEstudio({
           podeEditar={podeEditar}
           onEditarInstrumento={onEditarInstrumento}
           gatilhoTipo={gatilho.tipo}
-          configGatilho={{ teto_por_hora: gatilho.tetoPorHora }}
+          configGatilho={{ teto_por_hora: gatilho.webhookTeto }}
         />
       </div>
     );
@@ -591,7 +588,6 @@ export function PainelEstudio({
             setGatilho={setGatilho}
             webhookUrl={webhookUrl}
             segredoWebhookUltimos4={segredoWebhookUltimos4}
-            credenciaisInstagram={credenciaisInstagram}
             cadeia={cadeia}
             agentes={agentes}
             podeEditar={podeEditar}
@@ -953,7 +949,6 @@ function ConfigGatilhoBloco({
   setGatilho,
   webhookUrl,
   segredoWebhookUltimos4,
-  credenciaisInstagram,
   cadeia,
   agentes,
   podeEditar,
@@ -963,7 +958,6 @@ function ConfigGatilhoBloco({
   setGatilho: (patch: Partial<ConfigGatilho>) => void;
   webhookUrl?: string | null;
   segredoWebhookUltimos4?: string | null;
-  credenciaisInstagram: Credencial[];
   cadeia: Cadeia;
   agentes: Agente[];
   podeEditar: boolean;
@@ -976,7 +970,6 @@ function ConfigGatilhoBloco({
     { chave: "manual", rotulo: "Manual" },
     { chave: "agendamento", rotulo: "Na hora marcada" },
     { chave: "webhook", rotulo: "Por webhook" },
-    // "Comentário no Instagram" saiu (2026-10-01): comentário chega por webhook.
   ];
   return (
     <div className="flex flex-col gap-2.5">
@@ -1094,94 +1087,6 @@ function ConfigGatilhoBloco({
             podeEditar={podeEditar}
           />
         </div>
-      )}
-
-      {gatilho.tipo === "comentario_instagram" && (
-        <>
-          <div>
-            <label className={rotuloCls}>Conta do Instagram</label>
-            <select
-              className={`${campo} cursor-pointer`}
-              value={gatilho.credencialId}
-              disabled={!podeEditar}
-              onChange={(e) => setGatilho({ credencialId: e.target.value })}
-            >
-              <option value="">— escolha a conta —</option>
-              {credenciaisInstagram.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
-            </select>
-          </div>
-          {/* QUAIS posts disparam. Sem isto, um fluxo montado na tela clássica com
-              posts específicos não tinha como ser editado aqui — o valor ia e voltava
-              intacto, mas ficava invisível, que é a pior forma de configuração. */}
-          <div>
-            <label className={rotuloCls}>Quais posts</label>
-            <div className="flex flex-col gap-1">
-              {(
-                [
-                  ["todas", "Todos os posts do perfil"],
-                  ["especificas", "Posts específicos"],
-                ] as const
-              ).map(([valor, rotulo]) => (
-                <label
-                  key={valor}
-                  className="flex items-center gap-1.5 text-[11.5px] text-[#4A4860]"
-                >
-                  <input
-                    type="radio"
-                    className="accent-[#6D4AFF]"
-                    checked={gatilho.midiasModo === valor}
-                    disabled={!podeEditar}
-                    onChange={() => setGatilho({ midiasModo: valor })}
-                  />
-                  {rotulo}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {gatilho.midiasModo === "especificas" && (
-            <div>
-              <label className={rotuloCls}>
-                IDs dos posts (media_id), separados por vírgula
-              </label>
-              <textarea
-                className={`${campo} resize-none leading-snug`}
-                rows={2}
-                value={gatilho.midiasIds}
-                disabled={!podeEditar}
-                onChange={(e) => setGatilho({ midiasIds: e.target.value })}
-              />
-            </div>
-          )}
-
-          <div>
-            <label className={rotuloCls}>Só comentários que contenham (opcional)</label>
-            <input
-              className={campo}
-              value={gatilho.palavraChave}
-              disabled={!podeEditar}
-              onChange={(e) => setGatilho({ palavraChave: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className={rotuloCls}>Teto de disparos por hora</label>
-            <input
-              type="number"
-              min={0}
-              className={`${campo} w-24`}
-              value={gatilho.tetoPorHora}
-              disabled={!podeEditar}
-              onChange={(e) => setGatilho({ tetoPorHora: Number(e.target.value) })}
-            />
-            <p className="mt-1 text-[11px] leading-snug text-[#6B6880]">
-              Protege seu custo se um post viralizar. <strong>0 = sem limite.</strong>
-            </p>
-          </div>
-        </>
       )}
 
       <div>

@@ -368,14 +368,14 @@ def test_servicos_resolviveis_nao_decifra(sessao, dados, monkeypatch):
 
     org_id = dados["timeA"].organizacao_id
     sessao.add(
-        ChaveApi(organizacao_id=org_id, provedor="tavily",
+        ChaveApi(organizacao_id=org_id, provedor="openai",
                  valor_cifrado="x", ultimos4="9999", ativa=True)
     )
     sessao.flush()
     com_chave_mestra = si.servicos_resolviveis(sessao, org_id)
     monkeypatch.delenv("COFRE_CHAVE_MESTRA", raising=False)
     sem_chave_mestra = si.servicos_resolviveis(sessao, org_id)
-    assert "tavily" in com_chave_mestra
+    assert "openai" in com_chave_mestra
     assert com_chave_mestra == sem_chave_mestra
 
 

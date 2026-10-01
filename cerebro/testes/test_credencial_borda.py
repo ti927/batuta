@@ -36,24 +36,24 @@ def _instrumento(sessao, dados, tipo, *, credencial_id=None, configuracao=None):
 
 def test_instrumento_recebe_o_saco_da_credencial(sessao, dados):
     cred = _credencial(
-        sessao, dados["orgA"].id, "wordpress",
-        {"usuario": "editor", "senha_app": "segredo123"},
+        sessao, dados["orgA"].id, "sql",
+        {"usuario": "editor", "senha": "segredo123"},
     )
-    inst = _instrumento(sessao, dados, "publicar_wordpress", credencial_id=cred.id)
+    inst = _instrumento(sessao, dados, "banco_sql", credencial_id=cred.id)
     si.anexar_aos_instrumentos(sessao, [inst])
-    assert inst.segredos_decifrados == {"usuario": "editor", "senha_app": "segredo123"}
+    assert inst.segredos_decifrados == {"usuario": "editor", "senha": "segredo123"}
 
 
 def test_inline_proprio_vence_a_credencial(sessao, dados):
     cred = _credencial(
-        sessao, dados["orgA"].id, "wordpress",
-        {"usuario": "central", "senha_app": "senha-central"},
+        sessao, dados["orgA"].id, "sql",
+        {"usuario": "central", "senha": "senha-central"},
     )
-    inst = _instrumento(sessao, dados, "publicar_wordpress", credencial_id=cred.id)
-    si.salvar_segredos(sessao, inst.id, {"senha_app": "senha-propria"})
+    inst = _instrumento(sessao, dados, "banco_sql", credencial_id=cred.id)
+    si.salvar_segredos(sessao, inst.id, {"senha": "senha-propria"})
     si.anexar_aos_instrumentos(sessao, [inst])
     # A senha inline própria vence; o usuário (só na credencial) é preenchido por ela.
-    assert inst.segredos_decifrados["senha_app"] == "senha-propria"
+    assert inst.segredos_decifrados["senha"] == "senha-propria"
     assert inst.segredos_decifrados["usuario"] == "central"
 
 

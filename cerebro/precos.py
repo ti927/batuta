@@ -85,31 +85,6 @@ PRECOS_VIDEO_USD = {
 }
 PRECO_VIDEO_PADRAO_POR_S = 0.10
 
-# Vídeo a partir de foto via fal.ai (imagem→vídeo). Cobrado por VÍDEO (varia por
-# modelo/duração/resolução) — aqui, um valor aproximado POR CLIPE por modelo
-# (informativo, não cobrança; a fila só nos diz o NOME e a config, não os segundos
-# reais). Números do maestro ajustar conforme o plano/uso da fal.ai.
-PRECOS_FAL_VIDEO_USD = {
-    "kling": 0.35,
-    "luma": 0.40,
-    "hailuo": 0.25,
-}
-PRECO_FAL_VIDEO_PADRAO = 0.35
-
-# Busca semântica EXA (`busca_exa`). Tabela oficial (exa.ai/pricing, 2026-09-26):
-# US$7/mil buscas (cobre até 10 resultados) + US$1/mil resultados além de 10; a busca
-# "deep" custa US$12/mil. O CONTEÚDO (texto de cada página) é cobrado à parte, US$1/mil
-# páginas por tipo — e o instrumento sempre pede o texto, então cada resultado soma.
-PRECO_EXA_BUSCA = {"fast": 0.007, "auto": 0.007, "deep": 0.012}
-PRECO_EXA_RESULTADO_EXTRA = 0.001  # cada resultado além de 10
-PRECO_EXA_TEXTO_POR_PAGINA = 0.001
-
-# Leitura de página pela FIRECRAWL (`ler_site_firecrawl`): 1 crédito por página no
-# scrape básico (docs.firecrawl.dev/billing). O preço do crédito depende do PLANO
-# (assinatura mensal); usamos o do plano de entrada (~US$0,0032/crédito). Quem estiver
-# num plano maior paga menos por página — ajuste aqui.
-PRECO_FIRECRAWL_POR_PAGINA = 0.0032
-
 # Rótulos internos das categorias de uso (em que FUNÇÃO a IA paga foi gasta). A
 # interface dá o nome amigável (`interface/lib/uso.ts`). Carimbadas na borda:
 # execucao (disparo), conversa (IA criadora), mensageria/transcricao (atendimento),
@@ -198,21 +173,6 @@ def custo_por_video(modelo: str, tamanho: str = "", segundos="8") -> float:
     except (TypeError, ValueError):
         segs = 0
     return por_s * max(0, segs)
-
-
-def custo_por_video_fal(modelo: str) -> float:
-    """Custo aproximado de UM vídeo da fal.ai (imagem→vídeo), em USD, por modelo.
-    Informativo (a cobrança real varia por duração/resolução). Desconhecido → padrão."""
-    return PRECOS_FAL_VIDEO_USD.get((modelo or "").strip().lower(), PRECO_FAL_VIDEO_PADRAO)
-
-
-def custo_por_busca_exa(tipo_api: str, resultados: int) -> float:
-    """Custo aproximado de UMA busca na Exa com texto das páginas, em USD. `tipo_api` é
-    o valor da API (fast/auto/deep); `resultados` é quantos foram pedidos (o teto — a
-    Exa pode devolver menos, então isto é o custo máximo daquela busca)."""
-    n = max(0, int(resultados or 0))
-    base = PRECO_EXA_BUSCA.get((tipo_api or "auto").lower(), PRECO_EXA_BUSCA["auto"])
-    return base + max(0, n - 10) * PRECO_EXA_RESULTADO_EXTRA + n * PRECO_EXA_TEXTO_POR_PAGINA
 
 
 def custo_de_entrada(e: dict) -> float:

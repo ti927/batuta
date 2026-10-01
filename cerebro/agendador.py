@@ -144,72 +144,6 @@ def _reconciliar_job() -> None:
         sessao.close()
 
 
-# ─────────────── Renovação dos tokens do Instagram (Fase 1) ───────────────
-# O token de longa duração do Instagram dura ~60 dias e precisa ser renovado
-# antes de expirar (a Meta só renova token com ≥24h e <60 dias de vida). Janela
-# de 10 dias: renova bem antes do fim, com folga para retentar nos dias seguintes
-# se um refresh oscilar.
-JANELA_REFRESH_IG_DIAS = 10
-
-
-def renovar_tokens_instagram(sessao) -> int:
-    """Renova as credenciais `instagram` cujo token está perto de expirar.
-
-    Commit por credencial (uma falha não derruba as outras). Devolve quantas
-    foram renovadas. É a única escrita pelo SISTEMA no cofre (via
-    `credenciais_cofre.gravar_token_renovado`)."""
-    import credenciais_cofre
-    import instagram_tokens
-
-    corte = datetime.now(timezone.utc) + timedelta(days=JANELA_REFRESH_IG_DIAS)
-    alvos = sessao.scalars(
-        select(Credencial).where(
-            Credencial.tipo == "instagram",
-            Credencial.expira_em.is_not(None),
-            Credencial.expira_em <= corte,
-        )
-    ).all()
-    renovadas = 0
-    for cred in alvos:
-        try:
-            atual = credenciais_cofre.decifrar(cred).get("token", "")
-            if not atual:
-                continue
-            res = instagram_tokens.renovar(atual)
-            credenciais_cofre.gravar_token_renovado(
-                cred, res["token"], res["expira_em"]
-            )
-            sessao.commit()
-            renovadas += 1
-        except Exception as e:
-            sessao.rollback()
-            logger.exception(
-                "Falha ao renovar token Instagram da credencial %s", cred.id
-            )
-            # `logger.exception` sozinho é falha muda: ninguém abre o log do servidor
-            # (§12-A). Sem o evento, uma conta do Instagram pode morrer e só se
-            # descobrir quando uma publicação falhar — foi assim que a conta do Google
-            # ficou dois meses quebrada sem ninguém saber.
-            registrar_evento(
-                categoria="credencial",
-                acao="instagram.renovacao_falhou",
-                nivel="error",
-                resultado="falha",
-                erro=e,
-                recurso_tipo="credencial",
-                recurso_id=str(cred.id),
-                organizacao_id=cred.organizacao_id,
-                detalhe={
-                    "conta": cred.nome,
-                    "o_que_fazer": (
-                        "Abra Organização → Chaves e reconecte esta conta do Instagram. "
-                        "Com o token vencido, publicar e ler comentários param de funcionar."
-                    ),
-                },
-            )
-    return renovadas
-
-
 # De quanto em quanto tempo conferimos se as contas Google ainda renovam. O
 # access_token do Google dura ~1h e é renovado sob demanda — então o que este job
 # persegue não é o token, é a CONTA: um refresh_token revogado só aparecia quando
@@ -259,15 +193,6 @@ def _refresh_google_job() -> None:
     sessao = CriadorDeSessao()
     try:
         renovar_tokens_google(sessao)
-    finally:
-        sessao.close()
-
-
-def _refresh_instagram_job() -> None:
-    """Entrada do agendador: abre a própria sessão e renova os tokens vencendo."""
-    sessao = CriadorDeSessao()
-    try:
-        renovar_tokens_instagram(sessao)
     finally:
         sessao.close()
 
@@ -437,14 +362,6 @@ def iniciar() -> None:
         saude_elos.sondar_job,
         trigger=IntervalTrigger(seconds=15),
         id="saude_elos",
-        replace_existing=True,
-    )
-    # Renovação diária dos tokens de longa duração do Instagram (Fase 1), de
-    # madrugada (BRT) fora do horário comercial.
-    _scheduler.add_job(
-        _refresh_instagram_job,
-        trigger=CronTrigger(hour=3, minute=30, timezone=FUSO),
-        id="instagram_token_refresh",
         replace_existing=True,
     )
     # Conferência periódica das contas Google. Não é sobre o access_token (que se

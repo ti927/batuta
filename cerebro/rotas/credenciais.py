@@ -25,7 +25,6 @@ import credenciais_cofre as cofre_cred
 import tipos_credencial as tc
 from auth import usuario_atual
 from consultoria import exigir_admin_consultoria
-from instrumentos.base import FalhaInstrumento
 from esquemas import (
     CampoCredencialLer,
     CredencialCriar,
@@ -75,9 +74,7 @@ def _exigir_nome_livre(
 
 
 def _gravar(cred: Credencial, dados: dict) -> None:
-    """Grava o saco da credencial. Casos especiais:
-    - `instagram`: valida o token na Meta (descobre o `ig_user_id` e fixa a
-      validade); um token recusado vira 422 claro;
+    """Grava o saco da credencial. Caso especial:
     - `certificado_mtls`: normaliza o arquivo do certificado (.pfx/.pem) para PEM,
       cifra e deriva titular/validade; arquivo/senha inválidos viram 422 claro.
     Para os demais tipos, é o gravar normal."""
@@ -85,15 +82,9 @@ def _gravar(cred: Credencial, dados: dict) -> None:
         if cred.tipo == "certificado_mtls":
             cofre_cred.gravar_com_certificado(cred, dados)
         else:
-            cofre_cred.gravar_com_validacao_ig(cred, dados)
+            cofre_cred.gravar(cred, dados)
     except certificados.CertificadoInvalido as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
-    except FalhaInstrumento as e:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            f"O Instagram não aceitou o token: {e}. Gere um token novo no painel da "
-            "Meta (Instagram → API setup → Gerar token) e cole aqui.",
-        )
 
 
 def _bloquear_se_em_uso(sessao: Session, cred: Credencial) -> None:

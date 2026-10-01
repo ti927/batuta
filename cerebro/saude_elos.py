@@ -51,11 +51,10 @@ TIMEOUT_SONDA_S = 5.0
 FALHAS_PARA_AUTOCURA = 2
 
 # Períodos por grupo (segundos). Internos/banco são baratos e críticos → 30 s.
-# Externos respeitam os limites dos serviços → 60 s (Meta: 300 s).
+# Externos respeitam os limites dos serviços → 60 s.
 PERIODO_BANCO_S = 30
 PERIODO_INTERNO_S = 30
 PERIODO_EXTERNO_S = 60
-PERIODO_META_S = 300
 
 
 class EloDegradado(Exception):
@@ -309,14 +308,6 @@ def _sonda_storage() -> str | None:
     return None
 
 
-def _sonda_meta() -> str | None:
-    # Alcançabilidade da Graph API (o token em si é renovado pelo job diário; aqui o
-    # que se vigia é a REDE até a Meta). Qualquer resposta HTTP = alcançável.
-    with httpx.Client(timeout=TIMEOUT_SONDA_S) as cli:
-        cli.get("https://graph.facebook.com/v19.0/")
-    return "Graph API alcançável (validade do token é vigiada pelo job diário)"
-
-
 def _sonda_url(url: str, *, nome: str) -> Callable[[], str | None]:
     def sonda() -> str | None:
         with httpx.Client(timeout=TIMEOUT_SONDA_S, follow_redirects=True) as cli:
@@ -419,17 +410,6 @@ def montar_elos() -> list[Elo]:
                         PERIODO_EXTERNO_S, _sonda_telegram(canal.id, canal.nome),
                         _reconectar_telegram(canal.id),
                     )
-                )
-
-            tem_instagram = sessao.scalar(
-                select(Instrumento.id)
-                .where(Instrumento.tipo.ilike("%instagram%"))
-                .limit(1)
-            )
-            if tem_instagram is not None:
-                elos.append(
-                    Elo("meta", "Meta / Instagram (Graph API)", "canais",
-                        PERIODO_META_S, _sonda_meta)
                 )
         finally:
             sessao.close()

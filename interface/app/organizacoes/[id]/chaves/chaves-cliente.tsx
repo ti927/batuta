@@ -61,9 +61,9 @@ export function ChavesCliente({
               Chaves de serviço
             </h2>
             <p className="mb-4 text-sm text-muted-foreground">
-              Uma chave por serviço, compartilhada por toda a organização. Os
-              instrumentos que usam IA ou busca (gerar imagem, busca na web)
-              reusam estas chaves automaticamente.
+              Uma chave por IA, compartilhada por toda a organização. Os
+              instrumentos prontos daquela IA (gerar imagem, gerar vídeo, ler
+              imagem) usam esta chave.
             </p>
             <GestaoChaves
               basePath={`/organizacoes/${organizacao.id}/chaves`}
@@ -77,8 +77,8 @@ export function ChavesCliente({
               Credenciais
             </h2>
             <p className="mb-4 text-sm text-muted-foreground">
-              Senhas e tokens nomeados (WordPress, banco de dados, bot do
-              Telegram…) que os instrumentos usam. Crie aqui e aponte o
+              Senhas e tokens nomeados (banco de dados, bot do Telegram, conta
+              Google…) que os instrumentos usam. Crie aqui e aponte o
               instrumento para a credencial — para trocar, muda num lugar só. O
               valor secreto nunca é reexibido.
             </p>

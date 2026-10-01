@@ -2,7 +2,7 @@
 
 // Caixa-forte de credenciais nomeadas (FASE Caixa-forte, Passo 6). Substitui o
 // antigo "inventário por-instrumento". O usuário cria credenciais nomeadas
-// ("WordPress Blog" = usuario+senha_app); os instrumentos as referenciam. Trocar
+// ("Banco do ERP" = usuario+senha); os instrumentos as referenciam. Trocar
 // num lugar só vale para todos. Valores secretos nunca voltam (só os 4 últimos).
 //
 // Serve a duas telas pela diferença de caminho:
@@ -92,14 +92,13 @@ export function CofreCredenciais({
   const [edicao, setEdicao] = useState<Edicao>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Retorno do fluxo "Conectar Instagram" (OAuth): a Meta devolve o navegador
-  // para esta página com ?instagram=ok|erro. useSearchParams não exige Suspense
+  // Retorno do fluxo "Conectar Google" (OAuth): o Google devolve o navegador
+  // para esta página com ?google=ok|erro. useSearchParams não exige Suspense
   // aqui (página dinâmica, atrás de login).
   const params = useSearchParams();
-  const igRetorno = params.get("instagram");
   const googleRetorno = params.get("google");
-  const igConta = params.get("conta");
-  const igMotivo = params.get("motivo");
+  const contaRetorno = params.get("conta");
+  const motivoRetorno = params.get("motivo");
 
   const caminhoCriar = ehConsultoria
     ? "/credenciais-consultoria"
@@ -130,35 +129,22 @@ export function CofreCredenciais({
     <div className="flex flex-col gap-4">
       {erro && <Aviso>{erro}</Aviso>}
 
-      {igRetorno === "ok" && (
-        <Aviso variant="sucesso">
-          Conta {igConta ? `@${igConta}` : "do Instagram"} conectada. Ela já
-          aparece na lista abaixo.
-        </Aviso>
-      )}
-      {igRetorno === "erro" && (
-        <Aviso variant="atencao">
-          Não foi possível conectar o Instagram
-          {igMotivo ? `: ${igMotivo}` : "."}
-        </Aviso>
-      )}
-
       {googleRetorno === "ok" && (
         <Aviso variant="sucesso">
-          Conta {igConta ? igConta : "do Google"} conectada. Ela já aparece na
+          Conta {contaRetorno ? contaRetorno : "do Google"} conectada. Ela já aparece na
           lista abaixo.
         </Aviso>
       )}
       {googleRetorno === "erro" && (
         <Aviso variant="atencao">
           Não foi possível conectar o Google
-          {igMotivo ? `: ${igMotivo}` : "."}
+          {motivoRetorno ? `: ${motivoRetorno}` : "."}
         </Aviso>
       )}
 
       {credenciais.length === 0 ? (
         <EstadoVazio icone={KeyRound} titulo="Nenhuma credencial">
-          Crie credenciais nomeadas (senha do WordPress, banco, bot…) e os
+          Crie credenciais nomeadas (senha do banco, bot, conta Google…) e os
           instrumentos passam a apontar para elas — você troca num lugar só.
         </EstadoVazio>
       ) : (
@@ -279,29 +265,6 @@ function FormularioCredencial({
 }) {
   const editando = credencial !== null;
   const [conectando, setConectando] = useState(false);
-
-  // Conectar Instagram por OAuth: pede ao cérebro a URL de consentimento da Meta
-  // e manda o navegador para lá. No retorno, a credencial já vem preenchida (o
-  // colar token manual abaixo continua como alternativa). Só na org (não na
-  // consultoria), pois o fluxo grava uma credencial DA organização.
-  async function conectarInstagram() {
-    if (!organizacaoId) return;
-    setConectando(true);
-    try {
-      const { url } = await api.post<{ url: string }>(
-        `/organizacoes/${organizacaoId}/instagram/iniciar`,
-        {},
-      );
-      window.location.href = url;
-    } catch (e) {
-      onErro(
-        e instanceof ErroDaApi
-          ? e.message
-          : "Não foi possível iniciar a conexão com o Instagram.",
-      );
-      setConectando(false);
-    }
-  }
 
   // QUAIS serviços a conexão pede. Pedir tudo de uma vez era o padrão e custou caro:
   // basta UM escopo não aprovado na verificação do Google para ele mostrar "app não
@@ -458,34 +421,11 @@ function FormularioCredencial({
         <Label htmlFor="cred-nome">Nome</Label>
         <Input
           id="cred-nome"
-          placeholder="Ex.: WordPress do Blog"
+          placeholder="Ex.: Banco do ERP"
           value={nome}
           onChange={(e) => setNome(e.target.value)}
         />
       </div>
-
-      {tipoSel === "instagram" && !ehConsultoria && organizacaoId && (
-        <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3">
-          <Button
-            type="button"
-            className="self-start"
-            disabled={conectando}
-            onClick={conectarInstagram}
-          >
-            {conectando ? "Abrindo o Instagram…" : "Conectar Instagram"}
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Recomendado: você faz login na conta na própria Meta e o Batuta
-            guarda o acesso sozinho — sem colar token, e ele se renova
-            automaticamente.
-          </p>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="h-px flex-1 bg-border" />
-            ou cole o token manualmente
-            <span className="h-px flex-1 bg-border" />
-          </div>
-        </div>
-      )}
 
       {tipoSel === "google" && !ehConsultoria && organizacaoId && (
         <div className="flex flex-col gap-3 rounded-md border border-border bg-muted/40 p-3">

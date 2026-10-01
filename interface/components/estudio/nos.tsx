@@ -337,9 +337,7 @@ export function GatilhoNode({ data, selected }: NodeProps) {
       ? "Agendamento"
       : tipo === "webhook"
         ? "Webhook"
-        : tipo === "comentario_instagram"
-          ? "Comentário do Instagram"
-          : "Manual";
+        : "Manual";
   return (
     <Cartao d={d} selected={selected} comEntrada={false}>
       <Cabeca
