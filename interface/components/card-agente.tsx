@@ -44,7 +44,7 @@ export function CardAgente({
           onAbrir();
         }
       }}
-      className="flex w-full cursor-pointer flex-col rounded-xl border border-border bg-card p-3.5 text-left transition-all hover:border-[#D6D3E8] hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      className="flex h-full w-full cursor-pointer flex-col rounded-xl border border-border bg-card p-3.5 text-left transition-all hover:border-[#D6D3E8] hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
     >
       <span className="flex w-full items-start gap-3">
         <RobotFace size={40} indice={indice} lider={agente.papel === "lider"} />
@@ -58,7 +58,7 @@ export function CardAgente({
             )}
           </span>
           {agente.agent_md && (
-            <span className="mt-0.5 line-clamp-2 block text-sm text-muted-foreground">
+            <span className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">
               {agente.agent_md}
             </span>
           )}
@@ -98,19 +98,21 @@ export function CardAgente({
         </span>
       </span>
       {onExcluir && (
-        <span className="mt-3 flex justify-end border-t border-border pt-2">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onExcluir();
-            }}
-            onKeyDown={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 className="size-3.5" />
-            Excluir
-          </button>
+        <span className="mt-auto pt-3">
+          <span className="flex justify-end border-t border-border pt-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onExcluir();
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-3.5" />
+              Excluir
+            </button>
+          </span>
         </span>
       )}
     </div>
