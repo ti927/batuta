@@ -3,7 +3,7 @@ titulo: "O cinto e os instrumentos"
 area: "instrumentos"
 slug: "cinto"
 tags: ["instrumento", "cinto", "encaixe", "config", "args", "secreto", "credencial", "acao-irreversivel"]
-revisado_em: "2026-09-29"
+revisado_em: "2026-10-01"
 fontes: ["PRODUTO.md §13", "cerebro/instrumentos/base.py"]
 ---
 
@@ -33,22 +33,26 @@ Todo instrumento é de UM destes dois tipos. "Nativo" e "pronto" são a MESMA co
 
 | | **Personalizado** | **Pronto do Batuta** ("nativo") |
 |---|---|---|
-| O que é | Ligação com um **serviço de fora**, sem código: uma **API** (conector, com uma ou várias operações) ou um **servidor MCP** | Capacidade que **vem com o Batuta**: mexe no interior dele ou precisa de código de verdade |
-| Exemplos | Zernio (Instagram), WordPress por MCP, Search Console, "Data de hoje" | Agendar automação, Pedir aprovação, Quadro do Cérebro, Gerar imagem/vídeo, Descrever imagem, Telegram, Busca na web, Banco SQL, Gerar PDF |
-| Nasce em | **🌟 Criar instrumento** → "Uma API" ou "Um servidor MCP" | **Instrumento pronto** |
+| O que é | Ligação com um **serviço ou sistema de fora**, sem código: uma **API** (conector, com uma ou várias operações), um **servidor MCP** ou um **banco de dados** | O que é **do Batuta por dentro** e o que vem **das IAs** (OpenAI, Anthropic, Gemini) |
+| Exemplos | Zernio (Instagram), WordPress, busca na web (Tavily/Exa), ler site (Firecrawl), Search Console, banco PostgreSQL de um sistema, "Data de hoje" | Agendar automação, Pedir aprovação, Quadro do Cérebro, Guardar imagem recebida, Gerar PDF, Telegram; Gerar imagem, Montar imagem e Gerar vídeo (OpenAI); Descrever imagem (qualquer IA) |
+| Nasce em | **🌟 Criar instrumento** → "Uma API", "Um servidor MCP" ou "Um banco de dados" | **Instrumento pronto** |
 | Edita em | **Construtor** (também quando foi a IA quem criou) | Painel lateral |
-| Identificação | Dentro do próprio instrumento (chave, senha, login, certificado) | Idem; busca e imagem podem usar a chave da organização |
+| Identificação | Dentro do próprio instrumento (chave, senha, login, certificado) | Os das IAs usam a chave de IA da organização |
 
+- **Desde 01/10/2026, integração de mercado não é pronta:** Instagram, busca e leitura de sites
+  (Tavily, Exa, Firecrawl), WordPress, Search Console, vídeo da fal.ai e o webhook de saída se
+  montam como personalizado. Os que já existem seguem funcionando até serem trocados. Para um time
+  acionar outro, use **Agendar automação**.
 - A **chamada de API avulsa** não se cria mais: virou conector. As que já existem seguem valendo.
 - A aba **Instrumentos** mostra as duas listas separadas (**Personalizados** e **Prontos do Batuta**,
   com os quadros do Cérebro num grupo à parte), com busca, filtros (tipo, alcance, situação,
   categoria, agente) e selos no cartão: **precisa de atenção** (falta a chave, a conta caiu ou a
-  última conexão falhou), **sem agente**, **do time** / **da organização**, **API** / **MCP**,
+  última conexão falhou), **sem agente**, **do time** / **da organização**, **API** / **MCP** / **Banco**,
   **altera algo** / **só lê** e **pago**. Personalizado sem ícone escolhido ganha o ícone do serviço
   (o que o servidor MCP anuncia, ou o do site da API), buscado pelo Batuta.
 
 ## Exemplos
-- "Gerar imagem" no cinto do redator; "Publicar no Instagram" no cinto do publicador.
+- "Gerar imagem" no cinto do redator; o conector "Zernio: publicar no Instagram" no cinto do publicador.
 - Um mesmo instrumento de envio pode estar em vários agentes (para só **enviar**).
 
 ## Limites e cuidados
@@ -59,8 +63,9 @@ Todo instrumento é de UM destes dois tipos. "Nativo" e "pronto" são a MESMA co
 
 ## Para a IA
 Integração com serviço de fora = instrumento personalizado: API → `montar_conector` (uma ou
-várias operações); servidor MCP → `configurar_instrumento` tipo `conectar_mcp`. Nunca a chamada de
-API avulsa (é recusada).
+várias operações); servidor MCP → `configurar_instrumento` tipo `conectar_mcp`; banco de dados →
+`configurar_instrumento` tipo `banco_sql`. Nunca a chamada de API avulsa nem os tipos aposentados
+(Instagram, busca/ler site, WordPress, Search Console, fal.ai, webhook de saída) — são recusados.
 Os parâmetros exatos de cada tipo estão no **catálogo** (`catalogo_de_instrumentos`) — a fonte da
 verdade; não os repita de memória. `acao_irreversivel` resolve se a ação é irreversível. Config = fixo do
 humano (prevalece); Args = conteúdo do agente. Só proponha instrumentos que existem no catálogo.

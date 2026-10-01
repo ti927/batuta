@@ -3,11 +3,18 @@ titulo: "Instrumento — Busca na web (Exa — semântica)"
 area: "instrumentos"
 slug: "busca-exa"
 tags: ["busca-exa", "busca", "semantica", "exa", "significado", "diverso", "instrumento"]
-revisado_em: "2026-07-17"
+revisado_em: "2026-10-01"
 fontes: ["cerebro/instrumentos/busca_exa.py"]
 ---
 
 # Instrumento — Busca na web (Exa — semântica)
+
+> **Não é mais um pronto do Batuta (desde 01/10/2026).** Integração com serviço de fora é
+> instrumento **personalizado**: crie em **🌟 Criar instrumento → Uma API** (ou **Um servidor
+> MCP**, se o serviço tiver um), com a chave do serviço no próprio instrumento (pela IA:
+> `montar_conector` ou `configurar_instrumento` com `conectar_mcp`). Os que já existem seguem
+> funcionando e editáveis até serem trocados — este capítulo vale só para eles.
+> Ver [[instrumentos/construir-conector]] e [[instrumentos/mcp]].
 
 ## Em uma frase
 Busca na internet por **significado** (não só por palavra-chave) e devolve uma lista de resultados — boa

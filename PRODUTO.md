@@ -149,19 +149,20 @@ A forma de cada instrumento — se é um MCP, um plugin, ou uma instrução deta
 
 ### Os dois tipos de instrumento: personalizado e pronto
 
-Decisão do maestro (12/08/2026, reafirmada em 29/09/2026). Todo instrumento é de **um** destes dois tipos, e a tela, a documentação e as IAs usam **estes nomes**:
+Decisão do maestro (12/08/2026, reafirmada em 29/09/2026; prontos enxugados em 01/10/2026). Todo instrumento é de **um** destes dois tipos, e a tela, a documentação e as IAs usam **estes nomes**:
 
 | | **Personalizado** | **Pronto do Batuta** (o "nativo") |
 |---|---|---|
-| O que é | Uma ligação com um **serviço de fora**, montada sem código: uma **API** (o "conector", com uma ou várias operações) ou um **servidor MCP** | Uma capacidade que **vem com o Batuta**: mexe no interior dele ou precisa de código de verdade |
-| Exemplos | Zernio (Instagram), WordPress por MCP, Search Console, "Data de hoje", qualquer API ou MCP de mercado | Agendar automação, Pedir aprovação, Quadro do Cérebro, Gerar imagem/vídeo, Descrever imagem, Telegram (canal), Busca na web, Banco SQL, Gerar PDF |
-| Onde nasce | **🌟 Criar instrumento** → "Uma API" ou "Um servidor MCP" | **Instrumento pronto** (lista do catálogo) |
+| O que é | Uma ligação com um **serviço ou sistema de fora**, montada sem código: uma **API** (o "conector", com uma ou várias operações), um **servidor MCP** ou um **banco de dados** | (a) o que é **do Batuta por dentro**; (b) o que vem **das IAs** (OpenAI, Anthropic, Gemini), liberado quando a organização tem a chave daquela IA |
+| Exemplos | Zernio (Instagram), WordPress, busca na web e leitura de sites (Tavily, Exa, Firecrawl), Search Console, banco PostgreSQL de um sistema, "Data de hoje", qualquer API ou MCP de mercado | (a) Agendar automação, Pedir aprovação, Quadro do Cérebro, Guardar imagem recebida, Gerar PDF, Telegram (canal); (b) Gerar imagem, Montar imagem, Gerar vídeo (OpenAI), Descrever imagem (qualquer IA) |
+| Onde nasce | **🌟 Criar instrumento** → "Uma API", "Um servidor MCP" ou "Um banco de dados" | **Instrumento pronto** (lista do catálogo) |
 | Onde se edita | No **Construtor** — inclusive quando foi a IA quem criou | No **painel lateral** |
 | Quem pode criar | Pessoa (tela) e IAs (criadora e externa) | Pessoa (tela) e IAs |
 
 Regras que decorrem disso:
 - **Integração com serviço de mercado é sempre personalizado** (Zernio, Zapier, WordPress…). O Batuta não ganha código com nome de fornecedor; o que vira código é só o **genérico** (o conector, o cliente MCP, o gatilho webhook).
-- **A identificação** (chave, senha, login OAuth, certificado) **mora dentro do próprio instrumento**. A "Central de chaves" guarda só as chaves de IA e as de serviço compartilhadas (busca, imagem).
+- **A identificação** (chave, senha, login OAuth, certificado) **mora dentro do próprio instrumento**. A "Central de chaves" guarda as chaves de IA (as de serviço — Tavily, Exa, Firecrawl, fal.ai — saem junto com os instrumentos que as usavam).
+- **Saíram dos prontos em 01/10/2026** (criar novo é recusado; os existentes seguem até serem trocados): os 5 do Instagram, busca na web (Tavily e Exa), ler site (Tavily e Firecrawl), WordPress, Search Console, vídeo da fal.ai e o webhook de saída (um time aciona outro por **Agendar automação**). O gatilho "Comentário do Instagram" também saiu: comentário de rede social chega pelo **webhook**.
 - **A chamada de API avulsa** (o antigo "Chamar API REST") não se cria mais: virou conector. As que já existem seguem funcionando.
 - **Nativo = pronto.** "Nativo" é como se fala; na tela o nome é **"Prontos do Batuta"**.
 

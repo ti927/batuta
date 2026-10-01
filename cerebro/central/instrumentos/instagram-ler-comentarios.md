@@ -3,11 +3,18 @@ titulo: "Instrumento — Instagram: ler comentários"
 area: "instrumentos"
 slug: "instagram-ler-comentarios"
 tags: ["instagram", "comentarios", "ler", "moderacao", "leitura", "instrumento"]
-revisado_em: "2026-07-17"
+revisado_em: "2026-10-01"
 fontes: ["cerebro/instrumentos/instagram_ler_comentarios.py"]
 ---
 
 # Instrumento — Instagram: ler comentários
+
+> **Não é mais um pronto do Batuta (desde 01/10/2026).** Integração com serviço de fora é
+> instrumento **personalizado**: crie em **🌟 Criar instrumento → Uma API** (ou **Um servidor
+> MCP**, se o serviço tiver um), com a chave do serviço no próprio instrumento (pela IA:
+> `montar_conector` ou `configurar_instrumento` com `conectar_mcp`). Os que já existem seguem
+> funcionando e editáveis até serem trocados — este capítulo vale só para eles.
+> Ver [[instrumentos/construir-conector]] e [[instrumentos/mcp]].
 
 ## Em uma frase
 Lê os comentários de um post do Instagram (texto, autor, data e curtidas) a partir do id do post.

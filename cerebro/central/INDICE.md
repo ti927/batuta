@@ -50,7 +50,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Condições e ramos | `automacoes/condicoes-e-ramos` | A condição de cada seta; o fluxo segue TODAS as atendidas; junção; **o markdown do agente precisa citar os rótulos das saídas** | ✅ | ✍️ |
 | Quando um passo dá erro | `automacoes/erros-no-fluxo` | Saída de erro, saída "se nenhuma", aviso da falha; `ok:false` de leitura × de ação irreversível; o teto de passos nomeia o nó em laço | ✅ | ✍️ |
 | A ficha da execução | `automacoes/ficha-da-execucao` | Os dados que atravessam o fluxo; `anotar`; regra exata na seta; "Para cada item" | ✅ | ✍️ |
-| Gatilhos | `automacoes/gatilhos` | Manual, agendamento, webhook (segredo, tipo de aviso, repetidos, eco da própria conta, teto), comentário do Instagram; a "entrada" ao 1º agente | ✅ | ✍️ |
+| Gatilhos | `automacoes/gatilhos` | Manual, agendamento, webhook (segredo, tipo de aviso, repetidos, eco da própria conta, teto; é por onde chega comentário de rede social); a "entrada" ao 1º agente | ✅ | ✍️ |
 | Pedir aprovação e aguardar | `automacoes/pedir-aprovacao` | O instrumento que para o fluxo até uma pessoa responder; por tela e por canal; quem recebe é quem aprova; **o agente precisa declarar o caminho depois da decisão**; uma porta de cada vez (tela × canal); botões Aprovar/Recusar e a resposta vai para o pedido certo (vários pedidos no mesmo bot); prazo da espera; converter time que pedia aprovação na mão | ✅ | ✍️ |
 | O passo Esperar | `automacoes/esperar` | Segura o fluxo por minutos/horas/dias e continua daqui, com a ficha intacta | ✅ | ✍️ |
 | O passo Chamar outra automação | `automacoes/chamar-automacao` | Roda outra automação inteira e ESPERA o resultado dela; a ficha vai e volta | ✅ | ✍️ |
@@ -65,34 +65,34 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Gerar imagem | `instrumentos/gerar-imagem` | Texto→imagem; modelo/tamanho/qualidade; proporção | ✅ | ✍️ |
 | Montar imagem | `instrumentos/montar-imagem` | Composição a partir de fotos | ✅ | ✍️ |
 | Gerar vídeo (Sora) | `instrumentos/gerar-video` | Texto/imagem→vídeo | ✅ | ✍️ |
-| Gerar vídeo de foto (fal.ai) | `instrumentos/gerar-video-fal` | Anima foto (rosto real); freios de movimento | ✅ | ✍️ |
+| Gerar vídeo de foto (fal.ai) | `instrumentos/gerar-video-fal` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Anima foto (rosto real); freios de movimento | ✅ | ✍️ |
 | Descrever imagem | `instrumentos/descrever-imagem` | Visão (imagem→texto) | ✅ | ✍️ |
 | Guardar imagem recebida | `instrumentos/arquivar-imagem` | Salva a foto do canal → URL pública (comprovantes) | ✅ | ✍️ |
 | Gerar PDF | `instrumentos/gerar-pdf` | Documentos | ✅ | ✍️ |
 | **Instagram** | | | | |
-| Publicar no Instagram | `instrumentos/publicar-instagram` | Feed/Reels/Stories/carrossel | ✅ | ✍️ (piloto) |
-| Ler post do Instagram | `instrumentos/instagram-ler-post` | Legenda + mídia do post | ✅ | ✍️ |
-| Ler comentários | `instrumentos/instagram-ler-comentarios` | Comentários de um post | ✅ | ✍️ |
-| Responder comentário | `instrumentos/instagram-responder-comentario` | Resposta pública | ✅ | ✍️ |
-| Insights do Instagram | `instrumentos/instagram-insights` | Métricas de mídia | ✅ | ✍️ |
+| Publicar no Instagram | `instrumentos/publicar-instagram` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Feed/Reels/Stories/carrossel | ✅ | ✍️ (piloto) |
+| Ler post do Instagram | `instrumentos/instagram-ler-post` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Legenda + mídia do post | ✅ | ✍️ |
+| Ler comentários | `instrumentos/instagram-ler-comentarios` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Comentários de um post | ✅ | ✍️ |
+| Responder comentário | `instrumentos/instagram-responder-comentario` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Resposta pública | ✅ | ✍️ |
+| Insights do Instagram | `instrumentos/instagram-insights` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Métricas de mídia | ✅ | ✍️ |
 | **Sites & blogs** | | | | |
-| Publicar no WordPress | `instrumentos/publicar-wordpress` | Post + imagem destacada | ✅ | ✍️ |
-| Ler site | `instrumentos/ler-site` | Extrair texto de uma URL (Tavily) | ✅ | ✍️ |
-| Ler site (JS pesado) | `instrumentos/ler-site-firecrawl` | Firecrawl (sites de JavaScript) | ✅ | ✍️ |
+| Publicar no WordPress | `instrumentos/publicar-wordpress` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Post + imagem destacada | ✅ | ✍️ |
+| Ler site | `instrumentos/ler-site` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Extrair texto de uma URL (Tavily) | ✅ | ✍️ |
+| Ler site (JS pesado) | `instrumentos/ler-site-firecrawl` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Firecrawl (sites de JavaScript) | ✅ | ✍️ |
 | **Web (busca)** | | | | |
-| Busca na web | `instrumentos/busca-web` | Tavily; tópico/recência/domínios | ✅ | ✍️ |
-| Busca semântica (Exa) | `instrumentos/busca-exa` | Alternativa semântica | ✅ | ✍️ |
+| Busca na web | `instrumentos/busca-web` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Tavily; tópico/recência/domínios | ✅ | ✍️ |
+| Busca semântica (Exa) | `instrumentos/busca-exa` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Alternativa semântica | ✅ | ✍️ |
 | **Dados & integração** | | | | |
 | Chamar API REST | `instrumentos/chamar-rest` | NÃO SE CRIA MAIS (29/09): chamada de API é conector (Construtor / montar_conector); vale para as instâncias antigas — GET/POST/…; leitura × escrita | ✅ | ✍️ |
 | Construir um conector | `instrumentos/construir-conector` | Criar instrumento SEM código: testar e detectar, operações, autenticação (inclusive conta de serviço do Google), POST que só consulta; **a armadilha do `campos_resposta`** (campos da linha × nome da lista) | ✅ | ✍️ |
-| Banco SQL | `instrumentos/banco-sql` | Ler/escrever em SQL; somente-leitura | ✅ | ✍️ |
+| Banco SQL | `instrumentos/banco-sql` | PERSONALIZADO (Construtor → Um banco de dados); ler/escrever em SQL; somente-leitura | ✅ | ✍️ |
 | Conectar MCP | `instrumentos/mcp` | Ferramentas de um servidor MCP (Zapier, Make, WordPress); a identificação mora NO instrumento (token, usuário e senha, cabeçalho, chave no endereço); ESCOLHER quais entram no cinto e quais alteram algo (aprovação é do agente) | ✅ | ✍️ |
-| Webhook de saída | `instrumentos/webhook-saida` | Avisar/disparar um sistema externo | ✅ | ✍️ |
+| Webhook de saída | `instrumentos/webhook-saida` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Avisar/disparar um sistema externo | ✅ | ✍️ |
 | Agendar automação | `instrumentos/agendar-automacao` | Um agente reprograma um disparo futuro (alvo manual+ativa) | ✅ | ✍️ |
 | **Mensageria** | | | | |
 | Enviar no Telegram | `instrumentos/enviar-telegram` | Enviar mensagem por um bot | ✅ | ✍️ |
 | **Google (OAuth)** | | | | |
-| Search Console | `instrumentos/search-console` | Desempenho no Google (cliques/impressões/posição) | ✅ | ✍️ |
+| Search Console | `instrumentos/search-console` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Desempenho no Google (cliques/impressões/posição) | ✅ | ✍️ |
 | Gmail: ler | `instrumentos/gmail-ler` | Ler e-mails | 📋 | ⬜ |
 | Gmail: enviar | `instrumentos/gmail-enviar` | Enviar e-mail | 📋 | ⬜ |
 | Agenda: listar/criar | `instrumentos/agenda` | Eventos do Google Agenda | 📋 | ⬜ |

@@ -3,11 +3,18 @@ titulo: "Instrumento — Gerar vídeo a partir de foto (fal.ai)"
 area: "instrumentos"
 slug: "gerar-video-fal"
 tags: ["gerar-video-fal", "video", "fal", "kling", "luma", "hailuo", "rosto", "animar-foto", "instrumento"]
-revisado_em: "2026-07-17"
+revisado_em: "2026-10-01"
 fontes: ["cerebro/instrumentos/gerar_video_fal.py", "project_fal-video-e-agendamento"]
 ---
 
 # Instrumento — Gerar vídeo a partir de foto (fal.ai)
+
+> **Não é mais um pronto do Batuta (desde 01/10/2026).** Integração com serviço de fora é
+> instrumento **personalizado**: crie em **🌟 Criar instrumento → Uma API** (ou **Um servidor
+> MCP**, se o serviço tiver um), com a chave do serviço no próprio instrumento (pela IA:
+> `montar_conector` ou `configurar_instrumento` com `conectar_mcp`). Os que já existem seguem
+> funcionando e editáveis até serem trocados — este capítulo vale só para eles.
+> Ver [[instrumentos/construir-conector]] e [[instrumentos/mcp]].
 
 ## Em uma frase
 Anima uma **foto** (URL pública) num clipe de vídeo pela fal.ai — e, ao contrário da Sora, **aceita

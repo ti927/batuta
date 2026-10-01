@@ -3,11 +3,18 @@ titulo: "Instrumento — Disparar webhook de saída"
 area: "instrumentos"
 slug: "webhook-saida"
 tags: ["webhook", "saida", "notificar", "disparar", "integracao", "post", "instrumento"]
-revisado_em: "2026-07-17"
+revisado_em: "2026-10-01"
 fontes: ["cerebro/instrumentos/webhook_saida.py"]
 ---
 
 # Instrumento — Disparar webhook de saída
+
+> **Não é mais um pronto do Batuta (desde 01/10/2026).** Integração com serviço de fora é
+> instrumento **personalizado**: crie em **🌟 Criar instrumento → Uma API** (ou **Um servidor
+> MCP**, se o serviço tiver um), com a chave do serviço no próprio instrumento (pela IA:
+> `montar_conector` ou `configurar_instrumento` com `conectar_mcp`). Os que já existem seguem
+> funcionando e editáveis até serem trocados — este capítulo vale só para eles.
+> Ver [[instrumentos/construir-conector]] e [[instrumentos/mcp]].
 
 ## Em uma frase
 Avisa um sistema externo enviando um **POST** com dados a uma URL configurada.

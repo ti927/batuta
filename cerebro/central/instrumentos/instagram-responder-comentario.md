@@ -3,11 +3,18 @@ titulo: "Instrumento — Instagram: responder ou moderar comentário"
 area: "instrumentos"
 slug: "instagram-responder-comentario"
 tags: ["instagram", "responder", "comentario", "ocultar", "apagar", "moderar", "escrita", "instrumento"]
-revisado_em: "2026-07-17"
+revisado_em: "2026-10-01"
 fontes: ["cerebro/instrumentos/instagram_responder_comentario.py"]
 ---
 
 # Instrumento — Instagram: responder ou moderar comentário
+
+> **Não é mais um pronto do Batuta (desde 01/10/2026).** Integração com serviço de fora é
+> instrumento **personalizado**: crie em **🌟 Criar instrumento → Uma API** (ou **Um servidor
+> MCP**, se o serviço tiver um), com a chave do serviço no próprio instrumento (pela IA:
+> `montar_conector` ou `configurar_instrumento` com `conectar_mcp`). Os que já existem seguem
+> funcionando e editáveis até serem trocados — este capítulo vale só para eles.
+> Ver [[instrumentos/construir-conector]] e [[instrumentos/mcp]].
 
 ## Em uma frase
 Age sobre um comentário do Instagram: **responde**, **oculta**, **reexibe** ou **apaga**.

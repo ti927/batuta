@@ -3,7 +3,7 @@ titulo: "Instrumento — Banco de dados direto (SQL)"
 area: "instrumentos"
 slug: "banco-sql"
 tags: ["sql", "banco", "postgres", "consulta", "somente-leitura", "dados", "instrumento"]
-revisado_em: "2026-07-17"
+revisado_em: "2026-10-01"
 fontes: ["cerebro/instrumentos/sql.py"]
 ---
 
@@ -18,9 +18,10 @@ Quando o dado que o time precisa está num banco (relatório, consulta, lançame
 chegar até ele. Prefira sempre o modo **somente leitura** quando o agente só precisa consultar.
 
 ## Como usar (na tela)
-1. Crie o instrumento **Banco de dados direto (SQL)**.
-2. Configure a conexão: **host**, **porta**, **banco**, **usuário**, **senha** (segredo) e o modo de
-   **SSL**.
+É um instrumento **personalizado** (desde 01/10/2026): nasce e se edita no **Construtor**.
+1. Em **Instrumentos**, clique em **🌟 Criar instrumento → Um banco de dados**.
+2. Configure a conexão: **endereço do servidor**, **porta**, **nome do banco**, **usuário**,
+   **senha** (fica guardada em segredo) e a **conexão protegida** (SSL).
 3. Ligue **Somente leitura** se o agente só consulta — assim ele **recusa qualquer escrita**. Deixe
    desligado (permite escrita) só quando necessário, e aí o **agente** pede aprovação antes, com o
    instrumento **Pedir aprovação e aguardar** e a regra no markdown dele.

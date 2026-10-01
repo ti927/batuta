@@ -3,11 +3,18 @@ titulo: "Instrumento — Google Search Console: consultar"
 area: "instrumentos"
 slug: "search-console"
 tags: ["search-console", "google", "seo", "cliques", "impressoes", "posicao", "blog", "instrumento"]
-revisado_em: "2026-07-18"
+revisado_em: "2026-10-01"
 fontes: ["cerebro/instrumentos/search_console.py"]
 ---
 
 # Instrumento — Google Search Console: consultar
+
+> **Não é mais um pronto do Batuta (desde 01/10/2026).** Integração com serviço de fora é
+> instrumento **personalizado**: crie em **🌟 Criar instrumento → Uma API** (ou **Um servidor
+> MCP**, se o serviço tiver um), com a chave do serviço no próprio instrumento (pela IA:
+> `montar_conector` ou `configurar_instrumento` com `conectar_mcp`). Os que já existem seguem
+> funcionando e editáveis até serem trocados — este capítulo vale só para eles.
+> Ver [[instrumentos/construir-conector]] e [[instrumentos/mcp]].
 
 ## Em uma frase
 Lê o desempenho do site no Google (cliques, impressões, CTR e posição média), agrupado por consulta de

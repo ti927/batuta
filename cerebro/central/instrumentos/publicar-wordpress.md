@@ -3,11 +3,18 @@ titulo: "Instrumento — WordPress: publicar"
 area: "instrumentos"
 slug: "publicar-wordpress"
 tags: ["wordpress", "publicar", "blog", "artigo", "post", "imagem-destacada", "413", "upload", "instrumento"]
-revisado_em: "2026-08-14"
+revisado_em: "2026-10-01"
 fontes: ["cerebro/instrumentos/wordpress.py"]
 ---
 
 # Instrumento — WordPress: publicar
+
+> **Não é mais um pronto do Batuta (desde 01/10/2026).** Integração com serviço de fora é
+> instrumento **personalizado**: crie em **🌟 Criar instrumento → Uma API** (ou **Um servidor
+> MCP**, se o serviço tiver um), com a chave do serviço no próprio instrumento (pela IA:
+> `montar_conector` ou `configurar_instrumento` com `conectar_mcp`). Os que já existem seguem
+> funcionando e editáveis até serem trocados — este capítulo vale só para eles.
+> Ver [[instrumentos/construir-conector]] e [[instrumentos/mcp]].
 
 ## Em uma frase
 Publica um artigo no WordPress e devolve o link do post — com título, conteúdo e, se quiser, tags, resumo

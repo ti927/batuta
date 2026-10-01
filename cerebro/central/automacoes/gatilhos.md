@@ -3,20 +3,21 @@ titulo: "Gatilhos (o que inicia um fluxo)"
 area: "automacoes"
 slug: "gatilhos"
 tags: ["gatilho", "manual", "agendamento", "webhook", "comentario", "instagram", "entrada"]
-revisado_em: "2026-09-30"
-fontes: ["PRODUTO.md §12", "cerebro/agendador.py", "cerebro/rotas/webhooks.py", "cerebro/webhook_entrada.py", "cerebro/rotas/instagram_webhook.py"]
+revisado_em: "2026-10-01"
+fontes: ["PRODUTO.md §12", "cerebro/agendador.py", "cerebro/rotas/webhooks.py", "cerebro/webhook_entrada.py"]
 ---
 
 # Gatilhos (o que inicia um fluxo)
 
 ## Em uma frase
-O gatilho diz **como** a automação começa; há quatro tipos, e cada automação tem o seu.
+O gatilho diz **como** a automação começa; há três tipos, e cada automação tem o seu.
 
 ## Para que serve / quando usar
 - **Manual** — você (ou alguém) dispara pelo botão "Rodar agora". Bom para testar ou rodar sob demanda.
 - **Agendamento** — roda sozinho num horário fixo (diário, semanal, mensal, no fuso de Brasília).
 - **Webhook** — um sistema externo dispara por uma **URL** (POST); o corpo enviado vira a entrada.
-- **Comentário do Instagram** — cada comentário num post de uma conta conectada dispara o fluxo.
+- Comentário em rede social (Instagram etc.) chega pelo **webhook**: o serviço que cuida da conta
+  (ex.: Zernio) chama a URL da automação. O gatilho "Comentário do Instagram" saiu em 01/10/2026.
 
 ## Como usar (na tela)
 1. No nó **Gatilho** do construtor, escolha o tipo.
@@ -30,8 +31,6 @@ O gatilho diz **como** a automação começa; há quatro tipos, e cada automaç�
    - **Só dispara para o aviso:** o tipo de aviso que interessa (ex.: `comment.received`); os
      outros chegam, respondem "ok" e não disparam.
    - **Teto de disparos por hora** (0 = sem limite).
-4. **Comentário do Instagram:** defina os filtros (posts, palavra-chave, teto/hora); a **conta** é
-   escolhida pelo humano na tela do gatilho (a IA não pluga o token).
 
 ## Exemplos
 - Lembrete todo dia 1º às 9h (agendamento) com a mensagem "Gere o lembrete mensal de fechamento."
@@ -55,8 +54,8 @@ O gatilho diz **como** a automação começa; há quatro tipos, e cada automaç�
 
 ## Para a IA
 Nunca afirme o tipo de gatilho de memória — confira no retrato do time (`tipo_gatilho` por automação).
-Gatilho/webhook é **por automação**, nunca "do time". Ao montar comentário do Instagram, avise que falta
-o humano escolher a conta. No **webhook**, a config aceita `evento`, `so_quando`/`nunca_quando`
+Gatilho/webhook é **por automação**, nunca "do time". O tipo `comentario_instagram` é recusado:
+comentário de rede social é webhook. No **webhook**, a config aceita `evento`, `so_quando`/`nunca_quando`
 (`[{campo: "a.b", valor}]`), `teto_por_hora` e `cabecalho_assinatura`; o **segredo você nunca manda**
 (é recusado) — peça ao consultor para colá-lo na tela do gatilho e no painel do serviço. O endereço
 a cadastrar no serviço aparece em `ver_automacao` (`endereco_webhook`). Para agendamento por um AGENTE (disparo futuro), veja
