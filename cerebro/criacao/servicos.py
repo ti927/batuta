@@ -131,6 +131,21 @@ def remover_agente(sessao: Session, agente: Agente, *, usuario: Usuario | None =
     sessao.flush()
 
 
+def automacoes_com_agente(sessao: Session, agente: Agente) -> list[Automacao]:
+    """As automações do time cujo desenho tem um passo com este agente."""
+    alvo = str(agente.id)
+    return [
+        auto
+        for auto in sessao.scalars(
+            select(Automacao).where(Automacao.time_id == agente.time_id).order_by(Automacao.nome)
+        )
+        if any(
+            n.get("tipo") == "agente" and str(n.get("ref")) == alvo
+            for n in grafo.normalizar(auto.cadeia or {}).get("nos") or []
+        )
+    ]
+
+
 def _limpar_agente_das_cadeias(sessao: Session, time_id: uuid.UUID, agente_id: str) -> None:
     """Tira um agente removido das cadeias das automações do time: apaga TODO nó cujo
     `ref` é esse agente (ele pode aparecer em vários nós), as saídas que apontavam

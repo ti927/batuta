@@ -33,7 +33,8 @@ todos.
 - **Mudar a configuração muda para todos os times** que o usam — a tela avisa. Confira o *Usado por*
   antes.
 - **Excluir é recusado enquanto algum agente o usa** (vale para todo instrumento): a tela diz quem, e o
-  caminho é tirá-lo do cinto primeiro.
+  caminho é tirá-lo do cinto primeiro. Os **personalizados** têm uma **lixeira** direto na lista da aba
+  Instrumentos (só para admin); os prontos se excluem abrindo o instrumento.
 - **Voltar para "só este time" é recusado enquanto outro time o usa.**
 - **Bot de Telegram da organização não atende conversa.** Ele só envia avisos e pedidos de aprovação e
   recebe as respostas desses pedidos; mensagem solta recebe um aviso curto. Para conversar com clientes,

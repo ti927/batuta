@@ -1,16 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Bot, Plus } from "lucide-react";
+import { toast } from "sonner";
 
 import {
+  api,
+  mensagemDeErro,
   type Agente,
   type Instrumento,
   type PapelAcesso,
   type Time,
   type TipoInstrumento,
 } from "@/lib/api";
-import { podeOperar } from "@/lib/permissoes";
+import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { CardAgente } from "@/components/card-agente";
 import { DrawerAgente } from "@/components/drawer-agente";
 import { DrawerInstrumento } from "@/components/drawer-instrumento";
@@ -34,7 +38,9 @@ export function AgentesCliente({
   meuPapel: PapelAcesso | null;
   conversaId: string | null;
 }) {
+  const router = useRouter();
   const souOperador = podeOperar(meuPapel);
+  const souAdmin = podeAdmin(meuPapel);
   // O drawer abre por id (não pelo objeto) para sobreviver ao router.refresh():
   // o agente é re-derivado da prop recarregada. `criando` abre o drawer vazio.
   const [abertoId, setAbertoId] = useState<string | null>(null);
@@ -50,14 +56,48 @@ export function AgentesCliente({
     ? (instrumentos.find((i) => i.id === instrumentoAbertoId) ?? null)
     : null;
 
+  async function excluir(agente: Agente) {
+    try {
+      const { automacoes } = await api.get<{
+        automacoes: { id: string; nome: string }[];
+      }>(`/agentes/${agente.id}/uso`);
+      if (automacoes.length > 0) {
+        toast.error(
+          `Não dá para excluir: “${agente.nome}” faz parte ` +
+            (automacoes.length === 1 ? "da automação " : "das automações ") +
+            automacoes.map((a) => `“${a.nome}”`).join(", ") +
+            ". Tire-o do desenho antes.",
+        );
+        return;
+      }
+    } catch {
+      /* sem a checagem, o cérebro recusa do mesmo jeito se estiver em uso */
+    }
+    if (
+      !confirm(`Excluir o agente “${agente.nome}”? Isso não pode ser desfeito.`)
+    )
+      return;
+    try {
+      await api.delete(`/agentes/${agente.id}`);
+      toast.success("Agente excluído");
+      router.refresh();
+    } catch (e) {
+      toast.error(
+        mensagemDeErro(e, "Não consegui excluir o agente. Tente de novo."),
+      );
+    }
+  }
+
   return (
     <main className="mx-auto w-full max-w-[1000px] px-5 py-8 sm:px-8">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-sm font-medium text-foreground">Agentes do time</h2>
+          <h2 className="text-sm font-medium text-foreground">
+            Agentes do time
+          </h2>
           <p className="text-sm text-muted-foreground">
-            Cada agente é um especialista. Clique num card para editar quem ele é,
-            o que sabe e o seu cinto.
+            Cada agente é um especialista. Clique num card para editar quem ele
+            é, o que sabe e o seu cinto.
           </p>
         </div>
         {souOperador && (
@@ -85,6 +125,7 @@ export function AgentesCliente({
               onEditarInstrumento={
                 souOperador ? (id) => setInstrumentoAbertoId(id) : undefined
               }
+              onExcluir={souAdmin ? () => excluir(a) : undefined}
             />
           ))}
         </div>

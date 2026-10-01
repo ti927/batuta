@@ -19,10 +19,12 @@ IA criadora **convivem**: monte com a IA e refine a mão, ou o contrário.
 
 ## Como usar (na tela)
 1. No dashboard do time, abra o **agente** (drawer/popup) e edite os markdowns, o modelo e o cinto.
-2. **Pendure/despendure instrumentos** e crie/remova peças ali mesmo.
+2. **Pendure/despendure instrumentos** e crie peças ali mesmo.
 3. Para o fluxo, o **construtor da cadeia** abre em tela cheia.
 4. O botão **"Ajustar com a IA"** fica em destaque, para você voltar à conversa quando quiser.
 5. **Salve** — o popup mantém o que você digitou; marcadores mostram o que ainda não foi salvo.
+6. **Excluir um agente** é no card dele, na aba **Agentes** (botão **Excluir** no rodapé, só para
+   admin). Se o agente faz parte de alguma automação, a tela recusa e diz qual — tire-o do desenho antes.
 
 ### As abas do popup
 Quem é · Habilidades · Uso dos instrumentos · Personalidade (os quatro markdowns) ·

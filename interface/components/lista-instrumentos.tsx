@@ -6,7 +6,14 @@
 // cartão vêm prontos do cérebro (`painel_instrumentos.py`), numa consulta só.
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ChevronDown, Pencil, Search, Wrench } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  Pencil,
+  Search,
+  Trash2,
+  Wrench,
+} from "lucide-react";
 
 import { type Instrumento, type TipoInstrumento } from "@/lib/api";
 import { IconeInstrumento } from "@/components/icone-instrumento";
@@ -39,7 +46,10 @@ function ehQuadro(i: Instrumento) {
   return i.tipo === "quadro";
 }
 
-function categoriaDe(i: Instrumento, tipos: Map<string, TipoInstrumento>): string {
+function categoriaDe(
+  i: Instrumento,
+  tipos: Map<string, TipoInstrumento>,
+): string {
   if (i.ligacao === "mcp") return "Servidor MCP";
   if (i.ligacao === "api") {
     const c = (i.configuracao?.categoria as string | undefined)?.trim();
@@ -51,8 +61,10 @@ function categoriaDe(i: Instrumento, tipos: Map<string, TipoInstrumento>): strin
 /** O que o instrumento é, em poucas palavras (linha de baixo do cartão). */
 function oQueE(i: Instrumento, tipos: Map<string, TipoInstrumento>): string {
   const n = i.qtd_acoes ?? 0;
-  if (i.ligacao === "api") return `API · ${n} ${n === 1 ? "operação" : "operações"}`;
-  if (i.ligacao === "mcp") return `MCP · ${n} ${n === 1 ? "ferramenta" : "ferramentas"}`;
+  if (i.ligacao === "api")
+    return `API · ${n} ${n === 1 ? "operação" : "operações"}`;
+  if (i.ligacao === "mcp")
+    return `MCP · ${n} ${n === 1 ? "ferramenta" : "ferramentas"}`;
   return tipos.get(i.tipo)?.nome_exibicao ?? i.tipo;
 }
 
@@ -61,7 +73,10 @@ function quemUsa(i: Instrumento): string {
   const fora = i.usado_em_outros_times ?? 0;
   const partes: string[] = [];
   if (nomes.length) partes.push(`usado por ${nomes.join(", ")}`);
-  if (fora) partes.push(`${nomes.length ? "e " : "usado "}em mais ${fora} ${fora === 1 ? "time" : "times"}`);
+  if (fora)
+    partes.push(
+      `${nomes.length ? "e " : "usado "}em mais ${fora} ${fora === 1 ? "time" : "times"}`,
+    );
   return partes.join(" ");
 }
 
@@ -69,19 +84,27 @@ function semAgente(i: Instrumento) {
   return !(i.usado_por_agentes?.length || i.usado_em_outros_times);
 }
 
-type Selo = { texto: string; variante: "neutral" | "info" | "warning" | "success" };
+type Selo = {
+  texto: string;
+  variante: "neutral" | "info" | "warning" | "success";
+};
 
 /** Até 3 selos, na ordem do que mais importa. */
 function selosDe(i: Instrumento): Selo[] {
   const selos: Selo[] = [];
-  if (i.situacao) selos.push({ texto: "precisa de atenção", variante: "warning" });
+  if (i.situacao)
+    selos.push({ texto: "precisa de atenção", variante: "warning" });
   if (semAgente(i)) selos.push({ texto: "sem agente", variante: "neutral" });
   selos.push(
     i.escopo === "organizacao"
       ? { texto: "da organização", variante: "info" }
       : { texto: "do time", variante: "neutral" },
   );
-  if (i.ligacao) selos.push({ texto: i.ligacao === "api" ? "API" : "MCP", variante: "neutral" });
+  if (i.ligacao)
+    selos.push({
+      texto: i.ligacao === "api" ? "API" : "MCP",
+      variante: "neutral",
+    });
   selos.push(
     i.acao_irreversivel
       ? { texto: "altera algo", variante: "warning" }
@@ -94,7 +117,9 @@ function selosDe(i: Instrumento): Selo[] {
 function lerFiltros(): Filtros {
   try {
     const salvo = window.localStorage.getItem(CHAVE_FILTROS);
-    return salvo ? { ...FILTROS_INICIAIS, ...JSON.parse(salvo), busca: "" } : FILTROS_INICIAIS;
+    return salvo
+      ? { ...FILTROS_INICIAIS, ...JSON.parse(salvo), busca: "" }
+      : FILTROS_INICIAIS;
   } catch {
     return FILTROS_INICIAIS;
   }
@@ -105,11 +130,14 @@ export function ListaInstrumentos({
   tipos,
   souOperador,
   onAbrir,
+  onExcluir,
 }: {
   instrumentos: Instrumento[];
   tipos: TipoInstrumento[];
   souOperador: boolean;
   onAbrir: (inst: Instrumento) => void;
+  /** Lixeira nos personalizados (só para quem pode apagar). */
+  onExcluir?: (inst: Instrumento) => void;
 }) {
   const [f, setF] = useState<Filtros>(FILTROS_INICIAIS);
   // Os filtros lembrados só são lidos depois de montar (o servidor não tem o navegador).
@@ -122,7 +150,10 @@ export function ListaInstrumentos({
     setF((atual) => {
       const novo = { ...atual, ...patch };
       try {
-        window.localStorage.setItem(CHAVE_FILTROS, JSON.stringify({ ...novo, busca: "" }));
+        window.localStorage.setItem(
+          CHAVE_FILTROS,
+          JSON.stringify({ ...novo, busca: "" }),
+        );
       } catch {
         /* sem armazenamento: o filtro só não é lembrado */
       }
@@ -130,19 +161,29 @@ export function ListaInstrumentos({
     });
   }
 
-  const porTipo = useMemo(() => new Map(tipos.map((t) => [t.tipo, t])), [tipos]);
+  const porTipo = useMemo(
+    () => new Map(tipos.map((t) => [t.tipo, t])),
+    [tipos],
+  );
   const categorias = useMemo(
     () => [...new Set(instrumentos.map((i) => categoriaDe(i, porTipo)))].sort(),
     [instrumentos, porTipo],
   );
   const agentes = useMemo(
-    () => [...new Set(instrumentos.flatMap((i) => i.usado_por_agentes ?? []))].sort(),
+    () =>
+      [
+        ...new Set(instrumentos.flatMap((i) => i.usado_por_agentes ?? [])),
+      ].sort(),
     [instrumentos],
   );
 
   const visiveis = instrumentos.filter((i) => {
     const busca = f.busca.trim().toLowerCase();
-    if (busca && !`${i.nome} ${oQueE(i, porTipo)}`.toLowerCase().includes(busca)) return false;
+    if (
+      busca &&
+      !`${i.nome} ${oQueE(i, porTipo)}`.toLowerCase().includes(busca)
+    )
+      return false;
     if (f.tipo === "personalizados" && !i.personalizado) return false;
     if (f.tipo === "prontos" && (i.personalizado || ehQuadro(i))) return false;
     if (f.tipo === "quadros" && !ehQuadro(i)) return false;
@@ -150,7 +191,8 @@ export function ListaInstrumentos({
     if (f.situacao === "atencao" && !i.situacao) return false;
     if (f.situacao === "sem_agente" && !semAgente(i)) return false;
     if (f.categoria && categoriaDe(i, porTipo) !== f.categoria) return false;
-    if (f.agente && !(i.usado_por_agentes ?? []).includes(f.agente)) return false;
+    if (f.agente && !(i.usado_por_agentes ?? []).includes(f.agente))
+      return false;
     return true;
   });
   const personalizados = visiveis.filter((i) => i.personalizado);
@@ -181,6 +223,11 @@ export function ListaInstrumentos({
             oQueE={oQueE(inst, porTipo)}
             souOperador={souOperador}
             onAbrir={() => onAbrir(inst)}
+            onExcluir={
+              onExcluir && inst.personalizado
+                ? () => onExcluir(inst)
+                : undefined
+            }
           />
         ))}
       </div>
@@ -226,7 +273,9 @@ export function ListaInstrumentos({
         <div className="flex flex-wrap gap-2">
           <Select
             value={f.alcance}
-            onChange={(e) => mudar({ alcance: e.target.value as Filtros["alcance"] })}
+            onChange={(e) =>
+              mudar({ alcance: e.target.value as Filtros["alcance"] })
+            }
             className="w-auto"
           >
             <option value="">Do time e da organização</option>
@@ -235,7 +284,9 @@ export function ListaInstrumentos({
           </Select>
           <Select
             value={f.situacao}
-            onChange={(e) => mudar({ situacao: e.target.value as Filtros["situacao"] })}
+            onChange={(e) =>
+              mudar({ situacao: e.target.value as Filtros["situacao"] })
+            }
             className="w-auto"
           >
             <option value="">Qualquer situação</option>
@@ -286,13 +337,18 @@ export function ListaInstrumentos({
       </div>
 
       {visiveis.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhum instrumento com esses filtros.</p>
+        <p className="text-sm text-muted-foreground">
+          Nenhum instrumento com esses filtros.
+        </p>
       )}
 
       {personalizados.length > 0 && (
         <section>
           <h3 className="mb-2 text-sm font-medium text-foreground">
-            Personalizados <span className="text-muted-foreground">({personalizados.length})</span>
+            Personalizados{" "}
+            <span className="text-muted-foreground">
+              ({personalizados.length})
+            </span>
           </h3>
           {cartoes(personalizados)}
         </section>
@@ -302,7 +358,9 @@ export function ListaInstrumentos({
         <section>
           <h3 className="mb-2 text-sm font-medium text-foreground">
             Prontos do Batuta{" "}
-            <span className="text-muted-foreground">({prontos.length + quadros.length})</span>
+            <span className="text-muted-foreground">
+              ({prontos.length + quadros.length})
+            </span>
           </h3>
           <div className="flex flex-col gap-3">
             {prontos.length > 0 && cartoes(prontos)}
@@ -328,47 +386,74 @@ function Cartao({
   oQueE,
   souOperador,
   onAbrir,
+  onExcluir,
 }: {
   inst: Instrumento;
   primeiro: boolean;
   oQueE: string;
   souOperador: boolean;
   onAbrir: () => void;
+  onExcluir?: () => void;
 }) {
   const uso = quemUsa(inst);
   return (
-    <button
-      onClick={() => souOperador && onAbrir()}
-      disabled={!souOperador}
-      className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
-        souOperador ? "hover:bg-accent/50" : "cursor-default"
+    <div
+      className={`flex items-center transition-colors ${
+        souOperador ? "hover:bg-accent/50" : ""
       } ${primeiro ? "" : "border-t border-border"}`}
     >
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-        <IconeInstrumento icone={inst.icone} auto={inst.icone_auto} className="size-4" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex flex-wrap items-center gap-1.5">
-          <span className="truncate text-sm font-medium text-foreground">{inst.nome}</span>
-          {selosDe(inst).map((s) => (
-            <Badge key={s.texto} variant={s.variante}>
-              {s.texto}
-            </Badge>
-          ))}
+      <button
+        onClick={() => souOperador && onAbrir()}
+        disabled={!souOperador}
+        className={`flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 text-left ${
+          onExcluir ? "pr-2" : "pr-4"
+        } ${souOperador ? "" : "cursor-default"}`}
+      >
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+          <IconeInstrumento
+            icone={inst.icone}
+            auto={inst.icone_auto}
+            className="size-4"
+          />
         </span>
-        <span className="block truncate text-xs text-muted-foreground">
-          {oQueE}
-          {inst.time_casa_nome && ` · vem do time ${inst.time_casa_nome}`}
-          {uso && ` · ${uso}`}
-        </span>
-        {inst.situacao_motivo && (
-          <span className="mt-0.5 flex items-center gap-1 text-xs text-warning">
-            <AlertTriangle className="size-3 shrink-0" />
-            <span className="truncate">{inst.situacao_motivo}</span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span className="truncate text-sm font-medium text-foreground">
+              {inst.nome}
+            </span>
+            {selosDe(inst).map((s) => (
+              <Badge key={s.texto} variant={s.variante}>
+                {s.texto}
+              </Badge>
+            ))}
           </span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {oQueE}
+            {inst.time_casa_nome && ` · vem do time ${inst.time_casa_nome}`}
+            {uso && ` · ${uso}`}
+          </span>
+          {inst.situacao_motivo && (
+            <span className="mt-0.5 flex items-center gap-1 text-xs text-warning">
+              <AlertTriangle className="size-3 shrink-0" />
+              <span className="truncate">{inst.situacao_motivo}</span>
+            </span>
+          )}
+        </span>
+        {souOperador && (
+          <Pencil className="size-4 shrink-0 text-muted-foreground/60" />
         )}
-      </span>
-      {souOperador && <Pencil className="size-4 shrink-0 text-muted-foreground/60" />}
-    </button>
+      </button>
+      {onExcluir && (
+        <button
+          type="button"
+          onClick={onExcluir}
+          title={`Excluir “${inst.nome}”`}
+          aria-label={`Excluir “${inst.nome}”`}
+          className="mr-3 flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive"
+        >
+          <Trash2 className="size-4" />
+        </button>
+      )}
+    </div>
   );
 }

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 import auditoria
 import memoria_agente
 from auth import usuario_atual
+from criacao.servicos import automacoes_com_agente
 from esquemas import (
     AgenteCriar,
     AgenteEditar,
@@ -120,6 +121,21 @@ def editar(
     return agente
 
 
+@rotas.get("/agentes/{agente_id}/uso")
+def uso(
+    agente_id: uuid.UUID,
+    sessao: Session = Depends(obter_sessao),
+    usuario: Usuario = Depends(usuario_atual),
+):
+    """As automações em que o agente aparece (a tela confere antes de excluir)."""
+    agente = agente_acessivel(sessao, usuario, agente_id)
+    return {
+        "automacoes": [
+            {"id": str(a.id), "nome": a.nome} for a in automacoes_com_agente(sessao, agente)
+        ]
+    }
+
+
 @rotas.delete("/agentes/{agente_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remover(
     agente_id: uuid.UUID,
@@ -127,6 +143,15 @@ def remover(
     usuario: Usuario = Depends(usuario_atual),
 ):
     agente = agente_acessivel(sessao, usuario, agente_id, minimo="admin")
+    autos = automacoes_com_agente(sessao, agente)
+    if autos:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Este agente faz parte "
+            + ("da automação " if len(autos) == 1 else "das automações ")
+            + ", ".join(f"“{a.nome}”" for a in autos)
+            + ". Tire-o do desenho antes de excluir.",
+        )
     auditoria.registrar(
         sessao, usuario=usuario, acao="agente.removido", recurso_tipo="agente",
         recurso_id=agente.id,
