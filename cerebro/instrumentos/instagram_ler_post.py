@@ -82,6 +82,8 @@ class ArgsLerPost(BaseModel):
 
 class InstagramLerPost(TipoInstrumento):
     tipo = "instagram_ler_post"
+    # Aposentado como pronto do Batuta (2026-10-01): monta-se como personalizado.
+    substituido_por = "personalizado"
     categoria = "Instagram"
     nome_exibicao = "Instagram: ler post"
     descricao = (

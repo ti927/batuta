@@ -32,8 +32,8 @@ def org(sessao, dados):
     sessao.add(time_b)
     sessao.flush()
     inst = Instrumento(time_id=dados["timeA"].id, nome="WordPress da empresa",
-                       tipo="busca_web", configuracao={}, escopo="organizacao")
-    so_a = Instrumento(time_id=dados["timeA"].id, nome="Só do A", tipo="busca_web", configuracao={})
+                       tipo="gerar_pdf", configuracao={}, escopo="organizacao")
+    so_a = Instrumento(time_id=dados["timeA"].id, nome="Só do A", tipo="gerar_pdf", configuracao={})
     ag_a = Agente(time_id=dados["timeA"].id, nome="Agente A", papel="agente")
     ag_b = Agente(time_id=time_b.id, nome="Agente B", papel="agente")
     sessao.add_all([inst, so_a, ag_a, ag_b])
@@ -76,7 +76,7 @@ def test_operador_encaixa_o_da_organizacao_em_agente_de_outro_time(cliente, entr
 # ───────────────────────────── quem configura ─────────────────────────────
 
 def test_so_admin_cria_da_organizacao(cliente, entrar, dados):
-    corpo = {"nome": "Bot avisos", "tipo": "busca_web", "configuracao": {}, "escopo": "organizacao"}
+    corpo = {"nome": "Bot avisos", "tipo": "gerar_pdf", "configuracao": {}, "escopo": "organizacao"}
     entrar(dados["operador"])
     assert cliente.post(f"/times/{dados['timeA'].id}/instrumentos", json=corpo).status_code == 403
     entrar(dados["admin"])

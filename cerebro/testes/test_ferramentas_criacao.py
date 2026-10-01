@@ -97,12 +97,11 @@ def test_remover_agente_limpa_cadeia(sessao, dados):
 
 
 def test_configurar_instrumento_marca_segredos_pendentes(sessao, dados, monkeypatch):
-    # Sem chave Tavily em lugar nenhum (cofre vazio pelo conftest + .env sem a
-    # variável): aí sim a chave da busca conta como pendente.
-    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    # Sem chave OpenAI em lugar nenhum (cofre vazio pelo conftest; OpenAI não tem
+    # queda para o .env): aí sim a chave da imagem conta como pendente.
     _ctx, f = _setup(sessao, dados)
     _chamar(f, "definir_time", nome="T")
-    r = _chamar(f, "configurar_instrumento", nome="Busca", tipo="busca_web")
+    r = _chamar(f, "configurar_instrumento", nome="Arte", tipo="gerar_imagem")
     assert r["ok"] and r["id"]
     assert r["segredos_pendentes"] == ["chave_api"]
 
@@ -111,15 +110,15 @@ def test_configurar_instrumento_tipo_desconhecido_e_config_invalida(sessao, dado
     _ctx, f = _setup(sessao, dados)
     _chamar(f, "definir_time", nome="T")
     assert _chamar(f, "configurar_instrumento", nome="X", tipo="nao_existe")["ok"] is False
-    # disparar_webhook exige 'url'
-    assert _chamar(f, "configurar_instrumento", nome="W", tipo="disparar_webhook")["ok"] is False
+    # banco_sql exige host/banco/usuario
+    assert _chamar(f, "configurar_instrumento", nome="W", tipo="banco_sql")["ok"] is False
 
 
 def test_encaixar_instrumento(sessao, dados):
     _ctx, f = _setup(sessao, dados)
     _chamar(f, "definir_time", nome="T")
     ag = _chamar(f, "adicionar_agente", nome="A")["id"]
-    inst = _chamar(f, "configurar_instrumento", nome="Busca", tipo="busca_web")["id"]
+    inst = _chamar(f, "configurar_instrumento", nome="PDF", tipo="gerar_pdf")["id"]
     assert _chamar(f, "encaixar_instrumento", agente_id=ag, instrumento_id=inst)["ok"]
     visto = json.loads(f["ver_time"].func())
     agente = next(a for a in visto["agentes"] if a["id"] == ag)
@@ -274,7 +273,10 @@ def test_ativar_nao_exige_mais_portao(sessao, dados):
     _chamar(f, "definir_time", nome="Blog")
     lider = _chamar(f, "adicionar_agente", nome="Guardião", papel="lider")["id"]
     pub = _chamar(f, "adicionar_agente", nome="Publicador")["id"]
-    inst = _chamar(f, "configurar_instrumento", nome="WP", tipo="publicar_wordpress")["id"]
+    inst = _chamar(
+        f, "configurar_instrumento", nome="ERP", tipo="banco_sql",
+        configuracao={"host": "db.x", "banco": "erp", "usuario": "u"},
+    )["id"]
     _chamar(f, "encaixar_instrumento", agente_id=pub, instrumento_id=inst)
     _chamar(f, "definir_gatilho", tipo_gatilho="manual")
     cadeia = {
@@ -292,19 +294,19 @@ def test_listar_tipos_traz_campos_e_irreversivel(sessao, dados):
     _ctx, f = _setup(sessao, dados)
     catalogo = json.loads(f["listar_tipos_instrumento"].func())
     por_tipo = {c["tipo"]: c for c in catalogo}
-    wp = por_tipo["publicar_wordpress"]
-    campos = {c["nome"]: c for c in wp["campos"]}
-    assert campos["site_url"]["secreto"] is False
-    assert campos["senha_app"]["secreto"] is True
-    assert wp["acao_irreversivel"] is True
-    assert por_tipo["busca_web"]["acao_irreversivel"] is False
+    sql = por_tipo["banco_sql"]
+    campos = {c["nome"]: c for c in sql["campos"]}
+    assert campos["host"]["secreto"] is False
+    assert campos["senha"]["secreto"] is True
+    assert sql["acao_irreversivel"] is True
+    assert por_tipo["gerar_pdf"]["acao_irreversivel"] is False
 
 
 def test_catalogo_marca_obrigatorio_e_secreto():
     catalogo = {c["tipo"]: c for c in catalogo_de_instrumentos()}
-    campos = {c["nome"]: c for c in catalogo["disparar_webhook"]["campos"]}
-    assert campos["url"]["obrigatorio"] is True and campos["url"]["secreto"] is False
-    assert campos["token_bearer"]["secreto"] is True
+    campos = {c["nome"]: c for c in catalogo["banco_sql"]["campos"]}
+    assert campos["host"]["obrigatorio"] is True and campos["host"]["secreto"] is False
+    assert campos["senha"]["secreto"] is True
 
 
 def test_chamada_de_api_avulsa_saiu_do_catalogo_e_a_criacao_aponta_o_construtor(sessao, dados):

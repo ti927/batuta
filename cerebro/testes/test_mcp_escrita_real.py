@@ -67,10 +67,10 @@ def test_configurar_instrumento_cria_de_verdade(mcp, dados):
 
 
 def test_configurar_instrumento_com_configuracao(mcp, dados):
-    """O caso real do maestro: Firecrawl com configuração."""
+    """Criar com configuração (era o caso real do Firecrawl, que virou personalizado)."""
     r = escrita.configurar_instrumento(
-        _sub(dados), str(dados["timeA"].id), "Ler Sites", "ler_site_firecrawl",
-        {"apenas_conteudo_principal": True, "max_caracteres": 6000},
+        _sub(dados), str(dados["timeA"].id), "ERP", "banco_sql",
+        {"host": "db.x", "banco": "erp", "usuario": "leitor", "somente_leitura": True},
     )
     assert escrita.ERRO_INESPERADO not in r, f"ferramenta quebrada: {r}"
     assert "criado" in r.lower()
@@ -191,7 +191,7 @@ def test_instrumento_com_chave_no_cofre_e_sem_chave_mestra(
     """REGRESSÃO dos bugs 1 e 2 (26/08): saber que a organização TEM chave de um
     serviço não pode exigir a chave-mestra — é só o nome do serviço que importa."""
     r = escrita.configurar_instrumento(
-        _sub(dados), str(dados["timeA"].id), "Busca do MCP", "busca_web", {}
+        _sub(dados), str(dados["timeA"].id), "Arte do MCP", "gerar_imagem", {}
     )
     assert escrita.ERRO_INESPERADO not in r, f"ferramenta quebrada: {r}"
     assert "criado" in r.lower()
@@ -236,17 +236,17 @@ def test_listar_e_ver_instrumento(mcp, dados):
     import mcp_ferramentas as leitura
 
     escrita.configurar_instrumento(
-        _sub(dados), str(dados["timeA"].id), "Ler Sites", "ler_site_firecrawl", {}
+        _sub(dados), str(dados["timeA"].id), "Arte", "gerar_imagem", {}
     )
     lista = json.loads(leitura.listar_instrumentos(_sub(dados), str(dados["timeA"].id)))
-    achado = next(i for i in lista["instrumentos"] if i["nome"] == "Ler Sites")
-    assert achado["tipo"] == "ler_site_firecrawl"
+    achado = next(i for i in lista["instrumentos"] if i["nome"] == "Arte")
+    assert achado["tipo"] == "gerar_imagem"
 
     detalhe = json.loads(leitura.ver_instrumento(_sub(dados), achado["id"]))
-    assert detalhe["nome"] == "Ler Sites"
+    assert detalhe["nome"] == "Arte"
     assert detalhe["time"]["id"] == str(dados["timeA"].id)
     assert "segredos_pendentes" in detalhe
-    # a chave da Firecrawl é secreta: aparece como pendente, JAMAIS o valor
+    # a chave da OpenAI é secreta: aparece como pendente, JAMAIS o valor
     assert "api_key" not in json.dumps(detalhe).replace('"api_key"', "")[:0] or True
     assert all("valor" not in str(k) for k in detalhe["segredos_preenchidos"])
 
@@ -554,7 +554,7 @@ def test_testar_instrumento_aciona_de_verdade(mcp, dados, monkeypatch):
     """Com o cofre à mão (local), aciona pelo MESMO caminho do botão da tela."""
     import rotas.instrumentos as rotas_inst
 
-    iid = _instrumento(dados, "busca_web")
+    iid = _instrumento(dados, "gerar_pdf")
     chamado = {}
 
     def _acionar(sessao, inst, argumentos):
@@ -584,7 +584,7 @@ def test_testar_instrumento_falha_volta_como_dado(mcp, dados, monkeypatch):
     import rotas.instrumentos as rotas_inst
     from instrumentos.base import FalhaInstrumento
 
-    iid = _instrumento(dados, "busca_web")
+    iid = _instrumento(dados, "gerar_pdf")
 
     def _falha(*a, **k):
         raise FalhaInstrumento("a API recusou: chave inválida")
@@ -625,7 +625,7 @@ def test_testar_instrumento_sem_cofre_pede_ao_cerebro(mcp, dados, monkeypatch):
 
 
 def test_testar_instrumento_ponte_desligada_diz_o_caminho(mcp, dados, monkeypatch):
-    iid = _instrumento(dados, "busca_web")
+    iid = _instrumento(dados, "gerar_pdf")
     monkeypatch.delenv("COFRE_CHAVE_MESTRA", raising=False)
     monkeypatch.delenv("BATUTA_INTERNO_SECRET", raising=False)
     saida = escrita.testar_instrumento(_sub(dados), iid, {})

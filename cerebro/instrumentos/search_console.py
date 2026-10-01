@@ -82,6 +82,8 @@ class ArgsSearchConsole(BaseModel):
 
 class SearchConsoleConsultar(TipoInstrumento):
     tipo = "search_console"
+    # Aposentado como pronto do Batuta (2026-10-01): monta-se como personalizado.
+    substituido_por = "personalizado"
     categoria = "Google"
     nome_exibicao = "Google Search Console: consultar"
     descricao = (

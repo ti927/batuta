@@ -57,6 +57,8 @@ class ArgsLerSite(BaseModel):
 
 class LerSite(TipoInstrumento):
     tipo = "ler_site"
+    # Aposentado como pronto do Batuta (2026-10-01): monta-se como personalizado.
+    substituido_por = "personalizado"
     categoria = "Web (busca e leitura)"
     nome_exibicao = "Ler site (Tavily)"
     descricao = (

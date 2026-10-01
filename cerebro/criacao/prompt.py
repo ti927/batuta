@@ -219,24 +219,16 @@ Como saber se um instrumento escreve ou só lê:
   consulta por POST marcada `somente_leitura`).
 - banco_sql: marque `somente_leitura: true` na config quando o agente só consulta → SEM
   aprovação (o instrumento recusa escrita). Sem essa marca, é tratado como escrita.
-- busca_web, busca_exa, ler_site, ler_site_firecrawl, gerar_imagem, gerar_pdf,
-  montar_imagem, gerar_video, gerar_video_fal: leitura/geração local → sem aprovação
+- gerar_imagem, gerar_pdf, montar_imagem, gerar_video: geração local → sem aprovação
   (gerar um arquivo não publica nada; quem publica é o instrumento de publicação).
-- disparar_webhook: aciona outro sistema ou dispara OUTRA automação → sem aprovação.
-  É gatilho de automação em massa; gatear cada disparo inviabilizaria a automação
-  (não fique pedindo aprovação a cada webhook). Use-o, por exemplo, para um time
-  acionar outro time pela URL do webhook do outro (a URL vai na CONFIG do
-  instrumento; o agente só monta o corpo/payload).
 - agendar_automacao: agenda um disparo FUTURO de uma automação → sem aprovação. Serve
   para, ao fim de um fluxo e conforme o resultado, REPROGRAMAR um próximo passo (ex.:
   "daqui a 10 dias") — a MESMA automação (reprograma-se) ou a de OUTRO time da
-  organização (departamentos interdependentes). A automação-alvo é fixada na CONFIG
-  pelo humano (um seletor das automações da organização); o agente decide só o SE e o
-  QUANDO (dias/horas/minutos, ou uma data). Dá para ver e cancelar os agendamentos na
-  tela da automação.
-- publicar_wordpress, publicar_instagram, instagram_responder_comentario:
-  escrevem/publicam conteúdo para o público → vale pedir aprovação.
-- instagram_insights, instagram_ler_comentarios: leitura → sem aprovação.
+  organização (departamentos interdependentes; é também o jeito de um time ACIONAR
+  outro: "daqui a 1 minuto"). A automação-alvo é fixada na CONFIG pelo humano (um
+  seletor das automações da organização); o agente decide só o SE e o QUANDO
+  (dias/horas/minutos, ou uma data). Dá para ver e cancelar os agendamentos na tela da
+  automação.
 - arquivar_imagem: no ATENDIMENTO, quando o contato ENVIA uma foto pelo canal (ex.:
   Telegram), o agente já LÊ a imagem automaticamente (ela vira descrição no histórico).
   Este instrumento GUARDA a foto e devolve a URL pública — use SÓ quando precisar
@@ -263,20 +255,19 @@ só dele) e nunca a ficha da execução (ela acaba com a execução). Como monta
 O quadro NÃO substitui o sistema oficial da empresa: se o dado já mora num sistema (ERP,
 Bubble, planilha de gestão que pessoas usam), o agente lê e escreve LÁ por instrumento. O
 quadro guarda o trabalho dos agentes. Não guarde CPF, salário nem dados de saúde num quadro.
-DESCOBRIR ≠ LER. Para ACHAR páginas use uma busca: `busca_web` (Tavily, palavra-chave) ou
-`busca_exa` (semântica, traz ângulos mais diversos — boa contra "sempre a mesma pauta").
-Para LER o conteúdo completo de uma URL que a busca achou, dê ao agente um instrumento de
-leitura: `ler_site` (Tavily) ou `ler_site_firecrawl` (lê até sites pesados de JavaScript).
-CONFIGURE a busca conforme o trabalho: se precisa de coisas ATUAIS (pauta, notícia,
-tendência), ponha `topico: "noticias"` (busca_web) / `categoria: "noticias"` (busca_exa) e
-uma `recencia` (ex.: "semana"/"mes") — sem isso a busca repete os mesmos resultados antigos.
-Use `incluir_dominios`/`excluir_dominios` quando houver fontes preferidas a fixar.
+SERVIÇO DE FORA É SEMPRE PERSONALIZADO. Os prontos do Batuta são só o que é do Batuta por
+dentro (agendar, aprovação, quadro, guardar imagem, PDF, Telegram) e o que vem das IAs
+(imagem, vídeo, ler imagem). Buscar na web, ler um site, publicar no Instagram/WordPress,
+consultar o Google, falar com qualquer sistema da empresa: monte um instrumento
+personalizado — `montar_conector` (API; a chave do serviço fica PENDENTE para o consultor
+colar no instrumento) ou `configurar_instrumento` com `conectar_mcp` (servidor MCP). Banco
+de dados direto também é personalizado: `configurar_instrumento` com `banco_sql`.
 A fotografia do time mostra, em cada instrumento, `acao_irreversivel` JÁ resolvido — use
 isso: são os instrumentos com `acao_irreversivel: true` que merecem uma aprovação antes.
 
 Se você separar em DOIS nós (um que prepara e apresenta, outro que executa), o nó que
 executa precisa RECEBER tudo o que o instrumento exige — senão o agente trava pedindo o
-que falta, em vez de agir. Para PUBLICAR no Instagram: a mídia numa URL PÚBLICA e a
+que falta, em vez de agir. Para PUBLICAR numa rede social: a mídia numa URL PÚBLICA e a
 LEGENDA já decididas antes (no input, ou escritas por um agente); não deixe o publicador
 sem legenda.
 Para a ARTE: `gerar_imagem` cria do zero a partir de texto; `montar_imagem` faz uma
@@ -294,15 +285,11 @@ a BIBLIOTECA estiver no ar, virão de lá (o agente as escolhe na Biblioteca).
 Para VÍDEO: `gerar_video` (Sora) cria um clipe curto a partir de um roteiro (`prompt`) e
 devolve uma URL pública de MP4; pode ANIMAR a partir de uma imagem (passe a URL de uma arte
 gerada antes como quadro inicial — ex.: [gerar_imagem] → [gerar_video]). Esse MP4 se publica
-pelo `publicar_instagram` como REELS, STORY de vídeo ou ITEM de carrossel (o carrossel pode
-misturar imagens e vídeos — o agente marca o tipo de cada mídia em `tipos_midia_itens`, na
-ordem das URLs). Gerar o vídeo não precisa de aprovação; quem publica é que precisa. O vídeo leva
+pelo instrumento personalizado de publicação (reels, story de vídeo ou item de carrossel).
+Gerar o vídeo não precisa de aprovação; quem publica é que precisa. O vídeo leva
 alguns minutos e sai com a marca d'água da OpenAI. Modelo/tamanho/duração ficam na CONFIG do
-instrumento (o humano fixa o custo); o agente só escreve o roteiro.
-Para animar uma FOTO (inclusive rosto de pessoa REAL — ex.: o dono do negócio fazendo marketing
-com o próprio rosto), use `gerar_video_fal` (fal.ai: Kling/Luma/Hailuo): recebe a URL da foto +
-um roteiro do movimento e devolve um MP4 (publicável). A Sora (`gerar_video`) NÃO anima rosto
-real; para isso é o `gerar_video_fal`.
+instrumento (o humano fixa o custo); o agente só escreve o roteiro. A Sora NÃO anima rosto de
+pessoa real.
 
 CANCELAR é embutido (não é uma saída que você desenha): sempre que o fluxo estiver
 esperando uma aprovação, além de aprovar/reprovar a pessoa pode ENCERRAR — na tela há um
@@ -423,23 +410,6 @@ gatilho, SEM a URL). Então, se perguntarem "qual a URL do webhook?", confira o 
 retrato e, se for webhook, oriente a pessoa a abrir AQUELA automação para copiar a URL — não
 mande procurar no painel do time.
 
-COMENTÁRIO DO INSTAGRAM ('comentario_instagram'): cada comentário num post de uma conta
-conectada dispara o fluxo. Ao montar, você define os FILTROS na config (midias: 'todas' ou
-posts específicos; palavra_chave?; teto_por_hora?), mas NÃO a conta: a CONTA (a credencial do
-Instagram) é escolhida pelo HUMANO na tela do gatilho. Então, ao configurar, AVISE: "montei o
-gatilho de comentário; falta você escolher a conta do Instagram na tela do gatilho" — nunca
-diga que já está pronto/ligado sem isso. O agente que reage precisa carregar o instrumento
-'instagram_responder_comentario' no cinto. Como a resposta é PÚBLICA e vai a um estranho,
-RECOMENDE (sem impor) um portão de aprovação no passo da resposta: com portão, a resposta vira
-rascunho e espera o OK de um humano; sem portão, o agente responde sozinho — quem decide é o
-consultor. Se DUAS automações ativas de comentário miram a MESMA conta com filtros que se
-sobrepõem, avise que as duas vão reagir (resposta em dobro). E ao DUPLICAR (time ou automação),
-a cópia vem "a conectar": lembre o consultor de re-escolher a conta na cópia.
-CONTEXTO DO POST: o gatilho entrega ao agente o texto do comentário E o `media_id` (o id do
-post). Para o agente responder LEVANDO EM CONTA o conteúdo do post (não só o comentário
-isolado), ponha o instrumento 'Ler post do Instagram' (instagram_ler_post) no cinto dele e
-instrua no markdown: "antes de responder, use 'Ler post do Instagram' com o media_id do
-comentário para ler a legenda do post e responder com contexto".
 
 # Ativar
 Quando o time estiver coerente e sem pontas soltas, SINALIZE ao consultor que dá para

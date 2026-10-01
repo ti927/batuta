@@ -76,6 +76,7 @@ export function DrawerInstrumento(props: PropsDrawer) {
   if (instrumento && tipo?.criado_no_construtor) {
     return (
       <ConstrutorMCP
+        tipo={instrumento.tipo === "banco_sql" ? "banco_sql" : "conectar_mcp"}
         time={time}
         instrumento={instrumento}
         tipos={tipos}

@@ -19,24 +19,26 @@ from modelos import Instrumento, SegredoInstrumento
 
 def test_preparar_config_separa_segredo():
     publica, segredos = encaixe.preparar_config(
-        "publicar_wordpress",
-        {"site_url": "https://x.com", "senha_app": "zzz9", "status": "publish"},
+        "banco_sql",
+        {"host": "db.x", "banco": "erp", "usuario": "u", "senha": "zzz9", "porta": 6543},
     )
-    assert "senha_app" not in publica
-    assert publica["site_url"] == "https://x.com" and publica["status"] == "publish"
-    assert segredos == {"senha_app": "zzz9"}
+    assert "senha" not in publica
+    assert publica["host"] == "db.x" and publica["porta"] == 6543
+    assert segredos == {"senha": "zzz9"}
 
 
 def test_preparar_config_segredo_omitido_ou_vazio_nao_entra():
-    _, s1 = encaixe.preparar_config("publicar_wordpress", {"site_url": "https://x"})
-    _, s2 = encaixe.preparar_config("publicar_wordpress", {"senha_app": "   "})
+    _, s1 = encaixe.preparar_config("banco_sql", {"host": "x", "banco": "b", "usuario": "u"})
+    _, s2 = encaixe.preparar_config(
+        "banco_sql", {"host": "x", "banco": "b", "usuario": "u", "senha": "   "}
+    )
     assert s1 == {} and s2 == {}
 
 
 # ───────────────────────── Cofre: salvar/resumo/decifrar ─────────────────────
 
 
-def _instrumento(sessao, dados, tipo="publicar_wordpress"):
+def _instrumento(sessao, dados, tipo="banco_sql"):
     inst = Instrumento(
         time_id=dados["timeA"].id, nome="i", tipo=tipo, configuracao={}
     )
@@ -47,7 +49,7 @@ def _instrumento(sessao, dados, tipo="publicar_wordpress"):
 
 def test_salvar_cifra_resumo_e_decifra(sessao, dados):
     inst = _instrumento(sessao, dados)
-    si.salvar_segredos(sessao, inst.id, {"senha_app": "minhasenha"})
+    si.salvar_segredos(sessao, inst.id, {"senha": "minhasenha"})
 
     # No banco está cifrado, nunca em claro.
     reg = sessao.scalars(
@@ -55,24 +57,24 @@ def test_salvar_cifra_resumo_e_decifra(sessao, dados):
     ).first()
     assert reg is not None and reg.valor_cifrado != "minhasenha"
 
-    assert si.resumo(sessao, inst.id) == {"senha_app": "enha"}  # 4 últimos
-    assert si.decifrar(sessao, inst.id) == {"senha_app": "minhasenha"}
+    assert si.resumo(sessao, inst.id) == {"senha": "enha"}  # 4 últimos
+    assert si.decifrar(sessao, inst.id) == {"senha": "minhasenha"}
 
 
 def test_salvar_omitido_preserva_o_atual(sessao, dados):
     inst = _instrumento(sessao, dados)
-    si.salvar_segredos(sessao, inst.id, {"senha_app": "primeira"})
+    si.salvar_segredos(sessao, inst.id, {"senha": "primeira"})
     si.salvar_segredos(sessao, inst.id, {})  # nada informado
-    assert si.decifrar(sessao, inst.id)["senha_app"] == "primeira"
-    si.salvar_segredos(sessao, inst.id, {"senha_app": "segunda"})  # troca
-    assert si.decifrar(sessao, inst.id)["senha_app"] == "segunda"
+    assert si.decifrar(sessao, inst.id)["senha"] == "primeira"
+    si.salvar_segredos(sessao, inst.id, {"senha": "segunda"})  # troca
+    assert si.decifrar(sessao, inst.id)["senha"] == "segunda"
 
 
 def test_anexar_decifra_em_atributo_transitorio(sessao, dados):
     inst = _instrumento(sessao, dados)
-    si.salvar_segredos(sessao, inst.id, {"senha_app": "secreta99"})
+    si.salvar_segredos(sessao, inst.id, {"senha": "secreta99"})
     si.anexar_aos_instrumentos(sessao, [inst])
-    assert inst.segredos_decifrados == {"senha_app": "secreta99"}
+    assert inst.segredos_decifrados == {"senha": "secreta99"}
 
 
 # ──────────────────────────── Rota: CRUD com segredo ─────────────────────────
@@ -83,8 +85,8 @@ def _criar_wp(cliente, dados, senha="abcd1234"):
         f"/times/{dados['timeA'].id}/instrumentos",
         json={
             "nome": "WP",
-            "tipo": "publicar_wordpress",
-            "configuracao": {"site_url": "https://x.com", "usuario": "u", "senha_app": senha},
+            "tipo": "banco_sql",
+            "configuracao": {"host": "db.x", "banco": "erp", "usuario": "u", "senha": senha},
         },
     )
 
@@ -95,24 +97,25 @@ def test_criar_separa_e_mascara_segredo(cliente, entrar, dados, sessao):
     assert r.status_code == 201
     corpo = r.json()
     # o valor nunca volta; a config pública não tem o segredo; só ultimos4 em segredos
-    assert "senha_app" not in (corpo["configuracao"] or {})
-    assert corpo["segredos"]["senha_app"] == "1234"
+    assert "senha" not in (corpo["configuracao"] or {})
+    assert corpo["segredos"]["senha"] == "1234"
     assert "abcd1234" not in json.dumps(corpo)
 
 
 def test_editar_sem_reinformar_preserva_segredo(cliente, entrar, dados):
     entrar(dados["admin"])
     inst_id = _criar_wp(cliente, dados).json()["id"]
-    # edita só o nome (sem senha_app) → segredo permanece
+    # edita só o nome (sem senha) → segredo permanece
     r = cliente.put(
         f"/instrumentos/{inst_id}",
-        json={"nome": "WP2", "configuracao": {"site_url": "https://x.com"}},
+        json={"nome": "WP2", "configuracao": {"host": "db.x", "banco": "erp", "usuario": "u"}},
     )
     assert r.status_code == 200
-    assert r.json()["segredos"]["senha_app"] == "1234"
+    assert r.json()["segredos"]["senha"] == "1234"
     # reinforma com novo valor → troca (ultimos4 muda)
     r2 = cliente.put(
         f"/instrumentos/{inst_id}",
-        json={"nome": "WP2", "configuracao": {"senha_app": "novo9876"}},
+        json={"nome": "WP2", "configuracao": {
+            "host": "db.x", "banco": "erp", "usuario": "u", "senha": "novo9876"}},
     )
-    assert r2.json()["segredos"]["senha_app"] == "9876"
+    assert r2.json()["segredos"]["senha"] == "9876"

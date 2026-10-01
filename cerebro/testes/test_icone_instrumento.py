@@ -4,7 +4,7 @@ metadado de apresentação — guardamos como veio e devolvemos no InstrumentoLe
 
 
 def _criar(cliente, dados, icone=None):
-    corpo = {"nome": "Busca", "tipo": "busca_web", "configuracao": {}}
+    corpo = {"nome": "Busca", "tipo": "gerar_pdf", "configuracao": {}}
     if icone is not None:
         corpo["icone"] = icone
     return cliente.post(f"/times/{dados['timeA'].id}/instrumentos", json=corpo)

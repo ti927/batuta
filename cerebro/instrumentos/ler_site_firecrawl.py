@@ -49,6 +49,8 @@ class ArgsLerSiteFirecrawl(BaseModel):
 
 class LerSiteFirecrawl(TipoInstrumento):
     tipo = "ler_site_firecrawl"
+    # Aposentado como pronto do Batuta (2026-10-01): monta-se como personalizado.
+    substituido_por = "personalizado"
     categoria = "Web (busca e leitura)"
     nome_exibicao = "Ler site (Firecrawl)"
     descricao = (

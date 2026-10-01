@@ -15,7 +15,7 @@ import {
 } from "@/lib/api";
 import { podeAdmin, podeOperar } from "@/lib/permissoes";
 import { ConstrutorInstrumento } from "@/components/construtor-instrumento";
-import { ConstrutorMCP } from "@/components/construtor-mcp";
+import { ConstrutorMCP, type TipoConstrutor } from "@/components/construtor-mcp";
 import { DrawerInstrumento } from "@/components/drawer-instrumento";
 import { buscarUso, emUso, quemUsa } from "@/components/uso-instrumento";
 import { ListaInstrumentos } from "@/components/lista-instrumentos";
@@ -49,9 +49,9 @@ export function InstrumentosCliente({
   const [construtor, setConstrutor] = useState<null | "novo" | Instrumento>(
     null,
   );
-  // Servidor MCP: instrumento personalizado, com o seu próprio Construtor.
+  // Servidor MCP e banco de dados: personalizados, com o Construtor de tipo fixo.
   const [construtorMcp, setConstrutorMcp] = useState<
-    null | "novo" | Instrumento
+    null | { tipo: TipoConstrutor; instrumento: Instrumento | null }
   >(null);
   // "Criar instrumento": primeiro a pessoa diz o que quer conectar.
   const [escolhendo, setEscolhendo] = useState(false);
@@ -136,8 +136,8 @@ export function InstrumentosCliente({
         onAbrir={(inst) =>
           inst.tipo === "conector"
             ? setConstrutor(inst)
-            : inst.tipo === "conectar_mcp"
-              ? setConstrutorMcp(inst)
+            : inst.tipo === "conectar_mcp" || inst.tipo === "banco_sql"
+              ? setConstrutorMcp({ tipo: inst.tipo, instrumento: inst })
               : setAberto(inst)
         }
       />
@@ -185,7 +185,7 @@ export function InstrumentosCliente({
                 className="rounded-md border border-border p-3 text-left hover:border-primary hover:bg-accent/40"
                 onClick={() => {
                   setEscolhendo(false);
-                  setConstrutorMcp("novo");
+                  setConstrutorMcp({ tipo: "conectar_mcp", instrumento: null });
                 }}
               >
                 <span className="block text-sm font-medium text-foreground">
@@ -196,6 +196,20 @@ export function InstrumentosCliente({
                   WordPress…); você escolhe quais entram no cinto.
                 </span>
               </button>
+              <button
+                className="rounded-md border border-border p-3 text-left hover:border-primary hover:bg-accent/40"
+                onClick={() => {
+                  setEscolhendo(false);
+                  setConstrutorMcp({ tipo: "banco_sql", instrumento: null });
+                }}
+              >
+                <span className="block text-sm font-medium text-foreground">
+                  Um banco de dados
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Os agentes leem direto no banco de dados do sistema (PostgreSQL).
+                </span>
+              </button>
             </div>
           </div>
         </div>
@@ -203,13 +217,16 @@ export function InstrumentosCliente({
 
       {construtorMcp && (
         <ConstrutorMCP
-          key={construtorMcp === "novo" ? "novo" : construtorMcp.id}
+          key={construtorMcp.instrumento?.id ?? `novo-${construtorMcp.tipo}`}
+          tipo={construtorMcp.tipo}
           time={time}
-          instrumento={construtorMcp === "novo" ? null : construtorMcp}
+          instrumento={construtorMcp.instrumento}
           tipos={tipos}
           souAdmin={podeAdmin(meuPapel)}
           onFechar={() => setConstrutorMcp(null)}
-          onSalvou={(salvo) => setConstrutorMcp(salvo)}
+          onSalvou={(salvo) =>
+            setConstrutorMcp({ tipo: construtorMcp.tipo, instrumento: salvo })
+          }
         />
       )}
 

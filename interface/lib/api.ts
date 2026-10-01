@@ -272,7 +272,7 @@ export type Instrumento = {
   icone_auto?: string | null;
   // Só na lista do time (aba Instrumentos): o que o cartão mostra.
   personalizado?: boolean;
-  ligacao?: "api" | "mcp" | null;
+  ligacao?: "api" | "mcp" | "banco" | null;
   qtd_acoes?: number | null;
   usado_por_agentes?: string[];
   usado_em_outros_times?: number;

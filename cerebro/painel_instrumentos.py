@@ -118,7 +118,7 @@ def enriquecer(sessao: Session, time: Time, lista: list[Instrumento]) -> None:
         inst.usado_por_agentes = nomes
         inst.usado_em_outros_times = len(outros)
         inst.personalizado = encaixe.eh_personalizado(inst.tipo)
-        inst.ligacao = {"conector": "api", "conectar_mcp": "mcp"}.get(inst.tipo)
+        inst.ligacao = {"conector": "api", "conectar_mcp": "mcp", "banco_sql": "banco"}.get(inst.tipo)
         inst.qtd_acoes = _qtd_acoes(inst)
         inst.pago = _pago(inst)
         inst.time_casa_nome = nomes_times.get(inst.time_id)

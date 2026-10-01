@@ -45,3 +45,94 @@ def test_servidor_mcp_segue_criavel_pelas_ias(sessao, dados):
         configuracao={"auth_modo": "bearer"},
     )
     assert inst.tipo == "conectar_mcp"
+
+
+# ── Reorganização dos prontos (2026-10-01) ──────────────────────────────────────
+# Pronto do Batuta = o que é do Batuta por dentro + o que vem das IAs. Integração de
+# mercado (Instagram, busca/leitura de sites, WordPress, Search Console, fal.ai) e o
+# webhook de saída viraram personalizado: criar NOVO é recusado em toda porta; o que
+# já existe segue rodando. O banco de dados virou personalizado com Construtor.
+
+APOSENTADOS = (
+    "instagram_insights", "instagram_ler_comentarios", "instagram_ler_post",
+    "instagram_responder_comentario", "publicar_instagram", "busca_web", "busca_exa",
+    "ler_site", "ler_site_firecrawl", "publicar_wordpress", "search_console",
+    "gerar_video_fal", "disparar_webhook",
+)
+PRONTOS = (
+    "agendar_automacao", "arquivar_imagem", "descrever_imagem", "enviar_telegram",
+    "gerar_imagem", "gerar_pdf", "gerar_video", "montar_imagem", "pedir_aprovacao",
+    "quadro",
+)
+
+
+def test_integracoes_de_mercado_nao_se_criam_mais_como_pronto():
+    import instrumentos as encaixe
+
+    for tipo in APOSENTADOS:
+        motivo = encaixe.motivo_para_nao_criar(tipo)
+        assert motivo and "Construtor" in motivo, tipo
+    for tipo in PRONTOS:
+        assert encaixe.motivo_para_nao_criar(tipo) is None, tipo
+        assert not encaixe.eh_personalizado(tipo), tipo
+
+
+def test_catalogo_das_ias_so_traz_prontos_e_personalizados_criaveis():
+    from criacao.ferramentas import catalogo_de_instrumentos
+
+    tipos = {t["tipo"] for t in catalogo_de_instrumentos()}
+    assert not (tipos & set(APOSENTADOS))
+    assert set(PRONTOS) <= tipos
+    assert {"conectar_mcp", "banco_sql"} <= tipos  # personalizados que as IAs criam
+
+
+def test_ia_criadora_recusa_tipo_aposentado(sessao, dados):
+    import pytest
+    from criacao import servicos
+    from criacao.servicos import ConflitoDominio
+
+    with pytest.raises(ConflitoDominio, match="personalizado"):
+        servicos.configurar_instrumento(
+            sessao, dados["timeA"], nome="Busca", tipo="busca_web", configuracao={}
+        )
+
+
+def test_tela_recusa_tipo_aposentado(cliente, entrar, dados):
+    entrar(dados["operador"])
+    r = cliente.post(f"/times/{dados['timeA'].id}/instrumentos", json={
+        "nome": "Ler site", "tipo": "ler_site", "configuracao": {}})
+    assert r.status_code == 422 and "personalizado" in r.json()["detail"]
+
+
+def test_instrumento_aposentado_que_ja_existe_segue_editavel(cliente, entrar, dados, sessao):
+    inst = Instrumento(time_id=dados["timeA"].id, nome="Ler site", tipo="ler_site",
+                       configuracao={})
+    sessao.add(inst)
+    sessao.flush()
+    entrar(dados["operador"])
+    r = cliente.put(f"/instrumentos/{inst.id}", json={"nome": "Ler site (Tavily)"})
+    assert r.status_code == 200 and r.json()["nome"] == "Ler site (Tavily)"
+
+
+def test_banco_de_dados_e_personalizado_com_construtor(cliente, entrar, dados, sessao):
+    import instrumentos as encaixe
+    from criacao import servicos
+
+    assert encaixe.eh_personalizado("banco_sql")
+    entrar(dados["operador"])
+    tipos = {t["tipo"]: t for t in cliente.get("/instrumentos/tipos").json()}
+    assert tipos["banco_sql"]["criado_no_construtor"] is True
+    inst, pendentes = servicos.configurar_instrumento(
+        sessao, dados["timeA"], nome="ERP", tipo="banco_sql",
+        configuracao={"host": "db.x", "banco": "erp", "usuario": "leitor",
+                      "somente_leitura": True},
+    )
+    assert inst.tipo == "banco_sql" and "senha" in pendentes
+
+
+def test_gatilho_de_comentario_do_instagram_nao_se_define_mais():
+    from criacao.ferramentas import FORMATO_GATILHO, _validar_gatilho
+
+    erro = _validar_gatilho("comentario_instagram", {})
+    assert erro and "webhook" in erro
+    assert "comentario_instagram" not in FORMATO_GATILHO

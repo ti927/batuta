@@ -62,22 +62,22 @@ class ConfigSQL(BaseModel):
     """Dados de conexão. A `senha` é SEGREDO (cofre 7-B); o resto é público."""
 
     tipo_banco: Literal["postgres"] = Field(
-        default="postgres", description="Tipo do banco (por ora, PostgreSQL)."
+        default="postgres", title="Tipo de banco", description="Por enquanto, só PostgreSQL."
     )
-    host: str = Field(min_length=1, description="Endereço do servidor de banco.")
-    porta: int = Field(default=5432, description="Porta do banco.")
-    banco: str = Field(min_length=1, description="Nome do banco de dados.")
-    usuario: str = Field(min_length=1, description="Usuário do banco.")
-    senha: str = Field(default="", description="Senha do banco (segredo).")
+    host: str = Field(min_length=1, title="Endereço do servidor", description="Ex.: db.minhaempresa.com.br")
+    porta: int = Field(default=5432, title="Porta", description="Quase sempre 5432.")
+    banco: str = Field(min_length=1, title="Nome do banco")
+    usuario: str = Field(min_length=1, title="Usuário")
+    senha: str = Field(default="", title="Senha")
     ssl: Literal["require", "prefer", "disable"] = Field(
-        default="prefer", description="Modo de SSL da conexão (sslmode)."
+        default="prefer",
+        title="Conexão protegida",
+        description="require = exige; prefer = usa se o servidor oferecer; disable = não usa.",
     )
     somente_leitura: bool = Field(
         default=False,
-        description=(
-            "Se verdadeiro, o instrumento SÓ executa consultas (SELECT) e recusa "
-            "escrita — e, por ser seguro, não exige portão de aprovação humana."
-        ),
+        title="Somente leitura",
+        description="Marcado, os agentes só consultam: qualquer alteração no banco é recusada.",
     )
 
 
@@ -93,6 +93,9 @@ class ArgsSQL(BaseModel):
 
 class BancoSQL(TipoInstrumento):
     tipo = "banco_sql"
+    # PERSONALIZADO (2026-10-01): banco de dados é ligação com sistema de fora — nasce
+    # no Construtor ("🌟 Criar instrumento" → Um banco de dados), não na lista de prontos.
+    criado_no_construtor = True
     categoria = "Integrações e dados"
     nome_exibicao = "Banco de dados direto (SQL)"
     descricao = (

@@ -31,7 +31,7 @@ def test_prompt_tem_as_pecas_essenciais():
     assert "SINALIZE" in p and "nunca ativa sozinho" in p.lower()
     assert "claude-haiku-4-5" in p
     # catálogo de instrumentos injetado (com a marca de irreversível)
-    assert "publicar_wordpress" in p
+    assert "banco_sql" in p
     assert "acao_irreversivel" in p
 
 

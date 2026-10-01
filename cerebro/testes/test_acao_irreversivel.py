@@ -9,15 +9,12 @@ import instrumentos as encaixe
 from criacao.ferramentas import catalogo_de_instrumentos
 
 # Baseline por tipo (o que o catálogo expõe à IA): o tipo PODE escrever?
-# `disparar_webhook` é gatilho de automação em massa → NÃO exige portão (decisão
-# do maestro); por isso está no baseline FALSE, não no TRUE.
+# As integrações de mercado (WordPress, busca, webhook de saída…) saíram do catálogo em
+# 2026-10-01 — viraram personalizado.
 # `chamar_api_rest` saiu do catálogo das IAs em 2026-09-29 (substituído na criação pelo
 # conector) — o baseline dele segue provado em `test_rest_deriva_do_metodo`.
-_BASELINE_TRUE = {
-    "publicar_wordpress", "banco_sql",
-    "conectar_mcp",
-}
-_BASELINE_FALSE = {"busca_web", "gerar_pdf", "gerar_imagem", "disparar_webhook"}
+_BASELINE_TRUE = {"enviar_telegram", "banco_sql", "conectar_mcp", "pedir_aprovacao"}
+_BASELINE_FALSE = {"gerar_pdf", "gerar_imagem", "agendar_automacao", "quadro"}
 
 
 def test_catalogo_expoe_baseline_do_tipo():
@@ -45,7 +42,7 @@ def test_sql_deriva_do_somente_leitura():
 
 
 def test_tipos_que_sempre_escrevem():
-    for tipo in ("publicar_wordpress", "conectar_mcp"):
+    for tipo in ("enviar_telegram", "conectar_mcp"):
         assert encaixe.acao_irreversivel(tipo, {}) is True, tipo
 
 

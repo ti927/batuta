@@ -51,6 +51,7 @@ function categoriaDe(
   tipos: Map<string, TipoInstrumento>,
 ): string {
   if (i.ligacao === "mcp") return "Servidor MCP";
+  if (i.ligacao === "banco") return "Banco de dados";
   if (i.ligacao === "api") {
     const c = (i.configuracao?.categoria as string | undefined)?.trim();
     return c || "API";
@@ -65,6 +66,7 @@ function oQueE(i: Instrumento, tipos: Map<string, TipoInstrumento>): string {
     return `API · ${n} ${n === 1 ? "operação" : "operações"}`;
   if (i.ligacao === "mcp")
     return `MCP · ${n} ${n === 1 ? "ferramenta" : "ferramentas"}`;
+  if (i.ligacao === "banco") return "Banco de dados (PostgreSQL)";
   return tipos.get(i.tipo)?.nome_exibicao ?? i.tipo;
 }
 
@@ -102,7 +104,7 @@ function selosDe(i: Instrumento): Selo[] {
   );
   if (i.ligacao)
     selos.push({
-      texto: i.ligacao === "api" ? "API" : "MCP",
+      texto: { api: "API", mcp: "MCP", banco: "Banco" }[i.ligacao],
       variante: "neutral",
     });
   selos.push(

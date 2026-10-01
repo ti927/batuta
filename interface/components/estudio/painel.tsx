@@ -976,7 +976,7 @@ function ConfigGatilhoBloco({
     { chave: "manual", rotulo: "Manual" },
     { chave: "agendamento", rotulo: "Na hora marcada" },
     { chave: "webhook", rotulo: "Por webhook" },
-    { chave: "comentario_instagram", rotulo: "Comentário no Instagram" },
+    // "Comentário no Instagram" saiu (2026-10-01): comentário chega por webhook.
   ];
   return (
     <div className="flex flex-col gap-2.5">

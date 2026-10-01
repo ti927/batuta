@@ -22,20 +22,20 @@ def test_criar_time_e_agentes(sessao, dados):
 def test_configurar_instrumento_separa_segredos(sessao, dados):
     time = servicos.criar_time(sessao, dados["orgA"].id, "T")
     inst, pendentes = servicos.configurar_instrumento(
-        sessao, time, nome="WP", tipo="publicar_wordpress",
-        configuracao={"site_url": "https://x.com", "usuario": "ana"},
+        sessao, time, nome="ERP", tipo="banco_sql",
+        configuracao={"host": "db.x", "banco": "erp", "usuario": "ana"},
     )
-    assert inst.tipo == "publicar_wordpress"
-    # senha_app não foi informada → fica pendente; e nunca entra na config pública
-    assert "senha_app" in pendentes
-    assert "senha_app" not in (inst.configuracao or {})
+    assert inst.tipo == "banco_sql"
+    # senha não foi informada → fica pendente; e nunca entra na config pública
+    assert "senha" in pendentes
+    assert "senha" not in (inst.configuracao or {})
 
 
 def test_encaixar_de_outro_time_recusa(sessao, dados):
     t1 = servicos.criar_time(sessao, dados["orgA"].id, "T1")
     t2 = servicos.criar_time(sessao, dados["orgA"].id, "T2")
     ag = servicos.adicionar_agente(sessao, t1, nome="A")
-    inst, _ = servicos.configurar_instrumento(sessao, t2, nome="Busca", tipo="busca_web")
+    inst, _ = servicos.configurar_instrumento(sessao, t2, nome="PDF", tipo="gerar_pdf")
     with pytest.raises(ConflitoDominio):
         servicos.encaixar(sessao, ag, inst)
 
@@ -72,7 +72,8 @@ def test_ativar_nao_exige_mais_portao(sessao, dados):
     guardiao = servicos.adicionar_agente(sessao, time, nome="Guardião", papel="lider")
     pub = servicos.adicionar_agente(sessao, time, nome="Publicador")
     inst, _ = servicos.configurar_instrumento(
-        sessao, time, nome="WP", tipo="publicar_wordpress"
+        sessao, time, nome="ERP", tipo="banco_sql",
+        configuracao={"host": "db.x", "banco": "erp", "usuario": "u"},
     )
     servicos.encaixar(sessao, pub, inst)
     cadeia = {

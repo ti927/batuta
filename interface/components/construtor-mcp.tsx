@@ -1,9 +1,10 @@
 "use client";
 
-// O CONSTRUTOR DE UM SERVIDOR MCP — instrumento PERSONALIZADO (decisão do maestro,
-// 2026-09-29): servidor MCP se cria em "Criar instrumento", como o conector, e não na
-// lista de tipos prontos. Por dentro é o mesmo formulário (identificação, lista de
-// ferramentas, quem pode usar), com o tipo fixo e a moldura do Construtor.
+// O CONSTRUTOR DE UM SERVIDOR MCP OU DE UM BANCO DE DADOS — instrumentos PERSONALIZADOS
+// (decisão do maestro, 2026-09-29; o banco entrou em 2026-10-01): nascem em "Criar
+// instrumento", como o conector, e não na lista de tipos prontos. Por dentro é o mesmo
+// formulário (identificação, campos, quem pode usar), com o tipo fixo e a moldura do
+// Construtor.
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -22,7 +23,29 @@ import { UsadoPor } from "@/components/uso-instrumento";
 import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
 
+// O que muda de um tipo para o outro: só os textos da moldura.
+const TEXTOS: Record<TipoConstrutor, { novo: string; titulo: string; ajuda: string }> = {
+  conectar_mcp: {
+    novo: "Novo servidor MCP",
+    titulo: "Servidor MCP",
+    ajuda:
+      "Conecta os agentes a um serviço que publica ferramentas prontas (Zernio, Zapier, " +
+      "WordPress…). Salve com o endereço e a identificação, depois escolha quais " +
+      "ferramentas entram no cinto.",
+  },
+  banco_sql: {
+    novo: "Novo banco de dados",
+    titulo: "Banco de dados",
+    ajuda:
+      "Os agentes consultam (e, se você permitir, alteram) um banco PostgreSQL. Marque " +
+      "“Somente leitura” quando eles só precisam consultar.",
+  },
+};
+
+export type TipoConstrutor = "conectar_mcp" | "banco_sql";
+
 export function ConstrutorMCP({
+  tipo = "conectar_mcp",
   time,
   instrumento,
   tipos,
@@ -30,6 +53,7 @@ export function ConstrutorMCP({
   onFechar,
   onSalvou,
 }: {
+  tipo?: TipoConstrutor;
   time: Time;
   instrumento: Instrumento | null;
   tipos: TipoInstrumento[];
@@ -37,7 +61,8 @@ export function ConstrutorMCP({
   onFechar: () => void;
   onSalvou: (salvo: Instrumento) => void;
 }) {
-  const tipoMcp = tipos.find((t) => t.tipo === "conectar_mcp");
+  const tipoDef = tipos.find((t) => t.tipo === tipo);
+  const textos = TEXTOS[tipo];
   const router = useRouter();
   // Abre sempre com o instrumento como está AGORA no Batuta. A cópia que chega de
   // uma lista pode ser de antes da chave ser colada — e aí o formulário acha que o
@@ -82,7 +107,7 @@ export function ConstrutorMCP({
           <span className="text-foreground">Construtor</span>
         </div>
         <span className="ml-1 min-w-0 truncate font-medium text-foreground">
-          {instrumento?.nome || "Novo servidor MCP"}
+          {instrumento?.nome || textos.novo}
         </span>
         <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
           {instrumento ? (
@@ -96,13 +121,9 @@ export function ConstrutorMCP({
       </header>
       <main className="min-w-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8">
         <div className="mx-auto max-w-3xl">
-          <h1 className="mb-1 text-lg font-semibold text-foreground">Servidor MCP</h1>
-          <p className="mb-5 text-sm text-muted-foreground">
-            Conecta os agentes a um serviço que publica ferramentas prontas (Zernio, Zapier,
-            WordPress…). Salve com o endereço e a identificação, depois escolha quais
-            ferramentas entram no cinto.
-          </p>
-          {!tipoMcp ? (
+          <h1 className="mb-1 text-lg font-semibold text-foreground">{textos.titulo}</h1>
+          <p className="mb-5 text-sm text-muted-foreground">{textos.ajuda}</p>
+          {!tipoDef ? (
             <Aviso>Não consegui carregar este tipo de instrumento. Recarregue a página.</Aviso>
           ) : erroCarga && carregando ? (
             <Aviso>
@@ -127,7 +148,7 @@ export function ConstrutorMCP({
               time={time}
               instrumento={atual}
               tipos={tipos}
-              tipoFixo="conectar_mcp"
+              tipoFixo={tipo}
               souAdmin={souAdmin}
               onSalvo={salvou}
               onCancelar={onFechar}

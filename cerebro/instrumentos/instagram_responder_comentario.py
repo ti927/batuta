@@ -94,6 +94,8 @@ class ArgsResponderComentario(BaseModel):
 
 class InstagramResponderComentario(TipoInstrumento):
     tipo = "instagram_responder_comentario"
+    # Aposentado como pronto do Batuta (2026-10-01): monta-se como personalizado.
+    substituido_por = "personalizado"
     categoria = "Instagram"
     nome_exibicao = "Instagram: responder ou moderar comentário"
     descricao = (

@@ -154,13 +154,12 @@ FORMATO_GATILHO = (
     "'mensal', hora: 0-23, minuto: 0-59, dia_semana: 0-6 (0=segunda, SÓ p/ semanal), "
     "dia_mes: 1-31 (SÓ p/ mensal), entrada?: texto que vira a entrada do fluxo}. "
     "Ex. semanal: {frequencia:'semanal', dia_semana:0, hora:8, minuto:0}.\n"
-    "- 'comentario_instagram': cada comentário num post de uma conta conectada "
-    "dispara o fluxo. config = {midias: 'todas' (padrão) ou lista de ids de post "
-    "(media_id); palavra_chave?: só dispara se o texto contém (ignora maiúsc.); "
-    "teto_por_hora?: teto de disparos/hora por automação (padrão 50, protege custo)}. "
-    "A CONTA em si (credencial do Instagram) é escolhida pelo humano na tela do "
-    "gatilho — você NÃO a define; avise o consultor que falta escolher a conta lá."
+    "Comentário em rede social (Instagram etc.) chega por 'webhook': o serviço que "
+    "cuida da conta (ex.: Zernio) chama o endereço da automação."
 )
+# Aposentado como opção nova (2026-10-01): a integração direta com a Meta saiu; o
+# comentário chega pelo gatilho webhook. Segue em TIPOS_GATILHO só até o código sair.
+GATILHOS_APOSENTADOS = ("comentario_instagram",)
 
 
 def _inteiro_no_intervalo(valor, minimo: int, maximo: int) -> bool:
@@ -199,8 +198,14 @@ def _validar_gatilho_webhook(config: dict) -> str | None:
 
 def _validar_gatilho(tipo: str, config: dict) -> str | None:
     """Devolve uma mensagem de erro se o gatilho estiver malformado (None = ok)."""
+    validos = [t for t in TIPOS_GATILHO if t not in GATILHOS_APOSENTADOS]
+    if tipo in GATILHOS_APOSENTADOS:
+        return (
+            "O gatilho 'comentario_instagram' não existe mais: comentário em rede social "
+            "chega pelo gatilho 'webhook' (o serviço da conta chama o endereço da automação)."
+        )
     if tipo not in TIPOS_GATILHO:
-        return f"Gatilho desconhecido: '{tipo}'. Use um de: {', '.join(TIPOS_GATILHO)}."
+        return f"Gatilho desconhecido: '{tipo}'. Use um de: {', '.join(validos)}."
     if tipo == "comentario_instagram":
         # A conta (credencial_id) é escolhida pelo HUMANO na tela (v1). Se a IA
         # mandar algo, validamos; ausência é OK (o gatilho fica "a conectar").

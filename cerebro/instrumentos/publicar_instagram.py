@@ -245,6 +245,8 @@ class ArgsPublicarInstagram(BaseModel):
 
 class PublicarInstagram(TipoInstrumento):
     tipo = "publicar_instagram"
+    # Aposentado como pronto do Batuta (2026-10-01): monta-se como personalizado.
+    substituido_por = "personalizado"
     categoria = "Instagram"
     nome_exibicao = "Instagram: publicar"
     descricao = (

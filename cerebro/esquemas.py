@@ -308,7 +308,7 @@ class InstrumentoLer(BaseModel):
     # ── Só na LISTA do time (`painel_instrumentos.enriquecer`); nas outras leituras,
     # os padrões. O que o cartão da aba Instrumentos mostra.
     personalizado: bool = False  # nasce no Construtor (API/servidor MCP)
-    ligacao: str | None = None  # "api" | "mcp" (personalizados)
+    ligacao: str | None = None  # "api" | "mcp" | "banco" (personalizados)
     qtd_acoes: int | None = None  # operações do conector / ferramentas do MCP no cinto
     usado_por_agentes: list[str] = Field(default_factory=list)  # agentes DESTE time
     usado_em_outros_times: int = 0

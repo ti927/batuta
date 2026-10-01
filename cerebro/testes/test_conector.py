@@ -402,7 +402,7 @@ def test_endpoint_testar_operacao_so_conector(cliente, entrar, dados):
     entrar(dados["admin"])
     criado = cliente.post(
         f"/times/{dados['timeA'].id}/instrumentos",
-        json={"nome": "Busca", "tipo": "busca_web", "configuracao": {}},
+        json={"nome": "Busca", "tipo": "gerar_pdf", "configuracao": {}},
     )
     inst_id = criado.json()["id"]
     r = cliente.post(

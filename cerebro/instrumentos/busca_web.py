@@ -124,6 +124,8 @@ class ArgsBuscaWeb(BaseModel):
 
 class BuscaWeb(TipoInstrumento):
     tipo = "busca_web"
+    # Aposentado como pronto do Batuta (2026-10-01): monta-se como personalizado.
+    substituido_por = "personalizado"
     categoria = "Web (busca e leitura)"
     nome_exibicao = "Busca na web (Tavily)"
     descricao = (

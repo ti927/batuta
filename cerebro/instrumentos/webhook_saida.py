@@ -51,6 +51,8 @@ class ArgsWebhook(BaseModel):
 
 class DispararWebhook(TipoInstrumento):
     tipo = "disparar_webhook"
+    # Aposentado como pronto do Batuta (2026-10-01): monta-se como personalizado.
+    substituido_por = "personalizado"
     categoria = "Integrações e dados"
     nome_exibicao = "Disparar webhook de saída"
     descricao = (

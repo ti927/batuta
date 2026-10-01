@@ -133,7 +133,7 @@ def test_so_conector(cliente, entrar, dados, ligada):
     entrar(dados["operador"])
     r = cliente.post(
         f"/times/{dados['timeA'].id}/instrumentos",
-        json={"nome": "Não é conector", "tipo": "busca_web", "configuracao": {}},
+        json={"nome": "Não é conector", "tipo": "gerar_pdf", "configuracao": {}},
     )
     iid = r.json()["id"]
     r2 = cliente.post(
@@ -189,7 +189,7 @@ CAMINHO_INST = "/interno/instrumento/testar"
 LIGADA = {"X-Batuta-Interno": "segredo-interno-de-teste"}
 
 
-def _instrumento(cliente, entrar, dados, tipo="busca_web", configuracao=None):
+def _instrumento(cliente, entrar, dados, tipo="gerar_pdf", configuracao=None):
     if tipo == "chamar_api_rest":
         # Não se cria mais pela rota (substituído pelo conector); uma instância que JÁ
         # EXISTE segue valendo — é ela que estes testes exercitam.

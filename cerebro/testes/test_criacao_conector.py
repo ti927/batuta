@@ -202,7 +202,7 @@ def test_testar_operacao_conector_so_conector(sessao, dados):
     """Um instrumento que não é conector recusa o teste."""
     ctx, f = _setup(sessao, dados)
     _chamar(f, "definir_time", nome="T")
-    iid = _chamar(f, "configurar_instrumento", nome="Busca", tipo="busca_web")["id"]
+    iid = _chamar(f, "configurar_instrumento", nome="Busca", tipo="gerar_pdf")["id"]
     r = _chamar(f, "testar_operacao_conector", conector_id=iid, operacao="x")
     assert r["ok"] is False
 

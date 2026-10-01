@@ -79,6 +79,8 @@ class ArgsLerComentarios(BaseModel):
 
 class InstagramLerComentarios(TipoInstrumento):
     tipo = "instagram_ler_comentarios"
+    # Aposentado como pronto do Batuta (2026-10-01): monta-se como personalizado.
+    substituido_por = "personalizado"
     categoria = "Instagram"
     nome_exibicao = "Instagram: ler comentários"
     descricao = (

@@ -222,6 +222,8 @@ def _subir_midia(cliente: httpx.Client, base: str, fonte: str) -> int:
 
 class PublicarWordpress(TipoInstrumento):
     tipo = "publicar_wordpress"
+    # Aposentado como pronto do Batuta (2026-10-01): monta-se como personalizado.
+    substituido_por = "personalizado"
     categoria = "Sites e blogs"
     nome_exibicao = "WordPress: publicar"
     descricao = (

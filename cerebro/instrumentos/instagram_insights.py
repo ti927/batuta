@@ -81,6 +81,8 @@ class ArgsInstagramInsights(BaseModel):
 
 class InstagramInsights(TipoInstrumento):
     tipo = "instagram_insights"
+    # Aposentado como pronto do Batuta (2026-10-01): monta-se como personalizado.
+    substituido_por = "personalizado"
     categoria = "Instagram"
     nome_exibicao = "Instagram: conta e métricas"
     descricao = (

@@ -146,7 +146,8 @@ class TipoInstrumento(ABC):
     # "Instrumento pronto" não o oferece; as IAs o criam normalmente).
     criado_no_construtor: bool = False
     # `substituido_por`: o tipo nativo foi SUBSTITUÍDO na criação por outro (ex.: a
-    # chamada de API avulsa → o conector). Instâncias existentes seguem funcionando e
+    # chamada de API avulsa → o conector; "personalizado" = integração de mercado que
+    # agora se monta no Construtor). Instâncias existentes seguem funcionando e
     # editáveis; criar uma NOVA é recusado em todo caminho (tela, IA criadora, MCP).
     substituido_por: str | None = None
 
@@ -361,6 +362,16 @@ _COMO_CRIAR = {
         "Chamada de API agora se cria como instrumento personalizado, no Construtor "
         "(“🌟 Criar instrumento” → Uma API). Pela IA, use montar_conector — ele serve "
         "para UMA ou várias operações."
+    ),
+    # Integração com serviço de mercado deixou de ser pronta do Batuta (decisão do
+    # maestro, 2026-10-01): pronto é só o que é do Batuta por dentro e o que vem das
+    # IAs. Instagram, busca/leitura de sites, WordPress, Search Console, fal.ai e o
+    # webhook de saída agora se montam como personalizado.
+    "personalizado": (
+        "Este instrumento não é mais um pronto do Batuta: monte-o como instrumento "
+        "personalizado, no Construtor (“🌟 Criar instrumento” → Uma API ou Um servidor "
+        "MCP), com a chave do serviço no próprio instrumento. Pela IA, use "
+        "montar_conector (API) ou configurar_instrumento com tipo conectar_mcp."
     ),
 }
 

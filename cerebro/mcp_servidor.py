@@ -689,7 +689,8 @@ async def definir_gatilho(
     """Define o gatilho de uma automação. Tipos: 'manual' (sem config), 'webhook' (um
     serviço de fora chama o endereço da automação), 'agendamento' (config = {frequencia:
     'diaria'|'semanal'|'mensal', hora: 0-23, minuto: 0-59, dia_semana: 0-6 só semanal,
-    dia_mes: 1-31 só mensal, entrada?: texto}), 'comentario_instagram'.
+    dia_mes: 1-31 só mensal, entrada?: texto}). Comentário em rede social chega por
+    'webhook' (o serviço da conta, ex.: Zernio, chama o endereço da automação).
 
     'webhook' — config opcional: {evento?: 'comment.received' (só esse tipo de aviso
     dispara; o nome vem do campo `event`/`type` do corpo), so_quando?: [{campo: 'a.b',

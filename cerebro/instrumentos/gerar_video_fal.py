@@ -226,6 +226,8 @@ def _detalhe_erro(resposta: httpx.Response) -> str:
 
 class GerarVideoFal(TipoInstrumento):
     tipo = "gerar_video_fal"
+    # Aposentado como pronto do Batuta (2026-10-01): monta-se como personalizado.
+    substituido_por = "personalizado"
     categoria = "Conteúdo"
     nome_exibicao = "Gerar vídeo a partir de foto"
     descricao = (
