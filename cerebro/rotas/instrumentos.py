@@ -124,6 +124,7 @@ def listar_tipos(usuario: Usuario = Depends(usuario_atual)):
             dependencias=t.dependencias_ui(),
             criado_no_construtor=bool(getattr(t, "criado_no_construtor", False)),
             substituido_por=getattr(t, "substituido_por", None),
+            provedores_ia=list(getattr(t, "provedores_ia", ()) or ()),
         )
         for t in encaixe.tipos_disponiveis()
         if not getattr(t, "oculto_no_catalogo", False)
@@ -187,7 +188,9 @@ def criar(
         sessao, usuario, time_id,
         minimo="admin" if dados.escopo == escopo_instrumento.ORGANIZACAO else "operador",
     )
-    motivo = encaixe.motivo_para_nao_criar(dados.tipo)
+    motivo = encaixe.motivo_para_nao_criar(dados.tipo) or segredos.falta_chave_de_ia(
+        sessao, dados.tipo, time.organizacao_id
+    )
     if motivo:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, motivo)
     try:

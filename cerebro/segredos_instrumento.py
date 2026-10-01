@@ -212,6 +212,19 @@ def servicos_resolviveis(
     return resolviveis
 
 
+def falta_chave_de_ia(sessao: Session, tipo: str, organizacao_id: uuid.UUID | None) -> str | None:
+    """Recusa criar um instrumento de IA quando a organização não tem a chave daquela IA
+    (fonte única para a tela, a IA criadora e o MCP). Só pergunta pela EXISTÊNCIA da
+    chave — nada é decifrado, então funciona também no MCP, que roda sem a chave-mestra."""
+    from instrumentos.base import falta_chave_de_ia as falta, obter_tipo
+    from orquestracao.modelos_ia import PROVEDORES
+
+    t = obter_tipo(tipo)
+    if not t or not getattr(t, "provedores_ia", ()):
+        return None
+    return falta(tipo, servicos_resolviveis(sessao, organizacao_id) & set(PROVEDORES))
+
+
 def pendentes(
     tipo: str,
     *,

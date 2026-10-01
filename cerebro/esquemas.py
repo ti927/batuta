@@ -336,6 +336,8 @@ class TipoInstrumentoLer(BaseModel):
     criado_no_construtor: bool = False
     # Substituído na criação por outro tipo (as instâncias existentes seguem valendo).
     substituido_por: str | None = None
+    # Instrumento de IA: as IAs que o liberam (basta uma ter chave). Vazio = nativo.
+    provedores_ia: list[str] = Field(default_factory=list)
     # Se o tipo reusa uma chave de serviço compartilhada da organização: o par
     # (campo_secreto, serviço), ex.: ["chave_api", "openai"]. O front mostra esse
     # campo como OPCIONAL ("usa a chave de IA da organização por padrão").

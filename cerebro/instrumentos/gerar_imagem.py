@@ -230,6 +230,8 @@ def _imagem_bytes(dados: dict) -> bytes:
 
 class GerarImagem(TipoInstrumento):
     tipo = "gerar_imagem"
+    # Instrumento da OpenAI: só existe para a organização que tem a chave dela.
+    provedores_ia = ("openai",)
     categoria = "Conteúdo"
     nome_exibicao = "Gerar imagem"
     descricao = (

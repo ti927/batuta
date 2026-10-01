@@ -190,7 +190,9 @@ def configurar_instrumento(
     """Cria um instrumento, separando os segredos (cifrados no cofre) da config
     pública. Devolve `(instrumento, segredos_pendentes)` — os pendentes são campos
     secretos que o consultor ainda precisa preencher no cofre."""
-    motivo = encaixe.motivo_para_nao_criar(tipo)
+    motivo = encaixe.motivo_para_nao_criar(tipo) or segredos.falta_chave_de_ia(
+        sessao, tipo, time.organizacao_id
+    )
     if motivo:
         raise ConflitoDominio(motivo)
     try:

@@ -191,7 +191,7 @@ def test_instrumento_com_chave_no_cofre_e_sem_chave_mestra(
     """REGRESSÃO dos bugs 1 e 2 (26/08): saber que a organização TEM chave de um
     serviço não pode exigir a chave-mestra — é só o nome do serviço que importa."""
     r = escrita.configurar_instrumento(
-        _sub(dados), str(dados["timeA"].id), "Arte do MCP", "gerar_imagem", {}
+        _sub(dados), str(dados["timeA"].id), "Visão do MCP", "descrever_imagem", {}
     )
     assert escrita.ERRO_INESPERADO not in r, f"ferramenta quebrada: {r}"
     assert "criado" in r.lower()
@@ -236,17 +236,18 @@ def test_listar_e_ver_instrumento(mcp, dados):
     import mcp_ferramentas as leitura
 
     escrita.configurar_instrumento(
-        _sub(dados), str(dados["timeA"].id), "Arte", "gerar_imagem", {}
+        _sub(dados), str(dados["timeA"].id), "ERP", "banco_sql",
+        {"host": "db.x", "banco": "erp", "usuario": "u"},
     )
     lista = json.loads(leitura.listar_instrumentos(_sub(dados), str(dados["timeA"].id)))
-    achado = next(i for i in lista["instrumentos"] if i["nome"] == "Arte")
-    assert achado["tipo"] == "gerar_imagem"
+    achado = next(i for i in lista["instrumentos"] if i["nome"] == "ERP")
+    assert achado["tipo"] == "banco_sql"
 
     detalhe = json.loads(leitura.ver_instrumento(_sub(dados), achado["id"]))
-    assert detalhe["nome"] == "Arte"
+    assert detalhe["nome"] == "ERP"
     assert detalhe["time"]["id"] == str(dados["timeA"].id)
     assert "segredos_pendentes" in detalhe
-    # a chave da OpenAI é secreta: aparece como pendente, JAMAIS o valor
+    # a senha do banco é secreta: aparece como pendente, JAMAIS o valor
     assert "api_key" not in json.dumps(detalhe).replace('"api_key"', "")[:0] or True
     assert all("valor" not in str(k) for k in detalhe["segredos_preenchidos"])
 

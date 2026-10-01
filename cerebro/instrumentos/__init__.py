@@ -8,7 +8,7 @@ instrumento à IA por este mesmo encaixe — sem conhecer o tipo concreto.
 Importar este pacote registra os tipos disponíveis.
 """
 
-from instrumentos.base import eh_personalizado, motivo_para_nao_criar  # noqa: F401
+from instrumentos.base import eh_personalizado, falta_chave_de_ia, motivo_para_nao_criar  # noqa: F401
 from instrumentos.base import (
     TipoInstrumento,
     acao_irreversivel,

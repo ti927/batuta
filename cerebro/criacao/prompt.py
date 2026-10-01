@@ -262,6 +262,9 @@ consultar o Google, falar com qualquer sistema da empresa: monte um instrumento
 personalizado — `montar_conector` (API; a chave do serviço fica PENDENTE para o consultor
 colar no instrumento) ou `configurar_instrumento` com `conectar_mcp` (servidor MCP). Banco
 de dados direto também é personalizado: `configurar_instrumento` com `banco_sql`.
+Os prontos de IA (`precisa_chave_de_ia` no catálogo) só se criam se a organização tiver a chave
+de uma daquelas IAs; sem ela, a criação é recusada — diga ao consultor que um admin cadastra a
+chave em Organização › Chaves, em vez de tentar outro caminho.
 A fotografia do time mostra, em cada instrumento, `acao_irreversivel` JÁ resolvido — use
 isso: são os instrumentos com `acao_irreversivel: true` que merecem uma aprovação antes.
 

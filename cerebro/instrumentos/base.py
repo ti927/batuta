@@ -150,6 +150,10 @@ class TipoInstrumento(ABC):
     # agora se monta no Construtor). Instâncias existentes seguem funcionando e
     # editáveis; criar uma NOVA é recusado em todo caminho (tela, IA criadora, MCP).
     substituido_por: str | None = None
+    # INSTRUMENTO DE UMA IA (decisão do maestro, 2026-10-01): o pronto que vem de uma IA
+    # (OpenAI, Anthropic, Google) só existe para a organização que tem a chave dela. Lista
+    # as IAs que servem — basta UMA ter chave. Vazio = nativo, sempre disponível.
+    provedores_ia: tuple[str, ...] = ()
 
     def normalizar_config(self, bruta: dict) -> dict:
         """Chance de o tipo TRANSFORMAR a configuração crua antes de ela ser
@@ -384,6 +388,23 @@ def eh_personalizado(tipo: str) -> bool:
         return True
     t = obter_tipo(tipo)
     return bool(getattr(t, "criado_no_construtor", False)) if t else False
+
+
+ROTULO_IA = {"openai": "OpenAI", "anthropic": "Anthropic", "google": "Google (Gemini)"}
+
+
+def falta_chave_de_ia(tipo: str, provedores_com_chave: set[str] | frozenset[str]) -> str | None:
+    """Se o tipo é de uma IA e a organização não tem a chave de nenhuma das IAs que
+    servem, o porquê e o caminho. None = pode criar (nativo, ou a chave existe)."""
+    t = obter_tipo(tipo)
+    exigidos = tuple(getattr(t, "provedores_ia", ()) or ()) if t else ()
+    if not exigidos or set(exigidos) & set(provedores_com_chave):
+        return None
+    nomes = " ou ".join(ROTULO_IA.get(p, p) for p in exigidos)
+    return (
+        f"“{t.nome_exibicao}” precisa da chave da {nomes}. Um admin cadastra em "
+        "Organização › Chaves; depois disso o instrumento aparece para criar."
+    )
 
 
 def motivo_para_nao_criar(tipo: str) -> str | None:

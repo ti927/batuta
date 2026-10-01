@@ -144,6 +144,8 @@ def _baixar(url: str) -> tuple[bytes, str]:
 
 class MontarImagem(TipoInstrumento):
     tipo = "montar_imagem"
+    # Instrumento da OpenAI: só existe para a organização que tem a chave dela.
+    provedores_ia = ("openai",)
     categoria = "Conteúdo"
     nome_exibicao = "Montar imagem (a partir de fotos)"
     descricao = (

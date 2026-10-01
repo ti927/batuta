@@ -19,6 +19,7 @@ import {
   provedoresParaSeletor,
   rotuloModelo,
   ROTULO_PROVEDOR,
+  type Provedor,
   type ProvedoresDisponiveis,
 } from "@/lib/modelos";
 import { IlustracaoProporcao } from "@/components/ilustracao-proporcao";
@@ -577,6 +578,16 @@ export function FormularioInstrumento({
     };
   }, [time.organizacao_id]);
 
+  // Pronto de IA só aparece para criar se a organização tem a chave de uma das IAs
+  // dele (o cérebro recusa do mesmo jeito). Enquanto a disponibilidade não chega,
+  // mostra todos.
+  const tiposOferecidos = tiposProntos.filter(
+    (t) =>
+      !t.provedores_ia?.length ||
+      !disponiveis ||
+      t.provedores_ia.some((p) => disponiveis[p as Provedor]),
+  );
+
   useEffect(() => {
     let vivo = true;
     api
@@ -803,7 +814,7 @@ export function FormularioInstrumento({
           }}
           disabled={!criando}
         >
-          {agruparTiposPorCategoria(criando ? tiposProntos : tipos).map(([grupo, lista]) => (
+          {agruparTiposPorCategoria(criando ? tiposOferecidos : tipos).map(([grupo, lista]) => (
             <optgroup key={grupo} label={grupo}>
               {lista.map((t) => (
                 <option key={t.tipo} value={t.tipo}>

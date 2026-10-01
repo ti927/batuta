@@ -74,6 +74,8 @@ class ArgsDescrever(BaseModel):
 
 class DescreverImagem(TipoInstrumento):
     tipo = "descrever_imagem"
+    # Serve a qualquer IA com chave (Anthropic, OpenAI ou Google).
+    provedores_ia = ("anthropic", "openai", "google")
     categoria = "Conteúdo"
     nome_exibicao = "Descrever/ler imagem (visão)"
     descricao = (

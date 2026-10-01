@@ -238,6 +238,8 @@ def _erro_openai(status: int, resposta) -> str:
 
 class GerarVideo(TipoInstrumento):
     tipo = "gerar_video"
+    # Instrumento da OpenAI: só existe para a organização que tem a chave dela.
+    provedores_ia = ("openai",)
     categoria = "Conteúdo"
     nome_exibicao = "Gerar vídeo"
     descricao = (

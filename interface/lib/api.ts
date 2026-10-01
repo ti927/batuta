@@ -337,6 +337,8 @@ export type TipoInstrumento = {
   criado_no_construtor?: boolean;
   // Substituído na criação (ex.: chamar_api_rest → conector); os antigos seguem valendo.
   substituido_por?: string | null;
+  // Instrumento de IA: as IAs que o liberam (basta uma ter chave). Vazio = nativo.
+  provedores_ia?: string[];
 };
 
 // ───────── Conector (Framework de Instrumentos) — configuração declarativa ─────────

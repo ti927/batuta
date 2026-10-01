@@ -136,3 +136,73 @@ def test_gatilho_de_comentario_do_instagram_nao_se_define_mais():
     erro = _validar_gatilho("comentario_instagram", {})
     assert erro and "webhook" in erro
     assert "comentario_instagram" not in FORMATO_GATILHO
+
+
+# ── A chave de IA libera os instrumentos daquela IA (2026-10-01, Fase 2) ─────────
+
+
+def _chave(sessao, org_id, provedor):
+    import cofre
+    from modelos import ChaveApi
+
+    sessao.add(ChaveApi(organizacao_id=org_id, provedor=provedor,
+                        valor_cifrado=cofre.cifrar("k-teste"), ativa=True))
+    sessao.flush()
+
+
+def test_instrumentos_de_ia_declaram_a_ia():
+    import instrumentos as encaixe
+
+    for tipo in ("gerar_imagem", "montar_imagem", "gerar_video"):
+        assert encaixe.obter_tipo(tipo).provedores_ia == ("openai",), tipo
+    assert set(encaixe.obter_tipo("descrever_imagem").provedores_ia) == {
+        "anthropic", "openai", "google"}
+    for tipo in ("agendar_automacao", "pedir_aprovacao", "quadro", "gerar_pdf"):
+        assert encaixe.obter_tipo(tipo).provedores_ia == (), tipo
+
+
+def test_sem_chave_da_openai_nao_cria_imagem(sessao, dados):
+    import pytest
+    from criacao import servicos
+    from criacao.servicos import ConflitoDominio
+
+    with pytest.raises(ConflitoDominio, match="chave da OpenAI"):
+        servicos.configurar_instrumento(sessao, dados["timeA"], nome="Arte",
+                                        tipo="gerar_imagem")
+
+
+def test_com_chave_da_openai_cria_imagem(sessao, dados):
+    from criacao import servicos
+
+    _chave(sessao, dados["orgA"].id, "openai")
+    inst, pendentes = servicos.configurar_instrumento(
+        sessao, dados["timeA"], nome="Arte", tipo="gerar_imagem")
+    assert inst.tipo == "gerar_imagem" and pendentes == []
+
+
+def test_tela_recusa_imagem_sem_chave_e_diz_onde_cadastrar(cliente, entrar, dados):
+    entrar(dados["operador"])
+    r = cliente.post(f"/times/{dados['timeA'].id}/instrumentos", json={
+        "nome": "Arte", "tipo": "gerar_imagem", "configuracao": {}})
+    assert r.status_code == 422 and "Organização › Chaves" in r.json()["detail"]
+
+
+def test_ler_imagem_serve_a_qualquer_ia(sessao, dados, monkeypatch):
+    from criacao import servicos
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    _chave(sessao, dados["orgA"].id, "google")
+    inst, _ = servicos.configurar_instrumento(
+        sessao, dados["timeA"], nome="Visão", tipo="descrever_imagem")
+    assert inst.tipo == "descrever_imagem"
+
+
+def test_catalogo_diz_qual_ia_libera(cliente, entrar, dados):
+    from criacao.ferramentas import catalogo_de_instrumentos
+
+    ia = {c["tipo"]: c for c in catalogo_de_instrumentos()}
+    assert ia["gerar_video"]["precisa_chave_de_ia"] == ["openai"]
+    assert ia["quadro"]["precisa_chave_de_ia"] == []
+    entrar(dados["operador"])
+    tela = {t["tipo"]: t for t in cliente.get("/instrumentos/tipos").json()}
+    assert tela["montar_imagem"]["provedores_ia"] == ["openai"]

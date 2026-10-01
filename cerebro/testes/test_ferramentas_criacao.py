@@ -97,13 +97,12 @@ def test_remover_agente_limpa_cadeia(sessao, dados):
 
 
 def test_configurar_instrumento_marca_segredos_pendentes(sessao, dados, monkeypatch):
-    # Sem chave OpenAI em lugar nenhum (cofre vazio pelo conftest; OpenAI não tem
-    # queda para o .env): aí sim a chave da imagem conta como pendente.
     _ctx, f = _setup(sessao, dados)
     _chamar(f, "definir_time", nome="T")
-    r = _chamar(f, "configurar_instrumento", nome="Arte", tipo="gerar_imagem")
+    r = _chamar(f, "configurar_instrumento", nome="ERP", tipo="banco_sql",
+                configuracao={"host": "db.x", "banco": "erp", "usuario": "u"})
     assert r["ok"] and r["id"]
-    assert r["segredos_pendentes"] == ["chave_api"]
+    assert r["segredos_pendentes"] == ["senha"]
 
 
 def test_configurar_instrumento_tipo_desconhecido_e_config_invalida(sessao, dados):

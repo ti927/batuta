@@ -10,12 +10,13 @@
 // compartilháveis (Tavily/busca), que os instrumentos reusam.
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   api,
   mensagemDeErro,
   type ChaveApiLer,
+  type TipoInstrumento,
 } from "@/lib/api";
 import {
   ROTULO_SERVICO,
@@ -48,6 +49,26 @@ export function GestaoChaves({
   const [compartilhavel, setCompartilhavel] = useState(true);
 
   const jaTem = chavesIniciais.some((c) => c.provedor === servico);
+
+  // Os instrumentos prontos que cada IA libera (vem do catálogo do cérebro).
+  const [tipos, setTipos] = useState<TipoInstrumento[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    api
+      .get<TipoInstrumento[]>("/instrumentos/tipos")
+      .then((t) => {
+        if (vivo) setTipos(t);
+      })
+      .catch(() => {
+        /* sem o catálogo, a linha "Libera" simplesmente não aparece */
+      });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+  const libera = tipos
+    .filter((t) => !t.substituido_por && t.provedores_ia?.includes(servico))
+    .map((t) => t.nome_exibicao);
 
   function tratar(e: unknown, padrao: string) {
     setErro(mensagemDeErro(e, padrao));
@@ -170,6 +191,12 @@ export function GestaoChaves({
         <p className="text-xs text-muted-foreground">
           Usada por: <span className="font-medium">{USADA_POR[servico]}</span>.
         </p>
+        {libera.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Com esta chave, a organização ganha os instrumentos prontos:{" "}
+            <span className="font-medium">{libera.join(", ")}</span>.
+          </p>
+        )}
         <Button className="self-start" onClick={salvar}>
           Salvar chave
         </Button>

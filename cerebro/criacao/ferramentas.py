@@ -122,6 +122,9 @@ def catalogo_de_instrumentos() -> list[dict]:
                 "campos": campos,
                 "dependencias": tipo.dependencias_ui(),
                 "acao_irreversivel": tipo.acao_irreversivel,
+                # Instrumento de IA: só se cria se a organização tem a chave de uma
+                # destas IAs (confira em ver_chaves_de_ia). Vazio = nativo.
+                "precisa_chave_de_ia": list(getattr(tipo, "provedores_ia", ()) or ()),
             }
         )
     return catalogo

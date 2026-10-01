@@ -40,7 +40,7 @@ export const ROTULO_SERVICO: Record<Servico, string> = {
 // Em que funções cada serviço é usado — texto de ajuda na tela de chaves.
 export const USADA_POR: Record<Servico, string> = {
   anthropic: "modelos dos agentes e IA de conversa",
-  openai: "modelos, IA de conversa, transcrição de áudio e geração de imagem",
+  openai: "modelos, IA de conversa e transcrição de áudio",
   google: "modelos dos agentes e IA de conversa",
   tavily: "busca na web e leitura de sites dos agentes",
   exa: "busca na web (semântica) dos agentes",
