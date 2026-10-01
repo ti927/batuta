@@ -3,7 +3,7 @@ titulo: "Chaves de IA"
 area: "segredos"
 slug: "chaves-de-ia"
 tags: ["chave", "ia", "openai", "anthropic", "google", "provedor", "pool", "consultoria", "custo"]
-revisado_em: "2026-07-17"
+revisado_em: "2026-10-01"
 fontes: ["PRODUTO.md §24-26", "cerebro/chaves.py", "reference_chaves-unificadas"]
 ---
 
@@ -19,7 +19,11 @@ certo. O Batuta resolve isso por um **pool**: primeiro a chave da **organizaçã
 chave da **consultoria** (fallback).
 
 - É **uma chave por provedor** — a escolha de qual IA usar fica no **modelo** do agente.
-- `gerar_imagem`/busca não pedem chave própria: reusam a do pool.
+- Os **prontos de IA** não pedem chave própria: reusam a do pool.
+- **A chave libera os instrumentos daquela IA** (desde 01/10/2026): com a chave da **OpenAI**, a
+  organização ganha **Gerar imagem**, **Montar imagem** e **Gerar vídeo**; com a de **qualquer** IA,
+  **Descrever imagem**. Sem a chave, esses instrumentos não aparecem em "Instrumento pronto" e criar
+  um é recusado, dizendo qual chave falta. A tela de chaves mostra o que cada chave libera.
 
 ## Como usar (na tela)
 1. Em **Chaves e credenciais** da organização, cadastre a chave de cada provedor que for usar.
@@ -27,16 +31,20 @@ chave da **consultoria** (fallback).
 3. Escolha o **modelo** de IA em cada agente — o provedor daquele modelo define qual chave é usada.
 
 ## Exemplos
-- Cadastrou a chave OpenAI da org → o `gerar_imagem` e agentes com modelo OpenAI passam a funcionar.
+- Cadastrou a chave OpenAI da org → Gerar imagem, Montar imagem e Gerar vídeo aparecem para criar, e
+  agentes com modelo OpenAI passam a funcionar.
 - Sem chave na org, mas com chave na consultoria → funciona pelo fallback.
 
 ## Limites e cuidados
-- **Sem a chave do provedor certo, a chamada falha** com um recado claro.
+- **Sem a chave do provedor certo, a chamada falha** com um recado claro. Um instrumento de IA que já
+  existe e perdeu a chave aparece como **precisa de atenção** (falta a chave).
 - O **uso é medido** (informativo) por provedor/origem — veja [[operacao/uso-e-custos]].
 
 ## Para a IA
 Não peça ao consultor uma "chave da executora/da conversa" — é **uma por provedor**. Se um instrumento
-reusa o pool (ex.: imagem→OpenAI) e a org já tem a chave, não acuse falta de chave. Segredo você **nunca**
+reusa o pool (ex.: imagem→OpenAI) e a org já tem a chave, não acuse falta de chave. No catálogo,
+`precisa_chave_de_ia` diz qual IA libera cada pronto; sem ela a criação é recusada — confira em
+`ver_chaves_de_ia` e oriente um admin a cadastrar. Segredo você **nunca**
 vê nem pede em texto; oriente a cadastrar na tela.
 
 ## Relacionado

@@ -37,7 +37,7 @@ Todo instrumento é de UM destes dois tipos. "Nativo" e "pronto" são a MESMA co
 | Exemplos | Zernio (Instagram), WordPress, busca na web (Tavily/Exa), ler site (Firecrawl), Search Console, banco PostgreSQL de um sistema, "Data de hoje" | Agendar automação, Pedir aprovação, Quadro do Cérebro, Guardar imagem recebida, Gerar PDF, Telegram; Gerar imagem, Montar imagem e Gerar vídeo (OpenAI); Descrever imagem (qualquer IA) |
 | Nasce em | **🌟 Criar instrumento** → "Uma API", "Um servidor MCP" ou "Um banco de dados" | **Instrumento pronto** |
 | Edita em | **Construtor** (também quando foi a IA quem criou) | Painel lateral |
-| Identificação | Dentro do próprio instrumento (chave, senha, login, certificado) | Os das IAs usam a chave de IA da organização |
+| Identificação | Dentro do próprio instrumento (chave, senha, login, certificado) | Os das IAs usam a chave de IA da organização — e só aparecem para criar quando ela existe |
 
 - **Desde 01/10/2026, integração de mercado não é pronta:** Instagram, busca e leitura de sites
   (Tavily, Exa, Firecrawl), WordPress, Search Console, vídeo da fal.ai e o webhook de saída se

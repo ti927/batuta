@@ -2740,3 +2740,9 @@ O app da Meta vai ser largado; o Instagram passa por um serviço de mercado (Zer
 - **Gatilho `comentario_instagram`:** recusado na IA criadora/MCP e fora do Estúdio — comentário de rede social chega por webhook.
 - Uso em produção medido antes: tudo 0, exceto `ler_site` (5 agentes do COF Post Instagram — o maestro troca pela IA externa) e 1 `busca_exa` sem agente.
 - **Próximas:** Fase 2 (a chave de IA libera os instrumentos daquela IA) · Fase 3 (apagar o código, só com 0 em uso — inclui OAuth/webhook da Meta e as chaves de serviço Tavily/Exa/Firecrawl/fal) · Fase 4 (instrumentos novos das IAs: busca na web pela própria IA, imagem/vídeo do Gemini).
+
+## FASE — Prontos do Batuta (Fase 2 de 4: a chave de IA libera os instrumentos daquela IA)  ✅ (2026-10-01, sem migração)
+- `TipoInstrumento.provedores_ia` (basta UMA ter chave): `gerar_imagem`, `montar_imagem`, `gerar_video` = OpenAI; `descrever_imagem` = qualquer IA. Vazio = nativo.
+- Criar sem a chave é recusado em toda porta (`segredos_instrumento.falta_chave_de_ia`, só pergunta pela EXISTÊNCIA da chave — funciona no MCP sem chave-mestra), com o recado de onde cadastrar.
+- Tela: "Instrumento pronto" esconde o que não tem chave (reusa `modelos-disponiveis`); a tela de chaves mostra "Com esta chave, a organização ganha os instrumentos prontos: …", derivado do catálogo. IAs: `precisa_chave_de_ia` no catálogo.
+- Instância existente que perde a chave: continua aparecendo como "precisa de atenção" (já existia).
