@@ -65,7 +65,6 @@ falta o humano **conectar a conta** (botão "Conectar Google"), se ainda não co
 reconectar): monte um conector com `auth_tipo: "google_conta_servico"` em vez de usar o OAuth.
 
 ## Relacionado
-- [[instrumentos/search-console]]
 - [[instrumentos/construir-conector]]
 - [[segredos/credenciais-nomeadas]]
 - [[segredos/segredos-de-instrumento]]

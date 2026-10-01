@@ -65,34 +65,18 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Gerar imagem | `instrumentos/gerar-imagem` | Texto→imagem; modelo/tamanho/qualidade; proporção | ✅ | ✍️ |
 | Montar imagem | `instrumentos/montar-imagem` | Composição a partir de fotos | ✅ | ✍️ |
 | Gerar vídeo (Sora) | `instrumentos/gerar-video` | Texto/imagem→vídeo | ✅ | ✍️ |
-| Gerar vídeo de foto (fal.ai) | `instrumentos/gerar-video-fal` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Anima foto (rosto real); freios de movimento | ✅ | ✍️ |
 | Descrever imagem | `instrumentos/descrever-imagem` | Visão (imagem→texto) | ✅ | ✍️ |
 | Guardar imagem recebida | `instrumentos/arquivar-imagem` | Salva a foto do canal → URL pública (comprovantes) | ✅ | ✍️ |
 | Gerar PDF | `instrumentos/gerar-pdf` | Documentos | ✅ | ✍️ |
-| **Instagram** | | | | |
-| Publicar no Instagram | `instrumentos/publicar-instagram` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Feed/Reels/Stories/carrossel | ✅ | ✍️ (piloto) |
-| Ler post do Instagram | `instrumentos/instagram-ler-post` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Legenda + mídia do post | ✅ | ✍️ |
-| Ler comentários | `instrumentos/instagram-ler-comentarios` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Comentários de um post | ✅ | ✍️ |
-| Responder comentário | `instrumentos/instagram-responder-comentario` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Resposta pública | ✅ | ✍️ |
-| Insights do Instagram | `instrumentos/instagram-insights` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Métricas de mídia | ✅ | ✍️ |
-| **Sites & blogs** | | | | |
-| Publicar no WordPress | `instrumentos/publicar-wordpress` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Post + imagem destacada | ✅ | ✍️ |
-| Ler site | `instrumentos/ler-site` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Extrair texto de uma URL (Tavily) | ✅ | ✍️ |
-| Ler site (JS pesado) | `instrumentos/ler-site-firecrawl` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Firecrawl (sites de JavaScript) | ✅ | ✍️ |
-| **Web (busca)** | | | | |
-| Busca na web | `instrumentos/busca-web` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Tavily; tópico/recência/domínios | ✅ | ✍️ |
-| Busca semântica (Exa) | `instrumentos/busca-exa` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Alternativa semântica | ✅ | ✍️ |
 | **Dados & integração** | | | | |
 | Chamar API REST | `instrumentos/chamar-rest` | NÃO SE CRIA MAIS (29/09): chamada de API é conector (Construtor / montar_conector); vale para as instâncias antigas — GET/POST/…; leitura × escrita | ✅ | ✍️ |
 | Construir um conector | `instrumentos/construir-conector` | Criar instrumento SEM código: testar e detectar, operações, autenticação (inclusive conta de serviço do Google), POST que só consulta; **a armadilha do `campos_resposta`** (campos da linha × nome da lista) | ✅ | ✍️ |
 | Banco SQL | `instrumentos/banco-sql` | PERSONALIZADO (Construtor → Um banco de dados); ler/escrever em SQL; somente-leitura | ✅ | ✍️ |
 | Conectar MCP | `instrumentos/mcp` | Ferramentas de um servidor MCP (Zapier, Make, WordPress); a identificação mora NO instrumento (token, usuário e senha, cabeçalho, chave no endereço); ESCOLHER quais entram no cinto e quais alteram algo (aprovação é do agente) | ✅ | ✍️ |
-| Webhook de saída | `instrumentos/webhook-saida` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Avisar/disparar um sistema externo | ✅ | ✍️ |
 | Agendar automação | `instrumentos/agendar-automacao` | Um agente reprograma um disparo futuro (alvo manual+ativa) | ✅ | ✍️ |
 | **Mensageria** | | | | |
 | Enviar no Telegram | `instrumentos/enviar-telegram` | Enviar mensagem por um bot | ✅ | ✍️ |
 | **Google (OAuth)** | | | | |
-| Search Console | `instrumentos/search-console` | NÃO É MAIS PRONTO (01/10): monte como personalizado; vale para os antigos — Desempenho no Google (cliques/impressões/posição) | ✅ | ✍️ |
 | Gmail: ler | `instrumentos/gmail-ler` | Ler e-mails | 📋 | ⬜ |
 | Gmail: enviar | `instrumentos/gmail-enviar` | Enviar e-mail | 📋 | ⬜ |
 | Agenda: listar/criar | `instrumentos/agenda` | Eventos do Google Agenda | 📋 | ⬜ |

@@ -13,9 +13,9 @@ fontes: ["cerebro/instrumentos/descrever_imagem.py", "project_descrever-imagem-v
 Uma IA de visão **lê** uma ou mais imagens e devolve uma descrição em texto — o oposto de gerar imagem.
 
 ## Para que serve / quando usar
-Para o agente **entender uma foto** e responder com contexto. O caso clássico: um comentário no Instagram
-sobre o post — o agente lê o post ([[instrumentos/instagram-ler-post]]), pega a URL da imagem, "enxerga"
-com este instrumento e então responde bem.
+Para o agente **entender uma foto** e responder com contexto. O caso clássico: um comentário numa rede
+social sobre o post — o agente lê o post (com o instrumento personalizado da rede), pega a URL da
+imagem, "enxerga" com este instrumento e então responde bem.
 
 ## Como usar (na tela)
 1. Crie o instrumento **Descrever/ler imagem (visão)**.
@@ -38,6 +38,4 @@ Parâmetros no catálogo (`descrever_imagem`): `imagens_url` (URLs públicas) e 
 É multimodal e agnóstico de provedor — serve a modelos OpenAI, Claude ou Gemini, conforme a chave da org.
 
 ## Relacionado
-- [[instrumentos/instagram-ler-post]]
-- [[instrumentos/instagram-responder-comentario]]
 - [[segredos/chaves-de-ia]]

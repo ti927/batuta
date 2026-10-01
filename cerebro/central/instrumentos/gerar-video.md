@@ -16,7 +16,7 @@ vídeo da OpenAI (Sora), e devolve um link público para o MP4.
 ## Para que serve / quando usar
 Produzir um Reels, um Story de vídeo ou um item de vídeo de um carrossel. Faz **texto→vídeo** e também
 **imagem→vídeo** (anima a partir de um quadro inicial — ex.: uma arte gerada no passo anterior). O link
-serve direto ao [[instrumentos/publicar-instagram]].
+serve direto ao instrumento personalizado que publica (ex.: o conector da rede social).
 
 ## Como usar (na tela)
 1. Crie o instrumento **Gerar vídeo** (provedor OpenAI/Sora).
@@ -32,17 +32,15 @@ serve direto ao [[instrumentos/publicar-instagram]].
 - **Leva alguns minutos** para ficar pronto — o passo aguarda dentro do próprio fluxo.
 - **Cobrado por segundo:** um clipe mais longo custa proporcionalmente mais. Prefira clipes curtos.
 - A OpenAI embute uma **marca d'água "Sora"** visível — não há como removê-la pela API.
-- **Sem pessoas reais / figuras públicas** (no roteiro e na imagem de referência) — a Sora recusa. Para
-  animar o rosto de uma pessoa real, use [[instrumentos/gerar-video-fal]].
+- **Sem pessoas reais / figuras públicas** (no roteiro e na imagem de referência) — a Sora recusa.
 - Se usar imagem de referência, ela precisa ter **exatamente o tamanho** do vídeo.
 - Não é irreversível (só gera o arquivo) — quem PUBLICA é que pede aprovação, num passo seguinte.
 
 ## Para a IA
 Parâmetros no catálogo (`gerar_video`): `prompt` (roteiro) e `imagem_referencia_url` (opcional, quadro
-inicial). Para Reels/Stories, gere em vertical. Encadeie a URL do MP4 no passo que publica. Se o conteúdo
-tem rosto real, prefira o `gerar_video_fal` (a Sora bloqueia).
+inicial). Para Reels/Stories, gere em vertical. Encadeie a URL do MP4 no passo que publica. Conteúdo com
+rosto real a Sora bloqueia — e não há pronto do Batuta para isso.
 
 ## Relacionado
-- [[instrumentos/gerar-video-fal]]
 - [[instrumentos/gerar-imagem]]
-- [[instrumentos/publicar-instagram]]
+- [[instrumentos/montar-imagem]]

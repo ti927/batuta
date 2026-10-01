@@ -136,7 +136,6 @@ Instrumentos previstas:
 
 **De ação e dados (construídas como peças plugáveis):**
 - Chamar API REST (parametrizada: endereço, autenticação, formato)
-- Disparar webhook de saída (avisar outro sistema)
 - Conectar com servidor MCP (padrão universal de integração de IA com sistemas)
 - Banco de dados direto (ler e escrever em SQL, para sistemas sem API)
 - Planilhas (ler `.xlsx`/`.csv` recebidos e gerar planilhas)
@@ -162,7 +161,7 @@ Decisão do maestro (12/08/2026, reafirmada em 29/09/2026; prontos enxugados em 
 Regras que decorrem disso:
 - **Integração com serviço de mercado é sempre personalizado** (Zernio, Zapier, WordPress…). O Batuta não ganha código com nome de fornecedor; o que vira código é só o **genérico** (o conector, o cliente MCP, o gatilho webhook).
 - **A identificação** (chave, senha, login OAuth, certificado) **mora dentro do próprio instrumento**. A "Central de chaves" guarda as chaves de IA (as de serviço — Tavily, Exa, Firecrawl, fal.ai — saem junto com os instrumentos que as usavam).
-- **Saíram dos prontos em 01/10/2026** (criar novo é recusado; os existentes seguem até serem trocados): os 5 do Instagram, busca na web (Tavily e Exa), ler site (Tavily e Firecrawl), WordPress, Search Console, vídeo da fal.ai e o webhook de saída (um time aciona outro por **Agendar automação**). O gatilho "Comentário do Instagram" também saiu: comentário de rede social chega pelo **webhook**.
+- **Saíram dos prontos em 01/10/2026** (o código saiu; quem pedir por eles ouve o caminho do Construtor): os 5 do Instagram, busca na web (Tavily e Exa), ler site (Tavily e Firecrawl), WordPress, Search Console, vídeo da fal.ai e o webhook de saída (um time aciona outro por **Agendar automação**). O gatilho "Comentário do Instagram" também saiu: comentário de rede social chega pelo **webhook**.
 - **A chamada de API avulsa** (o antigo "Chamar API REST") não se cria mais: virou conector. As que já existem seguem funcionando.
 - **Nativo = pronto.** "Nativo" é como se fala; na tela o nome é **"Prontos do Batuta"**.
 

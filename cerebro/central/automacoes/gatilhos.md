@@ -65,4 +65,3 @@ a cadastrar no serviço aparece em `ver_automacao` (`endereco_webhook`). Para ag
 - [[automacoes/automacao]]
 - [[automacoes/ficha-da-execucao]]
 - [[instrumentos/agendar-automacao]]
-- [[instrumentos/webhook-saida]]

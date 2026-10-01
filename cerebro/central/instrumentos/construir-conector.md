@@ -189,8 +189,7 @@ time: o Batuta não tem como saber o preço de uma API qualquer. Vazio ou `0` = 
   MCP).
 - Encaixe as ferramentas no cinto encaixando o CONECTOR no agente (`encaixar_instrumento`): cada
   operação declarada vira uma ação separada para o agente.
-- O par "um endpoint só, sem operações" é o [[instrumentos/chamar-rest]]; o "só disparar/notificar" é o
-  [[instrumentos/webhook-saida]].
+- O antigo "um endpoint só, sem operações" é o [[instrumentos/chamar-rest]] (não se cria mais).
 - **Ao montar um POST/PATCH, confira o destino campo a campo antes de salvar:** os dados do registro vão
   todos no `corpo`; a query é para filtro/paginação; a `url` é só para `[colchete]`. Um campo sozinho na
   query no meio de um POST é quase sempre engano — e ninguém vai perceber, porque a API responde
@@ -201,6 +200,5 @@ time: o Batuta não tem como saber o preço de uma API qualquer. Vazio ou `0` = 
 
 ## Relacionado
 - [[instrumentos/chamar-rest]]
-- [[instrumentos/webhook-saida]]
 - [[segredos/segredos-de-instrumento]]
 - [[automacoes/pedir-aprovacao]]

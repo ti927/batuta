@@ -20,9 +20,9 @@ Os três caminhos:
 - **Inline (no instrumento)** — você digita o segredo no campo do instrumento; ele vai **cifrado** (cofre).
   Simples, mas não é reusável.
 - **Credencial nomeada** — o instrumento aponta para uma [[segredos/credenciais-nomeadas]] tipada (ex.:
-  `instagram`, WordPress). Reusável e trocável num lugar só.
+  banco de dados, bot do Telegram). Reusável e trocável num lugar só.
 - **Pool compartilhado** — chaves de serviço que os instrumentos reusam sem você recadastrar (ex.: imagem e
-  busca reusam a chave OpenAI/Tavily da organização). Veja [[segredos/chaves-de-ia]].
+  vídeo reusam a chave de IA da organização). Veja [[segredos/chaves-de-ia]].
 
 ## Como usar (na tela)
 1. No formulário do instrumento, os campos secretos aparecem como **segredo** (nunca são reexibidos).

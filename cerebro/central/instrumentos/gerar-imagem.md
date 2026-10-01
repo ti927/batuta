@@ -49,5 +49,4 @@ Não peça "chave própria" se a organização já tem chave OpenAI no pool.
 
 ## Relacionado
 - [[instrumentos/montar-imagem]]
-- [[instrumentos/gerar-video-fal]]
-- [[instrumentos/publicar-instagram]]
+- [[instrumentos/gerar-video]]

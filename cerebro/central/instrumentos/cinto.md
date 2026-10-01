@@ -41,7 +41,7 @@ Todo instrumento é de UM destes dois tipos. "Nativo" e "pronto" são a MESMA co
 
 - **Desde 01/10/2026, integração de mercado não é pronta:** Instagram, busca e leitura de sites
   (Tavily, Exa, Firecrawl), WordPress, Search Console, vídeo da fal.ai e o webhook de saída se
-  montam como personalizado. Os que já existem seguem funcionando até serem trocados. Para um time
+  montam como personalizado (o código deles saiu do Batuta). Para um time
   acionar outro, use **Agendar automação**.
 - A **chamada de API avulsa** não se cria mais: virou conector. As que já existem seguem valendo.
 - A aba **Instrumentos** mostra as duas listas separadas (**Personalizados** e **Prontos do Batuta**,

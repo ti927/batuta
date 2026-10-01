@@ -44,5 +44,4 @@ o contrato (receber URL) não muda.
 
 ## Relacionado
 - [[instrumentos/gerar-imagem]]
-- [[instrumentos/gerar-video-fal]]
-- [[instrumentos/publicar-instagram]]
+- [[instrumentos/gerar-video]]

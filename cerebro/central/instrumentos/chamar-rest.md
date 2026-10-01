@@ -53,7 +53,7 @@ registro. O endereço, o método e os cabeçalhos são fixos (config); a IA pass
 ## Para a IA
 Parâmetros no catálogo (`chamar_api_rest`): `parametros_query` e `corpo` (JSON, para POST/PUT/PATCH). A URL,
 o método, a autenticação e o filtro **`campos_resposta`** são da **config** do humano. Se o método escreve,
-garanta uma aprovação antes. O par de "só notificar/disparar" é o [[instrumentos/webhook-saida]].
+garanta uma aprovação antes.
 
 **Corte de custo (importante ao montar um GET que lê listas):** preencha `campos_resposta` com apenas os
 campos que o agente usa (nome exato da API, ex.: `["_id","cpo.NomeCliente"]`). A resposta é reenviada ao
@@ -62,7 +62,7 @@ inteira; só deixe assim quando o agente precisar mesmo de todos os campos. O fi
 e o formato `results` do Bubble; formato não reconhecido volta intacto (nunca descarta dado por engano).
 
 ## Relacionado
-- [[instrumentos/webhook-saida]]
+- [[instrumentos/construir-conector]]
 - [[instrumentos/mcp]]
 - [[automacoes/pedir-aprovacao]]
 - [[segredos/certificado-digital-mtls]]
