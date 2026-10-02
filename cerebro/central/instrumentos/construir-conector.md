@@ -100,6 +100,15 @@ usa, com o nome EXATO da API (ex.: `["_id","cpo.NomeCliente","cpo.Valor"]`). Vaz
 `response.results` do Bubble e as chaves de lista das APIs conhecidas (`results`, `rows`, `items`,
 `data`, `records`); formato não reconhecido volta intacto.
 
+**Pedaço aninhado e lista com outro nome (desde 02/10/2026):**
+- Com **ponto**, um campo dentro de outro: `analytics.views` traz só as visualizações de cada registro.
+  O nome inteiro vale primeiro — campo do Bubble com ponto no nome (`cpo.NomeCliente`) continua igual.
+- Com **`[]`**, a partir da raiz da resposta, quando a lista não está numa das chaves acima: a resposta
+  do Zernio guarda os posts em `posts`, e cada post tem uma lista `platforms`. Para trazer só o id, as
+  visualizações e o status de cada rede: `["posts[]._id","posts[].analytics.views","posts[].platforms[].status"]`.
+  Com algum campo assim, **a resposta inteira passa a ser só o que você listou** (o resto, como a
+  paginação, sai — liste `pagination.total` se o agente precisar).
+
 ### ⚠️ A armadilha: são os campos DE DENTRO da linha, não o nome da lista
 `campos_resposta` filtra **cada registro**, não o envelope. O erro clássico é listar a chave que
 CONTÉM os registros.
