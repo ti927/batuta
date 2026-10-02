@@ -71,7 +71,9 @@ class PedirAprovacao(TipoInstrumento):
         "qualquer ação que não dá para desfazer (publicar, enviar, lançar num sistema) "
         "quando a sua documentação mandar confirmar com alguém. Passe na 'mensagem' "
         "tudo o que a pessoa precisa para decidir. Depois de chamar, NÃO faça mais "
-        "nada: você continua quando a resposta dela chegar."
+        "nada: você continua quando a resposta dela chegar. Aí, se ela aprovou, conclua "
+        "o trabalho (ex.: publique); se pediu mudança, refaça e chame este instrumento "
+        "de novo — só assim o fluxo espera outra resposta."
     )
     Config = ConfigPedirAprovacao
     Args = ArgsPedirAprovacao

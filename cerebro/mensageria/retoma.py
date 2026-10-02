@@ -504,13 +504,22 @@ def _retomar_conversando_tela(
         ramos = [resultado["ramo_escolhido"]]
     por_rotulo = {s["rotulo"]: s for s in saidas if s.get("rotulo")}
     escolhidas = [por_rotulo[r] for r in ramos if r in por_rotulo]
+    # Nó de UMA saída (ou nenhuma): não há caminho a escolher — o agente nem recebe o
+    # `seguir_para`. Ele age (ex.: publica o que foi aprovado) e o fluxo SEGUE sozinho,
+    # a menos que tenha pedido aprovação de novo. Antes, aqui a execução voltava a
+    # esperar e a pessoa via a MESMA aprovação duas, três vezes; pelo canal, o agente
+    # nem rodava (decisão do maestro, 2026-10-02: igual nas duas portas — ver
+    # `segue_sozinho` em `servico._turno_de_portao_com_posse`).
+    segue_sozinho = not pausa and len(saidas) <= 1
+    if segue_sozinho:
+        escolhidas = list(saidas)
     ordem = ultimo.ordem + 1
 
     passo = {
         "no_id": ultimo.no_id or (str(ultimo.agente_id) if ultimo.agente_id else None),
         # Espera por humano enquanto ele não decide o caminho (pediu de novo, ou
         # conversou); no turno que decide, é um passo de agente como qualquer outro.
-        "tipo": "espera_humano" if (pausa or not escolhidas) else "agente",
+        "tipo": "espera_humano" if (pausa or not (escolhidas or segue_sozinho)) else "agente",
         "aprovacao": pausa,
         "agente_id": str(agente.id),
         "agente_nome": agente.nome,
@@ -528,7 +537,7 @@ def _retomar_conversando_tela(
     }
     _fazer_registrador(sessao, execucao.id, origens)(passo, ordem)
 
-    if pausa or not escolhidas:
+    if pausa or not (escolhidas or segue_sozinho):
         execucao.estado = "aguardando_humano"
         # Rodada nova do portão = relógio novo da espera (§4.2). Quem acabou de conversar
         # não pode ser contado como quem sumiu.

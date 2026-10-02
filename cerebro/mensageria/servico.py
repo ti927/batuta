@@ -1378,9 +1378,11 @@ def _turno_de_portao_com_posse(
     saidas, _, _ = grafo.separar_saidas(no.get("saidas"))
     conf = com_ajuste_do_agente(resolver_config(sessao, conversa), sessao, no)
 
-    eh_conversa = (
-        conf["portao_forma"] == "conversa" and no.get("ref") and len(saidas) >= 2
-    )
+    # Com agente no nó, a resposta volta para ELE — também no nó de uma saída só (ele
+    # age e o fluxo segue; ver `segue_sozinho` abaixo). Até 2026-10-02 o nó de uma saída
+    # ia direto para o caminho mecânico: o agente não rodava, e "aprova e depois
+    # publica" no mesmo agente nunca publicava. A forma "direto" segue mecânica.
+    eh_conversa = conf["portao_forma"] == "conversa" and no.get("ref")
     if not eh_conversa:
         _processar_aprovacao(sessao, conversa, execucao, token, conf)
         return
@@ -1453,6 +1455,12 @@ def _turno_de_portao_com_posse(
     # (`executar_agente` já devolve a lista vazia ao pausar; a guarda é defensiva e
     # deixa a regra explícita em vez de depender do contrato do outro módulo.)
     escolhidas = [] if pausa else [por_rotulo[r] for r in ramos if r in por_rotulo]
+    # Nó de UMA saída (ou nenhuma): não há caminho a escolher. O agente agiu e, se não
+    # pediu aprovação de novo, o fluxo segue sozinho — a mesma regra da tela
+    # (`retoma._retomar_conversando_tela`).
+    segue_sozinho = not pausa and len(saidas) <= 1
+    if segue_sozinho:
+        escolhidas = list(saidas)
 
     # Fatia 4.2 (unificação do rastro): o portão pelo CANAL passa a deixar um passo
     # `espera_humano` na timeline do fluxo — como a tela (`retoma._retomar_conversando_tela`)
@@ -1493,8 +1501,8 @@ def _turno_de_portao_com_posse(
     )
     sessao.flush()
 
-    if escolhidas:
-        # O agente DECIDIU → o fluxo anda. O que desce ao próximo nó é EXATAMENTE o que
+    if escolhidas or segue_sozinho:
+        # O agente DECIDIU (ou o nó só tem um caminho) → o fluxo anda. O que desce ao próximo nó é EXATAMENTE o que
         # a tela manda: o material apresentado + a decisão da pessoa, rotulada como já
         # tomada (`retoma.entrada_retomada`). Antes o canal mandava o transcript inteiro
         # da conversa e a tela mandava o apresentado — duas verdades para a mesma

@@ -183,6 +183,9 @@ skill_md PRECISA citar os RÓTULOS EXATOS dessas saídas e mandar declará-los c
 coisa que ele faz depois da decisão. Sem isso ele conversa, refaz o material, publica — e
 nunca declara: a execução fica parada naquele ponto para sempre, com tudo aprovado e
 feito. Foi o incidente de 2026-09-21, e é a causa nº 1 de "aprovei e não aconteceu nada".
+Se o nó tem UMA saída só, não há o que declarar: o agente volta, age e o fluxo segue sozinho.
+Aí o skill_md precisa dizer o que fazer em cada resposta — aprovou: concluir (ex.: publicar);
+pediu ajuste: refazer e chamar `pedir_aprovacao` de novo (senão o fluxo segue com o que tinha).
 
 Escreva assim, com os rótulos do nó que você desenhou:
   "Quando a pessoa APROVAR, a última coisa que você faz é declarar o caminho `aprovado`.

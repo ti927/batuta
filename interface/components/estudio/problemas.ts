@@ -310,9 +310,9 @@ export function analisar({
         id: `${no.id}:aprova-sem-bifurcar`,
         nivel: "aviso",
         noId: no.id,
-        titulo: `“${quem}” para e pergunta a uma pessoa, mas o desenho tem um caminho só.`,
+        titulo: `“${quem}” para e pergunta a uma pessoa, e o desenho tem um caminho só.`,
         comoResolver:
-          "Aprovar e reprovar vão dar no mesmo lugar. Desenhe dois caminhos: um para quando aprovarem, outro para quando pedirem ajuste.",
+          "Depois da resposta, este agente volta e o fluxo segue pelo único caminho. Escreva no texto dele o que fazer: se aprovarem, concluir (por exemplo, publicar); se pedirem ajuste, refazer e pedir aprovação de novo. Ou desenhe dois caminhos, um para cada resposta.",
       });
     }
 
