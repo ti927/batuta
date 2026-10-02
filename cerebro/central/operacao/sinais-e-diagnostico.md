@@ -3,7 +3,7 @@ titulo: "Sinais e diagnóstico (quando algo trava ou degrada)"
 area: "operacao"
 slug: "sinais-e-diagnostico"
 tags: ["diagnostico", "log", "evento", "travou", "preso", "degradado", "silencio", "observabilidade", "turno", "status", "elo", "rede", "congelou", "reconectar", "aprovacao", "esquecida", "dono", "fila"]
-revisado_em: "2026-09-02"
+revisado_em: "2026-10-02"
 fontes: ["cerebro/observabilidade/escritor.py", "cerebro/mensageria/sweeper.py", "cerebro/orquestracao/memoria_conversa.py", "cerebro/diagnostico_execucao.py", "cerebro/saude_elos.py", "CLAUDE.md §12-A"]
 ---
 
@@ -147,6 +147,23 @@ da interface (o selo de versão da barra lateral leva até ela) e na API em `GET
   Os demais têm o botão **Reconectar** (admins da consultoria) quando há cura possível.
 - Instrumentos de cliente **não** são sondados automaticamente (custo/limites) — o teste deles é sob
   demanda, no Construtor.
+
+### O elo "Modelos de IA em uso" — quando a empresa da IA desliga um modelo
+As empresas de IA tiram modelos do ar com data marcada (a OpenAI desligou o vídeo, Sora, em
+24/09/2026). Para o Batuta não descobrir isso pela boca do cliente, há três travas:
+- **Registro com data de validade** (`cerebro/orquestracao/ciclo_modelos.py`): todo modelo que o Batuta
+  oferece, com situação e data de saída lidas das páginas oficiais de descontinuação. Modelo que vai
+  sair aparece no seletor com **"— sai em dd/mm/aaaa"**; o desligado some da escolha. Agente ou
+  instrumento que usa um modelo assim ganha o selo **precisa de atenção**.
+- **Este elo**, sondado a cada 12 h e logo depois de cada publicação: junta os modelos em uso
+  (agentes, IA de conversa de cada organização, instrumentos de IA, roteamento, transcrição), pergunta
+  a cada empresa a lista de modelos dela (consulta gratuita) e compara. **Vermelho** = algum modelo em
+  uso não existe mais (ou o registro o dá como desligado — a OpenAI seguiu listando o `sora-2` depois
+  de desligá-lo); **âmbar** = algum sai em até 60 dias. A mensagem diz qual modelo e quem usa.
+  Também grava o evento `modelo.desligado`.
+- **Erro honesto na hora**: se mesmo assim um agente bater num modelo desligado, a execução falha com
+  *"A OpenAI não reconhece mais o modelo X… Troque o modelo de IA do agente 'Y'"* (código
+  `ia.modelo_desligado`, sem novas tentativas), e o diagnóstico aponta o agente (`modelo_desligado`).
 
 ### O "Vigia das execuções" — quem vigia os vigias
 As Ondas 3 e 4 do motor criaram um padrão: **a execução pausa e um vigia a solta.** Um passo

@@ -3,7 +3,7 @@ titulo: "O Agente e os 4 markdowns"
 area: "times-agentes"
 slug: "agente"
 tags: ["agente", "markdown", "agent", "skill", "tools", "soul", "modelo", "modelo de ia", "qual modelo", "sonnet", "opus", "haiku", "preço do modelo", "personalidade"]
-revisado_em: "2026-09-29"
+revisado_em: "2026-10-02"
 fontes: ["PRODUTO.md §11", "cerebro/modelos.py (Agente)", "feedback_sem-prompt-base-agentes"]
 ---
 
@@ -43,8 +43,13 @@ saída:
 | `claude-opus-5`, `claude-opus-4-8` | raciocínio mais exigente | US$ 5 / 25 |
 | `claude-sonnet-4-6` | geração anterior do Sonnet | US$ 3 / 15 |
 
-Há também modelos da OpenAI (GPT-5.6 Luna/Terra/Sol e GPT-4) e do Google (Gemini) — só aparecem na tela
-quando a organização tem a chave daquele provedor.
+Há também modelos da OpenAI (GPT-5.6 Luna/Terra/Sol e GPT-4) e do Google (Gemini 3.8 Flash, 3.6 Flash,
+3.5 Flash-Lite e 3.1 Pro) — só aparecem na tela quando a organização tem a chave daquele provedor.
+
+**Modelo que vai sair do ar:** as empresas de IA desligam modelos com data marcada. No seletor, o modelo
+que vai sair aparece com **"— sai em dd/mm/aaaa"** e um aviso embaixo; o já desligado some da escolha, e o
+agente que ainda o usa ganha o selo **precisa de atenção** no cartão. Troque o modelo antes da data —
+o aviso traz a sugestão de substituto.
 
 Nos modelos mais novos da Anthropic (do Opus 4.7 em diante: Opus 4.8, Opus 5/5.5, Sonnet 5/5.5) o Batuta
 não envia "temperatura" (eles recusam) e deixa o raciocínio do modelo ligado. No Sonnet 5.5 e no Opus 5.5,
