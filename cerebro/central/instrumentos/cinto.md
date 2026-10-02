@@ -3,7 +3,7 @@ titulo: "O cinto e os instrumentos"
 area: "instrumentos"
 slug: "cinto"
 tags: ["instrumento", "cinto", "encaixe", "config", "args", "secreto", "credencial", "acao-irreversivel"]
-revisado_em: "2026-10-01"
+revisado_em: "2026-10-02"
 fontes: ["PRODUTO.md §13", "cerebro/instrumentos/base.py"]
 ---
 
@@ -49,7 +49,11 @@ Todo instrumento é de UM destes dois tipos. "Nativo" e "pronto" são a MESMA co
   categoria, agente) e selos no cartão: **precisa de atenção** (falta a chave, a conta caiu ou a
   última conexão falhou), **sem agente**, **do time** / **da organização**, **API** / **MCP** / **Banco**,
   **altera algo** / **só lê** e **pago**. Personalizado sem ícone escolhido ganha o ícone do serviço
-  (o que o servidor MCP anuncia, ou o do site da API), buscado pelo Batuta.
+  (o que o servidor MCP anuncia, ou o do site da API), buscado pelo Batuta. Os **prontos que chamam uma
+  IA ou o Telegram** mostram o ícone do serviço **primeiro** — o da IA do modelo escolhido (Anthropic,
+  OpenAI ou Google; em branco, a IA que a organização tem chave) ou o do Telegram —, e o ícone escolhido
+  na configuração fica de reserva, para quando o site não entrega o dele. Trocar o modelo para outra IA
+  troca o ícone. Os nativos de verdade (agendar, aprovação, quadro, PDF, guardar imagem) usam o escolhido.
 
 ## Exemplos
 - "Gerar imagem" no cinto do redator; o conector "Zernio: publicar no Instagram" no cinto do publicador.
