@@ -13,14 +13,16 @@ import {
   mensagemDeErro,
 } from "@/lib/api";
 import {
-  MODELOS_POR_PROVEDOR,
   NOTA_MODELO_CONVERSA,
   provedorDoModelo,
   provedoresParaSeletor,
-  rotuloModelo,
-  ROTULO_PROVEDOR,
   type ProvedoresDisponiveis,
 } from "@/lib/modelos";
+import {
+  alertaDoModelo,
+  OpcoesModelo,
+  useCatalogoModelos,
+} from "@/components/opcoes-modelo";
 import { Select } from "@/components/ui/select";
 
 export function SeletorModeloConversa({
@@ -39,6 +41,8 @@ export function SeletorModeloConversa({
     disponiveis,
     modeloAtual ? provedorDoModelo(modeloAtual) : null,
   );
+  const catalogo = useCatalogoModelos();
+  const alerta = alertaDoModelo(catalogo, modeloAtual);
 
   async function trocar(modelo: string) {
     setSalvando(true);
@@ -73,16 +77,9 @@ export function SeletorModeloConversa({
         onChange={(e) => trocar(e.target.value)}
       >
         <option value="">Padrão (Claude Sonnet 5)</option>
-        {provedores.map((p) => (
-          <optgroup key={p} label={ROTULO_PROVEDOR[p]}>
-            {MODELOS_POR_PROVEDOR[p].map((m) => (
-              <option key={m} value={m}>
-                {rotuloModelo(m)}
-              </option>
-            ))}
-          </optgroup>
-        ))}
+        <OpcoesModelo provedores={provedores} catalogo={catalogo} atual={modeloAtual} />
       </Select>
+      {alerta && <p className="text-xs text-warning">{alerta}</p>}
       <p className="text-xs text-muted-foreground">{NOTA_MODELO_CONVERSA}</p>
     </div>
   );

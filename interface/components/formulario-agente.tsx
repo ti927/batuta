@@ -33,13 +33,15 @@ import {
   salvarRascunho,
 } from "@/lib/rascunho-agente";
 import {
-  MODELOS_POR_PROVEDOR,
   provedorDoModelo,
   provedoresParaSeletor,
-  rotuloModelo,
-  ROTULO_PROVEDOR,
   type ProvedoresDisponiveis,
 } from "@/lib/modelos";
+import {
+  alertaDoModelo,
+  OpcoesModelo,
+  useCatalogoModelos,
+} from "@/components/opcoes-modelo";
 import { podeOperar } from "@/lib/permissoes";
 import { cn } from "@/lib/utils";
 import { MemoriaAgentePainel } from "@/components/memoria-agente";
@@ -284,6 +286,8 @@ export function FormularioAgente({
     disponiveis,
     form.modelo_ia ? provedorDoModelo(form.modelo_ia) : null,
   );
+  const catalogoModelos = useCatalogoModelos();
+  const alertaModelo = alertaDoModelo(catalogoModelos, form.modelo_ia);
 
   function campo<K extends keyof Campos>(chave: K, valor: Campos[K]) {
     setForm((f) => ({ ...f, [chave]: valor }));
@@ -524,16 +528,15 @@ export function FormularioAgente({
           className={anel("modelo_ia")}
         >
           <option value="">(não definido)</option>
-          {provedoresVisiveis.map((p) => (
-            <optgroup key={p} label={ROTULO_PROVEDOR[p]}>
-              {MODELOS_POR_PROVEDOR[p].map((m) => (
-                <option key={m} value={m}>
-                  {rotuloModelo(m)}
-                </option>
-              ))}
-            </optgroup>
-          ))}
+          <OpcoesModelo
+            provedores={provedoresVisiveis}
+            catalogo={catalogoModelos}
+            atual={form.modelo_ia}
+          />
         </Select>
+        {alertaModelo && (
+          <span className="text-xs font-normal text-warning">{alertaModelo}</span>
+        )}
       </Label>
     </div>
   );

@@ -6,6 +6,7 @@ import { type Agente, type Instrumento } from "@/lib/api";
 import { IconeInstrumento } from "@/components/icone-instrumento";
 import { RobotFace } from "@/components/robot-face";
 import { Badge } from "@/components/ui/badge";
+import { alertaDoModelo, useCatalogoModelos } from "@/components/opcoes-modelo";
 
 /**
  * Card de agente (clique abre o editor em drawer). Mostra rosto, nome, badge de
@@ -33,6 +34,7 @@ export function CardAgente({
   /** Mostra "Excluir" no rodapé (só para quem pode apagar). */
   onExcluir?: () => void;
 }) {
+  const alertaModelo = alertaDoModelo(useCatalogoModelos(), agente.modelo_ia);
   return (
     <div
       role="button"
@@ -68,6 +70,11 @@ export function CardAgente({
                 <Sparkles className="size-3 text-primary" />
                 {agente.modelo_ia}
               </span>
+            )}
+            {alertaModelo && (
+              <Badge variant="warning" className="text-[10px]" title={alertaModelo}>
+                precisa de atenção
+              </Badge>
             )}
             {cinto.map((i) =>
               onEditarInstrumento ? (

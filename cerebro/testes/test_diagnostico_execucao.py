@@ -114,6 +114,21 @@ def test_ia_sobrecarregada(sessao, dados):
     assert d["avisos"][0]["severidade"] == "alerta"
 
 
+def test_modelo_desligado_aponta_o_agente(sessao, dados):
+    auto = _auto(sessao, dados)
+    redator = _agente(sessao, dados, "Redator")
+    ex = _exec(sessao, auto, "falhou", resultado={
+        "erro": "A OpenAI não reconhece mais o modelo gpt-4o-mini (ele foi desligado ou "
+                "mudou de nome). Troque o modelo de IA do agente 'Redator'."
+    })
+    _passo(sessao, ex, agente=redator)
+    d = diag.diagnosticar(sessao, ex.id)
+    aviso = next(a for a in d["avisos"] if a["codigo"] == "modelo_desligado")
+    assert aviso["severidade"] == "erro"
+    assert aviso["referencias"]["agente_id"] == str(redator.id)
+    assert aviso["acao_sugerida"]["tipo"] == "editar_agente"
+
+
 def test_presa_orfa(sessao, dados):
     auto = _auto(sessao, dados)
     ex = _exec(sessao, auto, "falhou", resultado={

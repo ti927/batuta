@@ -7,6 +7,8 @@ agente). O `modelo_ia` do agente continua sendo uma string livre; aqui só
 mapeamos string → provedor, com inferência por prefixo para modelos não listados.
 """
 
+from orquestracao import ciclo_modelos
+
 PROVEDOR_ANTHROPIC = "anthropic"
 PROVEDOR_OPENAI = "openai"
 PROVEDOR_GOOGLE = "google"
@@ -14,24 +16,19 @@ PROVEDOR_GOOGLE = "google"
 # Provedores suportados pelo motor nesta fase (ordem = ordem de resolução).
 PROVEDORES = (PROVEDOR_ANTHROPIC, PROVEDOR_OPENAI, PROVEDOR_GOOGLE)
 
-# Modelos conhecidos por provedor (lista crua, refina-se com o uso). A interface
-# espelha esta lista para montar o seletor agrupado por provedor.
+# Modelos que se podem ESCOLHER, por provedor — saem do registro de ciclo de vida
+# (`ciclo_modelos`, fonte única com a data de saída de cada um). Os já desligados
+# ficam de fora da escolha, mas continuam resolvendo o provedor (abaixo), para um
+# agente antigo falhar com o recado certo, não com "provedor desconhecido".
 MODELOS_POR_PROVEDOR: dict[str, list[str]] = {
-    # Sonnet 5.5 e Opus 5.5 entraram em 2026-09-29 (Opus 5.5 custa MENOS que o 4.8).
-    PROVEDOR_ANTHROPIC: [
-        "claude-sonnet-5-5", "claude-opus-5-5", "claude-opus-5", "claude-opus-4-8",
-        "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5",
-    ],
-    # OpenAI GPT-5.6 (tiers Sol/Terra/Luna = par de Opus/Sonnet/Haiku). O Luna teve
-    # corte de 80% em 30/jul/2026 (US$0,20/1,20 por 1M) — o barato do mercado.
-    PROVEDOR_OPENAI: ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-4.1", "gpt-4o", "gpt-4o-mini"],
-    PROVEDOR_GOOGLE: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
+    p: ciclo_modelos.modelos(ciclo_modelos.TEXTO, p) for p in PROVEDORES
 }
 
 _PROVEDOR_POR_MODELO = {
-    modelo: provedor
-    for provedor, modelos in MODELOS_POR_PROVEDOR.items()
-    for modelo in modelos
+    nome: m.provedor
+    for m in ciclo_modelos.REGISTRO
+    if m.uso == ciclo_modelos.TEXTO
+    for nome in (m.id, *m.apelidos)
 }
 
 # Prefixos para inferir o provedor de um modelo não listado explicitamente.

@@ -29,7 +29,12 @@ PRECOS_USD_POR_MTOK = {
     "gpt-4o-mini": (0.15, 0.60),
     "gpt-4o": (2.5, 10.0),
     "gpt-4.1": (2.0, 8.0),
-    # Google Gemini
+    # Google Gemini (ai.google.dev/gemini-api/docs/pricing, 2026-10-02). Os Flash 3.6
+    # e 3.8 sobem para $1,50/$7,50 em 01/01/2027 — reveja aqui na virada.
+    "gemini-3.8-flash": (0.75, 3.75),
+    "gemini-3.6-flash": (0.75, 3.75),
+    "gemini-3.5-flash-lite": (0.30, 2.50),
+    "gemini-3.1-pro-preview": (2.0, 12.0),
     "gemini-2.0-flash": (0.10, 0.40),
     "gemini-1.5-pro": (1.25, 5.0),
     "gemini-1.5-flash": (0.075, 0.30),
@@ -95,12 +100,18 @@ PRECO_VIDEO_PADRAO_POR_S = 0.10
 CATEGORIAS = ("execucao", "conversa", "mensageria", "transcricao", "instrumento")
 
 
-def _preco(modelo: str) -> tuple[float, float]:
+def preco_conhecido(modelo: str) -> tuple[float, float] | None:
+    """(entrada, saída) por 1M tokens, ou None se o modelo não casa com nenhuma
+    família da tabela — para a tela não mostrar um preço inventado."""
     m = (modelo or "").lower()
     for familia, preco in PRECOS_USD_POR_MTOK.items():
         if familia in m:
             return preco
-    return PRECO_PADRAO
+    return None
+
+
+def _preco(modelo: str) -> tuple[float, float]:
+    return preco_conhecido(modelo) or PRECO_PADRAO
 
 
 def custo_usd(

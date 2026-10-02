@@ -25,6 +25,7 @@ from orquestracao.modelos_ia import (
     PROVEDOR_GOOGLE,
     PROVEDOR_OPENAI,
     provedor_do_modelo,
+    provedor_do_modelo_seguro,
 )
 
 # Modelo padrão quando o agente não escolheu um. Haiku: barato para o trivial.
@@ -85,13 +86,18 @@ def _envia_temperatura(modelo: str) -> bool:
     rejeitam o parâmetro com HTTP 400 e, para eles, omitimos (a API usa o padrão):
     na Anthropic, todo Claude do Opus 4.7 em diante (`_claude_aceita_temperatura`);
     na OpenAI, a série `o` (o1/o3/o4) e a família GPT-5+ (inclui o GPT-5.6
-    Sol/Terra/Luna). Os demais (GPT-4o/4.1, Gemini) aceitam. Ponto único, vale para a
-    conversa e para qualquer agente."""
+    Sol/Terra/Luna); no Google, a família Gemini 3, onde o Google descontinuou o
+    parâmetro em 21/07/2026 (sem dizer se ignora ou recusa — na dúvida, não mandamos).
+    Os demais (GPT-4o/4.1) aceitam. Ponto único, vale para a conversa e para qualquer
+    agente."""
     m = (modelo or "").lower()
     if m.startswith("claude"):
         return _claude_aceita_temperatura(m)
     if m.startswith(("o1", "o3", "o4")) or m.startswith("gpt-5"):
         return False
+    if m.startswith("gemini-"):
+        versao = m.removeprefix("gemini-").split(".", 1)[0].split("-", 1)[0]
+        return not (versao.isdigit() and int(versao) >= 3)
     return True
 
 
@@ -217,14 +223,16 @@ def construir_modelo(
             )
         from langchain_google_genai import ChatGoogleGenerativeAI
 
-        return ChatGoogleGenerativeAI(
-            model=modelo,
-            api_key=chave,
-            max_output_tokens=MAX_TOKENS,
-            temperature=temperatura,
-            timeout=espera,
-            max_retries=tentativas,
-        )
+        parametros = {
+            "model": modelo,
+            "api_key": chave,
+            "max_output_tokens": MAX_TOKENS,
+            "timeout": espera,
+            "max_retries": tentativas,
+        }
+        if _envia_temperatura(modelo):
+            parametros["temperature"] = temperatura
+        return ChatGoogleGenerativeAI(**parametros)
 
     raise ValueError(f"Provedor de IA não suportado: {provedor}")
 
@@ -268,6 +276,42 @@ def historico_invalido(erro: BaseException | str) -> bool:
     if "400" not in texto and "invalid_request" not in texto:
         return False
     return any(a in texto and b in texto for a, b in _MARCAS_HISTORICO_INVALIDO)
+
+
+# "Esse modelo não existe mais" no idioma de cada empresa (2026-10-02). Anthropic:
+# `not_found_error … model: claude-x`; OpenAI: `model_not_found` / "The model `x` does
+# not exist"; Google: "models/gemini-x is not found". Exige a palavra "model" no texto:
+# um 404 de outra coisa (um arquivo, uma ferramenta) não pode virar "troque o modelo".
+_MARCAS_MODELO_SUMIU = (
+    "model_not_found", "not_found_error", "does not exist", "is not found",
+    "no longer available", "has been deprecated", "decommissioned", "deprecated model",
+)
+
+
+def modelo_indisponivel(erro: BaseException | str, modelo: str | None) -> str | None:
+    """Se o erro da chamada é "o modelo não existe mais", o recado honesto — com a
+    empresa e o substituto do registro (`ciclo_modelos`). None = é outro erro."""
+    from orquestracao import ciclo_modelos
+
+    texto = str(erro).lower()
+    status = getattr(erro, "status_code", None)
+    if status is None:
+        status = getattr(getattr(erro, "response", None), "status_code", None)
+    if "model" not in texto:
+        return None
+    if status not in (404, 410) and not any(m in texto for m in _MARCAS_MODELO_SUMIU):
+        return None
+    nome = modelo or "escolhido"
+    registro = ciclo_modelos.obter(modelo)
+    provedor = registro.provedor if registro else provedor_do_modelo_seguro(modelo or "")
+    empresa = {"anthropic": "A Anthropic", "openai": "A OpenAI", "google": "O Google"}.get(
+        provedor or "", "A empresa da IA"
+    )
+    sugestao = f" Sugestão: {registro.substituto}." if registro and registro.substituto else ""
+    return (
+        f"{empresa} não reconhece mais o modelo {nome} (ele foi desligado ou mudou de "
+        f"nome).{sugestao}"
+    )
 
 
 def chamar(texto: str, modelo_ia: str | None = None) -> str:

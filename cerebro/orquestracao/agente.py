@@ -941,6 +941,20 @@ def executar_agente(
             "documentação dele (o que fazer quando um instrumento falha) ou reduza o "
             "tamanho da tarefa deste passo."
         ) from e
+    except Exception as e:
+        # A empresa da IA desligou o modelo do agente (ex.: a OpenAI e o Sora, em
+        # 24/09/2026): recado honesto, com o que fazer — e não-retentável, porque
+        # tentar de novo não traz o modelo de volta. Qualquer outro erro segue igual.
+        from orquestracao.llm import modelo_indisponivel
+
+        recado = modelo_indisponivel(e, agente.modelo_ia or MODELO_PADRAO)
+        if recado is None:
+            raise
+        raise FalhaInstrumento(
+            f"{recado} Troque o modelo de IA do agente '{agente.nome}'.",
+            retentavel=False,
+            codigo="ia.modelo_desligado",
+        ) from e
 
     # Não confiamos na narração do agente: se uma ação IRREVERSÍVEL falhou,
     # a execução falha de forma determinística e visível (nunca em silêncio).

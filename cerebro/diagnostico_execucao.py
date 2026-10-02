@@ -399,6 +399,27 @@ def _verificar_falha(sessao, d, ex, passos, avisos, nomes) -> None:
             acao={"tipo": "aguardar"},
         ))
         return
+    if "não reconhece mais o modelo" in low:
+        # A empresa da IA desligou o modelo de um agente (ver `llm.modelo_indisponivel`).
+        # Não é instabilidade: rodar de novo falha igual até alguém trocar o modelo.
+        agente_id = None
+        m = re.search(r"do agente '([^']+)'", erro)
+        if m:
+            from modelos import Agente
+
+            time_id = _time_da_execucao(sessao, ex)
+            agente_id = sessao.scalar(
+                select(Agente.id).where(Agente.time_id == time_id, Agente.nome == m.group(1))
+            ) if time_id else None
+        avisos.append(_aviso(
+            "modelo_desligado", "erro",
+            "O modelo de IA de um agente saiu do ar",
+            f"{_trunc(erro, 260)} Rodar de novo não resolve: troque o modelo no agente.",
+            acao={"tipo": "editar_agente", "agente_id": str(agente_id)} if agente_id
+            else {"tipo": "aguardar"},
+            agente_id=agente_id,
+        ))
+        return
     if any(t in low for t in ("travada", "reinício", "reinicio", "interrompida por reinício")):
         avisos.append(_aviso(
             "presa_orfa", "alerta",

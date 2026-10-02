@@ -26,6 +26,7 @@ from modelos import Agente, AgenteInstrumento, Credencial, Instrumento, SegredoI
 FALTA_CHAVE = "falta_chave"
 RECONECTAR = "reconectar"
 FALHOU = "falhou"
+MODELO_SAI = "modelo_sai"  # a empresa da IA desliga (ou já desligou) o modelo escolhido
 
 
 def _qtd_acoes(inst: Instrumento) -> int | None:
@@ -64,6 +65,11 @@ def _situacao(inst: Instrumento, pendentes: list[str]) -> tuple[str | None, str 
         return RECONECTAR, "A conexão da conta caiu: abra e clique em Conectar."
     if conexao.get("estado") == "falhou":
         return FALHOU, conexao.get("mensagem") or "A última conexão falhou."
+    from orquestracao import ciclo_modelos
+
+    aviso = ciclo_modelos.alerta((inst.configuracao or {}).get("modelo"))
+    if aviso:
+        return MODELO_SAI, aviso
     return None, None
 
 

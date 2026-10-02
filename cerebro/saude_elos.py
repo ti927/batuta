@@ -399,6 +399,15 @@ def montar_elos() -> list[Elo]:
                         Elo(f"ia_{provedor}", f"IA — {provedor.capitalize()}", "ia",
                             PERIODO_EXTERNO_S, _sonda_ia(provedor))
                     )
+            # Os modelos em uso ainda existem na empresa da IA? (a cada 12 h e logo
+            # depois de cada deploy — ver `vigia_modelos`).
+            if com_chave & {PROVEDOR_ANTHROPIC, PROVEDOR_OPENAI, PROVEDOR_GOOGLE}:
+                import vigia_modelos
+
+                elos.append(
+                    Elo("modelos_ia", "Modelos de IA em uso", "ia",
+                        vigia_modelos.PERIODO_S, vigia_modelos.sonda)
+                )
 
             canais = sessao.scalars(
                 select(Instrumento).where(Instrumento.tipo == "enviar_telegram")

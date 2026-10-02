@@ -14,14 +14,12 @@ import {
   type TipoInstrumento,
 } from "@/lib/api";
 import {
-  MODELOS_POR_PROVEDOR,
   provedorDoModelo,
   provedoresParaSeletor,
-  rotuloModelo,
-  ROTULO_PROVEDOR,
   type Provedor,
   type ProvedoresDisponiveis,
 } from "@/lib/modelos";
+import { OpcoesModelo, useCatalogoModelos } from "@/components/opcoes-modelo";
 import { IlustracaoProporcao } from "@/components/ilustracao-proporcao";
 import { SeletorIcone } from "@/components/seletor-icone";
 import { Aviso } from "@/components/ui/aviso";
@@ -237,6 +235,7 @@ function CampoConfigInput({
   quadros: QuadroResumo[]; // p/ o seletor de quadro (ui:quadro — instrumento `quadro`)
   onChange: (v: string) => void;
 }) {
+  const catalogoModelos = useCatalogoModelos();
   let entrada;
   if (campo.tipo === "boolean") {
     entrada = (
@@ -254,15 +253,7 @@ function CampoConfigInput({
     entrada = (
       <Select value={valor} onChange={(e) => onChange(e.target.value)}>
         {!campo.obrigatorio && <option value="">(padrão)</option>}
-        {provedores.map((p) => (
-          <optgroup key={p} label={ROTULO_PROVEDOR[p]}>
-            {MODELOS_POR_PROVEDOR[p].map((m) => (
-              <option key={m} value={m}>
-                {rotuloModelo(m)}
-              </option>
-            ))}
-          </optgroup>
-        ))}
+        <OpcoesModelo provedores={provedores} catalogo={catalogoModelos} atual={valor} />
       </Select>
     );
   } else if (campo.ui === "automacao_alvo" && !campo.secreto) {

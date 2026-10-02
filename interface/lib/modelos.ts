@@ -1,7 +1,6 @@
-// Modelos de IA por provedor (Fase 7-A) — espelha o registro do cérebro
-// (cerebro/orquestracao/modelos_ia.py). Usado no seletor de modelo do agente
-// (agrupado por provedor) e na escolha de provedor ao cadastrar uma chave.
-// Lista crua; refina-se com o uso.
+// Provedores de IA e o catálogo de modelos (que vem do cérebro, ver `InfoModelo`).
+// Usado nos seletores de modelo (agente, IA de conversa, instrumentos de IA) e na
+// escolha de provedor ao cadastrar uma chave.
 
 export const PROVEDORES = ["anthropic", "openai", "google"] as const;
 export type Provedor = (typeof PROVEDORES)[number];
@@ -35,43 +34,20 @@ export const USADA_POR: Record<Servico, string> = {
   google: "modelos dos agentes e IA de conversa",
 };
 
-export const MODELOS_POR_PROVEDOR: Record<Provedor, string[]> = {
-  // Sonnet 5.5 e Opus 5.5 entraram em 2026-09-29 (Opus 5.5 custa MENOS que o 4.8).
-  anthropic: [
-    "claude-sonnet-5-5",
-    "claude-opus-5-5",
-    "claude-opus-5",
-    "claude-opus-4-8",
-    "claude-sonnet-5",
-    "claude-sonnet-4-6",
-    "claude-haiku-4-5",
-  ],
-  // OpenAI GPT-5.6 (tiers Sol/Terra/Luna = par de Opus/Sonnet/Haiku); Luna teve
-  // corte de 80% em 30/jul/2026. Mantidos os GPT-4 legados abaixo.
-  openai: ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-4.1", "gpt-4o", "gpt-4o-mini"],
-  google: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
-};
-
-// Custo aproximado por 1M de tokens [entrada, saída] em USD — espelha
-// cerebro/precos.py (informativo, não cobrança). Alimenta o rótulo do seletor de
-// modelo, para o usuário escolher já vendo o custo (pedido do maestro).
-export const CUSTO_POR_MODELO: Record<string, [number, number]> = {
-  "claude-sonnet-5-5": [2, 10],
-  "claude-opus-5-5": [4, 20],
-  "claude-opus-5": [5, 25],
-  "claude-opus-4-8": [5, 25],
-  "claude-sonnet-5": [2, 10], // era [3, 15] — o Sonnet 5 custa $2/$10
-  "claude-sonnet-4-6": [3, 15],
-  "claude-haiku-4-5": [1, 5],
-  "gpt-5.6-luna": [0.2, 1.2],
-  "gpt-5.6-terra": [2, 12],
-  "gpt-5.6-sol": [5, 30],
-  "gpt-4.1": [2, 8],
-  "gpt-4o": [2.5, 10],
-  "gpt-4o-mini": [0.15, 0.6],
-  "gemini-2.0-flash": [0.1, 0.4],
-  "gemini-1.5-pro": [1.25, 5],
-  "gemini-1.5-flash": [0.075, 0.3],
+// ── O catálogo de modelos vem do cérebro (GET /modelos) ──────────────────────────
+// Fonte única: `cerebro/orquestracao/ciclo_modelos.py`, com a situação e a data de
+// saída de cada modelo. Até 2026-10-02 a tela tinha uma cópia própria da lista e da
+// tabela de custo — e a cópia ficou velha (oferecia Gemini que o Google já tinha
+// desligado). Agora a tela só lê.
+export type InfoModelo = {
+  id: string;
+  provedor: Provedor;
+  uso: "texto" | "imagem" | "video" | "transcricao";
+  situacao: "ativo" | "descontinuado" | "desligado";
+  sai_em: string | null; // AAAA-MM-DD
+  substituto: string | null;
+  alerta: string | null; // o aviso pronto, em português (null = nada a dizer)
+  custo_mtok: [number, number] | null; // [entrada, saída] por 1M tokens (texto)
 };
 
 function fmtUSD(v: number): string {
@@ -81,24 +57,46 @@ function fmtUSD(v: number): string {
   });
 }
 
-// Rótulo do modelo no seletor: nome + custo aproximado por 1M tokens
-// (entrada / saída). Modelo sem custo tabelado aparece só com o nome.
-export function rotuloModelo(modelo: string): string {
-  const c = CUSTO_POR_MODELO[modelo];
-  if (!c) return modelo;
-  return `${modelo} (entrada US$ ${fmtUSD(c[0])} / saída US$ ${fmtUSD(c[1])} por 1M)`;
+function fmtData(iso: string): string {
+  const [a, m, d] = iso.split("-");
+  return `${d}/${m}/${a}`;
+}
+
+// Os modelos de texto de um provedor que se podem escolher. Um modelo já desligado
+// só aparece se for o valor ATUAL — para a pessoa ver o que está configurado e trocar.
+export function modelosDoProvedor(
+  catalogo: InfoModelo[],
+  provedor: Provedor,
+  atual?: string | null,
+): InfoModelo[] {
+  return catalogo.filter(
+    (m) =>
+      m.uso === "texto" &&
+      m.provedor === provedor &&
+      (m.situacao !== "desligado" || m.id === atual),
+  );
+}
+
+// Rótulo no seletor: nome + custo aproximado por 1M tokens + o aviso de saída.
+export function rotuloModelo(m: InfoModelo): string {
+  const partes = [m.id];
+  if (m.custo_mtok) {
+    partes.push(
+      `(entrada US$ ${fmtUSD(m.custo_mtok[0])} / saída US$ ${fmtUSD(m.custo_mtok[1])} por 1M)`,
+    );
+  }
+  if (m.situacao === "desligado") partes.push("— desligado");
+  else if (m.sai_em) partes.push(`— sai em ${fmtData(m.sai_em)}`);
+  return partes.join(" ");
 }
 
 // Disponibilidade de provedor por chave (própria ou da consultoria), vinda do
 // cérebro em GET /organizacoes/{id}/modelos-disponiveis. Só booleanos.
 export type ProvedoresDisponiveis = Partial<Record<Provedor, boolean>>;
 
-// O provedor de um modelo (espelha o cérebro): lista conhecida + inferência por
-// prefixo. Devolve null se não der para determinar.
+// O provedor de um modelo, pelo prefixo do nome (o mesmo critério do cérebro para
+// modelos que ele não lista). Devolve null se não der para determinar.
 export function provedorDoModelo(modelo: string): Provedor | null {
-  for (const p of PROVEDORES) {
-    if (MODELOS_POR_PROVEDOR[p].includes(modelo)) return p;
-  }
   const m = modelo.toLowerCase();
   if (m.startsWith("claude")) return "anthropic";
   if (m.startsWith("gpt") || /^o[134]/.test(m)) return "openai";

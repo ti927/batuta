@@ -278,7 +278,7 @@ export type Instrumento = {
   usado_em_outros_times?: number;
   pago?: boolean;
   time_casa_nome?: string | null;
-  situacao?: "falta_chave" | "reconectar" | "falhou" | null;
+  situacao?: "falta_chave" | "reconectar" | "falhou" | "modelo_sai" | null;
   situacao_motivo?: string | null;
   criado_em: string;
   atualizado_em: string;

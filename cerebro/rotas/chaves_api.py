@@ -104,6 +104,22 @@ def listar_chaves_org(
     ).all()
 
 
+@rotas.get("/modelos")
+def catalogo_de_modelos(usuario: Usuario = Depends(usuario_atual)):
+    """Os modelos de IA que o Batuta conhece — FONTE ÚNICA (`ciclo_modelos`) para a
+    tela não manter cópia própria: cada um com a IA dona, para que serve, situação,
+    data de saída, substituto, o aviso já pronto e (nos de texto) o custo aproximado
+    por 1M tokens. O catálogo não é de nenhuma organização; basta estar logado."""
+    import precos
+    from orquestracao import ciclo_modelos
+
+    saida = []
+    for item in ciclo_modelos.como_dado():
+        preco = precos.preco_conhecido(item["id"]) if item["uso"] == ciclo_modelos.TEXTO else None
+        saida.append({**item, "custo_mtok": list(preco) if preco else None})
+    return saida
+
+
 @rotas.get("/organizacoes/{organizacao_id}/modelos-disponiveis")
 def modelos_disponiveis_org(
     organizacao_id: uuid.UUID,
