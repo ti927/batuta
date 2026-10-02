@@ -18,6 +18,7 @@ por organização, depois US$ 0,05 por hora). Os arquivos ficam guardados na Ant
 por até 30 dias. Só gera arquivos → não é ação irreversível.
 """
 
+import re
 import uuid
 from pathlib import PurePosixPath
 from typing import Literal
@@ -49,7 +50,8 @@ SISTEMA = (
     "Use o código e as habilidades disponíveis para entregar exatamente o que foi "
     "pedido, em português do Brasil (datas dd/mm/aaaa, moeda R$, vírgula decimal). "
     "Salve cada arquivo final em $OUTPUT_DIR. Termine com um resumo curto do que foi "
-    "entregue e dos números principais — sem inventar dado que não esteja na entrada."
+    "entregue e dos números principais — sem inventar dado que não esteja na entrada e "
+    "sem citar pastas ou caminhos de arquivo (quem pediu recebe o link pronto)."
 )
 
 
@@ -167,6 +169,26 @@ def _guardar_saidas(cliente: anthropic.Anthropic, ids: list[str]) -> list[dict]:
     return saida
 
 
+# Um caminho do espaço de execução ($OUTPUT_DIR/x.xlsx, /mnt/user-data/outputs/x.pdf).
+_CAMINHO = r"`?(?:\$OUTPUT_DIR|/mnt/(?:user-data/)?outputs)/[^\s`)]*`?"
+# Entre parênteses no meio de uma frase: "a planilha ($OUTPUT_DIR/a.xlsx) tem…".
+_CAMINHO_ENTRE_PARENTESES = re.compile(r"\s*\(" + _CAMINHO + r"\)")
+_TEM_CAMINHO = re.compile(_CAMINHO)
+_FRASES = re.compile(r"(?<=[.!?;])\s+")
+
+
+def _sem_caminho_interno(texto: str) -> str:
+    """Tira do resumo os caminhos do espaço de execução ("salvo em $OUTPUT_DIR/x.xlsx"):
+    não interessam a quem pediu, que recebe o link do arquivo. O caminho entre
+    parênteses sai sozinho; a frase que ainda cita um caminho sai inteira (é sempre a
+    do "salvei em…")."""
+    saida = []
+    for linha in _CAMINHO_ENTRE_PARENTESES.sub("", texto).split("\n"):
+        frases = [f for f in _FRASES.split(linha) if not _TEM_CAMINHO.search(f)]
+        saida.append(" ".join(frases))
+    return "\n".join(saida).strip()
+
+
 class GerarArquivo(TipoInstrumento):
     tipo = "gerar_arquivo"
     provedores_ia = ("anthropic",)
@@ -202,7 +224,7 @@ class GerarArquivo(TipoInstrumento):
         gerados = _guardar_saidas(cliente, _ids_gerados(r["blocos"]))
         resultado = {
             "ok": True,
-            "resumo": r["texto"],
+            "resumo": _sem_caminho_interno(r["texto"]),
             "arquivos": gerados,
             "uso": r["uso"],
         }

@@ -17,6 +17,7 @@ from instrumentos.base import (
     preparar_config,
     resolver_config,
     tipos_disponiveis,
+    validar_argumentos,
     validar_configuracao,
 )
 

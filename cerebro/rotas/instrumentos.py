@@ -408,7 +408,7 @@ def acionar_instrumento(sessao: Session, inst, argumentos: dict | None) -> dict:
         **getattr(inst, "segredos_decifrados", {}),
     }
     config = tipo.Config.model_validate(config_efetiva)
-    args = tipo.Args.model_validate(argumentos or {})
+    args = encaixe.validar_argumentos(tipo, argumentos)
     if not getattr(tipo, "guarda_conexao", False):
         return tipo.executar(config, args)
     # Tipos que falam com um servidor de fora (MCP) guardam o que o teste descobriu —

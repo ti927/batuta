@@ -312,8 +312,9 @@ async def ver_uso(time_id: str) -> str:
 @mcp.tool()
 async def listar_tipos_instrumento() -> str:
     """Lista os tipos de instrumento disponíveis, com o que cada um faz, os campos de
-    configuração (obrigatório/secreto) e se a ação é irreversível. Use para saber o que é
-    possível montar e o que merece uma aprovação humana antes."""
+    configuração (obrigatório/secreto), os ARGUMENTOS que o agente passa ao acionar (use
+    estes nomes exatos no `testar_instrumento` — nome errado é recusado) e se a ação é
+    irreversível. Use para saber o que é possível montar e o que merece uma aprovação."""
     return await anyio.to_thread.run_sync(mcp_ferramentas.listar_tipos_instrumento, _sub())
 
 

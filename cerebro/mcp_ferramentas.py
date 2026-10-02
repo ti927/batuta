@@ -541,7 +541,7 @@ def ver_uso(sessao, usuario, time_id) -> str:
 @_ferramenta
 def listar_tipos_instrumento(sessao, usuario) -> str:
     # Catálogo é global; basta estar autenticado (o `_ferramenta` já garante o usuário).
-    return json.dumps(catalogo_de_instrumentos(), ensure_ascii=False)
+    return json.dumps(catalogo_de_instrumentos(com_argumentos=True), ensure_ascii=False)
 
 
 @_ferramenta

@@ -284,13 +284,18 @@ def _uso(modelo: str, t: dict) -> dict:
 
 
 def fontes(blocos: list[dict]) -> list[dict]:
-    """As páginas que a busca trouxe e as citações usadas na resposta, sem repetir."""
+    """As páginas que a busca trouxe e as citações usadas na resposta, sem repetir. A
+    `idade` (o `page_age` que a busca informa, ex.: "2 days ago" ou uma data) deixa o
+    agente descartar resultado velho."""
     vistas: dict[str, dict] = {}
     for b in blocos:
         if b.get("type") == "web_search_tool_result" and isinstance(b.get("content"), list):
             for r in b["content"]:
                 if r.get("url"):
-                    vistas.setdefault(r["url"], {"titulo": r.get("title") or "", "url": r["url"]})
+                    fonte = {"titulo": r.get("title") or "", "url": r["url"]}
+                    if r.get("page_age"):
+                        fonte["idade"] = r["page_age"]
+                    vistas.setdefault(r["url"], fonte)
         for c in b.get("citations") or []:
             if c.get("url"):
                 vistas.setdefault(c["url"], {"titulo": c.get("title") or "", "url": c["url"]})

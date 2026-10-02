@@ -353,3 +353,58 @@ def test_espera_longa_publica_sinal_de_vida(monkeypatch):
     with atividade.usar_atividade(frases.append):
         valor = srv._com_batimento(lambda: _time.sleep(0.05) or 42, "Gerando o arquivo")
     assert valor == 42 and frases and frases[0].startswith("Gerando o arquivo (")
+
+
+# ── Melhorias do uso real (02/10/2026) ───────────────────────────────────────────
+
+
+def test_argumento_com_nome_errado_e_recusado_dizendo_os_certos():
+    tipo = encaixe.obter_tipo("ler_pagina")
+    with pytest.raises(ValueError, match="argumento desconhecido.*pedido.*o_que_extrair, url"):
+        encaixe.validar_argumentos(tipo, {"url": "https://x.com", "pedido": "a tabela"})
+
+
+def test_agente_que_erra_o_nome_do_argumento_recebe_o_erro(monkeypatch):
+    import orquestracao.agente as agente_mod
+    from modelos import Instrumento
+
+    chamado = []
+    monkeypatch.setattr(agente_mod, "acionar_com_retentativa", lambda *a: chamado.append(a))
+    tipo = encaixe.obter_tipo("descrever_imagem")
+    inst = Instrumento(time_id=uuid.uuid4(), nome="Visão", tipo="descrever_imagem", configuracao={})
+    inst.id = uuid.uuid4()
+    ferramenta = agente_mod._ferramenta_unica(inst, tipo, tipo.Config(), [], {}, [], {})
+    saida = json.loads(ferramenta.func(imagens_url=["https://x/a.png"], pergunta="o que é?"))
+    assert saida["ok"] is False and "instrucao" in saida["erro"] and not chamado
+
+
+def test_catalogo_do_mcp_mostra_os_argumentos():
+    from criacao.ferramentas import catalogo_de_instrumentos
+
+    mcp = {t["tipo"]: t for t in catalogo_de_instrumentos(com_argumentos=True)}
+    args = {a["nome"]: a for a in mcp["ler_pagina"]["argumentos"]}
+    assert args["url"]["obrigatorio"] is True and args["o_que_extrair"]["obrigatorio"] is False
+    # o roteiro da IA criadora segue enxuto
+    assert "argumentos" not in catalogo_de_instrumentos()[0]
+
+
+def test_pesquisa_sabe_a_data_de_hoje_e_respeita_o_desde(monkeypatch):
+    from datetime import date
+
+    pedidos = _anthropic_falsa(monkeypatch, [_Resposta([
+        {"type": "web_search_tool_result", "content": [
+            {"type": "web_search_result", "title": "T", "url": "https://a.com", "page_age": "2 days ago"},
+        ]},
+        {"type": "text", "text": "ok"},
+    ])])
+    tipo = encaixe.obter_tipo("pesquisar_web")
+    r = tipo.executar(tipo.Config(), tipo.Args(pergunta="notícias de IA", desde=date(2026, 9, 25)))
+    assert "Hoje é " in pedidos[0]["system"] and "a partir de 25/09/2026" in pedidos[0]["system"]
+    assert r["fontes"] == [{"titulo": "T", "url": "https://a.com", "idade": "2 days ago"}]
+
+
+def test_resumo_do_arquivo_sem_caminho_interno():
+    from instrumentos.gerar_arquivo import _sem_caminho_interno
+
+    assert _sem_caminho_interno("Arquivo salvo em `$OUTPUT_DIR/resumo.xlsx`. Total 370.") == "Total 370."
+    assert _sem_caminho_interno("A planilha ($OUTPUT_DIR/a.xlsx) tem 2 abas.") == "A planilha tem 2 abas."

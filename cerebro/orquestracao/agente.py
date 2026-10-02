@@ -25,6 +25,7 @@ from instrumentos.base import (
     FalhaInstrumento,
     acao_irreversivel,
     acionar_com_retentativa,
+    validar_argumentos,
 )
 from modelos import Agente, Instrumento
 from observabilidade import contexto
@@ -237,7 +238,12 @@ def _ferramenta_unica(
         parado = _turno_interrompido(falhas, pedido)
         if parado:
             return parado
-        args = tipo.Args.model_validate(kwargs)
+        try:
+            args = validar_argumentos(tipo, kwargs)
+        except ValueError as e:
+            # Nome de argumento errado: o agente precisa saber, senão o instrumento
+            # rodaria com o valor padrão e responderia a outra pergunta.
+            return json.dumps({"ok": False, "erro": str(e)}, ensure_ascii=False)
         # Feedback ao vivo: publica "o que está acontecendo agora" ANTES da chamada —
         # é o que evita a tela parecer travada enquanto um instrumento lento roda.
         atividade.registrar(atividade.mensagem_para(tipo.tipo, inst.nome))

@@ -10,7 +10,9 @@ fora: a chave é a de IA da organização. Custo real: US$ 10 por mil buscas + t
 medido pelo que a Anthropic informa. Só leitura.
 """
 
+from datetime import date, datetime
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -23,6 +25,21 @@ SISTEMA = (
     "português, de forma objetiva, só com o que as fontes sustentam. Se não achar, "
     "diga claramente que não achou — nunca invente."
 )
+FUSO = ZoneInfo("America/Sao_Paulo")
+
+
+def _sistema(desde: date | None) -> str:
+    """As instruções com a DATA DE HOJE: sem ela o modelo não sabe que dia é e erra
+    "notícias dos últimos 7 dias" (a busca da Anthropic não tem filtro de data). O
+    `desde` vira regra — é filtro feito pelo modelo, não pela busca."""
+    hoje = datetime.now(FUSO).strftime("%d/%m/%Y")
+    texto = f"{SISTEMA}\n\nHoje é {hoje} (horário de São Paulo)."
+    if desde:
+        texto += (
+            f" Use só fontes publicadas a partir de {desde.strftime('%d/%m/%Y')}; descarte "
+            "as anteriores e diga claramente se sobrou pouco ou nada no período."
+        )
+    return texto
 
 
 class ConfigPesquisa(BaseModel):
@@ -32,8 +49,8 @@ class ConfigPesquisa(BaseModel):
     )
     modelo: str = Field(
         default=srv.MODELO_PADRAO_WEB, title="Modelo da IA",
-        description="O Haiku é o mais barato (cerca de US$ 0,02 por pesquisa). Modelos "
-        "maiores aprofundam mais, mas custam até dez vezes mais.",
+        description="O Haiku é o mais barato (de US$ 0,02 a 0,05 por pesquisa, conforme o "
+        "número de buscas). Modelos maiores aprofundam mais, mas custam até dez vezes mais.",
         json_schema_extra={"enum": srv.modelos_disponiveis()},
     )
     max_buscas: int = Field(
@@ -66,6 +83,11 @@ class ArgsPesquisa(BaseModel):
         description="O que pesquisar, com o contexto necessário (período, região, "
         "o que interessa). Ex.: preço médio do aluguel em Campinas em 2026.",
     )
+    desde: date | None = Field(
+        default=None,
+        description="Opcional (AAAA-MM-DD): só usar fontes publicadas a partir desta data. "
+        "Ex.: para 'notícias da última semana', a data de 7 dias atrás.",
+    )
 
 
 class PesquisarWeb(TipoInstrumento):
@@ -93,7 +115,7 @@ class PesquisarWeb(TipoInstrumento):
         if config.sites_bloqueados:
             ferramenta["blocked_domains"] = config.sites_bloqueados
         r = srv.chamar(
-            modelo=config.modelo, sistema=SISTEMA,
+            modelo=config.modelo, sistema=_sistema(args.desde),
             conteudo=[{"type": "text", "text": args.pergunta}], ferramentas=[ferramenta],
         )
         if not r["texto"]:

@@ -78,7 +78,27 @@ def _opcoes_do_campo(prop: dict) -> list | None:
     return None
 
 
-def catalogo_de_instrumentos() -> list[dict]:
+def _argumentos_do_tipo(tipo) -> list[dict]:
+    """Os ARGUMENTOS (o que o agente passa ao acionar), com nome, descrição, se é
+    obrigatório e, quando houver, as opções. Sem isto uma IA externa só os achava no
+    texto da Central — e errava o nome (o campo errado era descartado calado)."""
+    esquema = tipo.Args.model_json_schema()
+    obrigatorios = set(esquema.get("required", []))
+    saida = []
+    for nome, prop in (esquema.get("properties") or {}).items():
+        arg = {
+            "nome": nome,
+            "descricao": prop.get("description", ""),
+            "obrigatorio": nome in obrigatorios,
+        }
+        opcoes = _opcoes_do_campo(prop)
+        if opcoes is not None:
+            arg["opcoes"] = opcoes
+        saida.append(arg)
+    return saida
+
+
+def catalogo_de_instrumentos(*, com_argumentos: bool = False) -> list[dict]:
     """O catálogo de tipos de instrumento COM os campos de configuração de cada um.
 
     É o que destrava a IA criadora: sem saber que o WordPress precisa de `site_url`
@@ -125,6 +145,9 @@ def catalogo_de_instrumentos() -> list[dict]:
                 # Instrumento de IA: só se cria se a organização tem a chave de uma
                 # destas IAs (confira em ver_chaves_de_ia). Vazio = nativo.
                 "precisa_chave_de_ia": list(getattr(tipo, "provedores_ia", ()) or ()),
+                # O MCP mostra também os argumentos; o roteiro da IA criadora não precisa
+                # (ela recebe as ferramentas do agente com o esquema completo).
+                **({"argumentos": _argumentos_do_tipo(tipo)} if com_argumentos else {}),
             }
         )
     return catalogo

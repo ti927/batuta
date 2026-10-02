@@ -271,6 +271,24 @@ def tipos_disponiveis() -> list[TipoInstrumento]:
     return list(_REGISTRO.values())
 
 
+def validar_argumentos(tipo: "TipoInstrumento", dados: dict | None) -> BaseModel:
+    """Valida os argumentos de um acionamento e RECUSA campo desconhecido.
+
+    Todo argumento de instrumento tem valor padrão e o pydantic descarta campo que não
+    conhece: um `pedido` no lugar de `o_que_extrair` sumia calado e o instrumento rodava
+    com o padrão, respondendo `ok: true` a outra pergunta (achado no uso real, 02/10/2026).
+    Agora o erro diz qual campo não existe e quais existem. Levanta `ValueError`."""
+    dados = dict(dados or {})
+    conhecidos = set(tipo.Args.model_fields)
+    desconhecidos = sorted(set(dados) - conhecidos)
+    if desconhecidos:
+        raise ValueError(
+            f"argumento desconhecido para “{tipo.nome_exibicao}”: "
+            f"{', '.join(desconhecidos)}. Os argumentos são: {', '.join(sorted(conhecidos))}."
+        )
+    return tipo.Args.model_validate(dados)
+
+
 def validar_configuracao(tipo: str, configuracao: dict | None) -> dict:
     """Valida a configuração contra o esquema do tipo e devolve a forma limpa.
 
