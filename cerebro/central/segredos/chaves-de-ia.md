@@ -3,7 +3,7 @@ titulo: "Chaves de IA"
 area: "segredos"
 slug: "chaves-de-ia"
 tags: ["chave", "ia", "openai", "anthropic", "google", "provedor", "pool", "consultoria", "custo"]
-revisado_em: "2026-10-01"
+revisado_em: "2026-10-02"
 fontes: ["PRODUTO.md §24-26", "cerebro/chaves.py", "reference_chaves-unificadas"]
 ---
 
@@ -22,9 +22,9 @@ chave da **consultoria** (fallback).
 - Os **prontos de IA** não pedem chave própria: reusam a do pool.
 - **A chave libera os instrumentos daquela IA** (desde 01/10/2026): com a chave da **OpenAI**, a
   organização ganha **Gerar imagem** e **Montar imagem** (o Gerar vídeo está fora do ar: a OpenAI
-  desligou o Sora em 24/09/2026); com a da **Anthropic**, **Pesquisar na web**, **Ler página da web**,
-  **Ler documento (PDF)** e **Gerar arquivo e analisar dados**; com a de **qualquer** IA,
-  **Descrever imagem**. Sem a chave, esses instrumentos não aparecem em "Instrumento pronto" e criar
+  desligou o Sora em 24/09/2026); com a da **Anthropic ou a da OpenAI**, **Pesquisar na web**, **Ler
+  página da web**, **Ler documento (PDF)** e **Gerar arquivo e analisar dados** (a IA que faz o trabalho
+  é a do modelo escolhido no instrumento); com a de **qualquer** IA, **Descrever imagem**. Sem a chave, esses instrumentos não aparecem em "Instrumento pronto" e criar
   um é recusado, dizendo qual chave falta. A tela de chaves mostra o que cada chave libera.
 
 ## Como usar (na tela)
