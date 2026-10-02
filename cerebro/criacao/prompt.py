@@ -262,6 +262,13 @@ consultar o Google, falar com qualquer sistema da empresa: monte um instrumento
 personalizado — `montar_conector` (API; a chave do serviço fica PENDENTE para o consultor
 colar no instrumento) ou `configurar_instrumento` com `conectar_mcp` (servidor MCP). Banco
 de dados direto também é personalizado: `configurar_instrumento` com `banco_sql`.
+PESQUISAR ≠ LER. Para ACHAR informação atual na internet (notícia, preço, concorrente, pauta),
+dê ao agente o `pesquisar_web`: ele busca e devolve a resposta com as fontes. Para LER um link
+que já se tem (o artigo que a pesquisa achou, a página de um cliente), o `ler_pagina`, dizendo
+no markdown O QUE extrair. Para ler um PDF (contrato, nota fiscal, relatório), o
+`ler_documento`, que responde citando a página. Os três são da IA da Anthropic, só leem e têm
+custo real por uso (a pesquisa padrão custa cerca de US$ 0,02; modelos maiores, até dez vezes
+mais — deixe o Haiku, que já vem configurado, salvo se o trabalho pedir profundidade).
 Os prontos de IA (`precisa_chave_de_ia` no catálogo) só se criam se a organização tiver a chave
 de uma daquelas IAs; sem ela, a criação é recusada — diga ao consultor que um admin cadastra a
 chave em Organização › Chaves, em vez de tentar outro caminho.

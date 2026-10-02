@@ -29,6 +29,7 @@ from instrumentos.base import (
 from modelos import Agente, Instrumento
 from observabilidade import contexto
 from orquestracao import atividade
+from orquestracao import gasto_instrumentos
 from orquestracao import ficha as ficha_mod
 from orquestracao import prazo
 from orquestracao.llm import MODELO_PADRAO, construir_modelo, texto_da_resposta
@@ -267,6 +268,18 @@ def _ferramenta_unica(
                 },
                 ensure_ascii=False,
             )
+        # Instrumento que chama uma IA paga por fora devolve o gasto REAL em `uso`
+        # (tokens, buscas): vai para o uso do turno, carimbado com quem gastou, e sai
+        # do que o agente lê (não é informação para ele).
+        uso_real = resultado.pop("uso", None) if isinstance(resultado, dict) else None
+        if isinstance(uso_real, dict):
+            gasto_instrumentos.registrar({
+                **uso_real,
+                "categoria": "instrumento",
+                "instrumento_id": str(inst.id),
+                "instrumento": inst.nome,
+                "tipo": tipo.tipo,
+            })
         # Falha devolvida como DADO (`ok: false`, ex.: HTTP 4xx que não levanta
         # exceção): entra no rastro também — a execução não pode parecer limpa.
         _registrar_resposta_com_falha(
@@ -928,7 +941,10 @@ def executar_agente(
         # durante o turno, para um instrumento que grava em nome dele (o quadro) carimbar
         # QUAL agente gravou — sem mudar a assinatura de nenhuma ferramenta. A execução já
         # vem no mesmo contexto, fixada pela borda (`disparo`).
-        with contexto.usar_contexto(agente_id=str(agente.id)):
+        with (
+            contexto.usar_contexto(agente_id=str(agente.id)),
+            gasto_instrumentos.coletar() as gastos_instrumentos,
+        ):
             resultado = app.invoke(
                 {"messages": [{"role": "user", "content": conteudo}]}, config
             )
@@ -1011,7 +1027,7 @@ def executar_agente(
             "tokens_cache_read": cache_read,
             "tokens_cache_write": cache_write,
         }
-    ]
+    ] + gastos_instrumentos
 
     # O agente PEDIU APROVAÇÃO e está esperando uma pessoa (instrumento
     # `pedir_aprovacao`, `tipo.pausa_para_humano`). Quem decide que este momento

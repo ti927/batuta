@@ -40,8 +40,13 @@ def _qtd_acoes(inst: Instrumento) -> int | None:
     return None
 
 
+# Os que chamam uma IA paga por fora e medem o gasto REAL (ver `gasto_instrumentos`):
+# não entram em TIPOS_PAGOS (lá é a estimativa por configuração), mas são pagos.
+_PAGOS_PELO_USO = {"pesquisar_web", "ler_pagina", "ler_documento"}
+
+
 def _pago(inst: Instrumento) -> bool:
-    if inst.tipo in TIPOS_PAGOS:
+    if inst.tipo in TIPOS_PAGOS or inst.tipo in _PAGOS_PELO_USO:
         return True
     if inst.tipo == "conector":
         return any(

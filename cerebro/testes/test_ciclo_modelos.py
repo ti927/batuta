@@ -10,7 +10,15 @@ from datetime import date
 
 import pytest
 
-from instrumentos import descrever_imagem, gerar_imagem, gerar_video, montar_imagem
+from instrumentos import (
+    descrever_imagem,
+    gerar_imagem,
+    gerar_video,
+    ler_documento,
+    ler_pagina,
+    montar_imagem,
+    pesquisar_web,
+)
 from mensageria import transcricao
 from orquestracao import ciclo_modelos as cm
 from orquestracao import llm
@@ -47,6 +55,9 @@ def test_nada_desligado_aparece_para_escolher():
         ("padrão do Gerar imagem", gerar_imagem.MODELO_PADRAO),
         ("padrão do Montar imagem", montar_imagem.ConfigMontagem().modelo),
         ("padrão do Ler imagem", descrever_imagem.ConfigDescrever().modelo),
+        ("padrão do Pesquisar na web", pesquisar_web.ConfigPesquisa().modelo),
+        ("padrão do Ler página", ler_pagina.ConfigLeitura().modelo),
+        ("padrão do Ler documento", ler_documento.ConfigDocumento().modelo),
         ("transcrição dos áudios do Telegram", transcricao.MODELO),
     ],
 )
