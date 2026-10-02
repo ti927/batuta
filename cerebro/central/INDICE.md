@@ -72,6 +72,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Pesquisar na web | `instrumentos/pesquisar-web` | A IA busca e responde com as fontes; custo real (~US$ 0,02 no Haiku) | ✅ | ✍️ |
 | Ler página da web | `instrumentos/ler-pagina` | Extrai de um link o que o agente pediu; sem login nem JavaScript pesado | ✅ | ✍️ |
 | Ler documento (PDF) | `instrumentos/ler-documento` | Responde sobre um PDF citando a página | ✅ | ✍️ |
+| Gerar arquivo e analisar dados | `instrumentos/gerar-arquivo` | Planilha/Word/PowerPoint/PDF/gráfico prontos + análise de CSV; leva minutos; custo real | ✅ | ✍️ |
 | **Dados & integração** | | | | |
 | Chamar API REST | `instrumentos/chamar-rest` | NÃO SE CRIA MAIS (29/09): chamada de API é conector (Construtor / montar_conector); vale para as instâncias antigas — GET/POST/…; leitura × escrita | ✅ | ✍️ |
 | Construir um conector | `instrumentos/construir-conector` | Criar instrumento SEM código: testar e detectar, operações, autenticação (inclusive conta de serviço do Google), POST que só consulta; **a armadilha do `campos_resposta`** (campos da linha × nome da lista) | ✅ | ✍️ |
