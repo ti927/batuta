@@ -523,7 +523,8 @@ async def montar_conector(
     auth_nome, auth_usuario (usuário no basic / Client ID no oauth2), url_token (oauth2),
     escopo (oauth2 se pedir; OBRIGATÓRIO na conta de serviço), operacoes: [{nome,
     descricao, metodo, url (use [colchete] p/ trecho variável), campos: [{nome,
-    papel: 'ia|fixo', destino: 'query|corpo|url', valor, descricao, obrigatorio}],
+    papel: 'ia|fixo', destino: 'query|corpo|url', valor, descricao, obrigatorio,
+    tipo?: 'texto|numero' (numero = vai como número no corpo; padrão texto)}],
     campos_resposta: [...], somente_leitura: false, custo_por_chamada_usd: 0,
     tempo_limite_s: 15}]}. `tempo_limite_s` (1-300): operação que só responde depois de
     concluir um trabalho demorado (publicar carrossel/vídeo numa rede social) precisa de mais

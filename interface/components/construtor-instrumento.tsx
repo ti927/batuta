@@ -790,6 +790,22 @@ function SecaoOperacoes({
                         <option value="corpo">no corpo</option>
                         <option value="url">no endereço</option>
                       </Select>
+                      {campo.destino === "corpo" && (
+                        <Select
+                          value={campo.tipo ?? "texto"}
+                          onChange={(e) =>
+                            onAtualizarCampo(ci, {
+                              tipo: e.target.value as "texto" | "numero",
+                            })
+                          }
+                          className="h-8 w-24 shrink-0 text-xs"
+                          aria-label="Tipo do valor"
+                          title="Número: vai como número (10), não como texto (“10”). Use quando o serviço recusar o texto."
+                        >
+                          <option value="texto">texto</option>
+                          <option value="numero">número</option>
+                        </Select>
+                      )}
                       <Button
                         size="icon-sm"
                         variant="ghost"

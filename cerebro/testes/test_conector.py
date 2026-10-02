@@ -533,3 +533,34 @@ def test_leitura_sem_resposta_e_sem_conexao_seguem_retentaveis(monkeypatch):
         with pytest.raises(FalhaInstrumento) as e:
             _executar_operacao(config, config.operacoes[0], {"texto": "x"})
         assert e.value.retentavel is True
+
+
+def test_campo_numero_vai_como_numero_no_corpo(monkeypatch):
+    """A Exa recusava `numResults: "10"` (texto) com 400 — uso real, 02/10/2026. Campo
+    marcado como número vai como número; texto continua texto (ids não mudam)."""
+    capturas: list = []
+    _mock_http(monkeypatch, _Resp(200, {"results": []}), capturas)
+    config = ConfigConector(
+        auth_tipo="nenhuma",
+        operacoes=[{
+            "nome": "buscar", "url": "https://api.exa.ai/search", "metodo": "POST",
+            "somente_leitura": True,
+            "campos": [
+                {"nome": "query", "papel": "ia", "destino": "corpo"},
+                {"nome": "numResults", "papel": "ia", "destino": "corpo", "tipo": "numero"},
+                {"nome": "taxa", "papel": "fixo", "valor": "2,5", "destino": "corpo", "tipo": "numero"},
+                {"nome": "id", "papel": "fixo", "valor": "0055", "destino": "corpo"},
+            ],
+        }],
+    )
+    tool = Conector().expandir_ferramentas(config)[0]
+    assert tool.args_schema.model_json_schema()["properties"]["numResults"]["anyOf"]
+    tool.invoke({"query": "ia no brasil", "numResults": 10})
+    assert capturas[0]["json"] == {"query": "ia no brasil", "numResults": 10, "taxa": 2.5, "id": "0055"}
+
+
+def test_campo_numero_com_texto_falha_dizendo_o_campo():
+    from instrumentos.conector import _numero
+
+    with pytest.raises(FalhaInstrumento, match="numResults"):
+        _numero("dez", "numResults")

@@ -368,6 +368,8 @@ export type CampoConector = {
   valor: string; // usado quando papel="fixo"
   descricao: string; // ajuda para a IA (quando papel="ia")
   obrigatorio: boolean;
+  // "numero" = vai como número no corpo (ex.: numResults: 10). Padrão: texto.
+  tipo?: "texto" | "numero";
 };
 
 export type OperacaoConector = {

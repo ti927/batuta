@@ -69,6 +69,13 @@ class CampoOperacao(BaseModel):
     valor: str = Field(default="", description="Valor fixo (quando papel='fixo').")
     descricao: str = Field(default="", description="Ajuda para a IA (quando papel='ia').")
     obrigatorio: bool = True
+    # Todo campo é TEXTO por padrão, de propósito: "0055" e ids longos viram outra coisa
+    # ao virar número (ver `_valor_json`). Quem monta marca "numero" quando a API exige
+    # número de verdade no corpo — a Exa recusava `numResults: "10"` com 400 (uso real,
+    # 02/10/2026). A IA passa a receber o campo como número.
+    tipo: Literal["texto", "numero"] = Field(
+        default="texto", description="numero = vai como número no corpo (ex.: numResults: 10)."
+    )
 
 
 class OperacaoConector(BaseModel):
@@ -238,10 +245,11 @@ def _args_da_operacao(op: OperacaoConector) -> type[BaseModel]:
     campos: dict[str, tuple] = {}
     for chave, c in _campos_ia_seguros(op):
         ajuda = c.descricao or c.nome
+        tipo = (int | float) if c.tipo == "numero" else str
         if c.obrigatorio:
-            campos[chave] = (str, Field(description=ajuda))
+            campos[chave] = (tipo, Field(description=ajuda))
         else:
-            campos[chave] = (str | None, Field(default=None, description=ajuda))
+            campos[chave] = (tipo | None, Field(default=None, description=ajuda))
     return create_model(f"ArgsOp_{_id_seguro(op.nome)}", **campos)
 
 
@@ -317,6 +325,24 @@ def _operacao_escreve(op: Any) -> bool:
     return not so_le
 
 
+def _numero(v: Any, nome: str) -> int | float:
+    """O valor de um campo marcado como NÚMERO: inteiro quando é inteiro (`10`, não
+    `10.0` — há API que recusa o decimal), decimal quando tem vírgula ou ponto. Aceita a
+    vírgula brasileira. O que não é número falha claro, com o nome do campo."""
+    if isinstance(v, bool):
+        raise FalhaInstrumento(f"o campo «{nome}» precisa ser um número.", retentavel=False)
+    if isinstance(v, (int, float)):
+        return int(v) if isinstance(v, float) and v.is_integer() else v
+    texto = str(v).strip().replace(",", ".")
+    try:
+        numero = float(texto)
+    except ValueError:
+        raise FalhaInstrumento(
+            f"o campo «{nome}» precisa ser um número (veio “{v}”).", retentavel=False
+        ) from None
+    return int(numero) if numero.is_integer() and "." not in texto else numero
+
+
 def _valor_json(v: Any) -> Any:
     """O valor de um campo do CORPO, no tipo que o JSON pede.
 
@@ -389,7 +415,7 @@ def _executar_operacao(
         if c.destino == "url":
             url = url.replace(f"[{c.nome}]", str(v))
         elif c.destino == "corpo":
-            corpo[c.nome] = _valor_json(v)
+            corpo[c.nome] = _numero(v, c.nome) if c.tipo == "numero" else _valor_json(v)
         else:  # query
             params[c.nome] = v
 

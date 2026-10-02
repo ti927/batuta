@@ -31,8 +31,10 @@ tem um `metodo`, uma `url`, os `campos` (o que entra na requisição) e, opciona
 No destino `corpo`, o valor pode ser **JSON de verdade**: o que começa com `[` ou `{` (e é JSON
 válido) e os literais `true`/`false`/`null` viram lista, objeto e booleano. É como se declara
 `{"nome": "dimensions", "papel": "fixo", "destino": "corpo", "valor": "[\"query\"]"}` — o Google
-recusa `dimensions` em texto. **Número NÃO é convertido**, de propósito: `"0055"` e ids longos viram
-outra coisa ao virar número, e as APIs aceitam número em texto.
+recusa `dimensions` em texto. **Número NÃO é convertido sozinho**, de propósito: `"0055"` e ids longos
+viram outra coisa ao virar número. Quando o serviço exige número de verdade (a Exa recusa
+`numResults: "10"`), marque o campo com **`"tipo": "numero"`** — na tela, o seletor **texto/número** que
+aparece ao lado de "no corpo". Aí a IA passa número e ele vai como número (`10`; `2,5` vira `2.5`).
 
 Regra de ouro: **um campo só existe se você o DECLARA**. Para a IA poder mandar um dado (o corpo de
 um POST, o filtro de uma busca), esse campo precisa estar na lista `campos` com o `destino` certo.
