@@ -246,6 +246,7 @@ def test_gerar_imagem_pelo_google_com_proporcao_e_resolucao(monkeypatch):
 
     pedidos = _google_falso(monkeypatch, [_resposta_imagem(b"jpeg-bytes", "image/jpeg")])
     salvos = _guardar(monkeypatch, gi)
+    # O Google devolve JPEG; pedido JPEG → vai como veio, sem converter.
     tipo = encaixe.obter_tipo("gerar_imagem")
     cfg = tipo.Config(modelo="gemini-3.1-flash-image", tamanho="4:5", qualidade="2K", formato="jpeg")
     with usar_chaves({"google": "g"}):
@@ -254,10 +255,38 @@ def test_gerar_imagem_pelo_google_com_proporcao_e_resolucao(monkeypatch):
     assert pedidos[0]["model"] == "gemini-3.1-flash-image"
     assert conf.response_modalities == ["IMAGE"]
     assert (conf.image_config.aspect_ratio, conf.image_config.image_size) == ("4:5", "2K")
-    assert conf.image_config.output_mime_type == "image/jpeg"
+    assert conf.image_config.output_mime_type is None  # a API dele não aceita (ao vivo)
     assert pedidos[0]["contents"] == ["um café na praia"]
     assert salvos[0][1] == b"jpeg-bytes" and salvos[0][0].endswith(".jpg")
     assert r["ok"] and r["url"].startswith("https://armazem/")
+
+
+def test_gerar_imagem_pelo_google_converte_para_png_quando_pedido(monkeypatch):
+    import io
+
+    from PIL import Image
+
+    from instrumentos import gerar_imagem as gi
+
+    jpeg = io.BytesIO()
+    Image.new("RGB", (4, 4), "red").save(jpeg, "JPEG")
+    _google_falso(monkeypatch, [_resposta_imagem(jpeg.getvalue(), "image/jpeg")])
+    salvos = _guardar(monkeypatch, gi)
+    tipo = encaixe.obter_tipo("gerar_imagem")
+    cfg = tipo.Config(modelo="gemini-3.1-flash-image", tamanho="1:1", qualidade="1K", formato="png")
+    with usar_chaves({"google": "g"}):
+        tipo.executar(cfg, tipo.Args(prompt="vermelho"))
+    nome, conteudo, mime = salvos[0]
+    assert mime == "image/png" and nome.endswith(".png") and conteudo[:4] == b"\x89PNG"
+
+
+def test_erro_que_nao_e_da_api_diz_o_porque_e_nao_retenta(monkeypatch):
+    _google_falso(monkeypatch, [ValueError("parâmetro só existe na versão empresarial")])
+    tipo = encaixe.obter_tipo("gerar_imagem")
+    cfg = tipo.Config(modelo="gemini-3.1-flash-image", tamanho="1:1", qualidade="1K")
+    with usar_chaves({"google": "g"}), pytest.raises(FalhaInstrumento) as e:
+        tipo.executar(cfg, tipo.Args(prompt="x"))
+    assert not e.value.retentavel and "versão empresarial" in str(e.value)
 
 
 def test_gerar_imagem_proporcao_de_um_modelo_nao_vale_no_outro():
@@ -349,7 +378,8 @@ def test_narrar_texto_poe_cabecalho_wav_no_audio_cru_e_mede_o_custo(monkeypatch)
     assert conf.response_modalities == ["AUDIO"]
     assert conf.speech_config.voice_config.prebuilt_voice_config.voice_name == "Achird"
     assert conf.speech_config.language_code == "pt-BR"
-    assert "animado" in conf.system_instruction
+    assert conf.system_instruction is None  # o modelo de voz não aceita (ao vivo)
+    assert pedidos[0]["contents"] == ["[animado] Olá, tudo bem?"]
     nome, wav, mime = salvos[0]
     assert mime == "audio/wav" and wav[:4] == b"RIFF" and nome.endswith(".wav")
     with wave.open(io.BytesIO(wav)) as w:
@@ -366,7 +396,7 @@ def test_narrar_texto_sem_tom_nao_manda_instrucao(monkeypatch):
     tipo = encaixe.obter_tipo("narrar_texto")
     with usar_chaves({"google": "g"}):
         tipo.executar(tipo.Config(), tipo.Args(texto="Oi"))
-    assert pedidos[0]["config"].system_instruction is None
+    assert pedidos[0]["contents"] == ["Oi"]
 
 
 def test_narrar_texto_sem_audio_vira_falha(monkeypatch):

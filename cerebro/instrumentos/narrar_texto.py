@@ -117,11 +117,14 @@ class NarrarTexto(TipoInstrumento):
 
     def executar(self, config: ConfigNarrar, args: ArgsNarrar) -> dict:
         cli = goo.cliente(TIMEOUT_S)
+        # O jeito de falar vai entre colchetes antes do texto: o modelo de voz não aceita
+        # instrução de sistema, e o que está entre colchetes ele usa sem ler em voz alta
+        # (conferido ao vivo em 02/10/2026, transcrevendo o próprio áudio gerado).
+        texto = f"[{config.tom.strip()}] {args.texto}" if config.tom.strip() else args.texto
         criar = lambda: cli.models.generate_content(  # noqa: E731
             model=config.modelo,
-            contents=[args.texto],
+            contents=[texto],
             config=gtypes.GenerateContentConfig(
-                system_instruction=f"Fale assim: {config.tom}." if config.tom.strip() else None,
                 response_modalities=["AUDIO"],
                 speech_config=gtypes.SpeechConfig(
                     language_code="pt-BR",
@@ -136,10 +139,7 @@ class NarrarTexto(TipoInstrumento):
         except errors.APIError as e:
             raise goo.traduzir_excecao(e, config.modelo) from e
         except Exception as e:
-            raise FalhaInstrumento(
-                f"o Google não respondeu a tempo ({type(e).__name__}); tente de novo em instantes.",
-                retentavel=True, codigo="ia.indisponivel",
-            ) from e
+            raise goo.falha_inesperada(e) from e
 
         audio = None
         for candidato in resposta.candidates or []:

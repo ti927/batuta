@@ -269,11 +269,12 @@ def gerar_pelo_google(
     config: ConfigImagem, prompt: str, referencias: list[tuple[bytes, str]] = (),
 ) -> tuple[bytes, str, str]:
     """Gera (ou monta, com `referencias`) uma imagem no Google. Devolve (bytes, tipo,
-    extensão). O formato do arquivo segue a config (png/jpeg)."""
+    extensão). O Google devolve JPEG e a API dele não deixa escolher o formato (só a
+    versão empresarial deixa — conferido ao vivo em 02/10/2026): quando a config pede
+    PNG, o Batuta converte."""
     from google.genai import errors
     from google.genai import types as gtypes
 
-    mime, ext = ("image/jpeg", ".jpg") if config.formato == "jpeg" else ("image/png", ".png")
     partes: list = [gtypes.Part.from_bytes(data=b, mime_type=t) for b, t in referencias]
     partes.append(prompt)
     cli = goo.cliente(TIMEOUT_S)
@@ -284,22 +285,18 @@ def gerar_pelo_google(
                 response_modalities=["IMAGE"],
                 image_config=gtypes.ImageConfig(
                     aspect_ratio=config.tamanho, image_size=config.qualidade,
-                    output_mime_type=mime,
                 ),
             ),
         )
     except errors.APIError as e:
         raise goo.traduzir_excecao(e, config.modelo) from e
     except Exception as e:
-        raise FalhaInstrumento(
-            f"o Google não respondeu a tempo ({type(e).__name__}); tente de novo em instantes.",
-            retentavel=True, codigo="ia.indisponivel",
-        ) from e
+        raise goo.falha_inesperada(e) from e
     for candidato in resposta.candidates or []:
         for parte in getattr(candidato.content, "parts", None) or []:
             dados = getattr(parte, "inline_data", None)
             if dados and dados.data:
-                return dados.data, dados.mime_type or mime, ext
+                return _no_formato(dados.data, dados.mime_type or "image/jpeg", config.formato)
     motivo = (resposta.candidates or [None])[0]
     motivo = str(getattr(motivo, "finish_reason", "") or "")
     raise FalhaInstrumento(
@@ -308,6 +305,26 @@ def gerar_pelo_google(
         + ".",
         retentavel=False, codigo="ia.recusa" if motivo and "STOP" not in motivo else "google.sem_imagem",
     )
+
+
+def _no_formato(dados: bytes, mime: str, formato: str) -> tuple[bytes, str, str]:
+    """A imagem no formato pedido (png/jpeg), convertendo com o Pillow (que já vem com o
+    gerador de PDF) quando o que chegou é outro."""
+    querido = "image/jpeg" if formato == "jpeg" else "image/png"
+    ext = ".jpg" if formato == "jpeg" else ".png"
+    if mime == querido:
+        return dados, mime, ext
+    import io
+
+    from PIL import Image
+
+    with Image.open(io.BytesIO(dados)) as imagem:
+        saida = io.BytesIO()
+        if formato == "jpeg":
+            imagem.convert("RGB").save(saida, "JPEG", quality=90)
+        else:
+            imagem.save(saida, "PNG")
+    return saida.getvalue(), querido, ext
 
 
 class GerarImagem(TipoInstrumento):

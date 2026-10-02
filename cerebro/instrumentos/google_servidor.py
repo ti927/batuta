@@ -19,6 +19,7 @@ Referência: ai.google.dev/gemini-api/docs (Google Search grounding, URL context
 document understanding, pricing, deprecations).
 """
 
+import httpx
 from google import genai
 from google.genai import errors, types
 
@@ -101,6 +102,17 @@ def traduzir_excecao(e: Exception, modelo: str) -> FalhaInstrumento:
     return FalhaInstrumento(f"a chamada ao Google falhou: {texto[:300]}", retentavel=True)
 
 
+def falha_inesperada(e: Exception) -> FalhaInstrumento:
+    """Erro que não veio da API do Google: rede/tempo esgotado (vale tentar de novo) ou
+    um pedido que o próprio SDK recusou antes de sair (não vale — diz o porquê)."""
+    if isinstance(e, (httpx.TimeoutException, httpx.TransportError, TimeoutError, ConnectionError)):
+        return FalhaInstrumento(
+            f"o Google não respondeu a tempo ({type(e).__name__}); tente de novo em instantes.",
+            retentavel=True, codigo="ia.indisponivel",
+        )
+    return FalhaInstrumento(f"a chamada ao Google falhou: {str(e)[:300]}", retentavel=False)
+
+
 def chamar(
     *, modelo: str, sistema: str, conteudo: list, ferramentas: list[types.Tool],
     timeout: float | None = None, frase_espera: str | None = None,
@@ -116,11 +128,8 @@ def chamar(
         resposta = _com_batimento(criar, frase_espera)
     except errors.APIError as e:
         raise traduzir_excecao(e, modelo) from e
-    except Exception as e:  # rede/tempo esgotado chegam como exceções do httpx
-        raise FalhaInstrumento(
-            f"o Google não respondeu a tempo ({type(e).__name__}); tente de novo em instantes.",
-            retentavel=True, codigo="ia.indisponivel",
-        ) from e
+    except Exception as e:
+        raise falha_inesperada(e) from e
 
     bloqueio = getattr(getattr(resposta, "prompt_feedback", None), "block_reason", None)
     candidato = (resposta.candidates or [None])[0]

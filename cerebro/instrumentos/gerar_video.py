@@ -250,11 +250,8 @@ class GerarVideo(TipoInstrumento):
             )
         except errors.APIError as e:
             raise goo.traduzir_excecao(e, config.modelo) from e
-        except Exception as e:
-            raise FalhaInstrumento(
-                f"não foi possível iniciar a geração de vídeo ({type(e).__name__}).",
-                retentavel=True, codigo="ia.indisponivel",
-            ) from e
+        except Exception as e:  # nada foi criado: a tradução decide se vale repetir
+            raise goo.falha_inesperada(e) from e
 
         # 2) ESPERA. A PARTIR DAQUI, TUDO é NÃO-retentável (idempotência).
         operacao = self._aguardar(cli, operacao)
