@@ -35,7 +35,8 @@ em CSV ou planilha (totais, médias, comparações) sem o agente fazer conta de 
   enquanto espera.
 - **Custo real por uso:** tokens (a IA lê o manual de cada formato) + tempo de execução (1.550 h grátis
   por mês por organização, depois US$ 0,05 por hora). Medido em 02/10/2026: uma planilha de resumo de
-  um CSV com gráfico custou **US$ 0,23** no Sonnet 5.
+  um CSV com gráfico custou **US$ 0,23** no Sonnet 5; uma planilha de 2 abas com fórmulas e gráfico,
+  só com o formato xlsx ligado, US$ 0,08 no Sonnet 5.5.
 - Arquivos de entrada: até 10, por **link público (https://)**, até 30 MB cada.
 - Os arquivos gerados ficam guardados no armazenamento do Batuta (link público) e, por até **30 dias**,
   também na Anthropic. Para clientes que exigem que nenhum dado fique com terceiros, avise antes de usar.
@@ -43,6 +44,8 @@ em CSV ou planilha (totais, médias, comparações) sem o agente fazer conta de 
 - Só gera arquivos → ninguém precisa aprovar (quem ENVIA o arquivo é que pode precisar).
 
 ## Para a IA
+Nome de argumento errado é recusado com a lista dos certos (veja os argumentos em
+`listar_tipos_instrumento`).
 Parâmetros no catálogo (`gerar_arquivo`): `instrucao` (o que gerar/analisar, com os detalhes) e
 `arquivos_url` (links públicos de entrada, opcional). Devolve `resumo`, `arquivos` (lista de `nome`,
 `url`, `tipo`) e, se nada foi gerado, `aviso`. Encadeie o `url` no passo que envia ou grava.

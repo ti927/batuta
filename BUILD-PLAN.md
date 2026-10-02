@@ -2780,3 +2780,11 @@ Motivo: a OpenAI desligou o Sora em 24/09/2026 e o Batuta só soube por acaso. T
 - `anthropic_servidor.chamar` ganhou `betas`/`container`/`timeout`/`frase_espera`: na continuação de turno pausado usa o MESMO espaço de execução (id); espera longa publica sinal de vida a cada 15 s (`_com_batimento`); a resposta passou a ser só o texto DEPOIS da última ação (`texto_final`), sem a narração do meio.
 - **Provado ao vivo (02/10):** CSV do Titanic → `resumo.xlsx` (aba de dados + resumo por fórmulas + gráfico), 65 s, US$ 0,23, sinal de vida a cada 15 s. (O arquivo de teste foi para o armazenamento da produção — dado público, inofensivo.)
 - Pendente geral: testar os 4 instrumentos dentro de um agente real; OpenAI e Google como opção dos mesmos instrumentos.
+
+## FASE — Melhorias do uso real dos instrumentos de IA (relatório de 02/10/2026)  ✅ (2026-10-02, sem migração)
+- **Argumento com nome errado não some mais calado:** `instrumentos.base.validar_argumentos` recusa campo desconhecido citando os certos — no "Testar"/MCP (`rotas.instrumentos.acionar_instrumento`) e na ferramenta do agente (`agente._ferramenta_unica`, devolve `ok:false` ao agente). Antes, `pedido` no lugar de `o_que_extrair` rodava com o padrão e respondia `ok:true` a outra pergunta.
+- **MCP mostra os argumentos:** `listar_tipos_instrumento` traz `argumentos` (nome, descrição, obrigatório, opções) de cada tipo — `catalogo_de_instrumentos(com_argumentos=True)`; o roteiro da IA criadora segue sem (ela já recebe o esquema das ferramentas).
+- **Pesquisar na web:** data de hoje (São Paulo) nas instruções; argumento opcional `desde` (a IA descarta fonte anterior — a busca da Anthropic não filtra data); `idade` (page_age) em cada fonte; faixa de custo realista (US$ 0,02–0,05 no Haiku).
+- **Gerar arquivo:** o resumo não cita mais caminho interno (`$OUTPUT_DIR/…`).
+- Central atualizada com os resultados medidos no uso real.
+- **Pendente de decisão do maestro:** limpar o `webhook_secret` que sobrou na configuração pública dos canais PES e EST (é o segredo em uso — trocar) · conector com número no corpo · `campos_resposta` com caminho · aviso de aprovação em nó de saída única · aceitar id curto no MCP.

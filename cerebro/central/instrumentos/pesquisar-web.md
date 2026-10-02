@@ -29,15 +29,20 @@ públicos, referências para uma pauta. Para ler por inteiro um link que a pesqu
 
 ## Limites e cuidados
 - **Custo real por uso**, medido pelo que a Anthropic informa: US$ 10 por mil buscas + tokens. Medido
-  em 02/10/2026: **cerca de US$ 0,02 por pesquisa no Haiku** e US$ 0,20 no Sonnet 5 (que lê muito mais).
+  em 02/10/2026: **de US$ 0,02 a 0,05 por pesquisa no Haiku**, conforme o número de buscas (uma
+  pesquisa de notícias com 2 buscas custou US$ 0,047), e US$ 0,20 no Sonnet 5 (que lê muito mais).
+- **Período:** a busca da Anthropic não filtra por data. O instrumento informa à IA a data de hoje, e o
+  argumento opcional `desde` (AAAA-MM-DD) faz a IA descartar fonte mais antiga e dizer se sobrou pouco.
+  Para "notícias da semana", passe `desde` = 7 dias atrás. Cada fonte vem com a `idade` da página.
 - A resposta só vale o que as fontes valem — o agente deve citar as fontes quando o dado importa.
 - Se a conta da Anthropic da empresa tiver a busca desligada (painel da Anthropic › Privacy), o
   instrumento falha com esse recado.
 - Só leitura → ninguém precisa aprovar nada.
 
 ## Para a IA
-Parâmetro no catálogo (`pesquisar_web`): `pergunta` (com o contexto: período, região, o que interessa).
-Devolve `resposta`, `fontes` e `avisos` (ex.: `max_uses_exceeded` = atingiu o máximo de buscas e
+Argumentos (`pesquisar_web`): `pergunta` (com o contexto: região, o que interessa) e, opcional,
+`desde` (AAAA-MM-DD). Nome de argumento errado é recusado com a lista dos certos. Devolve `resposta`,
+`fontes` (título, url e `idade` quando a busca informa) e `avisos` (ex.: `max_uses_exceeded` = atingiu o máximo de buscas e
 respondeu com o que tinha). Hoje só a Anthropic faz a busca; OpenAI e Google entram depois como opção
 do mesmo instrumento.
 

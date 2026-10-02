@@ -29,12 +29,14 @@ sustentam — quem confere depois sabe de onde veio cada dado.
 ## Limites e cuidados
 - O PDF precisa estar num **link público (https://)** — a própria Anthropic o baixa. Arquivo recebido
   pelo canal ou gerado por outro instrumento já vem com um link assim.
-- Até 32 MB e 600 páginas. Cada página custa cerca de 1.500 a 3.000 tokens (medido em 02/10/2026: um PDF
-  pequeno custou US$ 0,006).
+- Até 32 MB e 600 páginas. Cada página custa cerca de 1.500 a 3.000 tokens. Medido em 02/10/2026: um PDF
+  de 15 páginas com 3 perguntas custou US$ 0,042 no Haiku, com resposta correta citando trecho e página.
 - Lê texto, tabelas e imagens das páginas (inclusive PDF escaneado).
 - Só leitura → ninguém precisa aprovar nada.
 
 ## Para a IA
+Nome de argumento errado é recusado com a lista dos certos (veja os argumentos em
+`listar_tipos_instrumento`).
 Parâmetros no catálogo (`ler_documento`): `url` (link público https do PDF) e `pergunta`. Devolve
 `resposta` e `citacoes` (lista de `trecho` + `pagina`). Use as citações quando o dado for para outro
 sistema ou para uma pessoa conferir.

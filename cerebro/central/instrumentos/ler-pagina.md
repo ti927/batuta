@@ -31,11 +31,14 @@ só isso, não a página inteira.
 - **Não abre página com login** nem site que só monta o conteúdo no navegador (JavaScript pesado) —
   nesses casos a página vem vazia ou o instrumento avisa que não conseguiu abrir.
 - Lê texto, HTML e PDF. Endereço com até 250 caracteres.
-- Custo: só os tokens da página (medido em 02/10/2026: cerca de US$ 0,05 numa página da Wikipédia
-  no Sonnet; menos no Haiku).
+- Custo: só os tokens da página. Medido em 02/10/2026: US$ 0,018 listando os 6 artigos mais recentes de
+  um blog no Haiku (mais atual que um serviço de busca, que devolveu uma cópia velha da página); US$ 0,05
+  numa página da Wikipédia no Sonnet.
 - Só leitura → ninguém precisa aprovar nada.
 
 ## Para a IA
+Nome de argumento errado é recusado com a lista dos certos (veja os argumentos em
+`listar_tipos_instrumento`).
 Parâmetros no catálogo (`ler_pagina`): `url` (completa, com https://) e `o_que_extrair`. Devolve
 `conteudo` e `avisos`. Se falhar com "não pôde ser aberta", a página exige login, bloqueia robôs ou está
 fora do ar — não insista no mesmo link.
