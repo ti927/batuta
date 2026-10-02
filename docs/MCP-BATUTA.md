@@ -98,7 +98,9 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
   segundos a minutos — o teste de vídeo derrubou a conexão do MCP no uso real. Eles respondem na hora
   "em andamento" com um `teste_id`; o cérebro roda o teste em segundo plano e a IA lê o resultado com
   **`ver_teste_instrumento(teste_id)`** (guardado 1 hora; se o cérebro reiniciar no meio, a consulta diz
-  para rodar de novo). Porta interna `/interno/instrumento/teste`.
+  para rodar de novo). Porta interna `/interno/instrumento/teste`. Como o claude.ai só mostra
+  ferramenta nova depois de reconectar o conector, a mesma consulta funciona pela
+  `testar_instrumento` com argumentos `{"teste_id": "..."}`.
 
 > **Nomes que mudaram (2026-08-26):** `ativar_time`/`desativar_time` viraram
 > `ativar_automacao`/`desativar_automacao` — recebiam `automacao_id` e operavam sobre uma

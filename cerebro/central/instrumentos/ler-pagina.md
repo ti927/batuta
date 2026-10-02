@@ -36,7 +36,10 @@ só isso, não a página inteira.
 - **Na OpenAI, o Batuta baixa a página na hora** e entrega o texto à IA: a busca da OpenAI chegou a
   devolver uma cópia velha de um blog (os artigos de agosto como "os mais recentes"). Se a página for
   maior que o limite de leitura, o resultado avisa que só o começo foi lido; página que só monta o
-  conteúdo com JavaScript falha com "não tem texto".
+  conteúdo com JavaScript falha com "não tem texto". O texto entregue traz os **endereços das imagens**
+  (com a descrição de cada uma) e os links já completos.
+- **Endereços das imagens:** vêm com modelos da Anthropic ou da OpenAI; com o Google, não. Para pegar
+  a imagem de capa de um artigo, por exemplo, use um desses.
 - No Google, se a IA não conseguir abrir a página, o resultado traz um `aviso` dizendo que a resposta
   pode não ter vindo dela; página com login ou bloqueada falha com "não pôde ser aberta".
 - Custo: só os tokens da página. Medido em 02/10/2026: US$ 0,018 listando os 6 artigos mais recentes de
