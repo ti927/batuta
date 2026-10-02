@@ -42,7 +42,7 @@ def _id8(nome_ferramenta: str) -> str:
 
 def _custo_imagem(cfg: dict) -> dict:
     """Entrada de uso de UMA imagem gerada, a partir da config do instrumento."""
-    modelo = cfg.get("modelo") or "gpt-image-1"
+    modelo = cfg.get("modelo") or "gpt-image-2"
     tamanho = cfg.get("tamanho") or "1024x1024"
     qualidade = cfg.get("qualidade") or "medium"
     return {

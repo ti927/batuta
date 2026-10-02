@@ -15,13 +15,13 @@ neste instrumento quando a Biblioteca chegar. Ver `criacao/prompt.py`.
 Usa a API de imagens da OpenAI no endpoint de EDIÇÃO/COMPOSIÇÃO
 (`/v1/images/edits`, multipart): aceita até 16 imagens em `image[]` — a PRIMEIRA é
 preservada com a maior fidelidade (textura/rosto), por isso a foto principal da
-pessoa deve vir primeiro. O `input_fidelity: high` (suportado por gpt-image-1 e
-gpt-image-1.5; NÃO por gpt-image-2/mini) reforça a fidelidade ao rosto da entrada.
+pessoa deve vir primeiro. Os modelos atuais (gpt-image-2 e 2.5) já processam a
+entrada em alta fidelidade sozinhos — o antigo `input_fidelity` saiu com o 1/1.5.
 
 A chave é um SEGREDO, reusada do pool da organização ("Chaves de IA") quando o
 instrumento não tem chave própria (como o `gerar_imagem`). Reusa o `CATALOGO_IMAGEM`
 do `gerar_imagem` como fonte única de modelos/validação; só muda os PADRÕES para a
-montagem (gpt-image-1.5, retrato 1024x1536, qualidade alta). O custo (por imagem) é
+montagem (gpt-image-2, retrato 1024x1536, qualidade alta). O custo (por imagem) é
 contabilizado na borda — ver `medicao_instrumentos.TIPOS_PAGOS`.
 
 Política de falha: transporte/5xx/429 são retentáveis; chave recusada (401/403),
@@ -54,11 +54,6 @@ URL_EDITS = "https://api.openai.com/v1/images/edits"
 # folga generosa só para o POST de edição; o download das fotos-base segue em TIMEOUT_S.
 TIMEOUT_EDICAO_S = 600
 
-# Modelos que aceitam `input_fidelity` (reforça a fidelidade à imagem de entrada —
-# essencial para preservar rosto). gpt-image-2 processa tudo em alta fidelidade
-# sozinho (o parâmetro é recusado); gpt-image-1-mini não suporta.
-MODELOS_COM_FIDELITY = {"gpt-image-1", "gpt-image-1.5"}
-
 # Limite do endpoint de edição da OpenAI para a família gpt-image.
 MAX_IMAGENS_BASE = 16
 
@@ -67,15 +62,15 @@ _EXT_POR_TIPO = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp
 
 class ConfigMontagem(ConfigImagem):
     """Mesma família e validação do `gerar_imagem` (catálogo único), mas com PADRÕES
-    voltados à montagem com rosto: gpt-image-1.5 (aceita fidelidade alta à entrada),
-    retrato 1024x1536 (bom pro feed/stories) e qualidade alta."""
+    voltados à montagem com rosto: gpt-image-2, retrato 1024x1536 (bom pro
+    feed/stories) e qualidade alta."""
 
     modelo: str = Field(
-        default="gpt-image-1.5",
+        default="gpt-image-2",
         title="Modelo da imagem",
         description=(
-            "Modelo da família gpt-image. gpt-image-1.5 preserva melhor o "
-            "rosto/produto da foto-base (fidelidade alta à entrada)."
+            "Modelo da família gpt-image. O 2.5 Sunburst é o que edita com mais "
+            "precisão (preserva melhor o rosto/produto da foto-base)."
         ),
         json_schema_extra={"enum": list(CATALOGO_IMAGEM)},
     )
@@ -207,8 +202,6 @@ class MontarImagem(TipoInstrumento):
             "quality": config.qualidade,
             "n": "1",
         }
-        if config.modelo in MODELOS_COM_FIDELITY:
-            data["input_fidelity"] = "high"
 
         # VIGIA: registra o que SERÁ transmitido — prova que cada imagem vai como
         # ANEXO (bytes no multipart), com o tamanho real, não como URL. Best-effort.

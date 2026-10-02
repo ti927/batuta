@@ -39,48 +39,47 @@ URL_OPENAI = "https://api.openai.com/v1/images/generations"
 
 # Tamanhos e qualidades comuns à família gpt-image (1024x1024 é o padrão e vale
 # para todos). gpt-image-2 aceita tamanhos livres; oferecemos presets confiáveis.
-_TAMANHOS_GPT = ("1024x1024", "1536x1024", "1024x1536")
 _QUALIDADES_GPT = ("low", "medium", "high")
 
 # ── FONTE ÚNICA DA VERDADE: modelos de imagem e a parametrização válida de cada um ──
 # Adicionar um modelo = uma entrada aqui (+ preço em precos.PRECOS_IMAGEM_USD; um
 # teste-guarda garante que todo modelo do catálogo tem preço).
+# gpt-image-2 e 2.5 aceitam tamanhos livres (múltiplos de 16, proporção 1:3..3:1);
+# oferecemos presets confiáveis: os 3 padrão + 16:9/9:16 + 4:5 (feed do Instagram,
+# normal e alta-res) + 5:4 paisagem.
+_TAMANHOS_GPT_2 = (
+    "1024x1024", "1536x1024", "1024x1536", "1536x864", "864x1536",
+    "1024x1280", "1536x1920", "1280x1024",
+)
+
+# A OpenAI tira gpt-image-1 em 23/10/2026 e gpt-image-1-mini/1.5 em 01/12/2026
+# (developers.openai.com/api/docs/deprecations); os substitutos são os 2.5. Os 2.5
+# aceitam também xhigh/max, que ficam de fora até termos o preço por imagem deles.
 CATALOGO_IMAGEM: dict[str, dict] = {
-    "gpt-image-1": {
-        "rotulo": "GPT Image 1",
-        "tamanhos": _TAMANHOS_GPT,
-        "qualidades": _QUALIDADES_GPT,
-    },
-    "gpt-image-1-mini": {
-        "rotulo": "GPT Image 1 Mini (mais econômico)",
-        "tamanhos": _TAMANHOS_GPT,
-        "qualidades": _QUALIDADES_GPT,
-    },
-    "gpt-image-1.5": {
-        "rotulo": "GPT Image 1.5",
-        "tamanhos": _TAMANHOS_GPT,
-        "qualidades": _QUALIDADES_GPT,
-    },
     "gpt-image-2": {
-        "rotulo": "GPT Image 2 (mais novo)",
-        # gpt-image-2 aceita tamanhos livres (múltiplos de 16, proporção 1:3..3:1);
-        # oferecemos presets confiáveis: os 3 padrão + 16:9/9:16 + 4:5 (feed do
-        # Instagram, normal e alta-res) + 5:4 paisagem.
-        "tamanhos": (
-            "1024x1024", "1536x1024", "1024x1536", "1536x864", "864x1536",
-            "1024x1280", "1536x1920", "1280x1024",
-        ),
+        "rotulo": "GPT Image 2",
+        "tamanhos": _TAMANHOS_GPT_2,
+        "qualidades": _QUALIDADES_GPT,
+    },
+    "gpt-image-2.5-flare": {
+        "rotulo": "GPT Image 2.5 Flare (rápido, dia a dia)",
+        "tamanhos": _TAMANHOS_GPT_2,
+        "qualidades": _QUALIDADES_GPT,
+    },
+    "gpt-image-2.5-sunburst": {
+        "rotulo": "GPT Image 2.5 Sunburst (edição mais precisa)",
+        "tamanhos": _TAMANHOS_GPT_2,
         "qualidades": _QUALIDADES_GPT,
     },
 }
 
-MODELO_PADRAO = "gpt-image-1"
+MODELO_PADRAO = "gpt-image-2"
 TAMANHO_PADRAO = "1024x1024"
 QUALIDADE_PADRAO = "medium"
 
 # Modelos APOSENTADOS pela OpenAI: instrumentos antigos configurados com eles se
 # auto-curam para o padrão na execução (sem migração de banco).
-MODELOS_LEGADOS = {"dall-e-2", "dall-e-3"}
+MODELOS_LEGADOS = {"dall-e-2", "dall-e-3", "gpt-image-1", "gpt-image-1-mini", "gpt-image-1.5"}
 
 
 def _uniao_tamanhos() -> list[str]:
@@ -142,7 +141,7 @@ class ConfigImagem(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _curar_modelo_legado(cls, dados):
-        """Instrumento antigo com modelo APOSENTADO (DALL·E) → cai no padrão, com
+        """Instrumento antigo com modelo APOSENTADO (DALL·E, gpt-image-1…) → cai no padrão, com
         tamanho/qualidade ajustados para valores válidos do novo modelo. Assim os
         instrumentos legados voltam a funcionar sem mexer no banco (a config no
         banco continua a antiga; a cura acontece ao validar para usar)."""

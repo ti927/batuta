@@ -240,6 +240,8 @@ class GerarVideo(TipoInstrumento):
     tipo = "gerar_video"
     # Instrumento da OpenAI: só existe para a organização que tem a chave dela.
     provedores_ia = ("openai",)
+    # A OpenAI desligou a API de vídeo em 24/09/2026: criar novo é recusado.
+    substituido_por = "video_desligado"
     categoria = "Conteúdo"
     nome_exibicao = "Gerar vídeo"
     descricao = (

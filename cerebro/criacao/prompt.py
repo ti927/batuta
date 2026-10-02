@@ -219,7 +219,7 @@ Como saber se um instrumento escreve ou só lê:
   consulta por POST marcada `somente_leitura`).
 - banco_sql: marque `somente_leitura: true` na config quando o agente só consulta → SEM
   aprovação (o instrumento recusa escrita). Sem essa marca, é tratado como escrita.
-- gerar_imagem, gerar_pdf, montar_imagem, gerar_video: geração local → sem aprovação
+- gerar_imagem, gerar_pdf, montar_imagem: geração local → sem aprovação
   (gerar um arquivo não publica nada; quem publica é o instrumento de publicação).
 - agendar_automacao: agenda um disparo FUTURO de uma automação → sem aprovação. Serve
   para, ao fim de um fluxo e conforme o resultado, REPROGRAMAR um próximo passo (ex.:
@@ -285,14 +285,9 @@ dentro, escreva no skill_md/soul_md dele COMO usar o instrumento — que a foto 
 no `prompt` ao chamar. Assim cada tipo de montagem se ajusta pelo markdown do agente, SEM
 criar instrumento novo nem campos fixos. As URLs (foto e modelos) entram públicas; quando
 a BIBLIOTECA estiver no ar, virão de lá (o agente as escolhe na Biblioteca).
-Para VÍDEO: `gerar_video` (Sora) cria um clipe curto a partir de um roteiro (`prompt`) e
-devolve uma URL pública de MP4; pode ANIMAR a partir de uma imagem (passe a URL de uma arte
-gerada antes como quadro inicial — ex.: [gerar_imagem] → [gerar_video]). Esse MP4 se publica
-pelo instrumento personalizado de publicação (reels, story de vídeo ou item de carrossel).
-Gerar o vídeo não precisa de aprovação; quem publica é que precisa. O vídeo leva
-alguns minutos e sai com a marca d'água da OpenAI. Modelo/tamanho/duração ficam na CONFIG do
-instrumento (o humano fixa o custo); o agente só escreve o roteiro. A Sora NÃO anima rosto de
-pessoa real.
+VÍDEO está FORA DO AR: a OpenAI desligou o vídeo dela (Sora) em 24/09/2026 e o Batuta não
+tem outro gerador de vídeo por enquanto (vai voltar com o do Google). Se pedirem vídeo, diga
+isso com clareza — não monte `gerar_video` (a criação é recusada).
 
 CANCELAR é embutido (não é uma saída que você desenha): sempre que o fluxo estiver
 esperando uma aprovação, além de aprovar/reprovar a pessoa pode ENCERRAR — na tela há um

@@ -57,6 +57,9 @@ PRECOS_IMAGEM_USD = {
     "gpt-image-1-mini": {"low": 0.005, "medium": 0.015, "high": 0.060},
     "gpt-image-1.5": {"low": 0.011, "medium": 0.042, "high": 0.167},
     "gpt-image-2": {"low": 0.011, "medium": 0.042, "high": 0.167},
+    # Os 2.5 cobram a saída como o gpt-image-2 (US$ 30 por 1M tokens de imagem).
+    "gpt-image-2.5-flare": {"low": 0.011, "medium": 0.042, "high": 0.167},
+    "gpt-image-2.5-sunburst": {"low": 0.011, "medium": 0.042, "high": 0.167},
 }
 PRECO_IMAGEM_PADRAO = 0.042
 

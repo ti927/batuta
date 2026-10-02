@@ -61,7 +61,7 @@ APOSENTADOS = (
 )
 PRONTOS = (
     "agendar_automacao", "arquivar_imagem", "descrever_imagem", "enviar_telegram",
-    "gerar_imagem", "gerar_pdf", "gerar_video", "montar_imagem", "pedir_aprovacao",
+    "gerar_imagem", "gerar_pdf", "montar_imagem", "pedir_aprovacao",
     "quadro",
 )
 
@@ -198,8 +198,19 @@ def test_catalogo_diz_qual_ia_libera(cliente, entrar, dados):
     from criacao.ferramentas import catalogo_de_instrumentos
 
     ia = {c["tipo"]: c for c in catalogo_de_instrumentos()}
-    assert ia["gerar_video"]["precisa_chave_de_ia"] == ["openai"]
+    assert ia["gerar_imagem"]["precisa_chave_de_ia"] == ["openai"]
     assert ia["quadro"]["precisa_chave_de_ia"] == []
     entrar(dados["operador"])
     tela = {t["tipo"]: t for t in cliente.get("/instrumentos/tipos").json()}
     assert tela["montar_imagem"]["provedores_ia"] == ["openai"]
+
+
+def test_gerar_video_fora_do_ar_diz_por_que():
+    """A OpenAI desligou o vídeo (Sora) em 24/09/2026: criar é recusado com o motivo,
+    e o tipo some do catálogo das IAs (volta com o vídeo do Google)."""
+    import instrumentos as encaixe
+    from criacao.ferramentas import catalogo_de_instrumentos
+
+    motivo = encaixe.motivo_para_nao_criar("gerar_video")
+    assert motivo and "fora do ar" in motivo and "24/09/2026" in motivo
+    assert "gerar_video" not in {t["tipo"] for t in catalogo_de_instrumentos()}

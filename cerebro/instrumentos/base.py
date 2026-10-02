@@ -376,6 +376,12 @@ _COMO_CRIAR = {
         "MCP), com a chave do serviço no próprio instrumento. Pela IA, use "
         "montar_conector (API) ou configurar_instrumento com tipo conectar_mcp."
     ),
+    # A OpenAI desligou a API de vídeo (Sora) em 24/09/2026, sem substituto
+    # (developers.openai.com/api/docs/deprecations). O vídeo volta pelo Google (Veo).
+    "video_desligado": (
+        "O Gerar vídeo está fora do ar: a OpenAI desligou o vídeo dela (Sora) em "
+        "24/09/2026. Ele vai voltar com o vídeo do Google; até lá, não dá para criar."
+    ),
 }
 
 

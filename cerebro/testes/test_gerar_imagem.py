@@ -87,9 +87,10 @@ def test_sem_chave_falha_clara():
 
 
 def test_so_familia_gpt_image_no_catalogo():
-    # DALL·E foi aposentado: não é oferecido (mas se auto-cura, ver abaixo).
+    # DALL·E e gpt-image-1/1-mini/1.5 foram aposentados pela OpenAI: não são
+    # oferecidos (mas se auto-curam, ver abaixo).
     assert set(gi.CATALOGO_IMAGEM) == {
-        "gpt-image-1", "gpt-image-1-mini", "gpt-image-1.5", "gpt-image-2"
+        "gpt-image-2", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst"
     }
 
 
@@ -123,7 +124,7 @@ def test_esquema_config_tem_enum_para_dropdown():
 
 def test_padrao_funciona_de_saida():
     cfg = ConfigImagem()
-    assert cfg.modelo == "gpt-image-1"
+    assert cfg.modelo == "gpt-image-2"
     assert cfg.tamanho == "1024x1024"
     assert cfg.qualidade == "medium"
 
@@ -134,14 +135,13 @@ def test_combinacao_valida_passa():
 
 
 def test_tamanho_invalido_para_o_modelo_recusa_com_mensagem():
-    # 1536x864 é do gpt-image-2, não do gpt-image-1 → erro claro.
     with pytest.raises(pydantic.ValidationError, match="não vale para o modelo"):
-        ConfigImagem(modelo="gpt-image-1", tamanho="1536x864")
+        ConfigImagem(modelo="gpt-image-2", tamanho="999x999")
 
 
 def test_qualidade_invalida_recusa_com_mensagem():
     with pytest.raises(pydantic.ValidationError, match="qualidade"):
-        ConfigImagem(modelo="gpt-image-1", qualidade="ultra")
+        ConfigImagem(modelo="gpt-image-2", qualidade="ultra")
 
 
 def test_modelo_desconhecido_recusado():
@@ -153,8 +153,17 @@ def test_modelo_legado_se_cura_para_o_padrao():
     """Instrumento antigo com DALL·E (aposentado) vira o padrão, sem crashar —
     é o que faz o instrumento que falhava voltar a funcionar sem mexer no banco."""
     cfg = ConfigImagem(modelo="dall-e-3", tamanho="1024x1792")
-    assert cfg.modelo == "gpt-image-1"
+    assert cfg.modelo == "gpt-image-2"
     assert cfg.tamanho == "1024x1024"  # tamanho do DALL·E não vale → cai no padrão
+
+
+def test_gpt_image_1_aposentado_se_cura_preservando_o_que_vale():
+    """gpt-image-1 sai em 23/10/2026: o instrumento antigo passa a usar o padrão e
+    mantém tamanho/qualidade que continuam válidos."""
+    for antigo in ("gpt-image-1", "gpt-image-1-mini", "gpt-image-1.5"):
+        cfg = ConfigImagem(modelo=antigo, tamanho="1024x1536", qualidade="high")
+        assert cfg.modelo == "gpt-image-2" and cfg.tamanho == "1024x1536"
+        assert cfg.qualidade == "high"
 
 
 # ─────────────────────────── execução ───────────────────────────
@@ -164,11 +173,11 @@ def test_payload_tem_qualidade_e_nao_tem_response_format(monkeypatch):
     capt: dict = {}
     _mock_post(monkeypatch, _resp_ok(), capt)
     GerarImagem().executar(
-        ConfigImagem(chave_api="sk-fake", modelo="gpt-image-1", qualidade="high"),
+        ConfigImagem(chave_api="sk-fake", modelo="gpt-image-2", qualidade="high"),
         ArgsImagem(prompt="um gato"),
     )
     corpo = capt["json"]
-    assert corpo["model"] == "gpt-image-1"
+    assert corpo["model"] == "gpt-image-2"
     assert corpo["quality"] == "high"
     assert corpo["size"] == "1024x1024"
     assert "response_format" not in corpo  # gpt-image sempre devolve base64

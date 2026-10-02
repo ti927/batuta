@@ -3,7 +3,7 @@
 A chamada real à OpenAI é paga; aqui o `httpx` do instrumento é interceptado (o
 download das fotos-base E o POST multipart de edição). Provam: o registro/segredo;
 que NÃO é irreversível (não exige portão); que é contabilizado como instrumento
-pago; o multipart correto (`image[]` + `input_fidelity` só nos modelos que aceitam);
+pago; o multipart correto (`image[]`, sem o antigo `input_fidelity`);
 e os erros acionáveis (chave recusada, foto-base inacessível, parâmetro inválido).
 """
 
@@ -97,7 +97,7 @@ def test_e_instrumento_pago():
 
 def test_padroes_voltados_a_montagem():
     cfg = ConfigMontagem()
-    assert cfg.modelo == "gpt-image-1.5"
+    assert cfg.modelo == "gpt-image-2"
     assert cfg.tamanho == "1024x1536"  # retrato
     assert cfg.qualidade == "high"
 
@@ -120,19 +120,20 @@ def test_sem_chave_falha_clara():
 # ─────────────────────────── execução / multipart ───────────────────────────
 
 
-def test_monta_envia_multipart_com_fidelity_e_salva(monkeypatch):
+def test_monta_envia_multipart_e_salva(monkeypatch):
     capt: dict = {}
     _instalar(monkeypatch, _resp_ok(), capt)
     r = MontarImagem().executar(
-        ConfigMontagem(chave_api="sk-fake", modelo="gpt-image-1.5"),
+        ConfigMontagem(chave_api="sk-fake", modelo="gpt-image-2.5-sunburst"),
         ArgsMontagem(prompt="a pessoa num escritório", imagens_url=["http://x/eu.png"]),
     )
     try:
         assert r["ok"] is True and r["url"].endswith(r["arquivo"])
-        # a foto vai como image[] (multipart), o modelo e a fidelidade no corpo
+        # a foto vai como image[] (multipart) e o modelo no corpo; o antigo
+        # input_fidelity não vai mais (os modelos atuais o recusam).
         assert [f[0] for f in capt["files"]] == ["image[]"]
-        assert capt["data"]["model"] == "gpt-image-1.5"
-        assert capt["data"]["input_fidelity"] == "high"
+        assert capt["data"]["model"] == "gpt-image-2.5-sunburst"
+        assert "input_fidelity" not in capt["data"]
         assert capt["data"]["size"] == "1024x1536"
         # o arquivo final foi salvo (disco, no teste) com os bytes da resposta
         assert (DIRETORIO_ARQUIVOS / r["arquivo"]).read_bytes() == b"ARTE"
