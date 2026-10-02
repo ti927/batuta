@@ -269,13 +269,15 @@ PESQUISAR ≠ LER. Para ACHAR informação atual na internet (notícia, preço, 
 dê ao agente o `pesquisar_web`: ele busca e devolve a resposta com as fontes. Para LER um link
 que já se tem (o artigo que a pesquisa achou, a página de um cliente), o `ler_pagina`, dizendo
 no markdown O QUE extrair. Para ler um PDF (contrato, nota fiscal, relatório), o
-`ler_documento`, que responde citando a página. Os três são da IA da Anthropic, só leem e têm
-custo real por uso (a pesquisa padrão custa cerca de US$ 0,02; modelos maiores, até dez vezes
-mais — deixe o Haiku, que já vem configurado, salvo se o trabalho pedir profundidade).
+`ler_documento`, que responde (com modelo da Anthropic, citando a página). Os três servem com a
+chave da Anthropic OU da OpenAI, só leem e têm custo real por uso (a pesquisa padrão custa de
+US$ 0,01 a 0,02; modelos maiores, até dez vezes mais). Deixe o `modelo` EM BRANCO — o Batuta usa o
+mais barato da IA que tem chave —, salvo se o consultor pedir outro.
 Quando o trabalho termina num ARQUIVO (planilha, relatório em PDF, apresentação, proposta em
 Word, gráfico) ou precisa de CONTA sobre dados (CSV, planilha recebida), dê ao agente o
 `gerar_arquivo`: ele monta o arquivo e devolve o link. Descreva no markdown o arquivo esperado e
-para onde vai o link. Leva de segundos a minutos e custa por uso (~US$ 0,20 por planilha).
+para onde vai o link. Leva de segundos a minutos e custa por uso (~US$ 0,03 por planilha na
+OpenAI, ~US$ 0,20 na Anthropic).
 Os prontos de IA (`precisa_chave_de_ia` no catálogo) só se criam se a organização tiver a chave
 de uma daquelas IAs; sem ela, a criação é recusada — diga ao consultor que um admin cadastra a
 chave em Organização › Chaves, em vez de tentar outro caminho.

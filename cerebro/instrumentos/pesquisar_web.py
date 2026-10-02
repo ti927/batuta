@@ -1,22 +1,22 @@
 """Instrumento "Pesquisar na web" — a IA busca na internet e responde com as fontes.
 
 Instrumento POR CAPACIDADE (decisão do maestro, 2026-10-02): o agente pede "pesquise
-X"; QUAL IA faz a busca é configuração. Hoje só a Anthropic (ferramenta de busca que
-roda nos servidores dela); OpenAI e Google entram depois como outra opção do mesmo
-`provedor`, sem refazer agente nenhum.
+X"; QUAL IA faz a busca é configuração — o modelo escolhido (Anthropic ou OpenAI, cada
+uma com a ferramenta de busca que roda nos servidores dela; `escolha_ia`).
 
 Substitui as buscas de mercado que saíram dos prontos (Tavily, Exa) sem fornecedor de
 fora: a chave é a de IA da organização. Custo real: US$ 10 por mil buscas + tokens,
-medido pelo que a Anthropic informa. Só leitura.
+medido pelo que a IA informa (na OpenAI, com o Luna, ~US$ 0,012 por pesquisa). Só leitura.
 """
 
 from datetime import date, datetime
-from typing import Literal
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, model_validator
 
 from instrumentos import anthropic_servidor as srv
+from instrumentos import escolha_ia
+from instrumentos import openai_servidor as oai
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 
 SISTEMA = (
@@ -42,16 +42,14 @@ def _sistema(desde: date | None) -> str:
     return texto
 
 
+PADROES = {"anthropic": srv.MODELO_PADRAO_WEB, "openai": oai.MODELO_PADRAO_WEB}
+
+
 class ConfigPesquisa(BaseModel):
-    provedor: Literal["anthropic"] = Field(
-        default="anthropic", title="IA que faz a busca",
-        description="Por enquanto, só a Anthropic.",
-    )
-    modelo: str = Field(
-        default=srv.MODELO_PADRAO_WEB, title="Modelo da IA",
-        description="O Haiku é o mais barato (de US$ 0,02 a 0,05 por pesquisa, conforme o "
-        "número de buscas). Modelos maiores aprofundam mais, mas custam até dez vezes mais.",
-        json_schema_extra={"enum": srv.modelos_disponiveis()},
+    modelo: str = escolha_ia.campo_modelo(
+        "Em branco, o Batuta usa o mais barato da IA com chave: GPT-5.6 Luna (cerca de "
+        "US$ 0,01 por pesquisa) ou Claude Haiku (de US$ 0,02 a 0,05). Modelos maiores "
+        "aprofundam mais, mas custam até dez vezes mais."
     )
     max_buscas: int = Field(
         default=5, ge=1, le=20, title="Máximo de buscas por pesquisa",
@@ -66,14 +64,18 @@ class ConfigPesquisa(BaseModel):
         description="Não dá para usar junto com “Buscar só nestes sites”.",
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _provedor_antigo(cls, dados):
+        return escolha_ia.de_provedor_antigo(dados, PADROES)
+
     @model_validator(mode="after")
     def _um_filtro_so(self) -> "ConfigPesquisa":
         if self.sites_preferidos and self.sites_bloqueados:
             raise ValueError(
                 "Use “Buscar só nestes sites” ou “Nunca buscar nestes sites”, não os dois."
             )
-        if self.modelo not in srv.modelos_disponiveis():
-            raise ValueError(f"Modelo indisponível para a busca: {self.modelo}.")
+        escolha_ia.validar(self.modelo, "a busca")
         return self
 
 
@@ -92,7 +94,7 @@ class ArgsPesquisa(BaseModel):
 
 class PesquisarWeb(TipoInstrumento):
     tipo = "pesquisar_web"
-    provedores_ia = ("anthropic",)
+    provedores_ia = escolha_ia.PROVEDORES
     categoria = "Pesquisa e leitura"
     nome_exibicao = "Pesquisar na web"
     descricao = (
@@ -104,7 +106,10 @@ class PesquisarWeb(TipoInstrumento):
     Args = ArgsPesquisa
 
     def executar(self, config: ConfigPesquisa, args: ArgsPesquisa) -> dict:
-        busca, _ = srv.versoes(config.modelo)
+        modelo = escolha_ia.resolver(config.modelo, PADROES)
+        if escolha_ia.provedor(modelo) == "openai":
+            return self._pela_openai(config, args, modelo)
+        busca, _ = srv.versoes(modelo)
         ferramenta: dict = {
             "type": busca, "name": "web_search", "max_uses": config.max_buscas,
             "user_location": {"type": "approximate", "country": "BR",
@@ -115,7 +120,7 @@ class PesquisarWeb(TipoInstrumento):
         if config.sites_bloqueados:
             ferramenta["blocked_domains"] = config.sites_bloqueados
         r = srv.chamar(
-            modelo=config.modelo, sistema=_sistema(args.desde),
+            modelo=modelo, sistema=_sistema(args.desde),
             conteudo=[{"type": "text", "text": args.pergunta}], ferramentas=[ferramenta],
         )
         if not r["texto"]:
@@ -124,6 +129,34 @@ class PesquisarWeb(TipoInstrumento):
             "ok": True,
             "resposta": r["texto"],
             "fontes": srv.fontes(r["blocos"]),
+            "avisos": r["erros"],
+            "uso": r["uso"],
+        }
+
+    def _pela_openai(self, config: ConfigPesquisa, args: ArgsPesquisa, modelo: str) -> dict:
+        ferramenta: dict = {
+            "type": "web_search",
+            "user_location": {"type": "approximate", "country": "BR",
+                              "timezone": "America/Sao_Paulo"},
+        }
+        filtros = {}
+        if config.sites_preferidos:
+            filtros["allowed_domains"] = config.sites_preferidos
+        if config.sites_bloqueados:
+            filtros["blocked_domains"] = config.sites_bloqueados
+        if filtros:
+            ferramenta["filters"] = filtros
+        r = oai.chamar(
+            modelo=modelo, sistema=_sistema(args.desde),
+            conteudo=[{"type": "input_text", "text": args.pergunta}], ferramentas=[ferramenta],
+            include=["web_search_call.action.sources"], max_ferramentas=config.max_buscas,
+        )
+        if not r["texto"]:
+            raise FalhaInstrumento("a pesquisa não trouxe resposta.", retentavel=True)
+        return {
+            "ok": True,
+            "resposta": oai.sem_marca_no_texto(r["texto"]),
+            "fontes": oai.fontes(r["itens"]),
             "avisos": r["erros"],
             "uso": r["uso"],
         }

@@ -2,9 +2,12 @@
 espaço isolado da Anthropic e entrega arquivos prontos (planilha, Word, PowerPoint,
 PDF, gráfico), além da análise em texto.
 
-Por capacidade (hoje só a Anthropic: execução de código + as "habilidades" de
-arquivo dela — xlsx, docx, pptx, pdf —, que ensinam a IA a montar cada formato do
-jeito certo). O agente diz o que quer ("monte uma planilha com o resumo de vendas por
+Por capacidade: o modelo escolhido diz qual IA faz. Na Anthropic, execução de código
++ as "habilidades" de arquivo dela (xlsx, docx, pptx, pdf), que ensinam a IA a montar
+cada formato do jeito certo. Na OpenAI, o "code interpreter" (Python num espaço
+isolado, com as bibliotecas de planilha, Word e PowerPoint) — medido em 02/10/2026:
+uma planilha com fórmula e gráfico em 11 s, cerca de US$ 0,03, contra 65 s e US$ 0,23
+na Anthropic. O agente diz o que quer ("monte uma planilha com o resumo de vendas por
 mês e um gráfico") e, se houver, passa arquivos de entrada por link público (CSV,
 planilha, PDF): eles sobem para o espaço de execução antes. Os arquivos GERADOS são
 baixados da Anthropic e guardados no armazenamento do Batuta — o resultado traz o
@@ -18,6 +21,7 @@ por organização, depois US$ 0,05 por hora). Os arquivos ficam guardados na Ant
 por até 30 dias. Só gera arquivos → não é ação irreversível.
 """
 
+import mimetypes
 import re
 import uuid
 from pathlib import PurePosixPath
@@ -26,10 +30,13 @@ from urllib.parse import urlparse
 
 import anthropic
 import httpx
+import openai
 from pydantic import BaseModel, Field, model_validator
 
 import arquivos
 from instrumentos import anthropic_servidor as srv
+from instrumentos import escolha_ia
+from instrumentos import openai_servidor as oai
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 
 # A execução de código (com habilidades) e a API de arquivos ainda vão pela rota beta
@@ -53,17 +60,21 @@ SISTEMA = (
     "entregue e dos números principais — sem inventar dado que não esteja na entrada e "
     "sem citar pastas ou caminhos de arquivo (quem pediu recebe o link pronto)."
 )
+# Na OpenAI os arquivos ficam em /mnt/data, e não há habilidades: os formatos
+# permitidos vão nas instruções.
+SISTEMA_OPENAI = SISTEMA.replace("$OUTPUT_DIR", "/mnt/data") + (
+    " Gere só arquivos nestes formatos: {formatos}. Não gere imagens de conferência."
+)
+# Espaço de execução da OpenAI: 1 GB (US$ 0,03 por sessão de até 20 min).
+MEMORIA_OPENAI = "1g"
+PADROES = {"anthropic": srv.MODELO_PADRAO, "openai": oai.MODELO_PADRAO_WEB}
 
 
 class ConfigArquivo(BaseModel):
-    provedor: Literal["anthropic"] = Field(
-        default="anthropic", title="IA que gera o arquivo",
-        description="Por enquanto, só a Anthropic.",
-    )
-    modelo: str = Field(
-        default=srv.MODELO_PADRAO, title="Modelo da IA",
-        description="O Sonnet 5 monta planilhas e documentos bem e custa menos que o Opus.",
-        json_schema_extra={"enum": srv.modelos_disponiveis()},
+    modelo: str = escolha_ia.campo_modelo(
+        "Em branco, o Batuta usa o padrão da IA com chave: GPT-5.6 Luna (rápido e "
+        "barato, cerca de US$ 0,03 por arquivo) ou Claude Sonnet 5 (cerca de US$ 0,15 a "
+        "0,25, mais demorado)."
     )
     formatos: list[Literal["xlsx", "docx", "pptx", "pdf"]] = Field(
         default_factory=lambda: list(HABILIDADES), title="Formatos que a IA sabe montar",
@@ -71,10 +82,14 @@ class ConfigArquivo(BaseModel):
         "este agente não usa deixa cada pedido um pouco mais barato.",
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _provedor_antigo(cls, dados):
+        return escolha_ia.de_provedor_antigo(dados, PADROES)
+
     @model_validator(mode="after")
     def _valido(self) -> "ConfigArquivo":
-        if self.modelo not in srv.modelos_disponiveis():
-            raise ValueError(f"Modelo indisponível para gerar arquivos: {self.modelo}.")
+        escolha_ia.validar(self.modelo, "gerar arquivos")
         return self
 
 
@@ -97,10 +112,9 @@ def _nome_do_link(url: str) -> str:
     return nome[:120]
 
 
-def _subir_entradas(cliente: anthropic.Anthropic, urls: list[str]) -> list[dict]:
-    """Baixa cada arquivo de entrada e sobe para a Anthropic; devolve os blocos
-    `container_upload` que o colocam no espaço de execução."""
-    blocos = []
+def _baixar_entradas(urls: list[str]) -> list[tuple[str, bytes, str]]:
+    """Baixa cada arquivo de entrada: (nome, conteúdo, tipo)."""
+    baixados = []
     for url in urls:
         if not url.lower().startswith("https://"):
             raise FalhaInstrumento(
@@ -124,8 +138,17 @@ def _subir_entradas(cliente: anthropic.Anthropic, urls: list[str]) -> list[dict]
                 retentavel=False,
             )
         tipo = (r.headers.get("content-type") or "application/octet-stream").split(";")[0]
+        baixados.append((_nome_do_link(url), r.content, tipo))
+    return baixados
+
+
+def _subir_entradas(cliente: anthropic.Anthropic, urls: list[str]) -> list[dict]:
+    """Baixa cada arquivo de entrada e sobe para a Anthropic; devolve os blocos
+    `container_upload` que o colocam no espaço de execução."""
+    blocos = []
+    for arquivo in _baixar_entradas(urls):
         try:
-            enviado = cliente.beta.files.upload(file=(_nome_do_link(url), r.content, tipo))
+            enviado = cliente.beta.files.upload(file=arquivo)
         except anthropic.APIError as e:
             raise srv._traduzir_excecao(e, "") from e
         blocos.append({"type": "container_upload", "file_id": enviado.id})
@@ -169,8 +192,52 @@ def _guardar_saidas(cliente: anthropic.Anthropic, ids: list[str]) -> list[dict]:
     return saida
 
 
-# Um caminho do espaço de execução ($OUTPUT_DIR/x.xlsx, /mnt/user-data/outputs/x.pdf).
-_CAMINHO = r"`?(?:\$OUTPUT_DIR|/mnt/(?:user-data/)?outputs)/[^\s`)]*`?"
+def _gerados_openai(cliente: openai.OpenAI, itens: list[dict]) -> list[tuple[str, str, str]]:
+    """Os arquivos que o code interpreter entregou: (espaço, arquivo, nome). Vale o que
+    a resposta cita como arquivo; sem citação, os arquivos que a IA criou na pasta de
+    saída — sem as imagens de conferência que ela gera para si (subpastas, `cfile_…`)."""
+    citados = {
+        (a["container_id"], a["file_id"]): a.get("filename") or "arquivo"
+        for a in oai.anotacoes(itens)
+        if a.get("type") == "container_file_citation" and a.get("container_id") and a.get("file_id")
+    }
+    if citados:
+        return [(c, f, n) for (c, f), n in citados.items()]
+    espacos = {i["container_id"] for i in itens
+               if i.get("type") == "code_interpreter_call" and i.get("container_id")}
+    achados = []
+    for espaco in espacos:
+        try:
+            for f in cliente.containers.files.list(container_id=espaco):
+                caminho = PurePosixPath(f.path or "")
+                if (f.source == "assistant" and str(caminho.parent) == "/mnt/data"
+                        and not caminho.name.startswith("cfile_")):
+                    achados.append((espaco, f.id, caminho.name))
+        except openai.APIError as e:
+            raise oai.traduzir_excecao(e, "") from e
+    return achados
+
+
+def _guardar_saidas_openai(cliente: openai.OpenAI, gerados: list[tuple[str, str, str]]) -> list[dict]:
+    """Baixa os arquivos gerados da OpenAI e guarda no armazenamento do Batuta."""
+    saida = []
+    for espaco, file_id, nome in gerados[:MAX_SAIDAS]:
+        try:
+            conteudo = cliente.containers.files.content.retrieve(file_id, container_id=espaco).read()
+        except openai.APIError as e:
+            raise oai.traduzir_excecao(e, "") from e
+        nome = PurePosixPath(nome).name or "arquivo"
+        tipo = mimetypes.guess_type(nome)[0] or "application/octet-stream"
+        url = arquivos.salvar(f"{uuid.uuid4().hex[:8]}-{nome}", conteudo, tipo)
+        saida.append({"nome": nome, "url": url, "tipo": tipo, "bytes": len(conteudo)})
+    return saida
+
+
+# Um caminho do espaço de execução ($OUTPUT_DIR/x.xlsx, /mnt/user-data/outputs/x.pdf,
+# /mnt/data/x.docx na OpenAI).
+_CAMINHO = r"`?(?:\$OUTPUT_DIR|/mnt/(?:user-data/)?outputs|(?:sandbox:)?/mnt/data)/[^\s`)]*`?"
+# O link de download que a OpenAI põe no texto: "[Baixar x.xlsx](sandbox:/mnt/data/x.xlsx)".
+_LINK_SANDBOX = re.compile(r"\s*\[[^\]]*\]\(sandbox:[^)]*\)")
 # Entre parênteses no meio de uma frase: "a planilha ($OUTPUT_DIR/a.xlsx) tem…".
 _CAMINHO_ENTRE_PARENTESES = re.compile(r"\s*\(" + _CAMINHO + r"\)")
 _TEM_CAMINHO = re.compile(_CAMINHO)
@@ -183,7 +250,11 @@ def _sem_caminho_interno(texto: str) -> str:
     parênteses sai sozinho; a frase que ainda cita um caminho sai inteira (é sempre a
     do "salvei em…")."""
     saida = []
-    for linha in _CAMINHO_ENTRE_PARENTESES.sub("", texto).split("\n"):
+    for linha in texto.split("\n"):
+        if _LINK_SANDBOX.search(linha):
+            # Sem o link, "…e gráfico: [Baixar](sandbox:…)." vira "…e gráfico."
+            linha = re.sub(r"\s*:\s*\.?\s*$", ".", _LINK_SANDBOX.sub("", linha))
+        linha = _CAMINHO_ENTRE_PARENTESES.sub("", linha)
         frases = [f for f in _FRASES.split(linha) if not _TEM_CAMINHO.search(f)]
         saida.append(" ".join(frases))
     return "\n".join(saida).strip()
@@ -191,7 +262,7 @@ def _sem_caminho_interno(texto: str) -> str:
 
 class GerarArquivo(TipoInstrumento):
     tipo = "gerar_arquivo"
-    provedores_ia = ("anthropic",)
+    provedores_ia = escolha_ia.PROVEDORES
     categoria = "Pesquisa e leitura"
     nome_exibicao = "Gerar arquivo e analisar dados"
     descricao = (
@@ -209,30 +280,66 @@ class GerarArquivo(TipoInstrumento):
                 f"no máximo {MAX_ENTRADAS} arquivos de entrada (recebi {len(urls)}).",
                 retentavel=False,
             )
+        modelo = escolha_ia.resolver(config.modelo, PADROES)
+        if escolha_ia.provedor(modelo) == "openai":
+            return self._pela_openai(config, args, urls, modelo)
         cliente = srv._cliente(TIMEOUT_S)
         entradas = _subir_entradas(cliente, urls)
         habilidades = [
             {"type": "anthropic", "skill_id": h, "version": "latest"} for h in config.formatos
         ]
         r = srv.chamar(
-            modelo=config.modelo, sistema=SISTEMA,
+            modelo=modelo, sistema=SISTEMA,
             conteudo=[{"type": "text", "text": args.instrucao}, *entradas],
             ferramentas=[{"type": FERRAMENTA_CODIGO, "name": "code_execution"}],
             betas=BETAS, container={"skills": habilidades} if habilidades else None,
             timeout=TIMEOUT_S, frase_espera="Gerando o arquivo",
         )
         gerados = _guardar_saidas(cliente, _ids_gerados(r["blocos"]))
-        resultado = {
-            "ok": True,
-            "resumo": _sem_caminho_interno(r["texto"]),
-            "arquivos": gerados,
-            "uso": r["uso"],
-        }
-        if not gerados:
-            # Não é falha (pode ter sido só análise), mas o agente precisa saber —
-            # para não narrar "segue o arquivo" sem arquivo nenhum.
-            resultado["aviso"] = "Nenhum arquivo foi gerado; só a análise em texto."
-        return resultado
+        return _resultado(r, gerados)
+
+    def _pela_openai(self, config: ConfigArquivo, args: ArgsArquivo, urls: list[str], modelo: str) -> dict:
+        cliente = oai.cliente(TIMEOUT_S)
+        baixados = _baixar_entradas(urls)
+        enviados: list[str] = []
+        try:
+            for arquivo in baixados:
+                try:
+                    enviados.append(cliente.files.create(file=arquivo, purpose="user_data").id)
+                except openai.APIError as e:
+                    raise oai.traduzir_excecao(e, modelo) from e
+            r = oai.chamar(
+                modelo=modelo,
+                sistema=SISTEMA_OPENAI.format(formatos=", ".join(config.formatos) or "os pedidos"),
+                conteudo=[{"type": "input_text", "text": args.instrucao}],
+                ferramentas=[{"type": "code_interpreter", "container": {
+                    "type": "auto", "memory_limit": MEMORIA_OPENAI, "file_ids": enviados,
+                }}],
+                timeout=TIMEOUT_S, frase_espera="Gerando o arquivo", cliente_pronto=cliente,
+            )
+            gerados = _guardar_saidas_openai(cliente, _gerados_openai(cliente, r["itens"]))
+        finally:
+            # As entradas não precisam ficar na OpenAI depois do trabalho.
+            for file_id in enviados:
+                try:
+                    cliente.files.delete(file_id)
+                except openai.APIError:
+                    pass
+        return _resultado(r, gerados)
+
+
+def _resultado(r: dict, gerados: list[dict]) -> dict:
+    resultado = {
+        "ok": True,
+        "resumo": _sem_caminho_interno(r["texto"]),
+        "arquivos": gerados,
+        "uso": r["uso"],
+    }
+    if not gerados:
+        # Não é falha (pode ter sido só análise), mas o agente precisa saber —
+        # para não narrar "segue o arquivo" sem arquivo nenhum.
+        resultado["aviso"] = "Nenhum arquivo foi gerado; só a análise em texto."
+    return resultado
 
 
 registrar(GerarArquivo())

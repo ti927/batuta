@@ -53,6 +53,8 @@ type CampoConfig = {
   // Dica de UI do schema (json_schema_extra.ui). "modelo_ia" = seletor de modelo
   // agrupado por provedor, filtrado pelos provedores com chave na organização.
   ui?: string;
+  // Com "modelo_ia": as empresas de IA que este instrumento aceita (o resto some).
+  provedores?: string[];
   // Se este campo reusa uma chave de serviço da organização (ex.: gerar_imagem→
   // openai): aí é opcional — em branco usa a chave da org.
   compartilhada?: boolean;
@@ -140,6 +142,7 @@ export function camposDoTipo(tipo: TipoInstrumento | undefined): CampoConfig[] {
     opcoes: opcoesDoCampo(prop),
     padrao: prop.default !== undefined ? String(prop.default) : undefined,
     ui: (prop.ui as string) ?? undefined,
+    provedores: (prop.provedores as string[]) ?? undefined,
     compartilhada: nome === campoCompart,
     servico: nome === campoCompart ? (servicoCompart ?? undefined) : undefined,
   }));
@@ -249,7 +252,9 @@ function CampoConfigInput({
     // Seletor de modelo de IA: agrupado por provedor e filtrado pelos provedores
     // com chave na org (mesmo padrão do seletor do agente). O provedor do valor já
     // salvo continua visível mesmo se a chave sumir.
-    const provedores = provedoresParaSeletor(disponiveis, provedorDoModelo(valor));
+    const provedores = provedoresParaSeletor(disponiveis, provedorDoModelo(valor)).filter(
+      (p) => !campo.provedores || campo.provedores.includes(p),
+    );
     entrada = (
       <Select value={valor} onChange={(e) => onChange(e.target.value)}>
         {!campo.obrigatorio && <option value="">(padrão)</option>}
