@@ -21,7 +21,8 @@ chave da **consultoria** (fallback).
 - É **uma chave por provedor** — a escolha de qual IA usar fica no **modelo** do agente.
 - Os **prontos de IA** não pedem chave própria: reusam a do pool.
 - **A chave libera os instrumentos daquela IA** (desde 01/10/2026): com a chave da **OpenAI**, a
-  organização ganha **Gerar imagem**, **Montar imagem** e **Gerar vídeo**; com a de **qualquer** IA,
+  organização ganha **Gerar imagem** e **Montar imagem** (o Gerar vídeo está fora do ar: a OpenAI
+  desligou o Sora em 24/09/2026); com a de **qualquer** IA,
   **Descrever imagem**. Sem a chave, esses instrumentos não aparecem em "Instrumento pronto" e criar
   um é recusado, dizendo qual chave falta. A tela de chaves mostra o que cada chave libera.
 
@@ -31,7 +32,7 @@ chave da **consultoria** (fallback).
 3. Escolha o **modelo** de IA em cada agente — o provedor daquele modelo define qual chave é usada.
 
 ## Exemplos
-- Cadastrou a chave OpenAI da org → Gerar imagem, Montar imagem e Gerar vídeo aparecem para criar, e
+- Cadastrou a chave OpenAI da org → Gerar imagem e Montar imagem aparecem para criar, e
   agentes com modelo OpenAI passam a funcionar.
 - Sem chave na org, mas com chave na consultoria → funciona pelo fallback.
 

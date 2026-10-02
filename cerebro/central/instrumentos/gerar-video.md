@@ -7,7 +7,11 @@ revisado_em: "2026-07-17"
 fontes: ["cerebro/instrumentos/gerar_video.py"]
 ---
 
-# Instrumento — Gerar vídeo (Sora)
+# Instrumento — Gerar vídeo (Sora)
+
+> **Fora do ar (desde 24/09/2026).** A OpenAI desligou a API de vídeo dela (Sora), sem substituto.
+> Criar um Gerar vídeo é recusado. O vídeo vai voltar pelo Google (Veo); este capítulo fica como
+> registro de como o instrumento funcionava.
 
 ## Em uma frase
 Gera um vídeo curto a partir de uma descrição (e, opcionalmente, de uma imagem inicial), com a IA de

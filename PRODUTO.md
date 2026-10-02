@@ -153,7 +153,7 @@ Decisão do maestro (12/08/2026, reafirmada em 29/09/2026; prontos enxugados em 
 | | **Personalizado** | **Pronto do Batuta** (o "nativo") |
 |---|---|---|
 | O que é | Uma ligação com um **serviço ou sistema de fora**, montada sem código: uma **API** (o "conector", com uma ou várias operações), um **servidor MCP** ou um **banco de dados** | (a) o que é **do Batuta por dentro**; (b) o que vem **das IAs** (OpenAI, Anthropic, Gemini), liberado quando a organização tem a chave daquela IA |
-| Exemplos | Zernio (Instagram), WordPress, busca na web e leitura de sites (Tavily, Exa, Firecrawl), Search Console, banco PostgreSQL de um sistema, "Data de hoje", qualquer API ou MCP de mercado | (a) Agendar automação, Pedir aprovação, Quadro do Cérebro, Guardar imagem recebida, Gerar PDF, Telegram (canal); (b) Gerar imagem, Montar imagem, Gerar vídeo (OpenAI), Descrever imagem (qualquer IA) |
+| Exemplos | Zernio (Instagram), WordPress, busca na web e leitura de sites (Tavily, Exa, Firecrawl), Search Console, banco PostgreSQL de um sistema, "Data de hoje", qualquer API ou MCP de mercado | (a) Agendar automação, Pedir aprovação, Quadro do Cérebro, Guardar imagem recebida, Gerar PDF, Telegram (canal); (b) Gerar imagem e Montar imagem (OpenAI), Descrever imagem (qualquer IA); o Gerar vídeo está fora do ar desde que a OpenAI desligou o Sora (24/09/2026) |
 | Onde nasce | **🌟 Criar instrumento** → "Uma API", "Um servidor MCP" ou "Um banco de dados" | **Instrumento pronto** (lista do catálogo) |
 | Onde se edita | No **Construtor** — inclusive quando foi a IA quem criou | No **painel lateral** |
 | Quem pode criar | Pessoa (tela) e IAs (criadora e externa) | Pessoa (tela) e IAs |

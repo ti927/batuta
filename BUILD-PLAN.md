@@ -2753,3 +2753,9 @@ O app da Meta vai ser largado; o Instagram passa por um serviço de mercado (Zer
 - **Fica:** o login com Google (inclusive o escopo do Search Console — um conector personalizado do Search Console precisa dele); `TIPOS_REMOVIDOS` em `instrumentos/base.py`, para quem ainda pedir um desses tipos ouvir o caminho do Construtor.
 - **Para o maestro:** as variáveis `TAVILY_API_KEY` e `INSTAGRAM_*` no Railway ficaram sem uso (podem sair quando quiser); as páginas legais (privacidade, termos, exclusão de dados) e o texto da tela de login ainda citam Instagram/Meta e Tavily/Exa/Firecrawl — revisar o texto jurídico.
 - **Próxima:** Fase 4 (instrumentos novos das IAs: busca na web pela própria IA, imagem/vídeo do Gemini).
+
+## FASE — Instrumentos de IA, etapa 0: o que as IAs desligaram  ✅ (2026-10-01, sem migração)
+Achado da pesquisa das APIs (documentação oficial de descontinuações da OpenAI):
+- **Gerar vídeo fora do ar:** a OpenAI desligou o Sora e o `/v1/videos` em 24/09/2026, sem substituto. `gerar_video` ganhou `substituido_por = "video_desligado"`: some do catálogo e criar é recusado com o motivo. 0 instâncias em produção. Volta pelo Google (Veo/Omni) numa etapa futura.
+- **Imagem:** `gpt-image-1` sai em 23/10/2026; `gpt-image-1-mini` e `gpt-image-1.5` em 01/12/2026. O catálogo passou a ser `gpt-image-2` (padrão) + `gpt-image-2.5-flare` + `gpt-image-2.5-sunburst` (qualidades low/medium/high; xhigh/max ficam de fora até termos o preço por imagem). Os três antigos entram em `MODELOS_LEGADOS` e se auto-curam para o padrão (sem migração). O `montar_imagem` deixou de mandar `input_fidelity` (os modelos atuais o recusam). Produção já usava `gpt-image-2` em todos os 9 instrumentos.
+- **Transcrição (`whisper-1`, sai em 26/02/2027) NÃO foi trocada:** o substituto `gpt-transcribe` não aceita ogg, que é o formato dos áudios do Telegram. Fica para decisão (converter o áudio ou transcrever pelo Google).

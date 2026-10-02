@@ -64,7 +64,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | **Conteúdo & mídia** | | | | |
 | Gerar imagem | `instrumentos/gerar-imagem` | Texto→imagem; modelo/tamanho/qualidade; proporção | ✅ | ✍️ |
 | Montar imagem | `instrumentos/montar-imagem` | Composição a partir de fotos | ✅ | ✍️ |
-| Gerar vídeo (Sora) | `instrumentos/gerar-video` | Texto/imagem→vídeo | ✅ | ✍️ |
+| Gerar vídeo (Sora) | `instrumentos/gerar-video` | FORA DO AR (a OpenAI desligou o Sora em 24/09/2026); volta pelo Google | ✅ | ✍️ |
 | Descrever imagem | `instrumentos/descrever-imagem` | Visão (imagem→texto) | ✅ | ✍️ |
 | Guardar imagem recebida | `instrumentos/arquivar-imagem` | Salva a foto do canal → URL pública (comprovantes) | ✅ | ✍️ |
 | Gerar PDF | `instrumentos/gerar-pdf` | Documentos | ✅ | ✍️ |

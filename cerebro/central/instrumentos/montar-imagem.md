@@ -33,7 +33,8 @@ agente também passa a **URL da(s) foto(s)-base**.
 - **A 1ª foto é a mais preservada** (rosto/textura). Passe a foto principal primeiro.
 - As fotos-base precisam estar em **URLs públicas** (o cérebro as baixa). De 1 a 16 fotos.
 - Montagem em qualidade alta é **pesada** — leva minutos e tem um custo por imagem maior.
-- Só a família **gpt-image-1 / gpt-image-1.5** reforça a fidelidade ao rosto da entrada.
+- Os modelos atuais já preservam a entrada em alta fidelidade; para rosto e produto, o **GPT Image 2.5
+  Sunburst** é o que edita com mais precisão.
 - Não é ação irreversível (só gera um arquivo) — não precisa de aprovação.
 
 ## Para a IA

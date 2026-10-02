@@ -3,7 +3,7 @@ titulo: "Instrumento — Gerar imagem"
 area: "instrumentos"
 slug: "gerar-imagem"
 tags: ["gerar-imagem", "imagem", "arte", "openai", "gpt-image", "tamanho", "proporcao", "formato", "png", "jpeg", "413", "instrumento"]
-revisado_em: "2026-08-14"
+revisado_em: "2026-10-01"
 fontes: ["cerebro/instrumentos/gerar_imagem.py", "PRODUTO.md §13"]
 ---
 
@@ -18,7 +18,8 @@ próximo passo (ex.: publicar no Instagram, animar num vídeo).
 
 ## Como usar (na tela)
 1. Crie o instrumento **Gerar imagem** (provedor OpenAI, família gpt-image).
-2. Escolha o **Modelo**, o **Tamanho** e a **Qualidade** (as opções de tamanho dependem do modelo; ao
+2. Escolha o **Modelo** (**GPT Image 2**, o padrão; **2.5 Flare**, rápido para o dia a dia; **2.5
+   Sunburst**, a edição mais precisa), o **Tamanho** e a **Qualidade** (as opções de tamanho dependem do modelo; ao
    lado do tamanho há uma **ilustração da proporção** para você bater o olho).
 3. Escolha o **Formato**: **PNG** (padrão, sem perdas, mais pesado) ou **JPEG** (mesma resolução, bem
    mais leve). Prefira **JPEG** quando a imagem for **subir para um site** (ex.: WordPress) — evita a
@@ -31,6 +32,8 @@ próximo passo (ex.: publicar no Instagram, animar num vídeo).
 - Feed em retrato: `1024x1280` (4:5).
 
 ## Limites e cuidados
+- **Modelos antigos saíram** (gpt-image-1 em 23/10/2026; 1-mini e 1.5 em 01/12/2026, pela OpenAI). Um
+  instrumento antigo configurado com eles passa a usar o GPT Image 2 sozinho, sem precisar editar.
 - **Custo por imagem**, e maior na qualidade `high`.
 - O instrumento é **texto→imagem** (cria do zero, não recebe foto de entrada). Para montar com uma foto
   existente, use [[instrumentos/montar-imagem]].
