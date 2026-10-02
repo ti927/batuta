@@ -397,12 +397,22 @@ def acionar_instrumento(sessao: Session, inst, argumentos: dict | None) -> dict:
     # Resolve os segredos como na execução real (borda): inline próprio +
     # credencial da central + pool de serviço (os prontos de IA reusam
     # a chave da org). Sem isso, "Testar" não enxergaria credencial nem pool.
+    #
+    # As chaves da organização ficam ligadas durante o TESTE INTEIRO, não só durante
+    # a leitura dos segredos: os instrumentos de IA (pesquisar, ler, imagem e vídeo do
+    # Google, narrar, descrever imagem) pegam a chave na hora de rodar, como fazem
+    # dentro de um agente. Até 2026-10-02 o bloco fechava antes do `executar`, e o
+    # "Testar" da tela e do MCP respondia "não há chave" com a chave cadastrada.
     import chaves
     from orquestracao.llm import usar_chaves
 
     chaves_map, _ = chaves.resolver_chaves_por_time(sessao, inst.time_id)
     with usar_chaves(chaves_map):
-        segredos.anexar_aos_instrumentos(sessao, [inst])
+        return _acionar_com_as_chaves(sessao, inst, tipo, argumentos)
+
+
+def _acionar_com_as_chaves(sessao: Session, inst, tipo, argumentos: dict | None) -> dict:
+    segredos.anexar_aos_instrumentos(sessao, [inst])
     config_efetiva = {
         **(inst.configuracao or {}),
         **getattr(inst, "segredos_decifrados", {}),
