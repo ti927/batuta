@@ -3,7 +3,7 @@ titulo: "Pedir aprovação e aguardar"
 area: "automacoes"
 slug: "pedir-aprovacao"
 tags: ["aprovacao", "aprovar", "esperar", "humano", "instrumento", "pausa", "confirmar", "botão aprovar", "recusar", "dois pedidos", "mesmo bot"]
-revisado_em: "2026-09-29"
+revisado_em: "2026-10-02"
 fontes: ["cerebro/instrumentos/pedir_aprovacao.py", "cerebro/mensageria/retoma.py", "cerebro/orquestracao/dono.py", "cerebro/orquestracao/espera.py", "PRODUTO.md §19", "docs/FALHAS-DO-MOTOR.md"]
 ---
 
@@ -66,8 +66,16 @@ a escolha.
 ## Depois que a pessoa responde, o agente precisa DIZER por onde seguir
 Esta é a parte que mais dá problema, e vale ler com calma.
 
-Quando a aprovação chega, o Batuta religa o **mesmo agente**. Ele continua de onde parou —
-mas o fluxo **só anda** se ele declarar por qual caminho seguir. Se ele conversar, refizer
+**Passo com UM caminho só (ou nenhum):** o Batuta religa o **mesmo agente**, ele age (por
+exemplo, publica o que foi aprovado) e o fluxo **segue sozinho** pelo único caminho — não há o
+que declarar. Se a pessoa pediu ajuste, o agente refaz e **pede aprovação de novo**: só assim o
+fluxo espera outra resposta (se ele só escrever "refiz", o fluxo segue). Vale igual pela tela e
+pelo Telegram (desde 02/10/2026; antes, pelo Telegram o agente nem voltava e "aprova e depois
+publica" nunca publicava).
+
+**Passo com DOIS ou mais caminhos:** quando a aprovação chega, o Batuta religa o **mesmo
+agente**. Ele continua de onde parou — mas o fluxo **só anda** se ele declarar por qual
+caminho seguir. Se ele conversar, refizer
 o material, publicar e não declarar nada, a execução fica **parada naquele ponto para
 sempre**, mesmo com tudo aprovado e feito.
 
@@ -178,7 +186,9 @@ No motor, o instrumento tem `pausa_para_humano = True`: ao ser acionado com suce
 turno do agente termina numa espera, a execução vira `aguardando_humano` e o passo é
 gravado como `espera_humano`, carregando o canal e o destinatário. A resposta religa o
 MESMO agente, que continua de onde parou (memória por `execucao:nó`) e então declara os
-caminhos com `seguir_para`.
+caminhos com `seguir_para` — ou, num nó de uma saída só, age e o fluxo segue sozinho
+(`retoma._retomar_conversando_tela` e `servico._turno_de_portao_com_posse`, regra
+`segue_sozinho`; a forma "direto" da configuração segue mecânica, sem religar o agente).
 
 A execução tem **dono** enquanto alguém mexe nela (`execucoes.dono` = `tela` | `canal` |
 `fila`, com `dono_ate` como prazo). Quem chega segundo recebe recusa honesta: a rota
