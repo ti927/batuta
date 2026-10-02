@@ -1,67 +1,59 @@
 """Instrumento "Gerar vídeo" (PRODUTO §13; corrente de conteúdo).
 
-Gera um VÍDEO curto a partir de uma descrição (prompt) usando a API de vídeo da
-OpenAI (Sora) e devolve um link público para o MP4. Texto→vídeo; opcionalmente
-imagem→vídeo, animando a partir de um quadro inicial (ex.: uma imagem gerada
-antes). A chave é um SEGREDO reusado do pool da organização (a mesma chave OpenAI
-do gerar_imagem). O arquivo é salvo e servido pelo cérebro/Storage — a URL pública
-serve direto a um instrumento de publicação (reels, story de vídeo ou carrossel).
+Gera um VÍDEO curto (4, 6 ou 8 s, COM ÁUDIO) a partir de uma descrição (prompt) com o
+Veo 3.1, a IA de vídeo do Google, e devolve um link público para o MP4. Texto→vídeo;
+opcionalmente imagem→vídeo, animando a partir de um quadro inicial (ex.: uma imagem
+gerada antes). A chave é a do Google do pool da organização. O arquivo é baixado e
+guardado no armazenamento do Batuta — a URL pública serve direto a um instrumento de
+publicação (reels, story de vídeo ou carrossel).
 
-Ciclo ASSÍNCRONO da API (3 passos): CRIA o job (POST /v1/videos, multipart),
-ESPERA processar (GET /v1/videos/{id} até `status == completed` — leva minutos) e
-BAIXA o conteúdo (GET /v1/videos/{id}/content?variant=video → MP4). Como a geração
-demora, o poll é feito INLINE (o worker da fila fica ocupado o tempo todo) — por
-isso os padrões são rápidos (sora-2, clipe curto) e o teto do poll fica ABAIXO do
-sweeper da fila (15 min), para o instrumento falhar LIMPO em vez de ser morto.
+HISTÓRIA: até 24/09/2026 este instrumento usava a Sora (OpenAI), que a OpenAI desligou
+sem substituto; o Gerar vídeo ficou fora do ar até voltar pelo Google (2026-10-02).
+Uma configuração antiga de Sora se converte sozinha para o Veo (`_curar_sora`).
 
-A OpenAI embute uma MARCA D'ÁGUA visível ("Sora") em todo vídeo (mais um selo C2PA
-invisível de "gerado por IA") — não há como removê-la pela API. Restrições de
-conteúdo: sem pessoas reais/figuras públicas (inclusive na imagem de referência).
+Ciclo ASSÍNCRONO (operação longa do Google): CRIA a operação (`generate_videos`),
+ESPERA (consulta a operação até `done` — de ~11 s a 6 min) e BAIXA o vídeo (fica só 2
+dias no Google). A espera publica sinal de vida com o tempo decorrido (§12-A), e o
+vigia de execuções presas lê esse sinal (Onda 3, lacuna 24).
 
-IDEMPOTÊNCIA: criar um vídeo NÃO é idempotente (re-chamar gera — e cobra — outro).
-A orquestração reexecuta um instrumento em falha RETENTÁVEL; então, UMA VEZ criado
-o job, TODA falha aqui é NÃO-retentável, para nunca gerar/cobrar em dobro. Só a
-falha de transporte ANTES de existir o job (nada gerado) é retentável.
+IDEMPOTÊNCIA: criar um vídeo NÃO é idempotente (re-chamar gera — e cobra — outro). A
+orquestração reexecuta um instrumento em falha RETENTÁVEL; então, UMA VEZ criada a
+operação, TODA falha aqui é NÃO-retentável, para nunca gerar/cobrar em dobro. Só a
+falha ANTES de existir a operação (nada gerado) pode ser retentável.
 
-CATÁLOGO ÚNICO (`CATALOGO_VIDEO`) é a fonte da verdade dos modelos e da
-parametrização válida (tamanhos e durações por modelo). Dele saem o enum dos
-campos, a validação do trio e as dependências de UI — como no gerar_imagem. Como a
-OpenAI muda os parâmetros aceitos com o tempo, o `executar` traduz o erro da API
-num recado ACIONÁVEL (qual parâmetro/mensagem/código foi recusado).
+CATÁLOGO ÚNICO (`CATALOGO_VIDEO`): modelos, proporções, resoluções e durações válidas
+de cada um. Dele saem o enum dos campos, a validação e as dependências de UI.
+Regra do Google: 1080p e 4K só com 8 segundos. Todo vídeo do Google sai com a marca
+invisível SynthID. Preço por segundo: `precos.PRECOS_VIDEO_USD`.
 """
 
 import time
 import uuid
 
-import httpx
+from google.genai import errors
+from google.genai import types as gtypes
 from pydantic import BaseModel, Field, model_validator
 
 import arquivos
+from instrumentos import google_servidor as goo
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 from instrumentos.montar_imagem import _baixar
 # `atividade` é folha (só contextvars + logging): importá-la aqui não cria ciclo, e é
 # o que deixa o instrumento publicar sinal de vida DURANTE a espera.
 from orquestracao import atividade
 
-# Rede: cada request é rápido; o poll é o laço. Timeout generoso por request.
-TIMEOUT_S = 60.0
-URL_OPENAI = "https://api.openai.com/v1/videos"
-# Poll até `completed`. Vídeo Sora leva minutos — e agora o teto é o que a GERAÇÃO
-# precisa, não o que o vigia da fila permitia. Até 2026-09-03 este número era 120
-# (~10 min) escolhido "para ficar abaixo do sweeper (TETO_INATIVIDADE_EXEC_MIN=15)":
-# um instrumento contorcendo o próprio limite para fugir de um vigia que não olhava o
-# sinal de vida. Com o vigia corrigido (Onda 3, lacuna 24), o laço publica atividade a
-# cada volta e pode esperar o tempo real de um vídeo de 12 s em 1080p.
-POLL_TENTATIVAS = 300  # 300 × 5 s = 25 min
-POLL_INTERVALO_S = 5.0
+TIMEOUT_S = 120.0
+# Consulta a operação até `done`. O Google diz de 11 s a 6 min; folga para o pico.
+POLL_TENTATIVAS = 150  # 150 × 10 s = 25 min
+POLL_INTERVALO_S = 10.0
 TENTATIVAS_DOWNLOAD = 3
 # De quantas em quantas voltas o cronômetro da frase de espera muda (~30 s).
-VOLTAS_POR_AVISO = 6
+VOLTAS_POR_AVISO = 3
+
 
 def _frase_espera(volta: int) -> str:
-    """O que a tela mostra enquanto o vídeo é gerado. Com o tempo decorrido a partir
-    de meio minuto: sem número, uma espera de 20 minutos é indistinguível de um
-    travamento (§12-A — o usuário precisa saber o que acontece o tempo todo)."""
+    """O que a tela mostra enquanto o vídeo é gerado, com o tempo decorrido a partir
+    de meio minuto (§12-A — o usuário precisa saber o que acontece o tempo todo)."""
     segundos = int(volta * POLL_INTERVALO_S)
     if segundos < 30:
         return "Gerando o vídeo — pode levar minutos…"
@@ -70,204 +62,167 @@ def _frase_espera(volta: int) -> str:
     return f"Gerando o vídeo… ({segundos // 60} min)"
 
 
-_TAMANHOS_720 = ("720x1280", "1280x720")
-_TAMANHOS_1080 = ("1080x1920", "1920x1080")
-# Durações aceitas pela API de criação (enum "4"/"8"/"12" — verificado na doc OpenAI).
-_DURACOES = ("4", "8", "12")
+_PROPORCOES = ("9:16", "16:9")
+_DURACOES = ("4", "6", "8")
 
 # ── FONTE ÚNICA DA VERDADE: modelos de vídeo e a parametrização válida de cada um ──
-# Adicionar um modelo = uma entrada aqui (+ preço em precos.PRECOS_VIDEO_USD). O 1080p
-# é só do pro; a doc confirma 16/20s no create tb, mas mantemos clipes curtos por custo
-# (o preço é POR SEGUNDO) — 16/20 podem entrar aqui depois se preciso.
+# ai.google.dev/gemini-api/docs/veo (2026-10-02). Adicionar um modelo = uma entrada
+# aqui (+ preço em precos.PRECOS_VIDEO_USD + registro em ciclo_modelos).
 CATALOGO_VIDEO: dict[str, dict] = {
-    "sora-2": {
-        "rotulo": "Sora 2 (rápido e econômico, 720p)",
-        "tamanhos": _TAMANHOS_720,
+    "veo-3.1-lite-generate-preview": {
+        "rotulo": "Veo 3.1 Lite (o mais barato)",
+        "tamanhos": _PROPORCOES,
+        "resolucoes": ("720p", "1080p"),
         "duracoes": _DURACOES,
     },
-    "sora-2-pro": {
-        "rotulo": "Sora 2 Pro (alta qualidade, até 1080p)",
-        "tamanhos": _TAMANHOS_720 + _TAMANHOS_1080,
+    "veo-3.1-fast-generate-preview": {
+        "rotulo": "Veo 3.1 Fast (rápido, até 4K)",
+        "tamanhos": _PROPORCOES,
+        "resolucoes": ("720p", "1080p", "4k"),
+        "duracoes": _DURACOES,
+    },
+    "veo-3.1-generate-preview": {
+        "rotulo": "Veo 3.1 (melhor qualidade, até 4K)",
+        "tamanhos": _PROPORCOES,
+        "resolucoes": ("720p", "1080p", "4k"),
         "duracoes": _DURACOES,
     },
 }
 
-MODELO_PADRAO = "sora-2"
-TAMANHO_PADRAO = "720x1280"  # vertical — reels/stories do Instagram
+MODELO_PADRAO = "veo-3.1-lite-generate-preview"
+TAMANHO_PADRAO = "9:16"  # vertical — reels/stories
+RESOLUCAO_PADRAO = "720p"
 DURACAO_PADRAO = "8"
 
 
-def _uniao_tamanhos() -> list[str]:
-    """A união (sem repetir, ordem estável) de todos os tamanhos do catálogo — é o
-    `enum` do campo `tamanho`; a UI o filtra por modelo via `dependencias_ui`."""
+def _uniao(chave: str) -> list[str]:
     vistos: list[str] = []
     for spec in CATALOGO_VIDEO.values():
-        for t in spec["tamanhos"]:
-            if t not in vistos:
-                vistos.append(t)
+        for v in spec[chave]:
+            if v not in vistos:
+                vistos.append(v)
     return vistos
 
 
 class ConfigVideo(BaseModel):
     """Configuração fixa (o humano preenche; é o que a medição lê p/ estimar custo).
+    Conjuntos fechados derivados do `CATALOGO_VIDEO`, com resolução/duração
+    DEPENDENTES do modelo na tela."""
 
-    `modelo`, `tamanho` e `duracao_s` são conjuntos fechados derivados do
-    `CATALOGO_VIDEO` (a interface os mostra como dropdown, com tamanho/duração
-    DEPENDENTES do modelo). `chave_api` é SEGREDO reusado do pool OpenAI da org."""
-
-    provedor: str = Field(
-        default="openai",
-        title="Provedor",
-        description="Provedor de geração de vídeo (por ora, só OpenAI/Sora).",
-        json_schema_extra={"enum": ["openai"]},
-    )
     modelo: str = Field(
         default=MODELO_PADRAO,
         title="Modelo do vídeo",
-        description="sora-2 (mais barato, 720p) ou sora-2-pro (até 1080p, com áudio).",
+        description="Veo 3.1 Lite (US$ 0,05 a 0,08 por segundo), Fast (US$ 0,10 a 0,30) "
+        "ou o completo (US$ 0,40 a 0,60). Todos geram o áudio junto.",
         json_schema_extra={"enum": list(CATALOGO_VIDEO)},
     )
     tamanho: str = Field(
         default=TAMANHO_PADRAO,
-        title="Tamanho",
-        description="Resolução do vídeo (as opções dependem do modelo; 1080p só no pro).",
-        json_schema_extra={"enum": _uniao_tamanhos()},
+        title="Proporção",
+        description="9:16 = vertical (reels, stories); 16:9 = horizontal.",
+        json_schema_extra={"enum": _uniao("tamanhos")},
+    )
+    resolucao: str = Field(
+        default=RESOLUCAO_PADRAO,
+        title="Resolução",
+        description="1080p e 4K custam mais e só saem com 8 segundos.",
+        json_schema_extra={"enum": _uniao("resolucoes")},
     )
     duracao_s: str = Field(
         default=DURACAO_PADRAO,
         title="Duração (segundos)",
-        description="Duração do clipe. Cobrado POR SEGUNDO — mais longo custa proporcionalmente mais.",
+        description="Cobrado POR SEGUNDO — mais longo custa proporcionalmente mais.",
         json_schema_extra={"enum": list(_DURACOES)},
     )
-    chave_api: str = Field(
-        default="",
-        title="Chave da API (opcional)",
-        description="Chave da API OpenAI (segredo). Em branco, usa a chave OpenAI da organização.",
-    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _curar_sora(cls, dados):
+        """Configuração da época da Sora (desligada em 24/09/2026): vira o Veo, com a
+        mesma orientação. Sem migração de banco — a cura acontece ao validar."""
+        if not isinstance(dados, dict):
+            return dados
+        dados = {k: v for k, v in dados.items() if k not in ("provedor", "chave_api")}
+        if str(dados.get("modelo") or "").startswith("sora"):
+            largura, _, altura = str(dados.get("tamanho") or "720x1280").partition("x")
+            vertical = not (largura.isdigit() and altura.isdigit()) or int(altura) >= int(largura)
+            dados.update(modelo=MODELO_PADRAO, tamanho="9:16" if vertical else "16:9",
+                         resolucao=RESOLUCAO_PADRAO)
+            if str(dados.get("duracao_s")) not in _DURACOES:
+                dados["duracao_s"] = DURACAO_PADRAO
+        return dados
 
     @model_validator(mode="after")
     def _validar_combinacao(self) -> "ConfigVideo":
-        """O trio modelo×tamanho×duração precisa ser válido no catálogo — senão a
-        OpenAI recusaria com erro cru. Avisa claro já ao salvar/usar (backstop da
-        IA criadora)."""
+        """Modelo×proporção×resolução×duração válidos no catálogo — senão o Google
+        recusaria com erro cru. Avisa claro já ao salvar/usar (backstop da IA criadora)."""
         spec = CATALOGO_VIDEO.get(self.modelo)
         if spec is None:
             raise ValueError(
                 f"Modelo de vídeo desconhecido: '{self.modelo}'. "
                 f"Use um destes: {', '.join(CATALOGO_VIDEO)}."
             )
-        if self.tamanho not in spec["tamanhos"]:
-            raise ValueError(
-                f"O tamanho '{self.tamanho}' não vale para o modelo '{self.modelo}'. "
-                f"Tamanhos válidos: {', '.join(spec['tamanhos'])}."
-            )
-        if self.duracao_s not in spec["duracoes"]:
-            raise ValueError(
-                f"A duração '{self.duracao_s}s' não vale para o modelo '{self.modelo}'. "
-                f"Durações válidas: {', '.join(spec['duracoes'])} segundos."
-            )
+        for campo, valor, validos in (
+            ("proporção", self.tamanho, spec["tamanhos"]),
+            ("resolução", self.resolucao, spec["resolucoes"]),
+            ("duração", self.duracao_s, spec["duracoes"]),
+        ):
+            if valor not in validos:
+                raise ValueError(
+                    f"A {campo} '{valor}' não vale para o modelo '{self.modelo}'. "
+                    f"Válidas: {', '.join(validos)}."
+                )
+        if self.resolucao != "720p" and self.duracao_s != "8":
+            raise ValueError("Vídeo em 1080p ou 4K só sai com 8 segundos — ajuste a duração.")
         return self
 
 
 class ArgsVideo(BaseModel):
     """O que a IA passa: o roteiro e, opcional, uma imagem de partida (quadro inicial)."""
 
-    prompt: str = Field(min_length=1, description="Descrição/roteiro do vídeo a gerar.")
+    prompt: str = Field(
+        min_length=1,
+        description="Descrição/roteiro do vídeo: cena, movimento de câmera, clima e, se "
+        "houver, as falas e os sons (o vídeo sai com áudio).",
+    )
     imagem_referencia_url: str = Field(
         default="",
         description=(
             "Opcional: URL PÚBLICA de uma imagem para ser o QUADRO INICIAL do vídeo "
-            "(anima a partir dela — ex.: uma imagem gerada no passo anterior). A imagem "
-            "deve ter a MESMA resolução (tamanho) configurada no instrumento. Sem rostos "
-            "de pessoas reais/figuras públicas (a OpenAI recusa)."
+            "(anima a partir dela — ex.: uma imagem gerada no passo anterior), de "
+            "preferência na mesma proporção do vídeo."
         ),
     )
 
 
-def _dimensoes_imagem(conteudo: bytes) -> tuple[int, int] | None:
-    """Largura×altura de um PNG ou JPEG a partir dos bytes (sem dependência de
-    imagem — lê o cabeçalho). Devolve (w, h) ou None quando não reconhece o formato
-    (aí o pré-check de dimensão é PULADO, e a própria OpenAI valida)."""
-    b = conteudo or b""
-    if b[:8] == b"\x89PNG\r\n\x1a\n" and len(b) >= 24:  # PNG: IHDR em offset 16
-        return int.from_bytes(b[16:20], "big"), int.from_bytes(b[20:24], "big")
-    if b[:2] == b"\xff\xd8":  # JPEG: varre os marcadores até um SOF
-        i, n = 2, len(b)
-        while i + 9 < n:
-            if b[i] != 0xFF:
-                i += 1
-                continue
-            marcador = b[i + 1]
-            # SOF0..SOF15 trazem as dimensões; DHT/JPG/DAC (C4/C8/CC) não.
-            if 0xC0 <= marcador <= 0xCF and marcador not in (0xC4, 0xC8, 0xCC):
-                if i + 9 <= n:
-                    return int.from_bytes(b[i + 7:i + 9], "big"), int.from_bytes(b[i + 5:i + 7], "big")
-                return None
-            if i + 4 > n:
-                break
-            i += 2 + int.from_bytes(b[i + 2:i + 4], "big")  # pula o segmento
-    return None
-
-
-def _tamanho_para_par(tamanho: str) -> tuple[int, int] | None:
-    """'720x1280' → (720, 1280). None se não for 'LxA' de inteiros."""
-    try:
-        w, h = (tamanho or "").lower().split("x")
-        return int(w), int(h)
-    except (ValueError, AttributeError):
-        return None
-
-
-def _erro_openai(status: int, resposta) -> str:
-    """Traduz o erro da OpenAI num recado ACIONÁVEL: qual parâmetro, mensagem e
-    código a API recusou (o que ajustar no catálogo quando a OpenAI mudar)."""
-    try:
-        erro = (resposta.json() or {}).get("error") or {}
-    except ValueError:
-        erro = {}
-    mensagem = (erro.get("message") or (resposta.text or "")[:500] or "sem detalhes.").strip()
-    codigo = erro.get("code")
-    param = erro.get("param")
-    cabeca = f"a geração de vídeo falhou (HTTP {status})"
-    if param:
-        cabeca += f" no parâmetro '{param}'"
-    if codigo:
-        mensagem = f"{mensagem} [{codigo}]"
-    return f"{cabeca}: {mensagem}"
-
-
 class GerarVideo(TipoInstrumento):
     tipo = "gerar_video"
-    # Instrumento da OpenAI: só existe para a organização que tem a chave dela.
-    provedores_ia = ("openai",)
-    # A OpenAI desligou a API de vídeo em 24/09/2026: criar novo é recusado.
-    substituido_por = "video_desligado"
+    # Instrumento do Google: só existe para a organização que tem a chave dele.
+    provedores_ia = ("google",)
     categoria = "Conteúdo"
     nome_exibicao = "Gerar vídeo"
     descricao = (
-        "Gera um VÍDEO curto a partir de uma descrição (prompt), com a IA de vídeo da "
-        "OpenAI (Sora), e devolve um link público (MP4). Pode ANIMAR a partir de uma "
-        "imagem (passe a URL da imagem como quadro inicial — ex.: uma arte gerada antes). "
-        "O vídeo sai com a marca d'água da OpenAI e leva alguns minutos para ficar pronto. "
-        "Use o link no instrumento de publicação para postar como reels, story de vídeo ou "
-        "item de carrossel."
+        "Gera um VÍDEO curto (4 a 8 segundos, com áudio) a partir de uma descrição, com "
+        "a IA de vídeo do Google (Veo), e devolve um link público (MP4). Pode ANIMAR a "
+        "partir de uma imagem (passe a URL da imagem como quadro inicial — ex.: uma arte "
+        "gerada antes). Leva de segundos a alguns minutos. Use o link no instrumento de "
+        "publicação para postar como reels, story de vídeo ou item de carrossel."
     )
     Config = ConfigVideo
     Args = ArgsVideo
-    campos_secretos = ("chave_api",)
-    # Reusa a chave OpenAI da organização ("Chaves de IA") quando o instrumento não
-    # tem chave própria — a borda a injeta. Ver instrumentos/base.py.
-    chave_compartilhada = ("chave_api", "openai")
     # acao_irreversivel = False (padrão): só gera um arquivo; quem PUBLICA (irreversível)
-    # é o instrumento de publicação, num passo SEGUINTE com portão.
+    # é o instrumento de publicação, num passo seguinte.
 
     def dependencias_ui(self) -> dict:
-        """Ao escolher o `modelo`, só aparecem os tamanhos e durações válidos dele
-        (do catálogo). Mecanismo genérico — ver `TipoInstrumento.dependencias_ui`."""
+        """Ao escolher o `modelo`, só aparecem as resoluções e durações válidas dele."""
         return {
             "tamanho": {
                 "controlado_por": "modelo",
                 "opcoes": {m: list(s["tamanhos"]) for m, s in CATALOGO_VIDEO.items()},
+            },
+            "resolucao": {
+                "controlado_por": "modelo",
+                "opcoes": {m: list(s["resolucoes"]) for m, s in CATALOGO_VIDEO.items()},
             },
             "duracao_s": {
                 "controlado_por": "modelo",
@@ -276,79 +231,37 @@ class GerarVideo(TipoInstrumento):
         }
 
     def executar(self, config: ConfigVideo, args: ArgsVideo) -> dict:
-        if not config.chave_api:
-            raise FalhaInstrumento(
-                "falta a chave de API da OpenAI — configure-a no instrumento ou "
-                "cadastre a chave OpenAI da organização em Chaves de IA.",
-                retentavel=False,
-            )
-        headers = {"Authorization": f"Bearer {config.chave_api}"}
-        # multipart/form-data: campos de texto como (None, valor) forçam o multipart
-        # mesmo sem arquivo; o quadro inicial (se houver) vira um part de arquivo.
-        partes: dict = {
-            "model": (None, config.modelo),
-            "prompt": (None, args.prompt),
-            "size": (None, config.tamanho),
-            "seconds": (None, str(config.duracao_s)),
-        }
+        cli = goo.cliente(TIMEOUT_S)
+        imagem = None
         ref = (args.imagem_referencia_url or "").strip()
         if ref:
-            conteudo_ref, ct_ref = _baixar(ref)  # falha aqui é retentável (job ainda não existe)
-            # Pré-checa a dimensão: a Sora EXIGE que a imagem de referência tenha
-            # EXATAMENTE o tamanho do vídeo. Falhar aqui (com os números reais) é bem
-            # mais claro do que o erro cru da OpenAI — e evita gastar uma chamada.
-            dims = _dimensoes_imagem(conteudo_ref)
-            alvo = _tamanho_para_par(config.tamanho)
-            if dims is not None and alvo is not None and dims != alvo:
-                raise FalhaInstrumento(
-                    f"a imagem de referência é {dims[0]}×{dims[1]}, mas o vídeo está "
-                    f"configurado para {config.tamanho}. A Sora exige que a imagem tenha "
-                    f"EXATAMENTE o mesmo tamanho do vídeo — gere ou forneça a imagem em "
-                    f"{config.tamanho} (ou ajuste o tamanho do vídeo no instrumento).",
-                    retentavel=False,
-                )
-            partes["input_reference"] = ("referencia", conteudo_ref, ct_ref)
+            conteudo_ref, ct_ref = _baixar(ref)  # falha aqui é retentável (nada criado)
+            imagem = gtypes.Image(image_bytes=conteudo_ref, mime_type=ct_ref)
 
-        with httpx.Client(timeout=TIMEOUT_S) as cli:
-            # 1) CRIA o job. Falha ANTES de haver id → nada gerado → pode retentar.
-            try:
-                r = cli.post(URL_OPENAI, headers=headers, files=partes)
-            except httpx.HTTPError as e:
-                raise FalhaInstrumento(
-                    f"não foi possível iniciar a geração de vídeo: {e}", retentavel=True
-                )
-            status = r.status_code
-            if status in (401, 403):
-                raise FalhaInstrumento(
-                    "a chave de API da OpenAI foi recusada — verifique-a.",
-                    retentavel=False,
-                )
-            if status == 429 or 500 <= status < 600:
-                raise FalhaInstrumento(
-                    f"o serviço de vídeo respondeu HTTP {status} ao iniciar.",
-                    retentavel=True,
-                )
-            if not r.is_success:
-                raise FalhaInstrumento(_erro_openai(status, r), retentavel=False)
-            video_id = (r.json() or {}).get("id")
-            if not video_id:
-                raise FalhaInstrumento(
-                    "a OpenAI não devolveu o id do vídeo.", retentavel=False
-                )
+        # 1) CRIA a operação. Falha ANTES de haver operação → nada gerado → a tradução
+        # decide se vale tentar de novo.
+        try:
+            operacao = cli.models.generate_videos(
+                model=config.modelo, prompt=args.prompt, image=imagem,
+                config=gtypes.GenerateVideosConfig(
+                    aspect_ratio=config.tamanho, resolution=config.resolucao,
+                    duration_seconds=int(config.duracao_s), number_of_videos=1,
+                ),
+            )
+        except errors.APIError as e:
+            raise goo.traduzir_excecao(e, config.modelo) from e
+        except Exception as e:
+            raise FalhaInstrumento(
+                f"não foi possível iniciar a geração de vídeo ({type(e).__name__}).",
+                retentavel=True, codigo="ia.indisponivel",
+            ) from e
 
-            # 2) ESPERA o job. A PARTIR DAQUI, TUDO é NÃO-retentável (idempotência):
-            # re-rodar o executar geraria/cobraria outro vídeo. Erros transitórios do
-            # poll são reabsorvidos DENTRO do laço (dorme e reconfere), não sobem.
-            estado = self._aguardar(cli, headers, video_id)
-            if estado != "completed":
-                raise FalhaInstrumento(
-                    f"a geração de vídeo terminou em '{estado}'.", retentavel=False
-                )
+        # 2) ESPERA. A PARTIR DAQUI, TUDO é NÃO-retentável (idempotência).
+        operacao = self._aguardar(cli, operacao)
+        video = self._video_pronto(operacao)
 
-            # 3) BAIXA o MP4. Falha aqui também é NÃO-retentável (o job já foi cobrado);
-            # tenta algumas vezes dentro do próprio passo.
-            conteudo = self._baixar_conteudo(cli, headers, video_id)
-
+        # 3) BAIXA o MP4 (também não-retentável: já foi cobrado).
+        conteudo = self._baixar_conteudo(cli, video)
         nome = f"{uuid.uuid4().hex}.mp4"
         url = arquivos.salvar(nome, conteudo, "video/mp4")
         return {
@@ -357,78 +270,64 @@ class GerarVideo(TipoInstrumento):
             "url": url,
             "modelo": config.modelo,
             "duracao_s": config.duracao_s,
+            "resolucao": config.resolucao,
         }
 
-    def _aguardar(self, cli, headers, video_id: str) -> str:
-        """Poll do job até um estado terminal. Erros transitórios do GET NÃO sobem
-        como retentáveis (o job existe/cobra) — dorme e reconfere. Devolve
-        'completed'; `failed`/estouro do teto viram FalhaInstrumento não-retentável.
-
-        A cada volta o laço PUBLICA sinal de vida (Onda 3, lacuna 24). Isso serve a
-        duas pessoas ao mesmo tempo: quem olha a tela vê o cronômetro andando em vez de
-        uma tela parada, e o vigia de execuções presas sabe que este passo está vivo —
-        antes ele só via passos concluídos, e por isso este instrumento precisava
-        encolher o próprio teto para não ser morto."""
+    def _aguardar(self, cli, operacao):
+        """Consulta a operação até `done`. Erro transitório na consulta NÃO sobe (a
+        operação existe e cobra): dorme e reconfere. A cada ~30 s publica sinal de
+        vida — quem olha a tela vê o cronômetro, e o vigia sabe que o passo está vivo."""
         for volta in range(POLL_TENTATIVAS):
-            # A cada ~30 s, não a cada volta: o batimento precisa ser MUITO mais
-            # frequente que o teto do vigia (15 min), não a cada 5 s — isso seria uma
-            # escrita no banco por volta, à toa.
+            if getattr(operacao, "done", False):
+                return operacao
             if volta % VOLTAS_POR_AVISO == 0:
                 atividade.registrar(_frase_espera(volta))
-            try:
-                r = cli.get(f"{URL_OPENAI}/{video_id}", headers=headers)
-            except httpx.HTTPError:
-                time.sleep(POLL_INTERVALO_S)
-                continue
-            if r.is_success:
-                dados = r.json() or {}
-                estado = dados.get("status")
-                if estado == "completed":
-                    return "completed"
-                if estado == "failed":
-                    erro = dados.get("error") or {}
-                    detalhe = erro.get("message") or erro.get("code") or "sem detalhe"
-                    codigo = str(erro.get("code") or "")
-                    alvo_moder = f"{detalhe} {codigo}".lower()
-                    dica = ""
-                    if any(t in alvo_moder for t in ("moderation", "moderação", "sentinel", "blocked")):
-                        dica = (
-                            " A Sora recusa pessoas reais, rostos reconhecíveis e figuras "
-                            "públicas — tanto no roteiro quanto na imagem de referência. "
-                            "Ajuste o prompt/imagem e tente de novo."
-                        )
-                    raise FalhaInstrumento(
-                        f"a OpenAI não conseguiu gerar o vídeo: {detalhe}.{dica}",
-                        retentavel=False,
-                    )
-                # queued / in_progress → continua o laço
-            elif r.status_code in (401, 403):
-                raise FalhaInstrumento(
-                    "a chave de API da OpenAI foi recusada durante o acompanhamento.",
-                    retentavel=False,
-                )
             time.sleep(POLL_INTERVALO_S)
+            try:
+                operacao = cli.operations.get(operacao)
+            except Exception:
+                continue
         raise FalhaInstrumento(
-            "a geração de vídeo demorou além do tempo limite do Batuta.",
+            "a geração de vídeo demorou além do tempo limite do Batuta (25 min).",
             retentavel=False,
         )
 
-    def _baixar_conteudo(self, cli, headers, video_id: str) -> bytes:
-        """Baixa o MP4 pronto. Não-retentável no nível do instrumento (o job já foi
-        cobrado); tenta algumas vezes por dentro antes de desistir."""
-        url = f"{URL_OPENAI}/{video_id}/content"
+    def _video_pronto(self, operacao):
+        erro = getattr(operacao, "error", None)
+        if erro:
+            detalhe = erro.get("message") if isinstance(erro, dict) else str(erro)
+            raise FalhaInstrumento(
+                f"o Google não conseguiu gerar o vídeo: {detalhe or 'sem detalhe'}.",
+                retentavel=False,
+            )
+        resposta = getattr(operacao, "response", None) or getattr(operacao, "result", None)
+        videos = list(getattr(resposta, "generated_videos", None) or [])
+        if videos and getattr(videos[0], "video", None):
+            return videos[0].video
+        motivos = list(getattr(resposta, "rai_media_filtered_reasons", None) or [])
+        if motivos:
+            raise FalhaInstrumento(
+                "o Google recusou o vídeo pela política de segurança dele: "
+                + "; ".join(str(m) for m in motivos)
+                + ". Ajuste o roteiro (ou a imagem de partida) e tente de novo.",
+                retentavel=False, codigo="ia.recusa",
+            )
+        raise FalhaInstrumento("o Google terminou sem devolver o vídeo.", retentavel=False)
+
+    def _baixar_conteudo(self, cli, video) -> bytes:
+        """Baixa o MP4 pronto (fica só 2 dias no Google). Não-retentável no nível do
+        instrumento (já foi cobrado); tenta algumas vezes por dentro."""
         ultimo = "sem detalhe"
         for _ in range(TENTATIVAS_DOWNLOAD):
             try:
-                r = cli.get(url, headers=headers, params={"variant": "video"})
-            except httpx.HTTPError as e:
-                ultimo = str(e)
+                conteudo = cli.files.download(file=video)
+            except Exception as e:
+                ultimo = str(e)[:200]
                 time.sleep(POLL_INTERVALO_S)
                 continue
-            if r.is_success and r.content:
-                return r.content
-            ultimo = f"HTTP {r.status_code}"
-            time.sleep(POLL_INTERVALO_S)
+            if conteudo:
+                return conteudo
+            ultimo = "arquivo vazio"
         raise FalhaInstrumento(
             f"o vídeo foi gerado mas não pôde ser baixado ({ultimo}).",
             retentavel=False,

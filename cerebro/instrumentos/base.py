@@ -394,12 +394,6 @@ _COMO_CRIAR = {
         "MCP), com a chave do serviço no próprio instrumento. Pela IA, use "
         "montar_conector (API) ou configurar_instrumento com tipo conectar_mcp."
     ),
-    # A OpenAI desligou a API de vídeo (Sora) em 24/09/2026, sem substituto
-    # (developers.openai.com/api/docs/deprecations). O vídeo volta pelo Google (Veo).
-    "video_desligado": (
-        "O Gerar vídeo está fora do ar: a OpenAI desligou o vídeo dela (Sora) em "
-        "24/09/2026. Ele vai voltar com o vídeo do Google; até lá, não dá para criar."
-    ),
 }
 
 
@@ -414,6 +408,8 @@ def eh_personalizado(tipo: str) -> bool:
 
 
 ROTULO_IA = {"openai": "OpenAI", "anthropic": "Anthropic", "google": "Google (Gemini)"}
+# Com o artigo, para a frase: "a chave da OpenAI ou do Google (Gemini)".
+_DA_IA = {"openai": "da OpenAI", "anthropic": "da Anthropic", "google": "do Google (Gemini)"}
 
 
 def falta_chave_de_ia(tipo: str, provedores_com_chave: set[str] | frozenset[str]) -> str | None:
@@ -423,9 +419,9 @@ def falta_chave_de_ia(tipo: str, provedores_com_chave: set[str] | frozenset[str]
     exigidos = tuple(getattr(t, "provedores_ia", ()) or ()) if t else ()
     if not exigidos or set(exigidos) & set(provedores_com_chave):
         return None
-    nomes = " ou ".join(ROTULO_IA.get(p, p) for p in exigidos)
+    nomes = " ou ".join(_DA_IA.get(p, p) for p in exigidos)
     return (
-        f"“{t.nome_exibicao}” precisa da chave da {nomes}. Um admin cadastra em "
+        f"“{t.nome_exibicao}” precisa da chave {nomes}. Um admin cadastra em "
         "Organização › Chaves; depois disso o instrumento aparece para criar."
     )
 

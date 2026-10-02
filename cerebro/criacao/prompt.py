@@ -301,9 +301,11 @@ dentro, escreva no skill_md/soul_md dele COMO usar o instrumento — que a foto 
 no `prompt` ao chamar. Assim cada tipo de montagem se ajusta pelo markdown do agente, SEM
 criar instrumento novo nem campos fixos. As URLs (foto e modelos) entram públicas; quando
 a BIBLIOTECA estiver no ar, virão de lá (o agente as escolhe na Biblioteca).
-VÍDEO está FORA DO AR: a OpenAI desligou o vídeo dela (Sora) em 24/09/2026 e o Batuta não
-tem outro gerador de vídeo por enquanto (vai voltar com o do Google). Se pedirem vídeo, diga
-isso com clareza — não monte `gerar_video` (a criação é recusada).
+VÍDEO: o `gerar_video` usa a IA de vídeo do Google (Veo 3.1) e só existe com a chave do
+Google. Gera clipes de 4, 6 ou 8 s COM ÁUDIO, vertical (9:16) ou horizontal (16:9); cobra
+POR SEGUNDO (do Lite a US$ 0,05/s ao completo a US$ 0,60/s) — deixe o padrão (Lite, 720p,
+8 s) salvo pedido. Leva de segundos a minutos. O roteiro (`prompt`) pode descrever falas e
+sons; `imagem_referencia_url` anima a partir de uma imagem (ex.: a arte gerada antes).
 
 CANCELAR é embutido (não é uma saída que você desenha): sempre que o fluxo estiver
 esperando uma aprovação, além de aprovar/reprovar a pessoa pode ENCERRAR — na tela há um

@@ -41,10 +41,12 @@ from instrumentos.gerar_imagem import (
     CATALOGO_IMAGEM,
     TIMEOUT_S,
     ConfigImagem,
-    _QUALIDADES_GPT,
     _erro_openai,
     _imagem_bytes,
+    _uniao,
     _uniao_tamanhos,
+    gerar_pelo_google,
+    provedor_do_modelo,
 )
 
 URL_EDITS = "https://api.openai.com/v1/images/edits"
@@ -69,22 +71,24 @@ class ConfigMontagem(ConfigImagem):
         default="gpt-image-2",
         title="Modelo da imagem",
         description=(
-            "Modelo da família gpt-image. O 2.5 Sunburst é o que edita com mais "
-            "precisão (preserva melhor o rosto/produto da foto-base)."
+            "GPT Image (OpenAI) ou Gemini Image (Google). O GPT Image 2.5 Sunburst é o "
+            "que edita com mais precisão (preserva melhor o rosto/produto da foto-base)."
         ),
         json_schema_extra={"enum": list(CATALOGO_IMAGEM)},
     )
     tamanho: str = Field(
         default="1024x1536",
         title="Tamanho",
-        description="Resolução (as opções dependem do modelo). 1024x1536 = retrato, bom pro Instagram.",
+        description="Resolução (OpenAI) ou proporção (Google) — as opções dependem do "
+        "modelo. 1024x1536 ou 4:5 = retrato, bom pro Instagram.",
         json_schema_extra={"enum": _uniao_tamanhos()},
     )
     qualidade: str = Field(
         default="high",
         title="Qualidade",
-        description="low = rascunho; high = melhor acabamento (recomendado para montagem com rosto).",
-        json_schema_extra={"enum": list(_QUALIDADES_GPT)},
+        description="OpenAI: low = rascunho; high = melhor acabamento (recomendado para "
+        "montagem com rosto). Google: a resolução, 1K, 2K ou 4K.",
+        json_schema_extra={"enum": _uniao("qualidades")},
     )
 
 
@@ -139,8 +143,8 @@ def _baixar(url: str) -> tuple[bytes, str]:
 
 class MontarImagem(TipoInstrumento):
     tipo = "montar_imagem"
-    # Instrumento da OpenAI: só existe para a organização que tem a chave dela.
-    provedores_ia = ("openai",)
+    # Só existe para a organização que tem a chave da OpenAI ou a do Google.
+    provedores_ia = ("openai", "google")
     categoria = "Conteúdo"
     nome_exibicao = "Montar imagem (a partir de fotos)"
     descricao = (
@@ -171,13 +175,16 @@ class MontarImagem(TipoInstrumento):
         }
 
     def executar(self, config: ConfigMontagem, args: ArgsMontagem) -> dict:
+        urls = [u.strip() for u in args.imagens_url if u and u.strip()]
+        if provedor_do_modelo(config.modelo) == "google":
+            return self._pelo_google(config, args.prompt, urls)
         if not config.chave_api:
             raise FalhaInstrumento(
-                "falta a chave de API de imagem — configure-a no instrumento ou "
-                "cadastre a chave OpenAI da organização em Chaves de IA.",
+                "falta a chave de API de imagem — configure-a no instrumento, cadastre a "
+                "chave OpenAI da organização em Chaves de IA, ou escolha um modelo do "
+                "Google neste instrumento.",
                 retentavel=False,
             )
-        urls = [u.strip() for u in args.imagens_url if u and u.strip()]
         if not urls:
             raise FalhaInstrumento(
                 "nenhuma foto-base foi informada (passe ao menos uma URL pública).",
@@ -258,6 +265,23 @@ class MontarImagem(TipoInstrumento):
         nome = f"{uuid.uuid4().hex}.png"
         url = arquivos.salvar(nome, conteudo, "image/png")
         return {"ok": True, "arquivo": nome, "url": url}
+
+    def _pelo_google(self, config: ConfigMontagem, prompt: str, urls: list[str]) -> dict:
+        maximo = CATALOGO_IMAGEM[config.modelo].get("max_referencias", MAX_IMAGENS_BASE)
+        if not urls:
+            raise FalhaInstrumento(
+                "nenhuma foto-base foi informada (passe ao menos uma URL pública).",
+                retentavel=False,
+            )
+        if len(urls) > maximo:
+            raise FalhaInstrumento(
+                f"no máximo {maximo} fotos-base por montagem neste modelo do Google.",
+                retentavel=False,
+            )
+        referencias = [_baixar(u) for u in urls]
+        conteudo, mime, ext = gerar_pelo_google(config, prompt, referencias)
+        nome = f"{uuid.uuid4().hex}{ext}"
+        return {"ok": True, "arquivo": nome, "url": arquivos.salvar(nome, conteudo, mime)}
 
 
 registrar(MontarImagem())

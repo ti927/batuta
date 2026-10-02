@@ -224,3 +224,102 @@ def test_ler_documento_pelo_google_grande_demais_sugere_outra_ia(monkeypatch):
     with usar_chaves({"google": "g"}), pytest.raises(FalhaInstrumento) as e:
         tipo.executar(tipo.Config(), tipo.Args(url="https://x.com/nota.pdf"))
     assert "Anthropic ou da OpenAI" in str(e.value)
+
+
+# ── Gerar e montar imagem ────────────────────────────────────────────────────────
+
+
+def _resposta_imagem(dados=b"\x89PNG-imagem", mime="image/png", motivo="STOP"):
+    partes = [NS(inline_data=NS(data=dados, mime_type=mime))] if dados else []
+    return NS(candidates=[NS(content=NS(parts=partes), finish_reason=motivo)])
+
+
+def _guardar(monkeypatch, modulo):
+    salvos: list = []
+    monkeypatch.setattr(modulo.arquivos, "salvar",
+                        lambda nome, conteudo, tipo: salvos.append((nome, conteudo, tipo)) or f"https://armazem/{nome}")
+    return salvos
+
+
+def test_gerar_imagem_pelo_google_com_proporcao_e_resolucao(monkeypatch):
+    from instrumentos import gerar_imagem as gi
+
+    pedidos = _google_falso(monkeypatch, [_resposta_imagem(b"jpeg-bytes", "image/jpeg")])
+    salvos = _guardar(monkeypatch, gi)
+    tipo = encaixe.obter_tipo("gerar_imagem")
+    cfg = tipo.Config(modelo="gemini-3.1-flash-image", tamanho="4:5", qualidade="2K", formato="jpeg")
+    with usar_chaves({"google": "g"}):
+        r = tipo.executar(cfg, tipo.Args(prompt="um café na praia"))
+    conf = pedidos[0]["config"]
+    assert pedidos[0]["model"] == "gemini-3.1-flash-image"
+    assert conf.response_modalities == ["IMAGE"]
+    assert (conf.image_config.aspect_ratio, conf.image_config.image_size) == ("4:5", "2K")
+    assert conf.image_config.output_mime_type == "image/jpeg"
+    assert pedidos[0]["contents"] == ["um café na praia"]
+    assert salvos[0][1] == b"jpeg-bytes" and salvos[0][0].endswith(".jpg")
+    assert r["ok"] and r["url"].startswith("https://armazem/")
+
+
+def test_gerar_imagem_proporcao_de_um_modelo_nao_vale_no_outro():
+    tipo = encaixe.obter_tipo("gerar_imagem")
+    with pytest.raises(ValueError):
+        tipo.Config(modelo="gemini-3.1-flash-image", tamanho="1024x1024", qualidade="1K")
+    with pytest.raises(ValueError):  # o Flash-Lite só faz 1K
+        tipo.Config(modelo="gemini-3.1-flash-lite-image", tamanho="1:1", qualidade="4K")
+
+
+def test_gerar_imagem_pelo_google_sem_imagem_vira_recusa(monkeypatch):
+    _google_falso(monkeypatch, [_resposta_imagem(None, motivo="IMAGE_SAFETY")])
+    tipo = encaixe.obter_tipo("gerar_imagem")
+    cfg = tipo.Config(modelo="gemini-3.1-flash-image", tamanho="1:1", qualidade="1K")
+    with usar_chaves({"google": "g"}), pytest.raises(FalhaInstrumento) as e:
+        tipo.executar(cfg, tipo.Args(prompt="algo proibido"))
+    assert e.value.codigo == "ia.recusa" and not e.value.retentavel
+
+
+def test_gerar_imagem_pelo_google_sem_chave_do_google():
+    tipo = encaixe.obter_tipo("gerar_imagem")
+    cfg = tipo.Config(modelo="gemini-3.1-flash-image", tamanho="1:1", qualidade="1K", chave_api="sk-openai")
+    with usar_chaves({"openai": "o"}), pytest.raises(FalhaInstrumento) as e:
+        tipo.executar(cfg, tipo.Args(prompt="um gato"))
+    assert e.value.codigo == "ia.sem_chave"
+
+
+def test_imagem_do_google_libera_com_a_chave_do_google_e_tem_preco():
+    import precos
+
+    assert encaixe.obter_tipo("gerar_imagem").provedores_ia == ("openai", "google")
+    assert encaixe.obter_tipo("montar_imagem").provedores_ia == ("openai", "google")
+    assert precos.custo_por_imagem("gemini-3.1-flash-image", "1:1", "4K") == 0.151
+
+
+def test_campo_antigo_provedor_da_imagem_e_ignorado():
+    tipo = encaixe.obter_tipo("gerar_imagem")
+    assert tipo.Config(provedor="openai").modelo == "gpt-image-2"
+
+
+def test_montar_imagem_pelo_google_manda_as_fotos_junto(monkeypatch):
+    from instrumentos import montar_imagem as mi
+
+    pedidos = _google_falso(monkeypatch, [_resposta_imagem()])
+    _guardar(monkeypatch, mi)
+    monkeypatch.setattr(mi.httpx, "get", lambda url, **k: httpx.Response(
+        200, content=b"foto-" + url[-1:].encode(), headers={"content-type": "image/jpeg"},
+        request=httpx.Request("GET", url)))
+    tipo = encaixe.obter_tipo("montar_imagem")
+    cfg = tipo.Config(modelo="gemini-3.1-flash-image", tamanho="4:5", qualidade="1K")
+    with usar_chaves({"google": "g"}):
+        r = tipo.executar(cfg, tipo.Args(prompt="a 1ª é a pessoa; coloque num escritório",
+                                         imagens_url=["https://x.com/a", "https://x.com/b"]))
+    foto1, foto2, texto = pedidos[0]["contents"]
+    assert foto1.inline_data.data == b"foto-a" and foto2.inline_data.data == b"foto-b"
+    assert foto1.inline_data.mime_type == "image/jpeg" and texto.startswith("a 1ª")
+    assert r["ok"]
+
+
+def test_montar_imagem_pelo_google_respeita_o_limite_de_fotos(monkeypatch):
+    tipo = encaixe.obter_tipo("montar_imagem")
+    cfg = tipo.Config(modelo="gemini-3.1-flash-image", tamanho="1:1", qualidade="1K")
+    with usar_chaves({"google": "g"}), pytest.raises(FalhaInstrumento) as e:
+        tipo.executar(cfg, tipo.Args(prompt="x", imagens_url=[f"https://x.com/{i}" for i in range(15)]))
+    assert "no máximo 14" in str(e.value)

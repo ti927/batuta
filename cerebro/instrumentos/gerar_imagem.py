@@ -1,9 +1,10 @@
 """Instrumento "Gerar imagem" (PRODUTO §13; Fase adicional).
 
 Gera uma imagem a partir de uma descrição (prompt) e devolve um link para vê-la.
-Usa a API de imagens da OpenAI (família gpt-image); a chave é um SEGREDO (cofre da
-Fase 7-B), reusada do pool da organização quando o instrumento não tem chave
-própria. O arquivo é salvo localmente e servido pelo cérebro em `/arquivos` (migra
+Usa a API de imagens da OpenAI (família gpt-image) ou a do Google (Gemini Image,
+desde 2026-10-02) — a IA sai do MODELO escolhido (`provedor` no catálogo). Na OpenAI
+a chave é um SEGREDO (cofre da Fase 7-B), reusada do pool da organização quando o
+instrumento não tem chave própria; no Google, a chave do Google do pool. O arquivo é salvo localmente e servido pelo cérebro em `/arquivos` (migra
 para o Supabase Storage na fase de produção).
 
 CATÁLOGO ÚNICO (`CATALOGO_IMAGEM`) é a fonte da verdade dos modelos e da
@@ -31,6 +32,7 @@ from pydantic import BaseModel, Field, model_validator
 
 import arquivos
 import diagnostico_imagem
+from instrumentos import google_servidor as goo
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 
 # Geração de imagem pode demorar; damos folga no timeout.
@@ -55,21 +57,51 @@ _TAMANHOS_GPT_2 = (
 # A OpenAI tira gpt-image-1 em 23/10/2026 e gpt-image-1-mini/1.5 em 01/12/2026
 # (developers.openai.com/api/docs/deprecations); os substitutos são os 2.5. Os 2.5
 # aceitam também xhigh/max, que ficam de fora até termos o preço por imagem deles.
+# Google (Gemini Image — ai.google.dev/gemini-api/docs/image-generation): o "tamanho"
+# é a PROPORÇÃO e a "qualidade" é a RESOLUÇÃO (1K/2K/4K; o Flash-Lite só faz 1K).
+# Toda imagem do Google sai com a marca invisível SynthID.
+_PROPORCOES_GOOGLE = ("1:1", "4:5", "9:16", "16:9", "3:4", "4:3", "5:4", "3:2", "2:3")
+_RESOLUCOES_GOOGLE = ("1K", "2K", "4K")
+
 CATALOGO_IMAGEM: dict[str, dict] = {
     "gpt-image-2": {
+        "provedor": "openai",
         "rotulo": "GPT Image 2",
         "tamanhos": _TAMANHOS_GPT_2,
         "qualidades": _QUALIDADES_GPT,
     },
     "gpt-image-2.5-flare": {
+        "provedor": "openai",
         "rotulo": "GPT Image 2.5 Flare (rápido, dia a dia)",
         "tamanhos": _TAMANHOS_GPT_2,
         "qualidades": _QUALIDADES_GPT,
     },
     "gpt-image-2.5-sunburst": {
+        "provedor": "openai",
         "rotulo": "GPT Image 2.5 Sunburst (edição mais precisa)",
         "tamanhos": _TAMANHOS_GPT_2,
         "qualidades": _QUALIDADES_GPT,
+    },
+    "gemini-3.1-flash-image": {
+        "provedor": "google",
+        "rotulo": "Gemini 3.1 Flash Image (Google)",
+        "tamanhos": _PROPORCOES_GOOGLE,
+        "qualidades": _RESOLUCOES_GOOGLE,
+        "max_referencias": 14,
+    },
+    "gemini-3.1-flash-lite-image": {
+        "provedor": "google",
+        "rotulo": "Gemini 3.1 Flash-Lite Image (Google, o mais barato)",
+        "tamanhos": _PROPORCOES_GOOGLE,
+        "qualidades": ("1K",),
+        "max_referencias": 14,
+    },
+    "gemini-3-pro-image": {
+        "provedor": "google",
+        "rotulo": "Gemini 3 Pro Image (Google, acabamento superior)",
+        "tamanhos": _PROPORCOES_GOOGLE,
+        "qualidades": _RESOLUCOES_GOOGLE,
+        "max_referencias": 14,
     },
 }
 
@@ -85,12 +117,20 @@ MODELOS_LEGADOS = {"dall-e-2", "dall-e-3", "gpt-image-1", "gpt-image-1-mini", "g
 def _uniao_tamanhos() -> list[str]:
     """A união (sem repetir, ordem estável) de todos os tamanhos do catálogo — é o
     `enum` do campo `tamanho`; a UI o filtra por modelo via `dependencias_ui`."""
+    return _uniao("tamanhos")
+
+
+def _uniao(chave: str) -> list[str]:
     vistos: list[str] = []
     for spec in CATALOGO_IMAGEM.values():
-        for t in spec["tamanhos"]:
+        for t in spec[chave]:
             if t not in vistos:
                 vistos.append(t)
     return vistos
+
+
+def provedor_do_modelo(modelo: str) -> str:
+    return (CATALOGO_IMAGEM.get(modelo) or {}).get("provedor", "openai")
 
 
 class ConfigImagem(BaseModel):
@@ -100,29 +140,25 @@ class ConfigImagem(BaseModel):
     `CATALOGO_IMAGEM` (a interface os mostra como dropdown, com tamanho/qualidade
     DEPENDENTES do modelo). O trio é validado abaixo contra o catálogo."""
 
-    provedor: str = Field(
-        default="openai",
-        title="Provedor",
-        description="Provedor de geração de imagem (por ora, só OpenAI).",
-        json_schema_extra={"enum": ["openai"]},
-    )
     modelo: str = Field(
         default=MODELO_PADRAO,
         title="Modelo da imagem",
-        description="Modelo da família gpt-image da OpenAI.",
+        description="GPT Image (OpenAI) ou Gemini Image (Google) — só funciona o da IA "
+        "que tem chave na organização.",
         json_schema_extra={"enum": list(CATALOGO_IMAGEM)},
     )
     tamanho: str = Field(
         default=TAMANHO_PADRAO,
         title="Tamanho",
-        description="Resolução da imagem (as opções dependem do modelo).",
+        description="Resolução (OpenAI) ou proporção (Google) — as opções dependem do modelo.",
         json_schema_extra={"enum": _uniao_tamanhos()},
     )
     qualidade: str = Field(
         default=QUALIDADE_PADRAO,
         title="Qualidade",
-        description="low = rascunho rápido e barato; high = melhor acabamento (mais caro).",
-        json_schema_extra={"enum": list(_QUALIDADES_GPT)},
+        description="OpenAI: low = rascunho rápido e barato; high = melhor acabamento (mais "
+        "caro). Google: a resolução, 1K, 2K ou 4K (mais caro).",
+        json_schema_extra={"enum": _uniao("qualidades")},
     )
     formato: Literal["png", "jpeg"] = Field(
         default="png",
@@ -147,6 +183,8 @@ class ConfigImagem(BaseModel):
         banco continua a antiga; a cura acontece ao validar para usar)."""
         if not isinstance(dados, dict):
             return dados
+        if "provedor" in dados:  # campo antigo: a IA agora sai do modelo
+            dados = {k: v for k, v in dados.items() if k != "provedor"}
         if dados.get("modelo") in MODELOS_LEGADOS:
             dados = dict(dados)
             spec = CATALOGO_IMAGEM[MODELO_PADRAO]
@@ -227,10 +265,55 @@ def _imagem_bytes(dados: dict) -> bytes:
     )
 
 
+def gerar_pelo_google(
+    config: ConfigImagem, prompt: str, referencias: list[tuple[bytes, str]] = (),
+) -> tuple[bytes, str, str]:
+    """Gera (ou monta, com `referencias`) uma imagem no Google. Devolve (bytes, tipo,
+    extensão). O formato do arquivo segue a config (png/jpeg)."""
+    from google.genai import errors
+    from google.genai import types as gtypes
+
+    mime, ext = ("image/jpeg", ".jpg") if config.formato == "jpeg" else ("image/png", ".png")
+    partes: list = [gtypes.Part.from_bytes(data=b, mime_type=t) for b, t in referencias]
+    partes.append(prompt)
+    cli = goo.cliente(TIMEOUT_S)
+    try:
+        resposta = cli.models.generate_content(
+            model=config.modelo, contents=partes,
+            config=gtypes.GenerateContentConfig(
+                response_modalities=["IMAGE"],
+                image_config=gtypes.ImageConfig(
+                    aspect_ratio=config.tamanho, image_size=config.qualidade,
+                    output_mime_type=mime,
+                ),
+            ),
+        )
+    except errors.APIError as e:
+        raise goo.traduzir_excecao(e, config.modelo) from e
+    except Exception as e:
+        raise FalhaInstrumento(
+            f"o Google não respondeu a tempo ({type(e).__name__}); tente de novo em instantes.",
+            retentavel=True, codigo="ia.indisponivel",
+        ) from e
+    for candidato in resposta.candidates or []:
+        for parte in getattr(candidato.content, "parts", None) or []:
+            dados = getattr(parte, "inline_data", None)
+            if dados and dados.data:
+                return dados.data, dados.mime_type or mime, ext
+    motivo = (resposta.candidates or [None])[0]
+    motivo = str(getattr(motivo, "finish_reason", "") or "")
+    raise FalhaInstrumento(
+        "o Google não gerou a imagem"
+        + (" (recusou por política de segurança — reescreva a descrição)" if motivo and "STOP" not in motivo else "")
+        + ".",
+        retentavel=False, codigo="ia.recusa" if motivo and "STOP" not in motivo else "google.sem_imagem",
+    )
+
+
 class GerarImagem(TipoInstrumento):
     tipo = "gerar_imagem"
-    # Instrumento da OpenAI: só existe para a organização que tem a chave dela.
-    provedores_ia = ("openai",)
+    # Só existe para a organização que tem a chave da OpenAI ou a do Google.
+    provedores_ia = ("openai", "google")
     categoria = "Conteúdo"
     nome_exibicao = "Gerar imagem"
     descricao = (
@@ -260,10 +343,15 @@ class GerarImagem(TipoInstrumento):
         }
 
     def executar(self, config: ConfigImagem, args: ArgsImagem) -> dict:
+        if provedor_do_modelo(config.modelo) == "google":
+            conteudo, mime, ext = gerar_pelo_google(config, args.prompt)
+            nome = f"{uuid.uuid4().hex}{ext}"
+            return {"ok": True, "arquivo": nome, "url": arquivos.salvar(nome, conteudo, mime)}
         if not config.chave_api:
             raise FalhaInstrumento(
-                "falta a chave de API de imagem — configure-a no instrumento ou "
-                "cadastre a chave OpenAI da organização em Chaves de IA.",
+                "falta a chave de API de imagem — configure-a no instrumento, cadastre a "
+                "chave OpenAI da organização em Chaves de IA, ou escolha um modelo do "
+                "Google neste instrumento.",
                 retentavel=False,
             )
         # Payload por modelo, a partir do catálogo. NÃO enviamos `response_format`:

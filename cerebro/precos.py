@@ -65,6 +65,10 @@ PRECOS_IMAGEM_USD = {
     # Os 2.5 cobram a saída como o gpt-image-2 (US$ 30 por 1M tokens de imagem).
     "gpt-image-2.5-flare": {"low": 0.011, "medium": 0.042, "high": 0.167},
     "gpt-image-2.5-sunburst": {"low": 0.011, "medium": 0.042, "high": 0.167},
+    # Google (ai.google.dev/gemini-api/docs/pricing, 2026-10-02): por RESOLUÇÃO.
+    "gemini-3.1-flash-image": {"1K": 0.067, "2K": 0.101, "4K": 0.151},
+    "gemini-3.1-flash-lite-image": {"1K": 0.034},
+    "gemini-3-pro-image": {"1K": 0.134, "2K": 0.134, "4K": 0.24},
 }
 PRECO_IMAGEM_PADRAO = 0.042
 
@@ -83,13 +87,15 @@ PRECOS_DESCRICAO_USD = {
 }
 PRECO_DESCRICAO_PADRAO = 0.004
 
-# Geração de VÍDEO (OpenAI/Sora) é cobrada POR SEGUNDO, variando pelo modelo e pela
-# CLASSE de resolução (720p/1080p — só o pro faz 1080p). Aproximado (informativo, não
-# cobrança). A entrada de uso traz `segundos` e um `custo_usd` pré-calculado. Mantida
-# alinhada ao `instrumentos.gerar_video.CATALOGO_VIDEO`.
+# Geração de VÍDEO (Google/Veo, desde 2026-10-02; a Sora da OpenAI foi desligada em
+# 24/09/2026) é cobrada POR SEGUNDO, pelo modelo e pela resolução — com áudio
+# (ai.google.dev/gemini-api/docs/pricing). Aproximado (informativo, não cobrança). A
+# entrada de uso traz `segundos` e um `custo_usd` pré-calculado. Mantida alinhada ao
+# `instrumentos.gerar_video.CATALOGO_VIDEO` (um teste-guarda garante o par).
 PRECOS_VIDEO_USD = {
-    "sora-2": {"720p": 0.10},
-    "sora-2-pro": {"720p": 0.30, "1080p": 0.70},
+    "veo-3.1-lite-generate-preview": {"720p": 0.05, "1080p": 0.08},
+    "veo-3.1-fast-generate-preview": {"720p": 0.10, "1080p": 0.12, "4k": 0.30},
+    "veo-3.1-generate-preview": {"720p": 0.40, "1080p": 0.40, "4k": 0.60},
 }
 PRECO_VIDEO_PADRAO_POR_S = 0.10
 
@@ -152,6 +158,8 @@ def custo_por_imagem(modelo: str, tamanho: str = "", qualidade: str = "medium") 
                 break
     if tabela is None:
         return PRECO_IMAGEM_PADRAO
+    if qualidade in tabela:  # resolução do Google ("1K", "2K", "4K")
+        return tabela[qualidade]
     return tabela.get((qualidade or "medium").lower(), tabela.get("medium", PRECO_IMAGEM_PADRAO))
 
 
@@ -165,18 +173,11 @@ def custo_por_descricao(modelo: str) -> float:
     return PRECO_DESCRICAO_PADRAO
 
 
-def custo_por_video(modelo: str, tamanho: str = "", segundos="8") -> float:
+def custo_por_video(modelo: str, resolucao: str = "", segundos="8") -> float:
     """Custo aproximado de UM vídeo, em USD = preço/segundo × segundos. O preço/s vem
-    do modelo e da classe de resolução (1080p quando o `tamanho` tem 1080/1920, senão
-    720p). Modelo desconhecido tenta por família (o 'pro' antes do base, pois 'sora-2'
-    é prefixo de 'sora-2-pro'); nada casando → padrão."""
-    classe = "1080p" if ("1080" in (tamanho or "") or "1920" in (tamanho or "")) else "720p"
+    do modelo e da resolução (720p quando não informada). Modelo desconhecido → padrão."""
+    classe = (resolucao or "720p").strip().lower()
     tabela = PRECOS_VIDEO_USD.get((modelo or "").strip())
-    if tabela is None:
-        for familia in ("sora-2-pro", "sora-2"):
-            if (modelo or "").strip().startswith(familia):
-                tabela = PRECOS_VIDEO_USD[familia]
-                break
     por_s = (
         tabela.get(classe, tabela.get("720p", PRECO_VIDEO_PADRAO_POR_S))
         if tabela

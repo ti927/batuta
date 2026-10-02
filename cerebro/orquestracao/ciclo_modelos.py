@@ -107,6 +107,14 @@ REGISTRO: tuple[Modelo, ...] = (
     Modelo("gpt-image-1", "openai", IMAGEM, DESCONTINUADO, date(2026, 10, 23), "gpt-image-2"),
     Modelo("gpt-image-1-mini", "openai", IMAGEM, DESCONTINUADO, date(2026, 12, 1), "gpt-image-2.5-flare"),
     Modelo("gpt-image-1.5", "openai", IMAGEM, DESCONTINUADO, date(2026, 12, 1), "gpt-image-2.5-sunburst"),
+    # ── Google (imagem) ──
+    Modelo("gemini-3.1-flash-image", "google", IMAGEM),
+    Modelo("gemini-3.1-flash-lite-image", "google", IMAGEM),
+    Modelo("gemini-3-pro-image", "google", IMAGEM),
+    # ── Google (vídeo) — o Gerar vídeo voltou por aqui em 2026-10-02 ──
+    Modelo("veo-3.1-lite-generate-preview", "google", VIDEO),
+    Modelo("veo-3.1-fast-generate-preview", "google", VIDEO),
+    Modelo("veo-3.1-generate-preview", "google", VIDEO),
     # ── OpenAI (vídeo) — desligado sem substituto ──
     Modelo("sora-2", "openai", VIDEO, DESLIGADO, date(2026, 9, 24)),
     Modelo("sora-2-pro", "openai", VIDEO, DESLIGADO, date(2026, 9, 24)),

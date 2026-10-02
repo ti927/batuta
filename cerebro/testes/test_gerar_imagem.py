@@ -86,12 +86,14 @@ def test_sem_chave_falha_clara():
 # ───────────── catálogo como fonte da verdade + dependências ─────────────
 
 
-def test_so_familia_gpt_image_no_catalogo():
+def test_catalogo_tem_gpt_image_atual_e_gemini_image():
     # DALL·E e gpt-image-1/1-mini/1.5 foram aposentados pela OpenAI: não são
-    # oferecidos (mas se auto-curam, ver abaixo).
+    # oferecidos (mas se auto-curam, ver abaixo). O Google entrou em 2026-10-02.
     assert set(gi.CATALOGO_IMAGEM) == {
-        "gpt-image-2", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst"
+        "gpt-image-2", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst",
+        "gemini-3.1-flash-image", "gemini-3.1-flash-lite-image", "gemini-3-pro-image",
     }
+    assert {gi.provedor_do_modelo(m) for m in gi.CATALOGO_IMAGEM} == {"openai", "google"}
 
 
 def test_todo_modelo_do_catalogo_tem_preco():
@@ -115,7 +117,7 @@ def test_esquema_config_tem_enum_para_dropdown():
     # o front monta o dropdown do `enum`; o catálogo precisa chegar lá.
     props = ConfigImagem.model_json_schema()["properties"]
     assert props["modelo"]["enum"] == list(gi.CATALOGO_IMAGEM)
-    assert props["qualidade"]["enum"] == list(gi._QUALIDADES_GPT)
+    assert props["qualidade"]["enum"] == [*gi._QUALIDADES_GPT, "1K", "2K", "4K"]
     assert "1024x1024" in props["tamanho"]["enum"]
 
 

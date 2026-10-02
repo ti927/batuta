@@ -150,8 +150,9 @@ def _chave(sessao, org_id, provedor):
 def test_instrumentos_de_ia_declaram_a_ia():
     import instrumentos as encaixe
 
-    for tipo in ("gerar_imagem", "montar_imagem", "gerar_video"):
-        assert encaixe.obter_tipo(tipo).provedores_ia == ("openai",), tipo
+    for tipo in ("gerar_imagem", "montar_imagem"):
+        assert encaixe.obter_tipo(tipo).provedores_ia == ("openai", "google"), tipo
+    assert encaixe.obter_tipo("gerar_video").provedores_ia == ("google",)
     assert set(encaixe.obter_tipo("descrever_imagem").provedores_ia) == {
         "anthropic", "openai", "google"}
     for tipo in ("agendar_automacao", "pedir_aprovacao", "quadro", "gerar_pdf"):
@@ -198,19 +199,19 @@ def test_catalogo_diz_qual_ia_libera(cliente, entrar, dados):
     from criacao.ferramentas import catalogo_de_instrumentos
 
     ia = {c["tipo"]: c for c in catalogo_de_instrumentos()}
-    assert ia["gerar_imagem"]["precisa_chave_de_ia"] == ["openai"]
+    assert ia["gerar_imagem"]["precisa_chave_de_ia"] == ["openai", "google"]
     assert ia["quadro"]["precisa_chave_de_ia"] == []
     entrar(dados["operador"])
     tela = {t["tipo"]: t for t in cliente.get("/instrumentos/tipos").json()}
-    assert tela["montar_imagem"]["provedores_ia"] == ["openai"]
+    assert tela["montar_imagem"]["provedores_ia"] == ["openai", "google"]
 
 
-def test_gerar_video_fora_do_ar_diz_por_que():
-    """A OpenAI desligou o vídeo (Sora) em 24/09/2026: criar é recusado com o motivo,
-    e o tipo some do catálogo das IAs (volta com o vídeo do Google)."""
+def test_gerar_video_voltou_pelo_google():
+    """A OpenAI desligou o vídeo (Sora) em 24/09/2026; o Gerar vídeo voltou em 02/10/2026
+    com o Veo do Google: criar é permitido e o catálogo diz que a chave é a do Google."""
     import instrumentos as encaixe
     from criacao.ferramentas import catalogo_de_instrumentos
 
-    motivo = encaixe.motivo_para_nao_criar("gerar_video")
-    assert motivo and "fora do ar" in motivo and "24/09/2026" in motivo
-    assert "gerar_video" not in {t["tipo"] for t in catalogo_de_instrumentos()}
+    assert encaixe.motivo_para_nao_criar("gerar_video") is None
+    ia = {t["tipo"]: t for t in catalogo_de_instrumentos()}
+    assert ia["gerar_video"]["precisa_chave_de_ia"] == ["google"]

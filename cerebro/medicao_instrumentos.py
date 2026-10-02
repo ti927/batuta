@@ -28,7 +28,7 @@ from orquestracao.modelos_ia import provedor_do_modelo_seguro
 # Tipos de instrumento que consomem IA paga (cobrança própria, fora do LLM do
 # agente): os de imagem (gerar do zero e montar a partir de fotos, cobrados por
 # imagem), o de VISÃO (`descrever_imagem`, que lê uma imagem com um modelo de chat)
-# e o de VÍDEO (`gerar_video`, Sora, cobrado por segundo).
+# e o de VÍDEO (`gerar_video`, Veo do Google, cobrado por segundo).
 # Serviço pago de fora do Batuta é personalizado: o custo vem do preço que quem montou
 # o conector informou em cada operação (ver `_operacoes_com_preco`).
 TIPOS_PAGOS = {"gerar_imagem", "montar_imagem", "descrever_imagem", "gerar_video"}
@@ -63,9 +63,9 @@ def _custo_descricao(cfg: dict) -> dict:
 
 
 def _custo_video(cfg: dict) -> dict:
-    """Entrada de uso de UM vídeo gerado (Sora), a partir da config do instrumento."""
-    modelo = cfg.get("modelo") or "sora-2"
-    tamanho = cfg.get("tamanho") or ""
+    """Entrada de uso de UM vídeo gerado (Veo), a partir da config do instrumento."""
+    modelo = cfg.get("modelo") or "veo-3.1-lite-generate-preview"
+    resolucao = cfg.get("resolucao") or "720p"
     dur = cfg.get("duracao_s") or "8"
     try:
         segundos = int(str(dur).strip())
@@ -74,7 +74,7 @@ def _custo_video(cfg: dict) -> dict:
     return {
         "modelo": modelo,
         "segundos": segundos,
-        "custo_usd": round(precos.custo_por_video(modelo, tamanho, dur), 6),
+        "custo_usd": round(precos.custo_por_video(modelo, resolucao, dur), 6),
     }
 
 
@@ -85,9 +85,12 @@ def _entrada_e_servico(inst: Instrumento) -> tuple[dict, str | None]:
     cfg = inst.configuracao or {}
     if inst.tipo == "descrever_imagem":
         return _custo_descricao(cfg), provedor_do_modelo_seguro(cfg.get("modelo") or "")
+    # Imagem e vídeo podem ser da OpenAI ou do Google: quem paga é a IA do modelo.
+    servico = "google" if str(cfg.get("modelo") or "").startswith(("gemini", "veo")) \
+        else _servico_do_tipo(inst.tipo)
     if inst.tipo == "gerar_video":
-        return _custo_video(cfg), _servico_do_tipo(inst.tipo)
-    return _custo_imagem(cfg), _servico_do_tipo(inst.tipo)
+        return _custo_video(cfg), servico
+    return _custo_imagem(cfg), servico
 
 
 def _servico_do_tipo(tipo_str: str) -> str | None:
