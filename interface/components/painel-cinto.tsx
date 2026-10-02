@@ -132,6 +132,8 @@ export function PainelCinto({
             >
               <IconeInstrumento
                 icone={i.icone}
+                    auto={i.icone_auto}
+                    autoPrimeiro={i.icone_auto_primeiro}
                 className="size-3.5 text-muted-foreground"
               />
               {podeEditar ? (

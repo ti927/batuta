@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 Papel = Literal["lider", "agente"]
 
@@ -303,8 +303,16 @@ class InstrumentoLer(BaseModel):
     conexao: dict | None = None
     # "time" ou "organizacao" (todos os times da organização encaixam).
     escopo: str = "time"
-    # Ícone do serviço (personalizados), já como `data:` — vale se não há `icone`.
+    # Ícone do serviço, já como `data:`. Nos personalizados vale se não há `icone`
+    # escolhido; nos prontos (IA/Telegram) vem PRIMEIRO — `icone_auto_primeiro`.
     icone_auto: str | None = None
+
+    @computed_field
+    @property
+    def icone_auto_primeiro(self) -> bool:
+        import instrumentos as encaixe
+
+        return not encaixe.eh_personalizado(self.tipo)
     # ── Só na LISTA do time (`painel_instrumentos.enriquecer`); nas outras leituras,
     # os padrões. O que o cartão da aba Instrumentos mostra.
     personalizado: bool = False  # nasce no Construtor (API/servidor MCP)

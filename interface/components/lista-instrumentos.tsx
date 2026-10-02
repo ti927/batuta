@@ -415,6 +415,7 @@ function Cartao({
           <IconeInstrumento
             icone={inst.icone}
             auto={inst.icone_auto}
+            autoPrimeiro={inst.icone_auto_primeiro}
             className="size-4"
           />
         </span>

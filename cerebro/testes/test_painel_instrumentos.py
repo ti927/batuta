@@ -73,8 +73,14 @@ def test_situacao_e_pago(lista):
 
 
 def test_lista_pede_o_icone_dos_personalizados_sem_icone(lista, _sem_busca_de_icone):
-    # 2 personalizados sem ícone e nunca buscados → 2 buscas em segundo plano
-    assert len(_sem_busca_de_icone) == 2
+    # 2 personalizados sem ícone + o pronto de IA ("Imagem", OpenAI), nunca buscados →
+    # 3 buscas em segundo plano
+    assert len(_sem_busca_de_icone) == 3
+
+
+def test_lista_diz_que_nos_prontos_o_icone_do_servico_vem_primeiro(lista):
+    assert lista["Imagem"]["icone_auto_primeiro"] is True
+    assert lista["Zernio"]["icone_auto_primeiro"] is False
 
 
 # ───────────────────────────── ícone do serviço ─────────────────────────────
@@ -147,3 +153,44 @@ def test_servidor_guarda_titulo_site_e_icones():
     s = _servidor(_Info())
     assert s["titulo"] == "Zernio" and s["site"] == "https://zernio.com"
     assert s["icones"] == ["https://zernio.com/i.png"]  # o data: enorme fica de fora
+
+
+# ─────────────────── ícone do serviço nos PRONTOS (2026-10-02) ───────────────────
+
+
+@pytest.mark.parametrize("tipo, config, chaves, site", [
+    ("pesquisar_web", {"modelo": "claude-haiku-4-5"}, {}, "https://www.anthropic.com"),
+    ("pesquisar_web", {"modelo": ""}, {"openai": "o"}, "https://openai.com"),  # em branco: a IA com chave
+    ("pesquisar_web", {"modelo": ""}, {"google": "g"}, "https://ai.google.dev"),
+    ("gerar_imagem", {"modelo": "gemini-3.1-flash-image"}, {}, "https://ai.google.dev"),
+    ("gerar_imagem", {}, {}, "https://openai.com"),  # padrão: GPT Image
+    ("gerar_video", {}, {}, "https://ai.google.dev"),
+    ("narrar_texto", {}, {}, "https://ai.google.dev"),
+    ("descrever_imagem", {"modelo": "gpt-5.6-luna"}, {}, "https://openai.com"),
+    ("enviar_telegram", {}, {}, "https://telegram.org"),
+    ("agendar_automacao", {}, {}, None),  # nativo de verdade: não chama ninguém de fora
+    ("gerar_pdf", {}, {}, None),
+    ("conector", {}, {}, None),  # personalizado: segue pelo endereço da API
+])
+def test_site_do_pronto(tipo, config, chaves, site):
+    assert ic.site_do_pronto(tipo, config, chaves) == site
+
+
+def test_icone_do_pronto_baixa_o_site_uma_vez_so(monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(ic, "_ICONE_POR_SITE", {})
+    monkeypatch.setattr(ic, "icone_do_site", lambda s: chamadas.append(s) or "data:image/png;base64,AA")
+    for _ in range(3):
+        assert ic.icone_do_instrumento("gerar_video", {}, None) == "data:image/png;base64,AA"
+    assert chamadas == ["https://ai.google.dev"]
+
+
+def test_ia_editando_o_instrumento_faz_o_icone_ser_buscado_de_novo(sessao, dados):
+    from datetime import datetime, timezone
+
+    from criacao import servicos
+
+    inst = _inst(sessao, dados["timeA"], "Busca", "pesquisar_web", {"modelo": "claude-haiku-4-5"})
+    inst.icone_auto_em = datetime.now(timezone.utc)
+    servicos.editar_instrumento(sessao, inst, configuracao={"modelo": "gpt-5.6-luna"})
+    assert inst.icone_auto_em is None  # trocou de IA: a lista busca o ícone da nova

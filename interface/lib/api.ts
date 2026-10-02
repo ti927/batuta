@@ -268,8 +268,10 @@ export type Instrumento = {
   conexao?: ConexaoInstrumento | null;
   // "time" (só o time dono) ou "organizacao" (todos os times da organização usam).
   escopo?: "time" | "organizacao";
-  // Ícone do serviço (personalizados), já como data: — vale quando não há `icone`.
+  // Ícone do serviço, já como data:. Personalizados: vale quando não há `icone`.
+  // Prontos (IA/Telegram): vem primeiro, e o `icone` escolhido é a reserva.
   icone_auto?: string | null;
+  icone_auto_primeiro?: boolean;
   // Só na lista do time (aba Instrumentos): o que o cartão mostra.
   personalizado?: boolean;
   ligacao?: "api" | "mcp" | "banco" | null;

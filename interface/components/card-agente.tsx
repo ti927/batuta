@@ -88,7 +88,9 @@ export function CardAgente({
                   }}
                   className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-accent-foreground transition-colors hover:bg-primary/10 hover:text-primary"
                 >
-                  <IconeInstrumento icone={i.icone} className="size-3" />
+                  <IconeInstrumento icone={i.icone}
+                    auto={i.icone_auto}
+                    autoPrimeiro={i.icone_auto_primeiro} className="size-3" />
                   {i.nome}
                 </button>
               ) : (
@@ -96,7 +98,9 @@ export function CardAgente({
                   key={i.id}
                   className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-accent-foreground"
                 >
-                  <IconeInstrumento icone={i.icone} className="size-3" />
+                  <IconeInstrumento icone={i.icone}
+                    auto={i.icone_auto}
+                    autoPrimeiro={i.icone_auto_primeiro} className="size-3" />
                   {i.nome}
                 </span>
               ),

@@ -1,9 +1,16 @@
-"""O ÍCONE do serviço de um instrumento personalizado — buscado pelo cérebro, guardado.
+"""O ÍCONE do serviço de um instrumento — buscado pelo cérebro, guardado.
 
 Um servidor MCP pode anunciar os próprios ícones (`serverInfo.icons` no protocolo) e o
 site dele; uma API tem um endereço, e o site do serviço tem um ícone. O cérebro baixa
 esse ícone UMA vez e guarda como `data:` no instrumento (`icone_auto`): a tela não
 busca nada fora, e o ícone não quebra se o site mudar.
+
+PRONTOS DO BATUTA (2026-10-02, pedido do maestro): os que chamam a API de uma IA ou do
+Telegram também ganham o ícone do serviço — o da IA do MODELO escolhido (Anthropic,
+OpenAI ou Google; em branco, a IA que a organização tem chave) ou o do Telegram. Neles
+o ícone do serviço VEM PRIMEIRO e o escolhido na configuração é a reserva (nos
+personalizados, ao contrário: o escolhido vence). Os nativos de verdade (agendar,
+aprovação, quadro, PDF, guardar imagem) não chamam ninguém de fora: ficam no escolhido.
 
 Borda de rede com os mesmos cuidados de toda saída: tempo curto, tamanho máximo, só
 https e só endereço público (nada de `localhost`, IP privado ou rede interna — o
@@ -29,6 +36,18 @@ MAX_ICONE = 100_000  # bytes
 MAX_PAGINA = 400_000
 # Prefixos de subdomínio de API que não são o site do serviço (api.zernio.com → zernio.com).
 _PREFIXOS_TECNICOS = {"api", "apis", "mcp", "app", "rest", "gateway", "www", "services"}
+
+# O site de cada serviço por trás dos prontos (conferidos ao vivo em 02/10/2026: os
+# quatro entregam o ícone; o gemini.google.com não — o da API do Gemini, sim).
+SITE_DA_IA = {
+    "anthropic": "https://www.anthropic.com",
+    "openai": "https://openai.com",
+    "google": "https://ai.google.dev",
+}
+SITE_DO_TELEGRAM = "https://telegram.org"
+# Muitos instrumentos apontam para o MESMO site: o ícone baixado uma vez serve a todos
+# enquanto o processo vive.
+_ICONE_POR_SITE: dict[str, str | None] = {}
 
 
 def endereco_publico(url: str) -> bool:
@@ -142,8 +161,46 @@ def icone_do_site(site: str) -> str | None:
     return None
 
 
-def icone_do_instrumento(tipo: str, configuracao: dict, conexao: dict | None, url_secreta: str | None = None) -> str | None:
-    """O ícone automático de um instrumento personalizado (None = não achou)."""
+def site_do_pronto(tipo: str, configuracao: dict, chaves: dict | None = None) -> str | None:
+    """O site do serviço que um PRONTO chama (None = nativo de verdade, não chama
+    ninguém de fora). A IA sai do modelo da configuração; em branco, da mesma regra do
+    instrumento (`PADROES` + as chaves da organização)."""
+    import importlib
+
+    import instrumentos as encaixe
+    from orquestracao import ciclo_modelos
+    from orquestracao.llm import usar_chaves
+
+    if tipo == "enviar_telegram":
+        return SITE_DO_TELEGRAM
+    t = encaixe.obter_tipo(tipo)
+    provedores = tuple(getattr(t, "provedores_ia", ()) or ()) if t else ()
+    if not provedores:
+        return None
+    modelo = (configuracao or {}).get("modelo") or ""
+    if not modelo:
+        padroes = getattr(importlib.import_module(type(t).__module__), "PADROES", None)
+        if padroes:
+            from instrumentos import escolha_ia
+
+            with usar_chaves(chaves or {}):
+                modelo = escolha_ia.resolver("", padroes)
+    registro = ciclo_modelos.obter(modelo)
+    provedor = registro.provedor if registro else provedores[0]
+    return SITE_DA_IA.get(provedor)
+
+
+def icone_do_site_guardado(site: str) -> str | None:
+    if site not in _ICONE_POR_SITE:
+        _ICONE_POR_SITE[site] = icone_do_site(site)
+    return _ICONE_POR_SITE[site]
+
+
+def icone_do_instrumento(tipo: str, configuracao: dict, conexao: dict | None, url_secreta: str | None = None, chaves: dict | None = None) -> str | None:
+    """O ícone automático de um instrumento (None = não achou)."""
+    site_pronto = site_do_pronto(tipo, configuracao, chaves)
+    if site_pronto:
+        return icone_do_site_guardado(site_pronto)
     if tipo == "conectar_mcp":
         servidor = (conexao or {}).get("servidor") or {}
         for icone in servidor.get("icones") or []:
@@ -163,6 +220,7 @@ def icone_do_instrumento(tipo: str, configuracao: dict, conexao: dict | None, ur
 def atualizar(instrumento_id) -> None:
     """Segundo plano: busca e grava o ícone automático de um instrumento. Abre a
     própria sessão (a da requisição já fechou). Grava a TENTATIVA mesmo sem achar."""
+    import chaves as pool_de_chaves
     import segredos_instrumento
     from modelos import Instrumento
     from sessao import CriadorDeSessao
@@ -178,8 +236,10 @@ def atualizar(instrumento_id) -> None:
             # e nada dele sai daqui.
             url_mcp = segredos_instrumento.decifrar(sessao, inst.id).get("url")
         try:
+            # As chaves só servem para saber QUAL IA um pronto com modelo em branco usa.
+            chaves_map, _ = pool_de_chaves.resolver_chaves_por_time(sessao, inst.time_id)
             inst.icone_auto = icone_do_instrumento(
-                inst.tipo, inst.configuracao or {}, inst.conexao, url_mcp
+                inst.tipo, inst.configuracao or {}, inst.conexao, url_mcp, chaves_map
             )
         except Exception as e:  # noqa: BLE001
             inst.icone_auto = None

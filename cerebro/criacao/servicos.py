@@ -237,6 +237,9 @@ def editar_instrumento(
         except ValueError as e:
             raise ConflitoDominio(str(e))
         inst.configuracao = config_publica
+        # O endereço ou o modelo (logo, a IA) pode ter mudado: a lista busca o ícone
+        # do serviço de novo na próxima abertura.
+        inst.icone_auto_em = None
         if segredos_novos:
             segredos.salvar_segredos(sessao, inst.id, segredos_novos)
     sessao.flush()

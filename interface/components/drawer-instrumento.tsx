@@ -265,6 +265,8 @@ function DrawerNativo({
           <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
             <IconeInstrumento
               icone={instrumento?.icone}
+              auto={instrumento?.icone_auto}
+              autoPrimeiro={instrumento?.icone_auto_primeiro}
               className="size-4.5"
             />
           </span>

@@ -14,18 +14,24 @@ import { MAPA_ICONES } from "@/lib/icones-instrumento";
  * - senão, carrega o registro completo SOB DEMANDA e renderiza (mostra o genérico
  *   Wrench enquanto carrega — acontece só para ícones fora dos curados);
  * - sem `icone`, fica no genérico Wrench (comportamento de sempre).
+ * O ícone do serviço (`auto`, guardado pelo cérebro como data:) entra quando não há
+ * escolhido — ou ANTES do escolhido, com `autoPrimeiro` (os prontos que chamam uma IA
+ * ou o Telegram: o escolhido vira a reserva para quando o site não tem ícone).
  * `className` controla tamanho/cor (ex.: "size-4").
  */
 export function IconeInstrumento({
   icone,
   auto,
+  autoPrimeiro,
   className,
 }: {
   icone?: string | null;
-  /** Ícone do serviço (data:), usado só quando não há `icone` escolhido. */
+  /** Ícone do serviço (data:): quando não há `icone`, ou antes dele com `autoPrimeiro`. */
   auto?: string | null;
+  autoPrimeiro?: boolean;
   className?: string;
 }) {
+  const temAuto = !!auto?.startsWith("data:image/");
   const curado = icone ? MAPA_ICONES.get(icone) : undefined;
   // Guarda o id junto: um resultado de outro `icone` (troca rápida) é ignorado,
   // sem precisar de um setState de reset no corpo do efeito.
@@ -49,13 +55,13 @@ export function IconeInstrumento({
   const externo =
     !curado && icone && resolvido?.id === icone ? resolvido.def : undefined;
   const def = curado ?? externo;
-  if (def) {
-    return <FontAwesomeIcon icon={def} className={className} />;
-  }
-  if (!icone && auto?.startsWith("data:image/")) {
+  if (temAuto && (autoPrimeiro || !icone)) {
     // Guardado pelo cérebro como data: — não busca nada fora.
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={auto} alt="" className={`${className ?? ""} rounded-sm object-contain`} />;
+    return <img src={auto!} alt="" className={`${className ?? ""} rounded-sm object-contain`} />;
+  }
+  if (def) {
+    return <FontAwesomeIcon icon={def} className={className} />;
   }
   return <Wrench className={className} />;
 }

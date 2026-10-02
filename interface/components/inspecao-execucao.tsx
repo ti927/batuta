@@ -486,6 +486,8 @@ function LinhaPasso({
             >
               <IconeInstrumento
                 icone={inst.icone}
+                    auto={inst.icone_auto}
+                    autoPrimeiro={inst.icone_auto_primeiro}
                 className="size-3 flex-none text-[#6D4AFF]"
               />
               <span className="truncate text-[11px] text-[#4A4860]">

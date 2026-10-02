@@ -151,9 +151,14 @@ def listar(
     painel_instrumentos.enriquecer(sessao, time, lista)
     # Personalizados que nunca tiveram o ícone do serviço buscado: busca em segundo
     # plano (poucos por vez), e a próxima abertura da lista já mostra.
+    # Prontos que chamam uma IA ou o Telegram também (o ícone deles vem primeiro, mesmo
+    # com um escolhido).
     faltando = [
         i.id for i in lista
-        if i.personalizado and i.icone_auto_em is None and not i.icone
+        if i.icone_auto_em is None and (
+            (i.personalizado and not i.icone)
+            or (not i.personalizado and icone_servico.site_do_pronto(i.tipo, i.configuracao or {}))
+        )
     ]
     for iid in faltando[:5]:
         tarefas.add_task(icone_servico.atualizar, iid)
@@ -225,7 +230,7 @@ def criar(
     )
     sessao.commit()
     sessao.refresh(inst)
-    if encaixe.eh_personalizado(inst.tipo):
+    if encaixe.eh_personalizado(inst.tipo) or icone_servico.site_do_pronto(inst.tipo, inst.configuracao or {}):
         tarefas.add_task(icone_servico.atualizar, inst.id)
     return _ler(sessao, inst)
 
@@ -297,8 +302,9 @@ def editar(
         )
     sessao.commit()
     sessao.refresh(inst)
-    if encaixe.eh_personalizado(inst.tipo):
-        tarefas.add_task(icone_servico.atualizar, inst.id)  # o endereço pode ter mudado
+    # O endereço (personalizado) ou o modelo — logo, a IA — (pronto) pode ter mudado.
+    if encaixe.eh_personalizado(inst.tipo) or icone_servico.site_do_pronto(inst.tipo, inst.configuracao or {}):
+        tarefas.add_task(icone_servico.atualizar, inst.id)
     return _ler(sessao, inst)
 
 
