@@ -50,7 +50,7 @@ def _anthropic_falsa(monkeypatch, respostas):
     class Cliente:
         messages = Mensagens()
 
-    monkeypatch.setattr(srv, "_cliente", lambda: Cliente())
+    monkeypatch.setattr(srv, "_cliente", lambda timeout=None: Cliente())
     return pedidos
 
 
@@ -229,3 +229,127 @@ def test_gasto_real_vai_para_o_uso_do_turno_e_sai_do_que_o_agente_le(monkeypatch
         "modelo": "claude-haiku-4-5", "custo_usd": 0.02, "categoria": "instrumento",
         "instrumento_id": str(inst.id), "instrumento": "Busca", "tipo": "pesquisar_web",
     }]
+
+
+# ── Gerar arquivo e analisar dados ───────────────────────────────────────────────
+
+
+def _anthropic_com_arquivos(monkeypatch, respostas, arquivos_gerados):
+    """Cliente falso com a rota beta (execução de código) e a API de arquivos."""
+    from instrumentos import gerar_arquivo as ga
+
+    pedidos: list[dict] = []
+    subidos: list[tuple] = []
+    fila = list(respostas)
+
+    class Meta:
+        def __init__(self, nome, tipo):
+            self.filename, self.mime_type = nome, tipo
+
+    class Baixado:
+        def __init__(self, dados):
+            self._dados = dados
+
+        def read(self):
+            return self._dados
+
+    class Arquivos:
+        def upload(self, file):
+            subidos.append(file)
+
+            class Enviado:
+                id = f"file_entrada_{len(subidos)}"
+            return Enviado()
+
+        def retrieve_metadata(self, file_id):
+            nome, tipo, _ = arquivos_gerados[file_id]
+            return Meta(nome, tipo)
+
+        def download(self, file_id):
+            return Baixado(arquivos_gerados[file_id][2])
+
+    class Mensagens:
+        def create(self, **kw):
+            pedidos.append(kw)
+            return fila.pop(0)
+
+    class Beta:
+        messages = Mensagens()
+        files = Arquivos()
+
+    class Cliente:
+        beta = Beta()
+
+    monkeypatch.setattr(srv, "_cliente", lambda timeout=None: Cliente())
+    salvos: list[tuple] = []
+    monkeypatch.setattr(ga.arquivos, "salvar",
+                        lambda nome, dados, tipo: salvos.append((nome, dados, tipo)) or f"https://batuta/{nome}")
+    return pedidos, subidos, salvos
+
+
+def _resultado_com_arquivo(file_id):
+    return {"type": "bash_code_execution_tool_result", "content": {
+        "type": "bash_code_execution_result", "return_code": 0, "stdout": "", "stderr": "",
+        "content": [{"type": "bash_code_execution_output", "file_id": file_id}]}}
+
+
+def test_gerar_arquivo_sobe_entrada_gera_e_guarda_no_batuta(monkeypatch):
+    from instrumentos import gerar_arquivo as ga
+
+    pedidos, subidos, salvos = _anthropic_com_arquivos(monkeypatch, [_Resposta([
+        {"type": "text", "text": "vou montar"},
+        {"type": "server_tool_use", "name": "bash_code_execution"},
+        _resultado_com_arquivo("file_saida_1"),
+        {"type": "text", "text": "Planilha pronta: total 370."},
+    ])], {"file_saida_1": ("resumo.xlsx", "application/vnd.ms-excel", b"PK..")})
+    monkeypatch.setattr(ga.httpx, "get", lambda url, **k: httpx.Response(
+        200, content=b"a,b\n1,2\n", headers={"content-type": "text/csv"}))
+    tipo = encaixe.obter_tipo("gerar_arquivo")
+    r = tipo.executar(tipo.Config(formatos=["xlsx"]), tipo.Args(
+        instrucao="resuma em planilha", arquivos_url=["https://x.com/dados.csv"]))
+    # a resposta é só o texto final, sem a narração do meio
+    assert r["resumo"] == "Planilha pronta: total 370."
+    assert r["arquivos"][0]["nome"] == "resumo.xlsx"
+    assert r["arquivos"][0]["url"].startswith("https://batuta/") and salvos[0][1] == b"PK.."
+    assert subidos[0][0] == "dados.csv"
+    pedido = pedidos[0]
+    assert pedido["betas"] == ga.BETAS
+    assert pedido["container"] == {"skills": [{"type": "anthropic", "skill_id": "xlsx", "version": "latest"}]}
+    assert {"type": "container_upload", "file_id": "file_entrada_1"} in pedido["messages"][0]["content"]
+
+
+def test_gerar_arquivo_sem_arquivo_avisa_o_agente(monkeypatch):
+    _anthropic_com_arquivos(monkeypatch, [_Resposta([{"type": "text", "text": "a média é 5"}])], {})
+    tipo = encaixe.obter_tipo("gerar_arquivo")
+    r = tipo.executar(tipo.Config(), tipo.Args(instrucao="calcule a média de 4 e 6"))
+    assert r["arquivos"] == [] and "Nenhum arquivo" in r["aviso"]
+
+
+def test_gerar_arquivo_continua_no_mesmo_espaco_de_execucao(monkeypatch):
+    pausa = _Resposta([{"type": "server_tool_use", "name": "bash_code_execution"}], stop="pause_turn")
+
+    class Container:
+        id = "container_abc"
+    pausa.container = Container()
+    pedidos, _, _ = _anthropic_com_arquivos(monkeypatch, [pausa, _Resposta([{"type": "text", "text": "ok"}])], {})
+    tipo = encaixe.obter_tipo("gerar_arquivo")
+    tipo.executar(tipo.Config(), tipo.Args(instrucao="algo demorado"))
+    assert pedidos[1]["container"] == "container_abc"
+
+
+def test_gerar_arquivo_recusa_entrada_sem_https_e_em_excesso():
+    tipo = encaixe.obter_tipo("gerar_arquivo")
+    with pytest.raises(FalhaInstrumento, match="no máximo"):
+        tipo.executar(tipo.Config(), tipo.Args(instrucao="xxxxx", arquivos_url=["https://a"] * 11))
+
+
+def test_espera_longa_publica_sinal_de_vida(monkeypatch):
+    import time as _time
+
+    from orquestracao import atividade
+
+    monkeypatch.setattr(srv, "INTERVALO_BATIMENTO_S", 0.01)
+    frases: list[str] = []
+    with atividade.usar_atividade(frases.append):
+        valor = srv._com_batimento(lambda: _time.sleep(0.05) or 42, "Gerando o arquivo")
+    assert valor == 42 and frases and frases[0].startswith("Gerando o arquivo (")

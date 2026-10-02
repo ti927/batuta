@@ -12,6 +12,7 @@ import pytest
 
 from instrumentos import (
     descrever_imagem,
+    gerar_arquivo,
     gerar_imagem,
     gerar_video,
     ler_documento,
@@ -58,6 +59,7 @@ def test_nada_desligado_aparece_para_escolher():
         ("padrão do Pesquisar na web", pesquisar_web.ConfigPesquisa().modelo),
         ("padrão do Ler página", ler_pagina.ConfigLeitura().modelo),
         ("padrão do Ler documento", ler_documento.ConfigDocumento().modelo),
+        ("padrão do Gerar arquivo", gerar_arquivo.ConfigArquivo().modelo),
         ("transcrição dos áudios do Telegram", transcricao.MODELO),
     ],
 )

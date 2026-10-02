@@ -269,6 +269,10 @@ no markdown O QUE extrair. Para ler um PDF (contrato, nota fiscal, relatório), 
 `ler_documento`, que responde citando a página. Os três são da IA da Anthropic, só leem e têm
 custo real por uso (a pesquisa padrão custa cerca de US$ 0,02; modelos maiores, até dez vezes
 mais — deixe o Haiku, que já vem configurado, salvo se o trabalho pedir profundidade).
+Quando o trabalho termina num ARQUIVO (planilha, relatório em PDF, apresentação, proposta em
+Word, gráfico) ou precisa de CONTA sobre dados (CSV, planilha recebida), dê ao agente o
+`gerar_arquivo`: ele monta o arquivo e devolve o link. Descreva no markdown o arquivo esperado e
+para onde vai o link. Leva de segundos a minutos e custa por uso (~US$ 0,20 por planilha).
 Os prontos de IA (`precisa_chave_de_ia` no catálogo) só se criam se a organização tiver a chave
 de uma daquelas IAs; sem ela, a criação é recusada — diga ao consultor que um admin cadastra a
 chave em Organização › Chaves, em vez de tentar outro caminho.

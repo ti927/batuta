@@ -26,6 +26,7 @@ from instrumentos import arquivar_imagem  # noqa: E402, F401  (efeito colateral:
 from instrumentos import conector  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import descrever_imagem  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import enviar_telegram  # noqa: E402, F401  (efeito colateral: registro)
+from instrumentos import gerar_arquivo  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import gerar_imagem  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import gerar_pdf  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import gerar_video  # noqa: E402, F401  (efeito colateral: registro)

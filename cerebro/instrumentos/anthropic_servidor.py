@@ -20,13 +20,18 @@ Referência: platform.claude.com/docs (web search tool, web fetch tool, PDF supp
 citations, handling stop reasons).
 """
 
+import contextvars
 import os
+import time
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturoAindaRodando
 
 import anthropic
 
 import precos
 from instrumentos.base import FalhaInstrumento
 from orquestracao import ciclo_modelos
+from orquestracao import atividade
 from orquestracao.llm import chaves_atuais, modelo_indisponivel
 
 # Uma chamada com busca/leitura costuma levar segundos; uma pesquisa com várias buscas,
@@ -37,6 +42,8 @@ MAX_RETENTATIVAS = 2
 # Quantas vezes continuamos um turno pausado antes de desistir (evita laço sem fim).
 MAX_CONTINUACOES = 5
 MAX_TOKENS = 8000
+# De quanto em quanto tempo uma espera longa publica sinal de vida na tela.
+INTERVALO_BATIMENTO_S = 15
 
 # Versões das ferramentas. As de 2026-02-09 filtram o resultado antes de o modelo ler
 # (mais barato e mais preciso) e exigem Sonnet 4.6+/Opus 4.6+; o Haiku usa a básica.
@@ -94,8 +101,10 @@ def _chave() -> str:
     return chave
 
 
-def _cliente() -> anthropic.Anthropic:
-    return anthropic.Anthropic(api_key=_chave(), timeout=TIMEOUT_S, max_retries=MAX_RETENTATIVAS)
+def _cliente(timeout: float | None = None) -> anthropic.Anthropic:
+    return anthropic.Anthropic(
+        api_key=_chave(), timeout=timeout or TIMEOUT_S, max_retries=MAX_RETENTATIVAS
+    )
 
 
 def _traduzir_excecao(e: Exception, modelo: str) -> FalhaInstrumento:
@@ -142,33 +151,70 @@ def _somar_uso(total: dict, usage) -> None:
     total["leituras"] += servidor.get("web_fetch_requests") or 0
 
 
-def chamar(*, modelo: str, sistema: str, conteudo: list[dict], ferramentas: list[dict]) -> dict:
+def _com_batimento(fazer, frase: str | None):
+    """Roda `fazer()` e, enquanto espera, publica sinal de vida a cada
+    `INTERVALO_BATIMENTO_S` com o tempo decorrido (§12-A: uma espera de minutos sem
+    número é indistinguível de um travamento; e o vigia de execuções lê esse sinal)."""
+    if not frase:
+        return fazer()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        futuro = pool.submit(contextvars.copy_context().run, fazer)
+        inicio = time.monotonic()
+        while True:
+            try:
+                return futuro.result(timeout=INTERVALO_BATIMENTO_S)
+            except FuturoAindaRodando:
+                segundos = int(time.monotonic() - inicio)
+                quanto = f"{segundos} s" if segundos < 120 else f"{segundos // 60} min"
+                atividade.registrar(f"{frase} ({quanto})")
+
+
+def chamar(
+    *, modelo: str, sistema: str, conteudo: list[dict], ferramentas: list[dict],
+    betas: list[str] | None = None, container: dict | None = None,
+    timeout: float | None = None, frase_espera: str | None = None,
+) -> dict:
     """Uma rodada completa (com continuações de turno pausado). Devolve
-    `{"texto", "blocos", "erros", "uso"}`: o texto final, todos os blocos (dicts) de
-    todas as rodadas, os códigos de erro das ferramentas e o uso real para a medição."""
-    cliente = _cliente()
+    `{"texto", "blocos", "erros", "uso", "container"}`: a RESPOSTA FINAL (o texto
+    depois da última ação — sem a narração do meio), todos os blocos (dicts) de todas
+    as rodadas, os códigos de erro das ferramentas, o uso real e o id do espaço de
+    execução (quando houve). `betas`/`container` ligam a execução de código e as
+    habilidades de arquivo (rota beta do SDK)."""
+    cliente = _cliente(timeout)
     mensagens: list[dict] = [{"role": "user", "content": conteudo}]
     blocos: list[dict] = []
     total = {"entrada": 0, "saida": 0, "cache_read": 0, "cache_write": 0, "buscas": 0, "leituras": 0}
     resposta = None
+    id_container: str | None = None
     for _ in range(MAX_CONTINUACOES + 1):
-        try:
-            resposta = cliente.messages.create(
+        extra: dict = {"tools": ferramentas} if ferramentas else {}
+        if betas:
+            # Na continuação, o MESMO espaço de execução (os arquivos estão lá).
+            extra["container"] = id_container or container
+            criar = lambda: cliente.beta.messages.create(  # noqa: E731
                 model=modelo, max_tokens=MAX_TOKENS, system=sistema, messages=mensagens,
-                **({"tools": ferramentas} if ferramentas else {}),
+                betas=betas, **extra,
             )
+        else:
+            criar = lambda: cliente.messages.create(  # noqa: E731
+                model=modelo, max_tokens=MAX_TOKENS, system=sistema, messages=mensagens,
+                **extra,
+            )
+        try:
+            resposta = _com_batimento(criar, frase_espera)
         except anthropic.APIError as e:
             raise _traduzir_excecao(e, modelo) from e
         _somar_uso(total, resposta.usage)
-        rodada = [b.model_dump() for b in resposta.content]
-        blocos.extend(rodada)
+        blocos.extend(b.model_dump() for b in resposta.content)
+        if getattr(resposta, "container", None) is not None:
+            id_container = resposta.container.id
         if resposta.stop_reason != "pause_turn":
             break
         # Continua de onde parou: reenvia o pedido + o que já veio (sem "continue").
         mensagens = [mensagens[0], {"role": "assistant", "content": resposta.content}]
     else:
         raise FalhaInstrumento(
-            "a pesquisa não terminou dentro do limite de continuações; peça algo mais específico.",
+            "o trabalho não terminou dentro do limite de continuações; peça algo mais específico.",
             retentavel=False,
         )
 
@@ -179,14 +225,31 @@ def chamar(*, modelo: str, sistema: str, conteudo: list[dict], ferramentas: list
         )
 
     erros = _erros_das_ferramentas(blocos)
-    texto = "".join(b.get("text") or "" for b in blocos if b.get("type") == "text").strip()
+    texto = texto_final(blocos)
     if not texto and erros:
         codigo = erros[0]
         raise FalhaInstrumento(
             _ERROS.get(codigo, f"a ferramenta da Anthropic falhou ({codigo})") + ".",
             retentavel=codigo in _ERROS_RETENTAVEIS, codigo=f"anthropic.{codigo}",
         )
-    return {"texto": texto, "blocos": blocos, "erros": erros, "uso": _uso(modelo, total)}
+    return {
+        "texto": texto, "blocos": blocos, "erros": erros,
+        "uso": _uso(modelo, total), "container": id_container,
+    }
+
+
+def texto_final(blocos: list[dict]) -> str:
+    """A resposta da IA: os blocos de texto DEPOIS da última ação (busca, leitura,
+    execução). Antes disso é narração do caminho ("agora vou recalcular…"), que não
+    interessa a quem pediu. Sem nenhuma ação, é todo o texto."""
+    ultimo = -1
+    for i, b in enumerate(blocos):
+        tipo = str(b.get("type", ""))
+        if tipo == "server_tool_use" or tipo.endswith("_tool_result"):
+            ultimo = i
+    return "".join(
+        b.get("text") or "" for b in blocos[ultimo + 1:] if b.get("type") == "text"
+    ).strip()
 
 
 def _erros_das_ferramentas(blocos: list[dict]) -> list[str]:

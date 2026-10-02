@@ -67,6 +67,7 @@ MENSAGENS_ATIVIDADE: dict[str, str] = {
     "pesquisar_web": "Pesquisando na web…",
     "ler_pagina": "Lendo a página…",
     "ler_documento": "Lendo o documento…",
+    "gerar_arquivo": "Gerando o arquivo — pode levar alguns minutos…",
     "agendar_automacao": "Agendando o próximo disparo…",
     # O quadro publica a própria frase por ação ("Gravando 20 linhas no quadro X…").
     "quadro": "Usando o quadro…",
