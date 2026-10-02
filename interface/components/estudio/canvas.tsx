@@ -523,7 +523,10 @@ function CanvasInterno({
           clássico o zoom mora embaixo à esquerda — aqui esse canto é do painel que
           diz o que está errado, que é o que mais importa nesta tela. */}
       <Controls showInteractive={false} position="top-left" />
+      {/* No celular, o minimapa e o quadro de conferência do desenho somem: tomavam
+          o pouco espaço do desenho (pedido do maestro, 2026-10-02). */}
       <MiniMap
+        className="hidden md:block"
         pannable
         zoomable
         style={{ background: "#fff", border: "1px solid #E8E6F0", borderRadius: 10 }}
@@ -605,7 +608,7 @@ function CanvasInterno({
       </Panel>
 
       {/* ── o desenho se confere ── */}
-      <Panel position="bottom-left">
+      <Panel position="bottom-left" className="hidden md:block">
         <div className="w-[330px] overflow-hidden rounded-[12px] border border-[#E8E6F0] bg-white shadow-lg">
           <button
             type="button"

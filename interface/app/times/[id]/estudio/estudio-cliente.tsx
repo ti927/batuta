@@ -758,7 +758,9 @@ function EditorEstudio({
             onProblemas={setProblemas}
           />
         </div>
-        <div className="w-[352px] flex-none overflow-hidden border-l border-[#E8E6F0] bg-white">
+        {/* No celular o painel não cabe ao lado do desenho: some, e o desenho fica com a
+            tela inteira (pedido do maestro, 2026-10-02). */}
+        <div className="hidden w-[352px] flex-none overflow-hidden border-l border-[#E8E6F0] bg-white md:block">
           <PainelEstudio
             no={no}
             cadeia={cadeia}
