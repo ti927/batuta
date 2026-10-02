@@ -371,3 +371,16 @@ def test_entrada_apagada_mesmo_quando_a_chamada_falha(monkeypatch):
     with usar_chaves({"openai": "sk-x"}), pytest.raises(FalhaInstrumento) as e:
         tipo.executar(tipo.Config(), tipo.Args(instrucao="monte algo", arquivos_url=["https://x.com/a.csv"]))
     assert e.value.retentavel and cli.apagados == ["file-1"]
+
+
+def test_ler_pagina_pela_openai_traz_os_enderecos_das_imagens(monkeypatch):
+    _pagina(monkeypatch, "<p>Artigo</p><img data-src='/fotos/capa.jpg' alt='Capa do artigo'>"
+            "<img src='data:image/png;base64,AAA'><a href='/post-1'>Post 1</a>")
+    cli = _openai_falsa(monkeypatch, [_Resposta([_mensagem("ok")], texto="ok")])
+    tipo = encaixe.obter_tipo("ler_pagina")
+    with usar_chaves({"openai": "sk-x"}):
+        tipo.executar(tipo.Config(), tipo.Args(url="https://site.com/blog/"))
+    texto = cli.pedidos[0]["input"][0]["content"][0]["text"]
+    assert "[imagem: https://site.com/fotos/capa.jpg — Capa do artigo]" in texto
+    assert "https://site.com/post-1" in texto  # link relativo vira completo
+    assert "base64" not in texto

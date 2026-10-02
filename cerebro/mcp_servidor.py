@@ -590,7 +590,8 @@ async def testar_instrumento(instrumento_id: str, argumentos: dict | None = None
     imagem ~US$ 0,01–0,17 por teste (conforme a qualidade) — teste uma vez e não repita
     sem motivo; vídeo custa caro — só teste se o consultor pedir. Os lentos (gerar vídeo,
     gerar arquivo, montar imagem) respondem "em andamento" com um `teste_id`: busque o
-    resultado com `ver_teste_instrumento`.
+    resultado com `ver_teste_instrumento` — ou, se ela não aparecer para você, chamando
+    esta mesma ferramenta no mesmo instrumento com argumentos {"teste_id": "<o número>"}.
     Funciona com instrumento que tem segredo: o teste é pedido ao cérebro, que decifra
     lá e devolve só o resultado. Se a ponte não estiver ligada, a ferramenta diz isso —
     não fique retentando. Falha volta com `ok: false` e o motivo em `erro`: leia-o."""

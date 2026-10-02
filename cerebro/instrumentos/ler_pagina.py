@@ -8,6 +8,7 @@ monta o conteúdo no navegador vem vazio) e não entra em página com login. Só
 """
 
 from html.parser import HTMLParser
+from urllib.parse import urljoin
 
 import httpx
 from google.genai import types as gtypes
@@ -31,21 +32,39 @@ _SEM_TEXTO = {"script", "style", "noscript", "svg", "template", "head"}
 
 
 class _Texto(HTMLParser):
-    """O texto visível de um HTML (sem script/estilo), com os links das âncoras —
-    o bastante para a IA achar títulos, datas e endereços dos artigos."""
+    """O texto visível de um HTML (sem script/estilo), com os links das âncoras e os
+    endereços das imagens (com a descrição delas) — o bastante para a IA achar títulos,
+    datas, endereços dos artigos e as imagens da página. Endereço relativo vira
+    completo (a partir do endereço da página)."""
 
-    def __init__(self):
+    def __init__(self, base: str = ""):
         super().__init__(convert_charrefs=True)
         self.partes: list[str] = []
         self._fora = 0
+        self._base = base
+
+    def _completo(self, endereco: str | None) -> str | None:
+        if not endereco or endereco.startswith(("data:", "javascript:", "mailto:", "#")):
+            return None
+        completo = urljoin(self._base, endereco)
+        return completo if completo.startswith("http") else None
 
     def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
         if tag in _SEM_TEXTO:
             self._fora += 1
-        elif tag == "a" and not self._fora:
-            href = dict(attrs).get("href")
-            if href and href.startswith("http"):
+        elif self._fora:
+            return
+        elif tag == "a":
+            href = self._completo(a.get("href"))
+            if href:
                 self.partes.append(f" [{href}] ")
+        elif tag == "img":
+            # Imagem preguiçosa guarda o endereço em data-src/data-lazy-src.
+            src = self._completo(a.get("src") or a.get("data-src") or a.get("data-lazy-src"))
+            if src:
+                descricao = (a.get("alt") or "").strip()
+                self.partes.append(f" [imagem: {src}{' — ' + descricao if descricao else ''}] ")
         elif tag in ("p", "div", "li", "br", "h1", "h2", "h3", "h4", "tr", "article", "time"):
             self.partes.append("\n")
 
@@ -80,7 +99,7 @@ def texto_da_pagina(url: str, limite_caracteres: int) -> tuple[str, bool]:
         )
     tipo = (r.headers.get("content-type") or "").lower()
     if "html" in tipo or "xml" in tipo:
-        leitor = _Texto()
+        leitor = _Texto(str(r.url))
         leitor.feed(r.text)
         texto = "".join(leitor.partes)
     elif tipo.startswith("text/") or "json" in tipo:
@@ -140,7 +159,8 @@ class LerPagina(TipoInstrumento):
     descricao = (
         "Abre um link e devolve, em português, o que você pediu da página (resumo, "
         "uma tabela, dados específicos). Não abre páginas com login nem sites que só "
-        "funcionam com JavaScript. Só leitura."
+        "funcionam com JavaScript. Os endereços das imagens da página vêm com modelos da "
+        "Anthropic ou da OpenAI (com o Google, não). Só leitura."
     )
     Config = ConfigLeitura
     Args = ArgsLeitura

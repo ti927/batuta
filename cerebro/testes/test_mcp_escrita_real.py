@@ -691,3 +691,17 @@ def test_ver_teste_instrumento_ainda_rodando_e_pronto(mcp, dados, monkeypatch):
         {}, {"ok": True, "resultado": {"url": "https://x/v.mp4"}, "escreve": False}))
     saida = json.loads(escrita.ver_teste_instrumento(_sub(dados), "abc123"))
     assert saida["resultado"]["resultado"]["url"] == "https://x/v.mp4"
+
+
+def test_testar_instrumento_tambem_consulta_o_teste_sem_reconectar(mcp, dados, monkeypatch):
+    """O claude.ai só mostra `ver_teste_instrumento` depois de reconectar: a mesma
+    consulta funciona pela `testar_instrumento`, com argumentos {"teste_id": ...}."""
+    import httpx
+
+    iid = _instrumento_existente(dados, "gerar_arquivo", {})
+    monkeypatch.setenv("BATUTA_INTERNO_SECRET", "segredo-de-teste")
+    enviado = {}
+    monkeypatch.setattr(httpx, "Client", _ClienteFalso(enviado, {"em_andamento": True, "segundos": 12}))
+    saida = json.loads(escrita.testar_instrumento(_sub(dados), iid, {"teste_id": "abc123"}))
+    assert enviado["url"].endswith("/interno/instrumento/teste")
+    assert enviado["corpo"]["teste_id"] == "abc123" and "12 s" in saida["mensagem"]

@@ -357,6 +357,11 @@ def testar_instrumento(sessao, usuario, instrumento_id, argumentos) -> str:
             "Conector se testa por operação: use testar_operacao_conector com o nome "
             "da operação."
         )
+    if argumentos and set(argumentos) == {"teste_id"}:
+        # Consulta de um teste em segundo plano pela PRÓPRIA testar_instrumento: o
+        # claude.ai só mostra a ferramenta nova (`ver_teste_instrumento`) depois de
+        # reconectar o conector — e o teste não pode ficar sem como ser lido.
+        return _consultar_teste(usuario, str(argumentos["teste_id"]))
     if not (os.environ.get("COFRE_CHAVE_MESTRA") or "").strip():
         # ESPERADO em produção: este serviço roda sem a chave do cofre. Quem aciona é o
         # cérebro, que decifra lá e devolve só o resultado. Ver `rotas/interno.py`.
@@ -447,8 +452,10 @@ def _pedir_teste_ao_cerebro(caminho: str, corpo: dict, *, onde_testar: str) -> s
     if resultado.get("em_andamento") and resultado.get("teste_id"):
         return json.dumps({
             "mensagem": "Teste em andamento — este instrumento leva de segundos a minutos. "
-            "Consulte o resultado com ver_teste_instrumento(teste_id) daqui a ~30 segundos "
-            "(e de novo, se ainda não tiver terminado). Não rode o teste outra vez: cada "
+            "Consulte o resultado daqui a ~30 segundos (e de novo, se ainda não tiver "
+            "terminado) com ver_teste_instrumento(teste_id) — ou, se essa ferramenta não "
+            "aparecer para você, com testar_instrumento no MESMO instrumento e argumentos "
+            "{\"teste_id\": \"<o teste_id abaixo>\"}. Não rode o teste outra vez: cada "
             "rodada é cobrada.",
             "teste_id": resultado["teste_id"],
         }, ensure_ascii=False)
@@ -459,6 +466,10 @@ def _pedir_teste_ao_cerebro(caminho: str, corpo: dict, *, onde_testar: str) -> s
 
 @_ferramenta_escrita
 def ver_teste_instrumento(sessao, usuario, teste_id) -> str:
+    return _consultar_teste(usuario, str(teste_id))
+
+
+def _consultar_teste(usuario, teste_id: str) -> str:
     import httpx
 
     segredo = (os.environ.get("BATUTA_INTERNO_SECRET") or "").strip()
