@@ -33,8 +33,7 @@ original.
   webhook por bot). Você pluga um bot novo na cópia.
 - **Automações nascem inativas** — evita disparo em dobro de agendadas/webhook.
 - **Segredos não são copiados** (desde 2026-09-29 isto é verdade no código também — antes eram): todo
-  instrumento da cópia nasce com os segredos pendentes, e o login OAuth nunca vai junto. Credenciais da
-  central apontadas pelo instrumento continuam valendo.
+  instrumento da cópia nasce com os segredos pendentes, e o login OAuth nunca vai junto.
 - **A memória da IA é herdada** (a cópia já "sabe" as decisões lembradas); dados de runtime (execuções,
   conversas, uso) **não** são copiados.
 - Um alvo de **agendar automação** é remapeado — confira se aponta para a automação certa da cópia.

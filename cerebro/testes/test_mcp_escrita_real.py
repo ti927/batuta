@@ -17,7 +17,7 @@ import pytest
 from sqlalchemy import select
 
 import mcp_ferramentas_escrita as escrita
-from modelos import ChaveApi, Credencial, Instrumento
+from modelos import ChaveApi, Instrumento
 
 
 class _SessaoFake:
@@ -95,19 +95,6 @@ def test_montar_conector_cria_de_verdade(mcp, dados):
     r = escrita.montar_conector(_sub(dados), str(dados["timeA"].id), conector, None)
     assert escrita.ERRO_INESPERADO not in r, f"ferramenta quebrada: {r}"
     assert "criado" in r.lower()
-
-
-def test_criar_credencial_cria_esqueleto(mcp, dados):
-    """Bug 3: `token_bearer` (só nome + tipo, sem segredo) falhava."""
-    org_id = dados["timeA"].organizacao_id
-    r = escrita.criar_credencial(_sub(dados), str(org_id), "Token do MCP", "token_bearer")
-    assert escrita.ERRO_INESPERADO not in r, f"ferramenta quebrada: {r}"
-    cred = mcp.scalars(
-        select(Credencial).where(
-            Credencial.organizacao_id == org_id, Credencial.nome == "Token do MCP"
-        )
-    ).first()
-    assert cred is not None and cred.tipo == "token_bearer"
 
 
 def test_criar_agente_segue_funcionando(mcp, dados):
@@ -215,16 +202,6 @@ def test_mcp_com_segredo_passado_pela_ia_ignora_e_deixa_pendente(
     assert inst.configuracao["auth_modo"] == "basic"
     assert inst.configuracao["auth_usuario"] == "claude.ia"
     assert "auth_segredo" not in inst.configuracao and "url" not in inst.configuracao
-
-
-def test_credencial_com_chave_no_cofre_e_sem_chave_mestra(
-    mcp, dados, como_o_mcp_em_producao
-):
-    """REGRESSÃO do bug 3: o esqueleto de credencial não pode depender do cofre."""
-    r = escrita.criar_credencial(
-        _sub(dados), str(dados["timeA"].organizacao_id), "Token sem cofre", "token_bearer"
-    )
-    assert escrita.ERRO_INESPERADO not in r, f"ferramenta quebrada: {r}"
 
 
 def test_listar_e_ver_instrumento(mcp, dados):

@@ -364,6 +364,8 @@ Como tudo no Batuta depende dessas chaves, esta é uma peça central de seguran�
 
 > **Nota de implementação (jun/2026):** as **chaves de IA** entraram no cofre na **Fase 7** e as **credenciais de instrumentos** (senha de app do WordPress, chave Tavily, token de REST/webhook) na **Fase 7-B** — ambas cifradas, por organização, nunca reexibidas. O `.env` segue como fallback legado dos instrumentos já configurados.
 
+> **Onde cada segredo mora (decisão do maestro, 2026-10-02):** a página **"Chaves de IA"** da organização (e a da consultoria) guarda **só as chaves das IAs** (Anthropic, OpenAI, Google). Toda credencial de **qualquer outra plataforma** — token, senha, certificado, login OAuth, conta de serviço — é preenchida **dentro do próprio instrumento**, na criação dele (Construtor ou formulário do pronto), e fica no cofre do instrumento. Saíram da tela o cadastro de credenciais nomeadas ("caixa-forte"), o seletor "Credencial da central" no instrumento e o botão "Conectar Google"; saíram do MCP as 5 ferramentas de credencial. O código da caixa-forte no cérebro ficou parado (nenhuma credencial existia em produção) e pode ser apagado numa etapa seguinte.
+
 ## 27. Planos da plataforma
 
 A mensalidade fixa tem níveis, definidos por **capacidade do Batuta** (não por consumo de IA): quantidade de organizações, times, agentes, fluxos por mês, membros. Um nível gratuito para experimentar; níveis pagos para escalar. É a receita previsível do negócio.

@@ -10,7 +10,7 @@ fontes: ["cerebro/tipos_credencial.py", "cerebro/certificados.py", "cerebro/oaut
 # Certificado digital (mTLS) — Pix, boleto e APIs bancárias
 
 ## Em uma frase
-Um tipo de credencial que guarda o **certificado digital do cliente** (aquele arquivo que o banco
+O instrumento guarda o **certificado digital do cliente** (aquele arquivo que o banco
 entrega) e, quando o banco também exige, **busca e renova sozinho o token de acesso** — é o que
 destrava integrações de Pix, boleto e extrato.
 
@@ -19,7 +19,7 @@ APIs comuns pedem só uma chave. Banco é diferente: além da chave, ele exige q
 identifique com um certificado** no momento da conexão — o chamado mTLS. Sem isso, a chamada nem
 começa.
 
-Use este tipo de credencial sempre que a documentação da API falar em "certificado", ".pfx", ".p12",
+Use certificado sempre que a documentação da API falar em "certificado", ".pfx", ".p12",
 "mTLS" ou "certificado de cliente". Na prática: Banco Inter, Itaú, Bradesco, Sicredi e afins, e
 também alguns órgãos públicos.
 
@@ -51,20 +51,15 @@ qualquer opção** do seletor. O que você escolhe ali é o que o serviço pede 
 > (Receita Federal, SEFAZ, e-Social, notas fiscais), onde se usa um **e-CNPJ**. **Banco** é que
 > normalmente pede certificado **e** OAuth 2.0.
 
-> Também existe o caminho antigo, pela caixa-forte: criar uma credencial do tipo **Certificado
-> digital (mTLS)** em Chaves e credenciais e apontar o instrumento para ela. Continua funcionando
-> para quem já usa, mas para um instrumento novo prefira o Construtor — tudo o que ele precisa
-> mora nele.
-
 ## Exemplos
-- **Consultar um boleto no Inter:** credencial com o certificado + Client ID/Secret + o endereço de
+- **Consultar um boleto no Inter:** conector com o certificado + Client ID/Secret + o endereço de
   token do Inter e o escopo de cobrança; um instrumento REST apontando para o endpoint de consulta.
 - **Só certificado, sem token:** algumas APIs (e órgãos públicos) pedem apenas o certificado. Deixe
   os campos de OAuth em branco — funciona igual.
 
 ## Limites e cuidados
 - **O certificado vence** (normalmente em 1 ano). A tela mostra a data; quando renovar com o banco,
-  suba o arquivo novo na mesma credencial.
+  suba o arquivo novo no mesmo instrumento.
 - **A senha do arquivo não é guardada.** Ela serve só para abrir o `.pfx` no momento do envio. Vale
   conferir se a senha não está no **nome do arquivo** (acontece com frequência: `..._SENHA abc123.pfx`)
   — um `.pfx` sem a senha é inútil para quem o pegue; com a senha no nome, vira uma chave completa.
@@ -92,7 +87,6 @@ Ação em banco é **irreversível** por natureza: fluxo que paga, transfere ou 
 **pedido de aprovação** antes (instrumento [[automacoes/pedir-aprovacao]]) — dinheiro que sai não se desfaz.
 
 ## Relacionado
-- [[segredos/credenciais-nomeadas]]
 - [[segredos/segredos-de-instrumento]]
 - [[instrumentos/chamar-rest]]
 - [[automacoes/pedir-aprovacao]]

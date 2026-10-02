@@ -5,27 +5,20 @@ import { ChevronLeft } from "lucide-react";
 
 import {
   type ChaveApiLer,
-  type Credencial,
   type Organizacao,
   type PapelAcesso,
-  type TipoCredencial,
 } from "@/lib/api";
 import { GestaoChaves } from "@/components/gestao-chaves";
-import { CofreCredenciais } from "@/components/cofre-credenciais";
 import { Aviso } from "@/components/ui/aviso";
 
 export function ChavesCliente({
   organizacao,
   meuPapel,
   chaves,
-  credenciais,
-  tiposCredencial,
 }: {
   organizacao: Organizacao;
   meuPapel: PapelAcesso | null;
   chaves: ChaveApiLer[];
-  credenciais: Credencial[];
-  tiposCredencial: TipoCredencial[];
 }) {
   const souAdmin = meuPapel === "admin";
 
@@ -39,56 +32,23 @@ export function ChavesCliente({
         {organizacao.nome}
       </Link>
       <h1 className="mb-2 mt-2 text-2xl font-medium text-foreground">
-        Chaves e credenciais
+        Chaves de IA
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        Tudo num lugar só: as chaves de serviço da organização (usadas pelos
-        modelos, pela IA de conversa e pelos instrumentos) e as credenciais de
-        cada instrumento. Quando não há chave própria, o Batuta usa a chave-mãe da
-        consultoria. Nenhum valor é reexibido depois de salvo.
+        Uma chave por IA, para toda a organização. Os agentes e os instrumentos
+        prontos daquela IA usam esta chave. Sem chave própria, o Batuta usa a da
+        consultoria. Depois de salva, a chave não aparece mais.
       </p>
 
       {!souAdmin ? (
         <Aviso variant="atencao">
-          Somente administradores desta organização podem ver e gerir as chaves e
-          credenciais.
+          Somente administradores desta organização podem ver e gerir as chaves.
         </Aviso>
       ) : (
-        <div className="flex flex-col gap-10">
-          {/* Seção A — chaves de serviço (pool da organização) */}
-          <section>
-            <h2 className="mb-1 text-lg font-medium text-foreground">
-              Chaves de serviço
-            </h2>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Uma chave por IA, compartilhada por toda a organização. Os
-              instrumentos prontos daquela IA (gerar imagem, gerar vídeo, ler
-              imagem) usam esta chave.
-            </p>
-            <GestaoChaves
-              basePath={`/organizacoes/${organizacao.id}/chaves`}
-              chavesIniciais={chaves}
-            />
-          </section>
-
-          {/* Seção B — caixa-forte de credenciais nomeadas */}
-          <section>
-            <h2 className="mb-1 text-lg font-medium text-foreground">
-              Credenciais
-            </h2>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Senhas e tokens nomeados (banco de dados, bot do Telegram, conta
-              Google…) que os instrumentos usam. Crie aqui e aponte o
-              instrumento para a credencial — para trocar, muda num lugar só. O
-              valor secreto nunca é reexibido.
-            </p>
-            <CofreCredenciais
-              credenciais={credenciais}
-              tipos={tiposCredencial}
-              organizacaoId={organizacao.id}
-            />
-          </section>
-        </div>
+        <GestaoChaves
+          basePath={`/organizacoes/${organizacao.id}/chaves`}
+          chavesIniciais={chaves}
+        />
       )}
     </main>
   );

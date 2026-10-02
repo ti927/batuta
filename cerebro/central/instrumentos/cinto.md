@@ -24,7 +24,7 @@ Um instrumento é uma peça plugável, sempre com o mesmo encaixe. Duas coisas i
 ## Como usar (na tela)
 1. No time, crie o instrumento (escolha o tipo, preencha a configuração).
 2. **Pendure** o instrumento no cinto do agente que vai usá-lo.
-3. Se ele tem **segredo** (token/senha), aponte para uma **credencial** ou preencha o segredo (cofre).
+3. Se ele tem **segredo** (token/senha), preencha no próprio instrumento (vai cifrado).
 4. Explique no `tools.md` do agente **quando** e **como** usar.
 
 ## Os dois tipos: personalizado e pronto do Batuta

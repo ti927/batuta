@@ -19,7 +19,7 @@ import logging
 import uuid
 
 from fastapi import HTTPException
-from sqlalchemy import String, and_, cast, func, or_, select
+from sqlalchemy import String, cast, func, or_, select
 
 _log = logging.getLogger("batuta.mcp")
 # Mensagem honesta (§12-A): nunca despeja stack trace no Claude/consultor; o erro real
@@ -56,7 +56,6 @@ def relatar_erro_inesperado(e: BaseException, *, ferramenta: str, escrita: bool)
         f"(ferramenta '{ferramenta}')."
     )
 
-import credenciais_cofre as cofre_cred
 import diagnostico_execucao
 import instrumentos as encaixe
 from observabilidade.escritor import registrar_evento
@@ -569,60 +568,6 @@ def ver_uso(sessao, usuario, time_id) -> str:
 def listar_tipos_instrumento(sessao, usuario) -> str:
     # Catálogo é global; basta estar autenticado (o `_ferramenta` já garante o usuário).
     return json.dumps(catalogo_de_instrumentos(com_argumentos=True), ensure_ascii=False)
-
-
-@_ferramenta
-def listar_tipos_credencial(sessao, usuario) -> str:
-    # Catálogo global de tipos de credencial (basta estar autenticado). Sem segredo.
-    tipos = [
-        {
-            "tipo": t.tipo,
-            "nome": t.nome_exibicao,
-            "campos": [
-                {"nome": c.nome, "rotulo": c.rotulo, "secreto": c.secreto}
-                for c in t.campos
-            ],
-        }
-        for t in tc.tipos_disponiveis()
-    ]
-    return json.dumps({"tipos_credencial": tipos}, ensure_ascii=False)
-
-
-@_ferramenta
-def listar_credenciais(sessao, usuario, organizacao_id) -> str:
-    org_id = _uuid(organizacao_id)
-    if org_id is None:
-        return f"Id de organização inválido: {organizacao_id}."
-    mcp_escopo.organizacao_acessivel(sessao, usuario, org_id, "operador")
-    # As da organização + as da consultoria marcadas como compartilháveis (como a tela).
-    linhas = sessao.scalars(
-        select(Credencial)
-        .where(
-            or_(
-                Credencial.organizacao_id == org_id,
-                and_(
-                    Credencial.organizacao_id.is_(None),
-                    Credencial.compartilhavel.is_(True),
-                ),
-            )
-        )
-        .order_by(Credencial.nome)
-    ).all()
-    if not linhas:
-        return "Nenhuma credencial nesta organização."
-    itens = [
-        {
-            "id": str(c.id),
-            "nome": c.nome,
-            "tipo": c.tipo,
-            "da_consultoria": c.organizacao_id is None,
-            "usado_por": cofre_cred.usado_por(sessao, c.id),
-            "resumo": c.resumo,  # já mascarado (segredos = só últimos 4)
-            "preenchida": bool(c.dados_cifrado),
-        }
-        for c in linhas
-    ]
-    return json.dumps({"credenciais": itens}, ensure_ascii=False)
 
 
 @_ferramenta

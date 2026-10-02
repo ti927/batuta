@@ -16,7 +16,6 @@ import functools
 import json
 import os
 import logging
-import uuid
 
 from fastapi import HTTPException
 from sqlalchemy import delete, select
@@ -24,12 +23,10 @@ from sqlalchemy import delete, select
 _log = logging.getLogger("batuta.mcp")
 
 import auditoria
-import credenciais_cofre as cofre_cred
 import duplicacao_time
 import instrumentos as encaixe
 import mcp_escopo
 import segredos_instrumento as segredos
-import tipos_credencial as tc
 from criacao import servicos
 from mensageria.config import CHAVES_DO_AGENTE
 from criacao.ferramentas import _validar_gatilho
@@ -37,13 +34,12 @@ from criacao.servicos import ConflitoDominio
 from instrumentos.base import FalhaInstrumento
 from mcp_escopo import SemAcesso
 from mcp_ferramentas import (
-    ERRO_INESPERADO,
+    ERRO_INESPERADO,  # noqa: F401 — reexportado: os testes leem escrita.ERRO_INESPERADO
     _traduzir_acesso,
     _uuid,
     relatar_erro_inesperado,
 )
-from modelos import Credencial, Instrumento, Membro, Organizacao, Time
-from rotas.instrumentos import _validar_credencial
+from modelos import Instrumento, Membro, Organizacao, Time
 from sessao import CriadorDeSessao
 
 _RECALL_VALIDO = ("sempre", "sob_demanda")
@@ -609,75 +605,6 @@ def desativar_automacao(sessao, usuario, automacao_id) -> str:
     return f"Automação '{auto.nome}' desativada (desligada)."
 
 
-# ─────────────── Credenciais nomeadas (esqueleto — a IA NUNCA pluga o segredo) ───────────────
-# O Claude cria o esqueleto (nome+tipo) e aponta; o SEGREDO o consultor cola no cofre do
-# Batuta pela tela. Segue o princípio "a IA nunca pluga o token" e não passa segredo pelo
-# claude.ai. Só credenciais DA ORGANIZAÇÃO (as da consultoria são geridas só na tela).
-
-@_ferramenta_escrita
-def criar_credencial(sessao, usuario, organizacao_id, nome, tipo) -> str:
-    org_id = _uuid(organizacao_id)
-    if org_id is None:
-        return f"Id de organização inválido: {organizacao_id}."
-    nome = (nome or "").strip()
-    if not nome:
-        return "Dê um nome à credencial."
-    mcp_escopo.organizacao_acessivel(sessao, usuario, org_id, "operador")
-    if tc.obter_tipo(tipo) is None:
-        return f"Tipo de credencial desconhecido: {tipo!r}. Veja listar_tipos_credencial."
-    ja = sessao.scalar(
-        select(Credencial.id).where(
-            Credencial.organizacao_id == org_id, Credencial.nome == nome
-        )
-    )
-    if ja is not None:
-        return f"Já existe uma credencial chamada '{nome}' nesta organização."
-    cred = Credencial(organizacao_id=org_id, nome=nome, tipo=tipo, compartilhavel=False)
-    cred.resumo = cofre_cred.montar_resumo(tipo, {})  # esqueleto mascarado, SEM segredo
-    # Esqueleto = nenhum saco cifrado ainda. A coluna é NOT NULL (toda credencial da
-    # TELA nasce com segredo), então o vazio se escreve como "" — que todo o cofre já
-    # lê como "nada guardado" (`if not dados_cifrado: return {}`; `preenchida` False).
-    # Sem isto o INSERT violava a constraint e a ferramenta morria no erro genérico.
-    # Cifrar um saco vazio resolveria também, mas exigiria a chave-mestra do cofre,
-    # que este serviço não tem de propósito (least-privilege da Fatia 3a).
-    cred.dados_cifrado = ""
-    sessao.add(cred)
-    sessao.flush()
-    auditoria.registrar(
-        sessao, usuario=usuario, acao="credencial.criada", recurso_tipo="credencial",
-        recurso_id=cred.id, organizacao_id=org_id,
-        detalhe={"tipo": tipo, "nome": nome, "origem": "mcp"},
-    )
-    return (
-        f"Credencial '{nome}' ({tipo}) criada como esqueleto (id {cred.id}). "
-        "Agora cole os segredos no cofre do Batuta (tela de Credenciais da organização) — "
-        "a IA não pluga segredo. Depois é só apontar um instrumento para ela."
-    )
-
-
-@_ferramenta_escrita
-def remover_credencial(sessao, usuario, credencial_id) -> str:
-    cid = _uuid(credencial_id)
-    if cid is None:
-        return f"Id de credencial inválido: {credencial_id}."
-    cred = sessao.get(Credencial, cid)
-    if cred is None or cred.organizacao_id is None:
-        return "Não encontrei essa credencial (ou é da consultoria, gerida só na tela)."
-    mcp_escopo.organizacao_acessivel(sessao, usuario, cred.organizacao_id, "operador")
-    n = cofre_cred.usado_por(sessao, cred.id)
-    if n > 0:
-        return f"Credencial em uso por {n} instrumento(s). Troque-os antes de apagá-la."
-    nome = cred.nome
-    auditoria.registrar(
-        sessao, usuario=usuario, acao="credencial.removida", recurso_tipo="credencial",
-        recurso_id=cred.id, organizacao_id=cred.organizacao_id,
-        detalhe={"nome": nome, "origem": "mcp"},
-    )
-    sessao.delete(cred)
-    sessao.flush()
-    return f"Credencial '{nome}' removida."
-
-
 # ───────────────────────── Fatia 3b: config, referência, exclusão, duplicação, org ─────────────────────────
 
 @_ferramenta_escrita
@@ -732,29 +659,6 @@ def configurar_memoria_agente(sessao, usuario, agente_id, ativa, recall) -> str:
         detalhe={"ativa": bool(ativa), "recall": recall, "origem": "mcp"},
     )
     return f"Memória do agente '{agente.nome}' {'ligada' if ativa else 'desligada'} (recall: {recall})."
-
-
-@_ferramenta_escrita
-def apontar_credencial(sessao, usuario, instrumento_id, credencial_id) -> str:
-    iid = _uuid(instrumento_id)
-    if iid is None:
-        return f"Id de instrumento inválido: {instrumento_id}."
-    inst = mcp_escopo.instrumento_acessivel(sessao, usuario, iid, "operador")
-    org_id = auditoria.org_do_time(sessao, inst.time_id)
-    cid = None
-    if credencial_id and str(credencial_id).strip():
-        cid = _uuid(credencial_id)
-        if cid is None:
-            return f"Id de credencial inválido: {credencial_id}."
-    # Valida existência/acesso/tipo-aceito (HTTPException 422 → traduzida pelo decorator).
-    _validar_credencial(sessao, inst.tipo, org_id, cid)
-    inst.credencial_id = cid
-    sessao.flush()
-    return (
-        "Instrumento desvinculado da credencial."
-        if cid is None
-        else f"Instrumento '{inst.nome}' agora usa a credencial {cid}."
-    )
 
 
 @_ferramenta_escrita

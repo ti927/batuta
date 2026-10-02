@@ -427,39 +427,6 @@ export type RespostaTeste = {
   aviso_campos_resposta?: string;
 };
 
-// Caixa-forte de credenciais nomeadas (docs/CAIXA-FORTE-PLANO.md).
-export type CampoCredencial = {
-  nome: string;
-  rotulo: string;
-  secreto: boolean; // segredo → mascarado; identidade → visível
-};
-
-export type TipoCredencial = {
-  tipo: string;
-  nome_exibicao: string;
-  campos: CampoCredencial[];
-};
-
-// Resumo mascarado por campo: identidade → {secreto:false, valor}; segredo →
-// {secreto:true, ultimos4}. O valor pleno de um segredo nunca volta.
-export type CredencialCampoResumo = {
-  secreto: boolean;
-  valor?: string;
-  ultimos4?: string;
-};
-
-export type Credencial = {
-  id: string;
-  organizacao_id: string | null; // nulo = da consultoria
-  nome: string;
-  tipo: string;
-  resumo: Record<string, CredencialCampoResumo> | null;
-  compartilhavel: boolean;
-  usado_por: number;
-  criado_em: string;
-  atualizado_em: string;
-};
-
 // ─── Mensageria / Conversas (Fase 1) ───
 // (Nota: `MensagemConversa`, mais abaixo, é da IA criadora — outro conceito.)
 

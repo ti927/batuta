@@ -1,17 +1,15 @@
 """Testes do OAuth 'Conectar Google': módulo de troca/renovação de token, o refresh
-sob demanda (`garantir_token`) e as rotas iniciar/callback.
+sob demanda (`garantir_token`). As rotas iniciar/callback saíram em 2026-10-02
+(a página de chaves ficou só com as chaves de IA).
 
 Nenhuma rede real: o `httpx` de `google_oauth` é interceptado e, nos testes de rota,
 o próprio `google_oauth.conectar` é trocado por um dublê. O `state` é gerado pelo
 cofre real (COFRE_CHAVE_MESTRA vem do .env, como nos demais testes)."""
 
-import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import select
 
-import cofre
 import credenciais_cofre as cc
 import google_oauth as go
 from instrumentos.base import FalhaInstrumento
@@ -245,147 +243,6 @@ def test_token_com_folga_nao_alarma(monkeypatch):
     cred = _cred_google(expira=datetime.now(timezone.utc) + timedelta(hours=1))
     assert go.garantir_token(cred) == "ACCESS_ATUAL"
     assert eventos == []
-
-
-# ───────────────────────── rota: iniciar ────────────────────────────────────
-
-
-def test_iniciar_operador_recebe_url(cliente, entrar, dados):
-    entrar(dados["operador"])
-    org = dados["orgA"].id
-    r = cliente.post(f"/organizacoes/{org}/google/iniciar")
-    assert r.status_code == 200, r.text
-    url = r.json()["url"]
-    assert "accounts.google.com/o/oauth2" in url
-    assert "state=" in url
-
-
-def test_iniciar_observador_negado(cliente, entrar, dados):
-    entrar(dados["observador"])
-    org = dados["orgA"].id
-    r = cliente.post(f"/organizacoes/{org}/google/iniciar")
-    assert r.status_code == 403, r.text
-
-
-def test_iniciar_estranho_nao_ve_org(cliente, entrar, dados):
-    entrar(dados["estranho"])
-    org = dados["orgA"].id
-    r = cliente.post(f"/organizacoes/{org}/google/iniciar")
-    assert r.status_code == 404, r.text
-
-
-def test_iniciar_sem_config_responde_503(cliente, entrar, dados, monkeypatch):
-    monkeypatch.delenv("GOOGLE_CLIENT_ID")
-    entrar(dados["operador"])
-    org = dados["orgA"].id
-    r = cliente.post(f"/organizacoes/{org}/google/iniciar")
-    assert r.status_code == 503, r.text
-
-
-# ───────────────────────── rota: callback ───────────────────────────────────
-
-
-def _state(org_id, usuario_id) -> str:
-    return cofre.cifrar(json.dumps({"org": str(org_id), "usuario": str(usuario_id)}))
-
-
-def _mock_conectar(monkeypatch, *, email="dono@empresa.com", access="ACCESS9999",
-                   refresh="REFRESH1234"):
-    monkeypatch.setattr(
-        "google_oauth.conectar",
-        lambda code: {
-            "access_token": access,
-            "refresh_token": refresh,
-            "email": email,
-            "escopos": "openid email",
-            "expira_em": datetime.now(timezone.utc) + timedelta(hours=1),
-        },
-    )
-
-
-def _google_da_org(sessao, org_id):
-    return list(
-        sessao.scalars(
-            select(Credencial).where(
-                Credencial.organizacao_id == org_id, Credencial.tipo == "google"
-            )
-        ).all()
-    )
-
-
-def test_callback_cria_credencial_e_redireciona(cliente, dados, sessao, monkeypatch):
-    _mock_conectar(monkeypatch)
-    org = dados["orgA"].id
-    state = _state(org, dados["operador"].id)
-    r = cliente.get(
-        "/google/oauth/callback",
-        params={"code": "OCODE", "state": state},
-        follow_redirects=False,
-    )
-    assert r.status_code == 303, r.text
-    destino = r.headers["location"]
-    assert f"/organizacoes/{org}/chaves" in destino
-    assert "google=ok" in destino
-
-    creds = _google_da_org(sessao, org)
-    assert len(creds) == 1
-    c = creds[0]
-    assert c.nome == "Google: dono@empresa.com"
-    assert c.resumo["email"] == {"secreto": False, "valor": "dono@empresa.com"}
-    assert c.resumo["access_token"]["ultimos4"] == "9999"
-    assert "ACCESS9999" not in r.text  # token pleno nunca aparece
-
-
-def test_callback_reconexao_mesma_conta_nao_duplica(cliente, dados, sessao, monkeypatch):
-    org = dados["orgA"].id
-    _mock_conectar(monkeypatch, access="ACCESS_ANTIGO1111", refresh="REFRESH_A")
-    cliente.get("/google/oauth/callback",
-                params={"code": "C1", "state": _state(org, dados["operador"].id)},
-                follow_redirects=False)
-    _mock_conectar(monkeypatch, access="ACCESS_NOVO2222", refresh="REFRESH_B")
-    cliente.get("/google/oauth/callback",
-                params={"code": "C2", "state": _state(org, dados["operador"].id)},
-                follow_redirects=False)
-    creds = _google_da_org(sessao, org)
-    assert len(creds) == 1  # atualizou, não duplicou
-    saco = cc.decifrar(creds[0])
-    assert saco["access_token"] == "ACCESS_NOVO2222"
-    assert saco["refresh_token"] == "REFRESH_B"
-
-
-def test_callback_state_invalido_da_400(cliente, dados, monkeypatch):
-    _mock_conectar(monkeypatch)
-    r = cliente.get(
-        "/google/oauth/callback",
-        params={"code": "OCODE", "state": "lixo-nao-cifrado"},
-        follow_redirects=False,
-    )
-    assert r.status_code == 400, r.text
-
-
-def test_callback_usuario_sem_permissao_redireciona_erro(cliente, dados, monkeypatch):
-    _mock_conectar(monkeypatch)
-    org = dados["orgA"].id
-    state = _state(org, dados["observador"].id)
-    r = cliente.get(
-        "/google/oauth/callback",
-        params={"code": "OCODE", "state": state},
-        follow_redirects=False,
-    )
-    assert r.status_code == 303
-    assert "google=erro" in r.headers["location"]
-
-
-def test_callback_erro_do_google_redireciona_com_motivo(cliente, dados, monkeypatch):
-    org = dados["orgA"].id
-    state = _state(org, dados["operador"].id)
-    r = cliente.get(
-        "/google/oauth/callback",
-        params={"state": state, "error": "access_denied", "error_description": "usuário recusou"},
-        follow_redirects=False,
-    )
-    assert r.status_code == 303
-    assert "google=erro" in r.headers["location"]
 
 
 # ── Nenhum escopo RESTRITO (2026-09-22) ────────────────────────────────────────

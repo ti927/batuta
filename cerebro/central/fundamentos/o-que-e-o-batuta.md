@@ -25,7 +25,7 @@ toca cada instrumento — você conduz.
 1. Crie (ou escolha) uma **Organização** (a empresa).
 2. Dentro dela, crie um **Time** para um conjunto de tarefas relacionadas.
 3. Monte os **Agentes** e o **fluxo** (a Automação) — a jeito, ou conversando com a **IA criadora**.
-4. Ligue as **conexões** (chaves de IA, credenciais) e **ative** quando estiver pronto.
+4. Ligue as **conexões** (chaves de IA, senhas dos instrumentos) e **ative** quando estiver pronto.
 
 ## Exemplos
 - Um time de marketing: idealizador → redator → revisor → aprovação → publica no blog.

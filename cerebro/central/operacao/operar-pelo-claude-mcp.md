@@ -42,8 +42,8 @@ de forma permitida pela Anthropic (o app do usuário é que aciona a ferramenta)
 - **Login real e escopo por papel:** você só enxerga e mexe nas suas organizações/times,
   conforme seu papel (observador lê; operador cria/edita; admin cria organização/time e
   exclui).
-- **A IA nunca pluga segredo:** ao criar credenciais ou conectores, o segredo (senha,
-  chave de API) fica **pendente** — você o cola no **cofre do Batuta pela tela**, nunca
+- **A IA nunca pluga segredo:** ao criar instrumentos ou conectores, o segredo (senha,
+  chave de API) fica **pendente** — você o cola **no próprio instrumento, pela tela**, nunca
   no chat. Segredo não passa pelo claude.ai.
 - **Ativar não tem mais trava:** o Batuta não recusa mais uma automação com ação
   irreversível. Quem segura uma ação que precisa de gente é o agente, pelo instrumento

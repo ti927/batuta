@@ -112,7 +112,7 @@ Quando um fluxo morreu no meio, **não mande refazer tudo**: oriente o consultor
 que ele faz (se publica, publica de novo). Você **não tem ferramenta** para disparar isso; é ação de tela. Um fluxo "parado" quase nunca é erro: são **três** as pausas legítimas — `aguardando você` (o agente pediu aprovação e espera uma pessoa), `aguardando o tempo` (passo **Esperar**; volta sozinha na data mostrada) e `rodando outra automação` (passo **Chamar outra automação**; abra o passo para ver o rastro da chamada). Só a primeira pede algo de alguém.
 O diagnóstico já entrega, quando dá para saber: **qual instrumento** falhou (pelo nome que o próprio erro
 cita), **qual agente** o carrega e uma **ação sugerida derivada do tipo de erro** — arquivo grande demais
-pede ajuste de configuração, não cadastro de credencial. Use essas referências em vez de deduzir pelo
+pede ajuste de configuração, não um segredo novo. Use essas referências em vez de deduzir pelo
 instrumento que aparece por último no passo: o que falhou pode nem ter chegado a registrar passo, se o
 agente estourou antes.
 Quando o consultor estiver **ajustando um agente** (mexendo no markdown, trocando um instrumento),

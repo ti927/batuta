@@ -1168,7 +1168,7 @@ def montar_ferramentas(ctx: ContextoCriacao) -> list[StructuredTool]:
 
     def consultar_conhecimento(topico: str) -> str:
         """Consulta a Central de Conhecimento do Batuta — o manual dos recursos
-        (instrumentos, automações, gatilhos, portão de aprovação, chaves, credenciais,
+        (instrumentos, automações, gatilhos, portão de aprovação, chaves de IA, segredos de instrumento,
         mensageria/Telegram, memória do agente, etc.). USE quando não souber COMO um
         recurso funciona ou COMO orientar o consultor sobre ele — em vez de adivinhar de
         memória. Devolve os capítulos mais relevantes ao `topico`; cada um traz uma seção

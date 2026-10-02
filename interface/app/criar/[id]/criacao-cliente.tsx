@@ -125,9 +125,8 @@ export function CriacaoCliente({
             <div className="mt-6 flex items-start gap-2 rounded-lg border border-[#F3D9A8] bg-[#FDF6EA] px-4 py-3 text-sm text-[#8A5A12]">
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <span>
-                Faltam {pendentes.length} segredo(s) para os instrumentos funcionarem
-                (senhas/tokens). Cadastre em <strong>Chaves e credenciais</strong> (no
-                menu lateral) ou direto no instrumento, na tela do time.
+                Faltam {pendentes.length} senha(s) para os instrumentos funcionarem.
+                Preencha em cada instrumento, na tela do time.
               </span>
             </div>
           )}

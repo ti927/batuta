@@ -28,8 +28,7 @@ descrições de ferramenta escritas por terceiros.
 1. Em **Instrumentos → 🌟 Criar instrumento**, escolha **Um servidor MCP** (é um instrumento
    personalizado, criado no Construtor — não está na lista de instrumentos prontos).
 2. Em **"Como o Batuta se conecta"**, cole o **endereço** do servidor e escolha **como ele pede
-   identificação** (tabela abaixo). Tudo fica **dentro do instrumento** — não é mais preciso criar
-   credencial na central.
+   identificação** (tabela abaixo). Tudo fica **dentro do instrumento**.
 3. Salve e use **"Conectar e listar ferramentas"**: o Batuta conversa com o servidor, descobre o tipo
    de conexão e mostra o que ele oferece.
 4. **Marque as ferramentas que entram no cinto** e, em cada uma, escolha **só lê** ou **altera
@@ -118,8 +117,8 @@ A cópia **não leva segredo nenhum**: endereço, token, senha, chave, certifica
   sem ele (servidor que exija certificado também no token ainda não é coberto).
 
 ## Para a IA
-- **Ao criar** (`configurar_instrumento` tipo `conectar_mcp`): a identificação mora **no instrumento**
-  — não crie credencial na central. Escolha `auth_modo` pelo que o servidor pede: `url_secreta`
+- **Ao criar** (`configurar_instrumento` tipo `conectar_mcp`): a identificação mora **no instrumento**.
+  Escolha `auth_modo` pelo que o servidor pede: `url_secreta`
   (Make/Zapier com a chave no endereço), `bearer`, `cabecalho` (+ `auth_nome`), `query` (+
   `auth_nome`), `basic` (+ `auth_usuario`; WordPress), `oauth_login` (o consultor clica
   **Conectar** na tela depois de salvar — você não faz login), `oauth_cliente` (+

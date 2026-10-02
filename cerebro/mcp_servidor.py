@@ -63,9 +63,9 @@ mcp = FastMCP(
         "sugerida — e traz avisos que o texto do agente esconde (ex.: uma ferramenta que "
         "respondeu falha e o agente narrou sucesso). Em dúvida de COMO um recurso funciona, "
         "use `consultar_conhecimento` em vez de adivinhar; para montar conector, consulte antes.\n"
-        "SEGURANÇA (respeite sempre): (1) você NUNCA pluga segredo — ao criar credenciais/"
-        "conectores, deixa o segredo pendente e orienta o consultor a colá-lo no cofre do "
-        "Batuta pela tela. (2) APROVAÇÃO é do AGENTE: não há trava de ativação nem portão no "
+        "SEGURANÇA (respeite sempre): (1) você NUNCA pluga segredo — ao criar instrumentos/"
+        "conectores, deixa o segredo pendente e orienta o consultor a colá-lo no próprio "
+        "instrumento, pela tela. (2) APROVAÇÃO é do AGENTE: não há trava de ativação nem portão no "
         "desenho — quem segura uma ação até uma pessoa confirmar é o agente, com o instrumento "
         "`pedir_aprovacao` no cinto e a regra escrita no markdown dele. Ao montar um time com "
         "ação irreversível, confira isso ANTES de sugerir ativar. E o markdown desse agente "
@@ -332,7 +332,7 @@ async def listar_instrumentos(time_id: str) -> str:
 
 @mcp.tool()
 async def ver_instrumento(instrumento_id: str) -> str:
-    """(Aceita o id completo ou os 8 primeiros caracteres que aparecem na tela.) Mostra um instrumento a fundo: configuração pública, credencial apontada, segredos
+    """(Aceita o id completo ou os 8 primeiros caracteres que aparecem na tela.) Mostra um instrumento a fundo: configuração pública, segredos
     preenchidos e os que ainda FALTAM para ele funcionar, o `escopo` (time ou
     organização) e `usado_por` (times, agentes, automações e pedidos de aprovação que
     dependem dele). Nunca devolve o valor de um segredo."""
@@ -344,24 +344,9 @@ async def ver_instrumento(instrumento_id: str) -> str:
 @mcp.tool()
 async def consultar_conhecimento(topico: str) -> str:
     """Consulta a Central de Conhecimento do Batuta — o manual dos recursos (instrumentos,
-    automações, gatilhos, condições e ramos, aprovação, chaves, credenciais, mensageria, memória do
+    automações, gatilhos, condições e ramos, aprovação, chaves de IA, segredos de instrumento, mensageria, memória do
     agente, etc.). Use quando não souber COMO um recurso funciona, em vez de adivinhar."""
     return await anyio.to_thread.run_sync(mcp_ferramentas.consultar_conhecimento, _sub(), topico)
-
-
-@mcp.tool()
-async def listar_tipos_credencial() -> str:
-    """Lista os tipos de credencial nomeada e seus campos (quais são de identidade e quais
-    são secretos). Use para saber o que uma credencial de cada tipo precisa."""
-    return await anyio.to_thread.run_sync(mcp_ferramentas.listar_tipos_credencial, _sub())
-
-
-@mcp.tool()
-async def listar_credenciais(organizacao_id: str) -> str:
-    """Lista as credenciais nomeadas de uma organização (mascaradas — segredos só aparecem
-    com os 4 últimos dígitos), com o tipo, se já está preenchida e quantos instrumentos a
-    usam."""
-    return await anyio.to_thread.run_sync(mcp_ferramentas.listar_credenciais, _sub(), organizacao_id)
 
 
 @mcp.tool()
@@ -469,8 +454,7 @@ async def configurar_instrumento(
     Construtor; 'chamar_api_rest' não se cria mais e é recusado). Este `configurar_instrumento`
     é para os tipos do catálogo e para o servidor MCP. Depois de criar, TESTE você mesmo com
     `testar_instrumento`.
-    SERVIDOR MCP (`conectar_mcp`): a identificação mora NO INSTRUMENTO (não crie
-    credencial na central). Escolha `auth_modo` pelo que o servidor pede: 'url_secreta'
+    SERVIDOR MCP (`conectar_mcp`): a identificação mora NO INSTRUMENTO. Escolha `auth_modo` pelo que o servidor pede: 'url_secreta'
     (Make/Zapier: a chave está no endereço), 'bearer' (token), 'cabecalho' (+ `auth_nome`,
     ex.: X-API-Key), 'query' (+ `auth_nome` do parâmetro), 'basic' (+ `auth_usuario`;
     WordPress com senha de aplicativo — endereço /wp-json/mcp/mcp-adapter-default-server),
@@ -748,21 +732,6 @@ async def desativar_automacao(automacao_id: str) -> str:
     return await anyio.to_thread.run_sync(escrita.desativar_automacao, _sub(), automacao_id)
 
 
-@mcp.tool()
-async def criar_credencial(organizacao_id: str, nome: str, tipo: str) -> str:
-    """Cria o ESQUELETO de uma credencial nomeada (nome + tipo) numa organização. NÃO
-    recebe segredos: o consultor cola a senha/token no cofre do Batuta pela tela. Veja os
-    tipos e campos em `listar_tipos_credencial`. Depois um instrumento pode apontar para
-    esta credencial. (A IA nunca pluga o segredo.)"""
-    return await anyio.to_thread.run_sync(escrita.criar_credencial, _sub(), organizacao_id, nome, tipo)
-
-
-@mcp.tool()
-async def remover_credencial(credencial_id: str) -> str:
-    """Remove uma credencial da organização (bloqueada se algum instrumento ainda a usa)."""
-    return await anyio.to_thread.run_sync(escrita.remover_credencial, _sub(), credencial_id)
-
-
 # ───────────────────────── Fatia 3b: config, referência, exclusão, duplicação, org ─────────────────────────
 
 @mcp.tool()
@@ -800,17 +769,6 @@ async def configurar_ritmo_agente(agente_id: str, ajustes: dict | None = None) -
     podem ter um teto, e ficam no fluxo. Passá-los aqui é recusado."""
     return await anyio.to_thread.run_sync(
         escrita.configurar_ritmo_agente, _sub(), agente_id, ajustes
-    )
-
-
-@mcp.tool()
-async def apontar_credencial(instrumento_id: str, credencial_id: str | None = None) -> str:
-    """Faz um instrumento USAR uma credencial nomeada (por id) — o jeito de ligar um
-    conector/instrumento ao segredo que o consultor colou no cofre. Passe `credencial_id`
-    vazio para desvincular. A credencial precisa existir, ser da organização e de um tipo
-    que o instrumento aceita."""
-    return await anyio.to_thread.run_sync(
-        escrita.apontar_credencial, _sub(), instrumento_id, credencial_id
     )
 
 

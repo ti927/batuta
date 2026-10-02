@@ -92,9 +92,7 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | Capítulo | slug | O que cobre | Recurso | Escrita |
 |---|---|---|---|---|
 | Chaves de IA | `segredos/chaves-de-ia` | Pool por provedor (org → consultoria) | ✅ | ✍️ |
-| Credenciais nomeadas | `segredos/credenciais-nomeadas` | Caixa-forte tipada; reuso entre instrumentos | ✅ | ✍️ |
-| Segredos de instrumento | `segredos/segredos-de-instrumento` | Inline × credencial × pool | ✅ | ✍️ |
-| Conectar Google (OAuth) | `segredos/conectar-google` | Conta Google por OAuth (Gmail/Agenda/Drive/Search Console) | ✅ | ✍️ |
+| Segredos de instrumento | `segredos/segredos-de-instrumento` | Todo segredo mora no próprio instrumento; prontos de IA usam a chave de IA | ✅ | ✍️ |
 | Certificado digital (mTLS) | `segredos/certificado-digital-mtls` | Pix, boleto e APIs bancárias; upload do .pfx/.pem + token OAuth renovado sozinho | ✅ | ✍️ |
 
 ## 6. Mensageria & Conversação

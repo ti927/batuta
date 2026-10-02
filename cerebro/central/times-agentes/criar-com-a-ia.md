@@ -31,7 +31,7 @@ peças reais. É uma **conversa única e contínua** sobre aquele time — não 
 
 ## Limites e cuidados
 - Ela **não toca em segredos**: monta o agente de Instagram/WordPress e dá a ele o instrumento de pedir aprovação, mas quem
-  **liga a credencial/token é você**, na tela. Ela avisa o que ficou pendente — não diz "pronto/no ar" sem
+  **preenche a senha/token no instrumento é você**, na tela. Ela avisa o que ficou pendente — não diz "pronto/no ar" sem
   isso.
 - Ela **não ativa** ações irreversíveis por conta própria, e **não remove** peças — remover é na tela.
 - Quem **ativa** a automação é você. Ela sinaliza quando dá para ativar.
@@ -39,10 +39,10 @@ peças reais. É uma **conversa única e contínua** sobre aquele time — não 
 ## Para a IA
 Você opera as linhas reais do time (sem rascunho). Pergunte **qual automação** quando ambíguo; crie/renomeie
 quando pedido; para dúvida de recurso, **consulte a Central de Conhecimento** (a ferramenta
-`consultar_conhecimento`). Nunca afirme que algo está ligado/ativo sem o humano ter conectado a
-credencial e ativado.
+`consultar_conhecimento`). Nunca afirme que algo está ligado/ativo sem o humano ter preenchido o
+segredo no instrumento e ativado.
 
 ## Relacionado
 - [[times-agentes/editar-agente]]
 - [[fundamentos/o-que-e-o-batuta]]
-- [[segredos/credenciais-nomeadas]]
+- [[segredos/segredos-de-instrumento]]

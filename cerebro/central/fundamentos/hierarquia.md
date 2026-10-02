@@ -17,7 +17,7 @@ Automações).
 Entender a hierarquia é o que te ajuda a saber **onde cada coisa mora** e **o que fica isolado do quê**.
 
 - **Usuário** — uma pessoa com conta; cria organizações ou é convidada para elas.
-- **Organização** — a empresa. É o espaço fechado onde vivem os times, as chaves, as credenciais, os
+- **Organização** — a empresa. É o espaço fechado onde vivem os times, as chaves de IA, os
   membros e a auditoria. Uma organização **não enxerga** outra.
 - **Time** — a unidade de trabalho, montada para um conjunto de tarefas. Dentro dele ficam os agentes,
   os instrumentos, as automações e (no futuro) a biblioteca do time.
@@ -26,18 +26,18 @@ Entender a hierarquia é o que te ajuda a saber **onde cada coisa mora** e **o q
 ## Como usar (na tela)
 1. Escolha a Organização ativa (seletor no rodapé da barra lateral).
 2. Entre num Time (ou crie um) para ver seus agentes, instrumentos e automações.
-3. Chaves e credenciais são **da Organização** (valem para todos os times dela).
+3. As chaves de IA são **da Organização** (valem para todos os times dela).
 
 ## Exemplos
 - Consultoria com 3 clientes → 3 organizações; cada uma com seus times (marketing, financeiro…).
 - Um mesmo time pode ter **várias automações** (fluxos independentes, cada um com seu gatilho).
 
 ## Limites e cuidados
-- **Isolamento por organização** é rígido: chaves, credenciais e dados de uma org não vazam para outra.
+- **Isolamento por organização** é rígido: chaves, segredos e dados de uma org não vazam para outra.
 - Um **instrumento é do time** — para usá-lo em outro time, recria-se lá (ou duplica-se o time).
 
 ## Para a IA
-Ao montar/editar, respeite o escopo: instrumento e agente são do **mesmo time**; credenciais e chaves
+Ao montar/editar, respeite o escopo: instrumento e agente são do **mesmo time** (ou da organização, quando marcado assim); as chaves de IA
 são da **organização**. Nunca proponha apontar recursos entre organizações diferentes. Ao duplicar um
 time, os ids mudam e os canais nascem **desconectados**.
 

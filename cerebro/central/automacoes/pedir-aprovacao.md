@@ -43,7 +43,7 @@ execução ficava órfã. Agora vale uma regra só: **quem recebe é quem aprova
   aparece no cabeçalho da conversa. A pessoa precisa ter dado **/start** no bot antes;
   sem isso o Telegram recusa e o instrumento diz exatamente isso.
 - **Aprovador diferente de quem o canal já atende?** Crie um **segundo** instrumento de
-  Telegram (pode apontar para a mesma credencial, sem recolar o token) com outro
+  Telegram (com o mesmo token do bot) com outro
   Destinatário, e aponte a aprovação para ele. Um canal = um destino.
 
 ### Vindo de um time que pedia aprovação "na mão"

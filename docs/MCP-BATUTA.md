@@ -38,7 +38,7 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
 - **Matriz de papéis:** observador lê; **operador** cria/edita; **admin** cria
   organização/time, duplica e exclui.
 
-## As ferramentas (67)
+## As ferramentas (62)
 
 - **Leitura/diagnóstico:** `listar_organizacoes`, `listar_times`, `descrever_time`,
   `listar_agentes`, `ver_agente`, `ver_memoria_agente`, `listar_instrumentos`/
@@ -56,11 +56,10 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
   `testar_operacao_conector`/`testar_instrumento`/`ver_teste_instrumento`, `encaixar_instrumento`/`desencaixar_instrumento`,
   `criar_automacao`/`renomear_automacao`/`montar_cadeia`/`definir_gatilho`/
   `ativar_automacao`/`desativar_automacao`. Reusa a porta validada `criacao/servicos.py`.
-- **Credenciais/chaves (esqueleto — a IA NUNCA recebe segredo):** `listar_tipos_credencial`,
-  `listar_credenciais` (mascarado), `ver_chaves_de_ia` (quais provedores têm chave, por
-  existência — não decifra), `criar_credencial` (esqueleto), `remover_credencial`.
+- **Chaves de IA (a IA NUNCA recebe segredo):** `ver_chaves_de_ia` (quais provedores têm
+  chave, por existência — não decifra).
 - **Config/referência/exclusão/duplicação/org:** `configurar_memoria_agente`,
-  `apontar_credencial` (instrumento→credencial), `duplicar_time`, `excluir_time`/
+  `duplicar_time`, `excluir_time`/
   `excluir_automacao`/`excluir_instrumento`, `criar_organizacao`/`excluir_organizacao`
   (esta só apaga organização **vazia** — nunca em cascata).
 - **Quadros do cérebro da organização (2026-09-24, `docs/CEREBRO-PLANO.md` §7), 13
@@ -81,7 +80,7 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
   do Planilhas UMA vez. `testar_link_quadro` — o que o painel recebe, pelo MESMO código da rota pública
   (`rotas.quadros_publico.ler_linhas`/`ler_totais`), pela URL inteira ou por `link_id` + `consulta`; não
   conta leitura nem gasta o limite do link. O risco aceito: o link fica na conversa do claude.ai. Trocar
-  link segue só pela tela. **Total: 67 ferramentas.**
+  link segue só pela tela. **Total: 62 ferramentas.** (Eram 67; em 2026-10-02 saíram as 5 de credencial nomeada — a página de chaves ficou só com as chaves de IA e todo segredo de plataforma mora no próprio instrumento.)
 - **Modelos (2026-09-29):** as docstrings de `criar_agente`/`editar_agente` passaram a listar os modelos
   (inclusive `claude-sonnet-5-5` e `claude-opus-5-5`, em validação) e a mandar a IA ao capítulo
   `times-agentes/agente` da Central, com preços e quando usar cada um. Antes diziam só "senão usa o padrão"
@@ -117,8 +116,8 @@ erros de domínio/acesso em texto humano (nunca stack trace — §12-A).
 
 - **Login real** por consultor; fim do auto-aprovado.
 - **Escopo por papel**, checado ao vivo a cada chamada (revogação imediata).
-- **A IA nunca pluga segredo:** credenciais e conectores são criados como esqueleto; o
-  segredo o consultor cola no **cofre do Batuta pela tela**. Nada de senha/chave passa pelo
+- **A IA nunca pluga segredo:** instrumentos e conectores são criados com o segredo
+  pendente; o consultor o cola **no próprio instrumento, pela tela**. Nada de senha/chave passa pelo
   claude.ai. (Decisão do maestro, 2026-08-21.)
 - **Least-privilege:** o 2º serviço **não** recebe a chave-mestra do cofre —
   `ver_chaves_de_ia` confere existência sem decifrar. **Isso tem consequência prática:**

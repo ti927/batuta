@@ -6,11 +6,9 @@ import { Lock } from "lucide-react";
 import {
   api,
   mensagemDeErro,
-  type Credencial,
   type Instrumento,
   type ModelosDisponiveis,
   type Time,
-  type TipoCredencial,
   type TipoInstrumento,
 } from "@/lib/api";
 import {
@@ -468,7 +466,7 @@ function CampoConfigInput({
       {campo.compartilhada && (
         <span className="text-xs font-normal text-muted-foreground">
           Opcional: em branco, usa a chave de {campo.servico} cadastrada em Chaves
-          e credenciais da organização. Preencha só para uma chave exclusiva deste
+          de IA da organização. Preencha só para uma chave exclusiva deste
           instrumento.
         </span>
       )}
@@ -532,15 +530,6 @@ export function FormularioInstrumento({
   // Instrumento da organização vale para todos os times: só admin muda.
   const bloqueado = daOrganizacao && !souAdmin;
 
-  // Caixa-forte: credencial nomeada da central que este instrumento usa (ou null
-  // = segredo próprio inline). As credenciais disponíveis e seus tipos são
-  // buscados sob demanda (a tela é uma ilha cliente; evita threading pelos
-  // servidores). A GET é operador+ — quem edita instrumento já tem o papel.
-  const [credencialId, setCredencialId] = useState<string | null>(
-    instrumento?.credencial_id ?? null,
-  );
-  const [credenciais, setCredenciais] = useState<Credencial[]>([]);
-  const [tiposCredencial, setTiposCredencial] = useState<TipoCredencial[]>([]);
   // Provedores com chave na org — para um campo de modelo de IA (ui:modelo_ia) só
   // oferecer modelos cujo provedor tem chave. Fallback (falha/carregando): mostra todos.
   const [disponiveis, setDisponiveis] = useState<ProvedoresDisponiveis>();
@@ -624,29 +613,6 @@ export function FormularioInstrumento({
     };
   }, [time.organizacao_id]);
 
-  useEffect(() => {
-    let ativo = true;
-    (async () => {
-      try {
-        const [creds, tiposC] = await Promise.all([
-          api.get<Credencial[]>(
-            `/organizacoes/${time.organizacao_id}/credenciais`,
-          ),
-          api.get<TipoCredencial[]>(`/credenciais/tipos`),
-        ]);
-        if (ativo) {
-          setCredenciais(creds);
-          setTiposCredencial(tiposC);
-        }
-      } catch {
-        // Sem credenciais disponíveis: o seletor simplesmente não aparece.
-      }
-    })();
-    return () => {
-      ativo = false;
-    };
-  }, [time.organizacao_id]);
-
   const tipoAtual = tipos.find((t) => t.tipo === tipoSel);
   const ehMCP = tipoSel === "conectar_mcp";
   // O modo que está salvo (para saber se a pessoa trocou de modo nesta edição).
@@ -656,18 +622,6 @@ export function FormularioInstrumento({
     criando,
   );
   const deps = tipoAtual?.dependencias ?? null;
-  const aceitos = tipoAtual?.tipos_credencial_aceitos ?? [];
-  const aceitaCredencial = aceitos.length > 0;
-  const credenciaisCompat = credenciais.filter((c) => aceitos.includes(c.tipo));
-  // Campos que a credencial selecionada fornece — ocultados do formulário e
-  // omitidos da config (o valor vem da credencial na borda).
-  const credSelecionada = credenciais.find((c) => c.id === credencialId) ?? null;
-  const camposCobertos = new Set<string>(
-    credSelecionada
-      ? (tiposCredencial.find((t) => t.tipo === credSelecionada.tipo)?.campos ?? [])
-          .map((c) => c.nome)
-      : [],
-  );
 
   async function salvar() {
     if (!nome.trim()) {
@@ -678,7 +632,7 @@ export function FormularioInstrumento({
       // Trocar de modo sem preencher o segredo do modo novo faria o Batuta usar o
       // segredo do modo anterior (a senha virando valor de cabeçalho, por exemplo).
       const guardados = instrumento?.segredos ?? {};
-      if (!camposCobertos.has("url") && !valores.url?.trim() && !guardados.url) {
+      if (!valores.url?.trim() && !guardados.url) {
         setErro("Preencha o endereço do servidor.");
         return;
       }
@@ -687,7 +641,7 @@ export function FormularioInstrumento({
         return;
       }
       const exigido = SEGREDO_DO_MODO_MCP[valores.auth_modo ?? ""];
-      if (exigido && !camposCobertos.has(exigido[0]) && !valores[exigido[0]]?.trim()) {
+      if (exigido && !valores[exigido[0]]?.trim()) {
         if (valores.auth_modo !== modoSalvoMCP || !guardados[exigido[0]]) {
           setErro(`Preencha ${exigido[1]} em “Como o Batuta se conecta”.`);
           return;
@@ -698,9 +652,6 @@ export function FormularioInstrumento({
     // Segredo preenchido vai cifrado; segredo em branco é OMITIDO (mantém).
     const config: Record<string, unknown> = {};
     for (const campo of camposDoTipo(tipoAtual)) {
-      // Campo fornecido pela credencial da central: não vai na config (a borda
-      // injeta o valor da credencial na execução).
-      if (camposCobertos.has(campo.nome)) continue;
       const bruto = (valores[campo.nome] ?? "").trim();
       if (campo.secreto) {
         if (bruto) config[campo.nome] = bruto;
@@ -739,21 +690,18 @@ export function FormularioInstrumento({
     }
     setSalvando(true);
     try {
-      const credencial_id = aceitaCredencial ? credencialId : null;
       const salvo = criando
         ? await api.post<Instrumento>(`/times/${time.id}/instrumentos`, {
             nome: nome.trim(),
             tipo: tipoSel,
             configuracao: config,
             icone,
-            credencial_id,
             escopo,
           })
         : await api.put<Instrumento>(`/instrumentos/${instrumento.id}`, {
             nome: nome.trim(),
             configuracao: config,
             icone,
-            credencial_id,
             ...(souAdmin ? { escopo } : {}),
           });
       setErro(null);
@@ -795,7 +743,6 @@ export function FormularioInstrumento({
           onChange={(e) => {
             const novo = e.target.value;
             setTipoSel(novo);
-            setCredencialId(null); // credencial pode não servir ao novo tipo
             // Tipo novo → semeia os padrões dele (some o estado do tipo anterior).
             setValores(
               semearMCP(valoresIniciais(tipos.find((t) => t.tipo === novo), null), novo, null),
@@ -819,48 +766,14 @@ export function FormularioInstrumento({
         <p className="text-xs text-muted-foreground">{tipoAtual.descricao}</p>
       )}
 
-      {ehMCP && credSelecionada && (
-        <Aviso variant="info" className="text-xs">
-          Usa a credencial “{credSelecionada.nome}” da central (vai para dentro do
-          instrumento na migração).
-        </Aviso>
-      )}
-
-      {aceitaCredencial && !ehMCP && (
-        <Label className="flex-col items-start gap-1">
-          <span className="flex items-center gap-1.5">
-            <Lock className="size-3 text-muted-foreground" />
-            Credencial da central
-          </span>
-          <Select
-            value={credencialId ?? ""}
-            onChange={(e) => setCredencialId(e.target.value || null)}
-          >
-            <option value="">Usar segredo próprio (preencher abaixo)</option>
-            {credenciaisCompat.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-                {c.organizacao_id === null ? " (consultoria)" : ""}
-              </option>
-            ))}
-          </Select>
-          <span className="text-xs font-normal text-muted-foreground">
-            {credencialId
-              ? "Os campos fornecidos por esta credencial ficam ocultos — para trocá-los, edite a credencial em Chaves e credenciais."
-              : "Aponte para uma credencial nomeada da central (troca num lugar só) ou preencha um segredo próprio abaixo."}
-          </span>
-        </Label>
-      )}
-
-      {(tipoAtual?.campos_secretos?.length ?? 0) > 0 && !credencialId && (
+      {(tipoAtual?.campos_secretos?.length ?? 0) > 0 && (
         <Aviso variant="atencao" className="text-xs">
           Os campos com cadeado são secretos: vão guardados cifrados e nunca são
           reexibidos. Ao editar, deixe um secreto em branco para manter o atual.
         </Aviso>
       )}
 
-      {camposDoTipo(tipoAtual).filter((campo) => !camposCobertos.has(campo.nome))
-        .length > 0 && (
+      {camposDoTipo(tipoAtual).length > 0 && (
         <Aviso variant="info" className="text-xs">
           O que você preenche aqui vale como está — o agente <strong>não</strong>{" "}
           troca esses valores pelo texto dele. Na hora de usar o instrumento, ele só
@@ -874,14 +787,12 @@ export function FormularioInstrumento({
           mudar={(campo, v) => setValores((atual) => ({ ...atual, [campo]: v }))}
           guardados={instrumento?.segredos ?? {}}
           modoSalvo={modoSalvoMCP}
-          cobertos={camposCobertos}
           instrumentoId={instrumento?.id ?? null}
           conexao={instrumento?.conexao ?? null}
         />
       )}
 
       {camposDoTipo(tipoAtual)
-        .filter((campo) => !camposCobertos.has(campo.nome))
         .filter((campo) => !(ehMCP && CAMPOS_CONEXAO_MCP.has(campo.nome)))
         .map((campo) => (
           <CampoConfigInput

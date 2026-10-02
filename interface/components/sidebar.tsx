@@ -193,7 +193,7 @@ export function Sidebar({
               Icone={Key}
               ativo={ativo(`/organizacoes/${org.id}/chaves`)}
             >
-              Chaves e credenciais
+              Chaves de IA
             </ItemNav>
             <ItemNav
               href={`/organizacoes/${org.id}/configuracoes`}

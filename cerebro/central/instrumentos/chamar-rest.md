@@ -42,7 +42,7 @@ registro. O endereço, o método e os cabeçalhos são fixos (config); a IA pass
   instrumento (a de servidor é retentável).
 - Não coloque segredos nos cabeçalhos fixos — use o campo de token.
 - **API de banco** (Pix, boleto) exige mais do que token: pede um **certificado digital** na conexão.
-  Isso não se configura aqui — cadastre uma credencial do tipo certificado e aponte para ela; o token
+  Monte como conector no Construtor e suba o certificado no passo de identificação; o token
   de acesso, quando o banco pedir, é obtido e renovado sozinho. Ver
   [[segredos/certificado-digital-mtls]].
 - **Respostas grandes custam tokens.** A resposta inteira é reenviada ao agente a cada passo do fluxo. Uma

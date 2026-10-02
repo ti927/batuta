@@ -33,7 +33,7 @@ chave da **consultoria** (fallback).
   um é recusado, dizendo qual chave falta. A tela de chaves mostra o que cada chave libera.
 
 ## Como usar (na tela)
-1. Em **Chaves e credenciais** da organização, cadastre a chave de cada provedor que for usar.
+1. Em **Chaves de IA** da organização, cadastre a chave de cada provedor que for usar.
 2. A chave vai **cifrada** e nunca é reexibida (só os últimos dígitos).
 3. Escolha o **modelo** de IA em cada agente — o provedor daquele modelo define qual chave é usada.
 
@@ -55,6 +55,5 @@ reusa o pool (ex.: imagem→OpenAI) e a org já tem a chave, não acuse falta de
 vê nem pede em texto; oriente a cadastrar na tela.
 
 ## Relacionado
-- [[segredos/credenciais-nomeadas]]
 - [[segredos/segredos-de-instrumento]]
 - [[operacao/uso-e-custos]]

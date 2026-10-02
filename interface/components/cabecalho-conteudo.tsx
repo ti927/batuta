@@ -21,7 +21,7 @@ function tituloDaRota(pathname: string): string {
     [/^\/chaves-consultoria/, "Chaves da consultoria"],
     [/^\/configuracoes-consultoria/, "Configurações da consultoria"],
     [/^\/organizacoes\/[^/]+\/acesso/, "Acesso e papéis"],
-    [/^\/organizacoes\/[^/]+\/chaves/, "Chaves e credenciais"],
+    [/^\/organizacoes\/[^/]+\/chaves/, "Chaves de IA"],
     [/^\/organizacoes\/[^/]+\/configuracoes/, "Configurações da organização"],
     [/^\/organizacoes\/[^/]+$/, "Gerenciar Times"],
     [/^\/organizacoes/, "Gerenciar Organizações"],

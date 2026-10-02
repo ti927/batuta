@@ -247,15 +247,11 @@ def test_campos_parciais_ignora_none():
     assert escrita._campos(nome=None) == {}
 
 
-def test_credenciais_sem_identidade_barram_antes_do_banco():
-    """As ferramentas de credencial (leitura e escrita) barram sem `sub` antes de tocar o
-    banco e devolvem texto, não exceção."""
+def test_chaves_sem_identidade_barram_antes_do_banco():
+    """`ver_chaves_de_ia` barra sem `sub` antes de tocar o banco e devolve texto, não
+    exceção."""
     import mcp_ferramentas
-    import mcp_ferramentas_escrita as escrita
-    assert "identifica" in mcp_ferramentas.listar_credenciais(None, "org").lower()
     assert "identifica" in mcp_ferramentas.ver_chaves_de_ia(None, "org").lower()
-    assert "identifica" in escrita.criar_credencial(None, "org", "WP", "wordpress").lower()
-    assert "identifica" in escrita.remover_credencial(None, "cred").lower()
 
 
 def test_fatia3b_sem_identidade_barra_antes_do_banco():
@@ -263,7 +259,6 @@ def test_fatia3b_sem_identidade_barra_antes_do_banco():
     `sub` antes de tocar o banco."""
     import mcp_ferramentas_escrita as escrita
     assert "identifica" in escrita.configurar_memoria_agente(None, "ag", True, "sempre").lower()
-    assert "identifica" in escrita.apontar_credencial(None, "inst", "cred").lower()
     assert "identifica" in escrita.duplicar_time(None, "t", "Cópia").lower()
     assert "identifica" in escrita.excluir_time(None, "t").lower()
     assert "identifica" in escrita.excluir_automacao(None, "a").lower()

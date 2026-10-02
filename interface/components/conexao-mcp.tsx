@@ -2,8 +2,7 @@
 
 // "COMO O BATUTA SE CONECTA" — a identificação de um servidor MCP, dentro do instrumento.
 //
-// Até 2026-09-29 o instrumento MCP só aceitava endereço + token, e o token morava numa
-// credencial da central. Servidores reais pedem outras coisas: o WordPress quer usuário
+// Até 2026-09-29 o instrumento MCP só aceitava endereço + token. Servidores reais pedem outras coisas: o WordPress quer usuário
 // e senha de aplicativo, muita API quer um cabeçalho próprio (X-API-Key). Decisão do
 // maestro: a identificação de um instrumento mora NO instrumento.
 //
@@ -222,7 +221,6 @@ export function ConexaoMCP({
   mudar,
   guardados,
   modoSalvo,
-  cobertos,
   instrumentoId,
   conexao,
 }: {
@@ -232,8 +230,6 @@ export function ConexaoMCP({
   guardados: Record<string, string>;
   /** O modo que está salvo — trocar de modo não reaproveita o segredo do anterior. */
   modoSalvo: string;
-  /** Campos que uma credencial antiga da central ainda fornece (não aparecem aqui). */
-  cobertos: Set<string>;
   /** O instrumento já salvo (o login precisa dele). */
   instrumentoId: string | null;
   conexao: ConexaoInstrumento | null;
@@ -318,16 +314,10 @@ export function ConexaoMCP({
     <section className="flex flex-col gap-3 rounded-md border border-border p-3">
       <h3 className="text-sm font-semibold text-foreground">Como o Batuta se conecta</h3>
 
-      {cobertos.has("url") ? (
-        <p className="text-xs text-muted-foreground">
-          O endereço vem da credencial da central indicada acima.
-        </p>
-      ) : (
-        campoSecreto(
-          "url",
-          "Endereço do servidor",
-          "Se o endereço já traz a chave, como no Make e no Zapier, basta ele.",
-        )
+      {campoSecreto(
+        "url",
+        "Endereço do servidor",
+        "Se o endereço já traz a chave, como no Make e no Zapier, basta ele.",
       )}
 
       <Label className="flex-col items-start gap-1">
@@ -342,7 +332,6 @@ export function ConexaoMCP({
       </Label>
 
       {modo === "bearer" &&
-        !cobertos.has("token_bearer") &&
         campoSecreto("token_bearer", "Token")}
       {modo === "cabecalho" && (
         <>
