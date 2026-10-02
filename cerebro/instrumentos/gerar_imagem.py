@@ -129,6 +129,15 @@ def _uniao(chave: str) -> list[str]:
     return vistos
 
 
+def custo_estimado(config) -> float:
+    """O custo aproximado desta imagem, para quem testa ver na resposta. A conta do
+    painel de uso continua vindo da borda (`medicao_instrumentos`) — por isso não vai
+    como `uso`, que somaria em dobro."""
+    import precos
+
+    return round(precos.custo_por_imagem(config.modelo, config.tamanho, config.qualidade), 4)
+
+
 def provedor_do_modelo(modelo: str) -> str:
     return (CATALOGO_IMAGEM.get(modelo) or {}).get("provedor", "openai")
 
@@ -363,7 +372,8 @@ class GerarImagem(TipoInstrumento):
         if provedor_do_modelo(config.modelo) == "google":
             conteudo, mime, ext = gerar_pelo_google(config, args.prompt)
             nome = f"{uuid.uuid4().hex}{ext}"
-            return {"ok": True, "arquivo": nome, "url": arquivos.salvar(nome, conteudo, mime)}
+            return {"ok": True, "arquivo": nome, "url": arquivos.salvar(nome, conteudo, mime),
+                "custo_estimado_usd": custo_estimado(config)}
         if not config.chave_api:
             raise FalhaInstrumento(
                 "falta a chave de API de imagem — configure-a no instrumento, cadastre a "
@@ -427,7 +437,7 @@ class GerarImagem(TipoInstrumento):
         conteudo = _imagem_bytes(dados)
         nome = f"{uuid.uuid4().hex}{ext}"
         url = arquivos.salvar(nome, conteudo, mime)
-        return {"ok": True, "arquivo": nome, "url": url}
+        return {"ok": True, "arquivo": nome, "url": url, "custo_estimado_usd": custo_estimado(config)}
 
 
 registrar(GerarImagem())

@@ -423,3 +423,27 @@ def test_imagem_do_google_paga_pela_chave_do_google():
     inst = NS(tipo="gerar_imagem", configuracao={"modelo": "gemini-3.1-flash-image", "qualidade": "2K"})
     entrada, servico = med._entrada_e_servico(inst)
     assert servico == "google" and entrada["custo_usd"] == 0.101
+
+
+def test_imagem_traz_o_custo_estimado_sem_uso(monkeypatch):
+    from instrumentos import gerar_imagem as gi
+
+    _google_falso(monkeypatch, [_resposta_imagem(b"jpeg", "image/jpeg")])
+    _guardar(monkeypatch, gi)
+    tipo = encaixe.obter_tipo("gerar_imagem")
+    cfg = tipo.Config(modelo="gemini-3.1-flash-image", tamanho="1:1", qualidade="2K", formato="jpeg")
+    with usar_chaves({"google": "g"}):
+        r = tipo.executar(cfg, tipo.Args(prompt="x"))
+    assert r["custo_estimado_usd"] == 0.101 and "uso" not in r
+
+
+def test_desde_vai_em_segundos_para_o_google(monkeypatch):
+    from datetime import date
+
+    pedidos = _google_falso(monkeypatch, [_resposta("ok")])
+    tipo = encaixe.obter_tipo("pesquisar_web")
+    with usar_chaves({"google": "g"}):
+        tipo.executar(tipo.Config(), tipo.Args(pergunta="selic", desde=date(2026, 9, 25)))
+    filtro = pedidos[0]["config"].tools[0].google_search.time_range_filter
+    # Com fração de segundo o Google recusa ("Granularity of nano is not supported").
+    assert filtro.start_time.microsecond == 0 and filtro.end_time.microsecond == 0

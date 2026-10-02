@@ -177,9 +177,11 @@ class PesquisarWeb(TipoInstrumento):
         if config.sites_bloqueados:
             busca.exclude_domains = config.sites_bloqueados
         if args.desde:
+            # O Google recusa horário com fração de segundo ("Granularity of nano is
+            # not supported" — ao vivo, 02/10/2026): os dois limites vão em segundos.
             busca.time_range_filter = gtypes.Interval(
                 start_time=datetime.combine(args.desde, datetime.min.time(), FUSO),
-                end_time=datetime.now(FUSO),
+                end_time=datetime.now(FUSO).replace(microsecond=0),
             )
         sistema = _sistema(args.desde)
         if config.sites_preferidos:

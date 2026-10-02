@@ -45,6 +45,7 @@ from instrumentos.gerar_imagem import (
     _imagem_bytes,
     _uniao,
     _uniao_tamanhos,
+    custo_estimado,
     gerar_pelo_google,
     provedor_do_modelo,
 )
@@ -264,7 +265,7 @@ class MontarImagem(TipoInstrumento):
         conteudo = _imagem_bytes(dados)
         nome = f"{uuid.uuid4().hex}.png"
         url = arquivos.salvar(nome, conteudo, "image/png")
-        return {"ok": True, "arquivo": nome, "url": url}
+        return {"ok": True, "arquivo": nome, "url": url, "custo_estimado_usd": custo_estimado(config)}
 
     def _pelo_google(self, config: ConfigMontagem, prompt: str, urls: list[str]) -> dict:
         maximo = CATALOGO_IMAGEM[config.modelo].get("max_referencias", MAX_IMAGENS_BASE)
@@ -281,7 +282,8 @@ class MontarImagem(TipoInstrumento):
         referencias = [_baixar(u) for u in urls]
         conteudo, mime, ext = gerar_pelo_google(config, prompt, referencias)
         nome = f"{uuid.uuid4().hex}{ext}"
-        return {"ok": True, "arquivo": nome, "url": arquivos.salvar(nome, conteudo, mime)}
+        return {"ok": True, "arquivo": nome, "url": arquivos.salvar(nome, conteudo, mime),
+                "custo_estimado_usd": custo_estimado(config)}
 
 
 registrar(MontarImagem())

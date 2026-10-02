@@ -35,6 +35,7 @@ from google.genai import types as gtypes
 from pydantic import BaseModel, Field, model_validator
 
 import arquivos
+import precos
 from instrumentos import google_servidor as goo
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 from instrumentos.montar_imagem import _baixar
@@ -102,6 +103,40 @@ def _uniao(chave: str) -> list[str]:
             if v not in vistos:
                 vistos.append(v)
     return vistos
+
+
+def na_proporcao(dados: bytes, mime: str, proporcao: str) -> tuple[bytes, str, bool]:
+    """A imagem de partida recortada no CENTRO para a proporção do vídeo (ex.: 9:16).
+    Uma foto 1:1 num vídeo vertical saía com faixas pretas (uso real, 02/10/2026).
+    Devolve (bytes, tipo, recortou). Se já está na proporção (2% de folga) ou não dá
+    para abrir a imagem, devolve como veio — o Google ainda a aceita."""
+    import io
+
+    from PIL import Image, UnidentifiedImageError
+
+    largura_alvo, altura_alvo = (int(x) for x in proporcao.split(":"))
+    alvo = largura_alvo / altura_alvo
+    try:
+        imagem = Image.open(io.BytesIO(dados))
+        imagem.load()
+    except (UnidentifiedImageError, OSError):
+        return dados, mime, False
+    largura, altura = imagem.size
+    if abs(largura / altura - alvo) / alvo <= 0.02:
+        return dados, mime, False
+    if largura / altura > alvo:  # larga demais: corta as laterais
+        nova = round(altura * alvo)
+        caixa = ((largura - nova) // 2, 0, (largura - nova) // 2 + nova, altura)
+    else:  # alta demais: corta em cima e embaixo
+        nova = round(largura / alvo)
+        caixa = (0, (altura - nova) // 2, largura, (altura - nova) // 2 + nova)
+    saida = io.BytesIO()
+    if mime == "image/png":
+        imagem.crop(caixa).save(saida, "PNG")
+    else:
+        imagem.crop(caixa).convert("RGB").save(saida, "JPEG", quality=92)
+        mime = "image/jpeg"
+    return saida.getvalue(), mime, True
 
 
 class ConfigVideo(BaseModel):
@@ -233,9 +268,11 @@ class GerarVideo(TipoInstrumento):
     def executar(self, config: ConfigVideo, args: ArgsVideo) -> dict:
         cli = goo.cliente(TIMEOUT_S)
         imagem = None
+        recortada = False
         ref = (args.imagem_referencia_url or "").strip()
         if ref:
             conteudo_ref, ct_ref = _baixar(ref)  # falha aqui é retentável (nada criado)
+            conteudo_ref, ct_ref, recortada = na_proporcao(conteudo_ref, ct_ref, config.tamanho)
             imagem = gtypes.Image(image_bytes=conteudo_ref, mime_type=ct_ref)
 
         # 1) CRIA a operação. Falha ANTES de haver operação → nada gerado → a tradução
@@ -261,14 +298,23 @@ class GerarVideo(TipoInstrumento):
         conteudo = self._baixar_conteudo(cli, video)
         nome = f"{uuid.uuid4().hex}.mp4"
         url = arquivos.salvar(nome, conteudo, "video/mp4")
-        return {
+        resultado = {
             "ok": True,
             "arquivo": nome,
             "url": url,
             "modelo": config.modelo,
             "duracao_s": config.duracao_s,
             "resolucao": config.resolucao,
+            # Para quem testa ver; o painel de uso conta pela borda (não vai como `uso`).
+            "custo_estimado_usd": round(precos.custo_por_video(
+                config.modelo, config.resolucao, config.duracao_s), 4),
         }
+        if recortada:
+            resultado["aviso"] = (
+                f"A imagem de partida estava em outra proporção e foi recortada no centro "
+                f"para {config.tamanho}."
+            )
+        return resultado
 
     def _aguardar(self, cli, operacao):
         """Consulta a operação até `done`. Erro transitório na consulta NÃO sobe (a

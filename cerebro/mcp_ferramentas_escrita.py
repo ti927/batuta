@@ -444,8 +444,45 @@ def _pedir_teste_ao_cerebro(caminho: str, corpo: dict, *, onde_testar: str) -> s
             detalhe = r.text[:300]
         return f"O teste não pôde rodar: {detalhe or f'HTTP {r.status_code}'}"
     resultado = r.json()
+    if resultado.get("em_andamento") and resultado.get("teste_id"):
+        return json.dumps({
+            "mensagem": "Teste em andamento — este instrumento leva de segundos a minutos. "
+            "Consulte o resultado com ver_teste_instrumento(teste_id) daqui a ~30 segundos "
+            "(e de novo, se ainda não tiver terminado). Não rode o teste outra vez: cada "
+            "rodada é cobrada.",
+            "teste_id": resultado["teste_id"],
+        }, ensure_ascii=False)
     return _saida_do_teste(
         "Teste executado (pelo cérebro).", resultado, bool(resultado.get("escreve"))
+    )
+
+
+@_ferramenta_escrita
+def ver_teste_instrumento(sessao, usuario, teste_id) -> str:
+    import httpx
+
+    segredo = (os.environ.get("BATUTA_INTERNO_SECRET") or "").strip()
+    if not segredo:
+        return "Não consigo consultar daqui: a ponte com o cérebro não está configurada."
+    try:
+        with httpx.Client(timeout=30.0) as cliente:
+            r = cliente.post(
+                f"{_url_cerebro()}/interno/instrumento/teste",
+                headers={"X-Batuta-Interno": segredo},
+                json={"usuario_id": str(usuario.id), "teste_id": str(teste_id)},
+            )
+    except httpx.HTTPError as e:
+        return f"Não consegui falar com o cérebro para ver o teste: {e}"
+    if r.status_code >= 400:
+        return f"O cérebro não respondeu a consulta do teste (HTTP {r.status_code})."
+    resultado = r.json()
+    if resultado.get("em_andamento"):
+        return json.dumps({
+            "mensagem": f"Ainda rodando ({resultado.get('segundos', 0)} s). Consulte de novo "
+            "daqui a ~30 segundos.", "teste_id": teste_id,
+        }, ensure_ascii=False)
+    return _saida_do_teste(
+        "Teste concluído (pelo cérebro).", resultado, bool(resultado.get("escreve"))
     )
 
 

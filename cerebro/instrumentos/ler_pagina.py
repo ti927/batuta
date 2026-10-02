@@ -7,6 +7,9 @@ Custo: os tokens da página. Limites das duas: não executa JavaScript (site que
 monta o conteúdo no navegador vem vazio) e não entra em página com login. Só leitura.
 """
 
+from html.parser import HTMLParser
+
+import httpx
 from google.genai import types as gtypes
 from pydantic import BaseModel, Field, model_validator
 
@@ -21,6 +24,76 @@ SISTEMA = (
     "endereço indicado, extraia exatamente o que foi pedido e responda em português. "
     "Se a página não tiver a informação, diga claramente — nunca invente."
 )
+TIMEOUT_DOWNLOAD_S = 30.0
+NAVEGADOR = "Mozilla/5.0 (compatible; Batuta/1.0; +https://batuta.team)"
+# Etiquetas cujo conteúdo não é texto da página.
+_SEM_TEXTO = {"script", "style", "noscript", "svg", "template", "head"}
+
+
+class _Texto(HTMLParser):
+    """O texto visível de um HTML (sem script/estilo), com os links das âncoras —
+    o bastante para a IA achar títulos, datas e endereços dos artigos."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.partes: list[str] = []
+        self._fora = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in _SEM_TEXTO:
+            self._fora += 1
+        elif tag == "a" and not self._fora:
+            href = dict(attrs).get("href")
+            if href and href.startswith("http"):
+                self.partes.append(f" [{href}] ")
+        elif tag in ("p", "div", "li", "br", "h1", "h2", "h3", "h4", "tr", "article", "time"):
+            self.partes.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in _SEM_TEXTO and self._fora:
+            self._fora -= 1
+
+    def handle_data(self, data):
+        if not self._fora and data.strip():
+            self.partes.append(data.strip() + " ")
+
+
+def texto_da_pagina(url: str, limite_caracteres: int) -> tuple[str, bool]:
+    """Baixa a página AGORA e devolve (texto, cortado). Levanta FalhaInstrumento se ela
+    não abrir. Feito pelo Batuta para a OpenAI porque a busca dela pode devolver uma
+    cópia guardada (achado no uso real: o blog veio com os artigos de agosto como "os
+    mais recentes", em 02/10/2026)."""
+    try:
+        r = httpx.get(url, timeout=TIMEOUT_DOWNLOAD_S, follow_redirects=True,
+                      headers={"User-Agent": NAVEGADOR, "Accept-Language": "pt-BR,pt;q=0.9"})
+    except httpx.HTTPError as e:
+        raise FalhaInstrumento(f"a página não respondeu ({type(e).__name__}).", retentavel=True) from e
+    if r.status_code in (401, 403):
+        raise FalhaInstrumento(
+            "a página não pôde ser aberta (exige login ou bloqueia robôs).",
+            retentavel=False, codigo="pagina.inacessivel",
+        )
+    if r.status_code >= 400:
+        raise FalhaInstrumento(
+            f"a página respondeu erro {r.status_code}.",
+            retentavel=r.status_code == 429 or r.status_code >= 500, codigo="pagina.inacessivel",
+        )
+    tipo = (r.headers.get("content-type") or "").lower()
+    if "html" in tipo or "xml" in tipo:
+        leitor = _Texto()
+        leitor.feed(r.text)
+        texto = "".join(leitor.partes)
+    elif tipo.startswith("text/") or "json" in tipo:
+        texto = r.text
+    else:
+        raise FalhaInstrumento(
+            f"o endereço não é uma página de texto ({tipo or 'tipo desconhecido'}); para PDF, "
+            "use o Ler documento.", retentavel=False,
+        )
+    texto = "\n".join(l.strip() for l in texto.splitlines() if l.strip())
+    return texto[:limite_caracteres], len(texto) > limite_caracteres
+
+
 PADROES = {
     "anthropic": srv.MODELO_PADRAO_WEB, "openai": oai.MODELO_PADRAO_WEB,
     "google": goo.MODELO_PADRAO_WEB,
@@ -83,7 +156,7 @@ class LerPagina(TipoInstrumento):
         # o link vai no texto do pedido (não basta o modelo "lembrar" dele).
         pedido = f"Endereço: {url}\n\nO que extrair: {args.o_que_extrair}"
         if escolha_ia.provedor(modelo) == "openai":
-            return self._pela_openai(url, pedido, modelo)
+            return self._pela_openai(url, args.o_que_extrair, modelo, config.max_tamanho)
         if escolha_ia.provedor(modelo) == "google":
             return self._pelo_google(url, pedido, modelo)
         _, leitura = srv.versoes(modelo)
@@ -105,33 +178,34 @@ class LerPagina(TipoInstrumento):
             "uso": r["uso"],
         }
 
-    def _pela_openai(self, url: str, pedido: str, modelo: str) -> dict:
-        # Na OpenAI a leitura é a própria busca: o modelo abre a página pedida
-        # (`open_page`). A regra "só esta página" vai nas instruções.
+    def _pela_openai(self, url: str, o_que_extrair: str, modelo: str, max_tamanho: int) -> dict:
+        # O Batuta baixa a página AO VIVO e entrega o texto: a busca da OpenAI pode abrir
+        # uma cópia guardada (veio uma versão de agosto de um blog atualizado ontem).
+        # `max_tamanho` está em tokens; ~4 caracteres por token.
+        texto, cortado = texto_da_pagina(url, max_tamanho * 4)
+        if not texto:
+            raise FalhaInstrumento(
+                "a página abriu, mas não tem texto (o conteúdo deve ser montado no navegador, "
+                "com JavaScript).", retentavel=False, codigo="pagina.sem_texto",
+            )
+        pedido = f"Endereço: {url}\n\nO que extrair: {o_que_extrair}\n\nConteúdo da página (lido agora):\n{texto}"
         r = oai.chamar(
-            modelo=modelo,
-            sistema=SISTEMA + " Abra exatamente o endereço indicado e use só essa página.",
-            conteudo=[{"type": "input_text", "text": pedido}],
-            ferramentas=[{"type": "web_search"}], max_ferramentas=3,
+            modelo=modelo, sistema=SISTEMA,
+            conteudo=[{"type": "input_text", "text": pedido}], ferramentas=[],
         )
         if not r["texto"]:
             raise FalhaInstrumento("a leitura da página não trouxe resposta.", retentavel=True)
         resultado = {
             "ok": True,
             "url": url,
-            "conteudo": oai.sem_marca_no_texto(r["texto"]),
+            "conteudo": r["texto"],
             "avisos": r["erros"],
             "uso": r["uso"],
         }
-        abriu = any(
-            i.get("type") == "web_search_call"
-            and (i.get("action") or {}).get("type") in ("open_page", "find_in_page")
-            for i in r["itens"]
-        )
-        if not abriu:
-            # Respondeu sem abrir a página (de memória ou só buscando): o agente precisa
-            # saber que a resposta pode não ter vindo dela.
-            resultado["aviso"] = "A IA não abriu esta página; a resposta pode não ter vindo dela."
+        if cortado:
+            resultado["aviso"] = (
+                "A página é maior que o limite de leitura do instrumento: só o começo foi lido."
+            )
         return resultado
 
     def _pelo_google(self, url: str, pedido: str, modelo: str) -> dict:

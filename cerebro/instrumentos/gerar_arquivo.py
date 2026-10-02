@@ -195,6 +195,20 @@ def _guardar_saidas(cliente: anthropic.Anthropic, ids: list[str]) -> list[dict]:
     return saida
 
 
+# O tipo de cada formato do Office, sem depender da tabela do sistema (no servidor ela
+# não tinha o xlsx: o arquivo saía como "application/octet-stream" — uso real, 02/10).
+_TIPOS_OFFICE = {
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".pdf": "application/pdf",
+    ".csv": "text/csv",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+}
+
+
 def _gerados_openai(cliente: openai.OpenAI, itens: list[dict]) -> list[tuple[str, str, str]]:
     """Os arquivos que o code interpreter entregou: (espaço, arquivo, nome). Vale o que
     a resposta cita como arquivo; sem citação, os arquivos que a IA criou na pasta de
@@ -230,7 +244,8 @@ def _guardar_saidas_openai(cliente: openai.OpenAI, gerados: list[tuple[str, str,
         except openai.APIError as e:
             raise oai.traduzir_excecao(e, "") from e
         nome = PurePosixPath(nome).name or "arquivo"
-        tipo = mimetypes.guess_type(nome)[0] or "application/octet-stream"
+        tipo = _TIPOS_OFFICE.get(PurePosixPath(nome).suffix.lower()) or \
+            mimetypes.guess_type(nome)[0] or "application/octet-stream"
         url = arquivos.salvar(f"{uuid.uuid4().hex[:8]}-{nome}", conteudo, tipo)
         saida.append({"nome": nome, "url": url, "tipo": tipo, "bytes": len(conteudo)})
     return saida

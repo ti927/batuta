@@ -588,13 +588,24 @@ async def testar_instrumento(instrumento_id: str, argumentos: dict | None = None
     e ao terminar diga ao consultor o que foi criado/enviado e onde. A resposta traz
     `escreve: true` e um campo `atencao` nesse caso. Cada teste que GERA mídia é cobrado:
     imagem ~US$ 0,01–0,17 por teste (conforme a qualidade) — teste uma vez e não repita
-    sem motivo; vídeo custa caro — só teste se o consultor pedir.
+    sem motivo; vídeo custa caro — só teste se o consultor pedir. Os lentos (gerar vídeo,
+    gerar arquivo, montar imagem) respondem "em andamento" com um `teste_id`: busque o
+    resultado com `ver_teste_instrumento`.
     Funciona com instrumento que tem segredo: o teste é pedido ao cérebro, que decifra
     lá e devolve só o resultado. Se a ponte não estiver ligada, a ferramenta diz isso —
     não fique retentando. Falha volta com `ok: false` e o motivo em `erro`: leia-o."""
     return await anyio.to_thread.run_sync(
         escrita.testar_instrumento, _sub(), instrumento_id, argumentos
     )
+
+
+@mcp.tool()
+async def ver_teste_instrumento(teste_id: str) -> str:
+    """O resultado de um `testar_instrumento` que ficou EM ANDAMENTO (instrumentos que
+    levam de segundos a minutos: gerar vídeo, gerar arquivo, montar imagem). Se ainda
+    estiver rodando, diz há quantos segundos — espere ~30 s e consulte de novo; NÃO rode o
+    teste outra vez (cada rodada é cobrada). O resultado fica guardado por 1 hora."""
+    return await anyio.to_thread.run_sync(escrita.ver_teste_instrumento, _sub(), teste_id)
 
 
 @mcp.tool()

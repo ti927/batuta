@@ -39,6 +39,8 @@ logs com quem agiu.
 
 import hmac
 import os
+import threading
+import time
 import uuid
 
 from fastapi import APIRouter, Header, HTTPException, status
@@ -46,13 +48,13 @@ from sqlalchemy.orm import Session
 from fastapi import Depends
 
 import instrumentos as encaixe
-from esquemas import TestarInstrumentoInterno, TestarOperacaoInterno
+from esquemas import TestarInstrumentoInterno, TestarOperacaoInterno, VerTesteInterno
 from instrumentos.base import FalhaInstrumento
-from modelos import Usuario
+from modelos import Instrumento, Usuario
 from observabilidade.escritor import registrar_evento
 from rotas._comum import instrumento_acessivel
 from rotas.instrumentos import acionar_instrumento
-from sessao import obter_sessao
+from sessao import CriadorDeSessao, obter_sessao
 import segredos_instrumento as segredos
 
 rotas = APIRouter()
@@ -120,6 +122,87 @@ def testar_operacao_interno(
     return resultado
 
 
+# Instrumentos que levam de dezenas de segundos a minutos: o teste deles roda em
+# SEGUNDO PLANO e a IA pergunta depois pelo resultado (§12-A — nada de uma ligação
+# aberta por minutos: o teste de vídeo derrubou a conexão do MCP no uso real, 02/10).
+TESTES_LENTOS = {"gerar_video", "gerar_arquivo", "montar_imagem"}
+# Quanto tempo o resultado fica guardado para ser lido. O cérebro roda numa réplica só;
+# se ele reiniciar no meio, o teste some e a consulta diz isso (rodar de novo).
+GUARDA_RESULTADO_S = 3600
+_TESTES: dict[str, dict] = {}
+_TRAVA = threading.Lock()
+
+
+def _nova_sessao() -> Session:
+    return CriadorDeSessao()
+
+
+def _em_segundo_plano(funcao) -> None:
+    threading.Thread(target=funcao, daemon=True, name="teste-instrumento").start()
+
+
+def _limpar_velhos() -> None:
+    limite = time.monotonic() - GUARDA_RESULTADO_S
+    with _TRAVA:
+        for tid in [t for t, v in _TESTES.items() if v["inicio"] < limite]:
+            _TESTES.pop(tid, None)
+
+
+def _acionar_como_dado(sessao: Session, inst, argumentos: dict) -> dict:
+    """Aciona e devolve a falha como DADO (`ok: false` + o motivo), nunca exceção."""
+    try:
+        return {"ok": True, "resultado": acionar_instrumento(sessao, inst, argumentos)}
+    except ValueError as e:
+        # Argumentos ou configuração que não fecham com o tipo — erro de quem montou.
+        return {"ok": False, "erro": str(e)}
+    except FalhaInstrumento as e:
+        saida = {"ok": False, "erro": str(e)}
+        if getattr(e, "codigo", None):
+            saida["codigo"] = e.codigo
+        return saida
+
+
+def _rodar_teste_lento(teste_id: str, instrumento_id, argumentos: dict, escreve: bool) -> None:
+    """O teste em segundo plano, com sessão própria. Qualquer queda vira resultado
+    honesto — nunca um teste "em andamento" para sempre."""
+    sessao = _nova_sessao()
+    try:
+        inst = sessao.get(Instrumento, instrumento_id)
+        saida = _acionar_como_dado(sessao, inst, argumentos)
+        sessao.commit()
+    except Exception as e:  # noqa: BLE001 — o resultado conta o que houve
+        saida = {"ok": False, "erro": f"o teste parou com um erro inesperado: {str(e)[:300]}"}
+        registrar_evento(categoria="interno", persistir=True, acao="instrumento.teste_lento_falhou",
+                         nivel="error", erro=e, recurso_tipo="instrumento", recurso_id=str(instrumento_id))
+    finally:
+        sessao.close()
+    saida["escreve"] = escreve
+    with _TRAVA:
+        if teste_id in _TESTES:
+            _TESTES[teste_id].update(estado="pronto", saida=saida)
+
+
+@rotas.post("/interno/instrumento/teste")
+def ver_teste_interno(
+    dados: VerTesteInterno,
+    x_batuta_interno: str | None = Header(default=None, alias=CABECALHO),
+):
+    """O resultado de um teste em segundo plano. Só quem pediu o teste o lê."""
+    _exigir_segredo(x_batuta_interno)
+    _limpar_velhos()
+    with _TRAVA:
+        teste = dict(_TESTES.get(dados.teste_id) or {})
+    if not teste or teste["usuario_id"] != dados.usuario_id:
+        return {
+            "ok": False,
+            "erro": "Não há teste com esse número — ele já expirou (fica 1 hora) ou se perdeu "
+            "numa atualização do Batuta. Rode o teste de novo.",
+        }
+    if teste["estado"] != "pronto":
+        return {"em_andamento": True, "segundos": int(time.monotonic() - teste["inicio"])}
+    return teste["saida"]
+
+
 @rotas.post("/interno/instrumento/testar")
 def testar_instrumento_interno(
     dados: TestarInstrumentoInterno,
@@ -140,17 +223,19 @@ def testar_instrumento_interno(
         )
 
     escreve = encaixe.acao_irreversivel(inst.tipo, inst.configuracao or {})
-    try:
-        saida = {"ok": True, "resultado": acionar_instrumento(sessao, inst, dados.argumentos)}
-    except ValueError as e:
-        # Argumentos ou configuração que não fecham com o tipo — erro de quem montou.
-        saida = {"ok": False, "erro": str(e)}
-    except FalhaInstrumento as e:
-        saida = {"ok": False, "erro": str(e)}
-        if getattr(e, "codigo", None):
-            saida["codigo"] = e.codigo
-    saida["escreve"] = escreve
-    sessao.commit()  # o estado da conexão (MCP) que o teste descobriu
+    if inst.tipo in TESTES_LENTOS:
+        _limpar_velhos()
+        teste_id = uuid.uuid4().hex
+        with _TRAVA:
+            _TESTES[teste_id] = {"usuario_id": dados.usuario_id, "inicio": time.monotonic(),
+                                 "estado": "em_andamento"}
+        argumentos, iid = dict(dados.argumentos or {}), inst.id
+        _em_segundo_plano(lambda: _rodar_teste_lento(teste_id, iid, argumentos, escreve))
+        saida = {"ok": True, "em_andamento": True, "teste_id": teste_id, "escreve": escreve}
+    else:
+        saida = _acionar_como_dado(sessao, inst, dados.argumentos)
+        saida["escreve"] = escreve
+        sessao.commit()  # o estado da conexão (MCP) que o teste descobriu
 
     registrar_evento(
         categoria="interno",

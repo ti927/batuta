@@ -213,3 +213,40 @@ def test_custo_por_segundo_e_origem_google():
     assert entrada["segundos"] == 8 and entrada["custo_usd"] == pytest.approx(0.96)
     assert servico == "google"
     assert precos.custo_por_video("veo-3.1-lite-generate-preview", "720p", "4") == pytest.approx(0.20)
+
+
+def test_imagem_de_outra_proporcao_e_recortada_no_centro(ambiente, monkeypatch):
+    import io
+
+    from PIL import Image
+
+    quadrada = io.BytesIO()
+    Image.new("RGB", (1000, 1000), "red").save(quadrada, "PNG")
+    cli = ambiente.com(_Cliente())
+    monkeypatch.setattr(gv, "_baixar", lambda url: (quadrada.getvalue(), "image/png"))
+    with usar_chaves({"google": "g"}):
+        r = GerarVideo().executar(ConfigVideo(), ArgsVideo(prompt="anime", imagem_referencia_url="https://x/a.png"))
+    enviada = Image.open(io.BytesIO(cli.pedidos[0]["image"].image_bytes))
+    assert enviada.size == (562, 1000)  # 9:16, recortada no centro — sem faixas pretas
+    assert "recortada" in r["aviso"]
+
+
+def test_imagem_ja_na_proporcao_vai_como_veio(ambiente, monkeypatch):
+    import io
+
+    from PIL import Image
+
+    vertical = io.BytesIO()
+    Image.new("RGB", (720, 1280), "blue").save(vertical, "PNG")
+    cli = ambiente.com(_Cliente())
+    monkeypatch.setattr(gv, "_baixar", lambda url: (vertical.getvalue(), "image/png"))
+    with usar_chaves({"google": "g"}):
+        r = GerarVideo().executar(ConfigVideo(), ArgsVideo(prompt="anime", imagem_referencia_url="https://x/a.png"))
+    assert cli.pedidos[0]["image"].image_bytes == vertical.getvalue() and "aviso" not in r
+
+
+def test_resposta_traz_o_custo_estimado(ambiente):
+    ambiente.com(_Cliente())
+    with usar_chaves({"google": "g"}):
+        r = GerarVideo().executar(ConfigVideo(duracao_s="4"), ArgsVideo(prompt="x"))
+    assert r["custo_estimado_usd"] == 0.2 and "uso" not in r  # `uso` contaria em dobro

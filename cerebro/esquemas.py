@@ -390,6 +390,14 @@ class TestarOperacaoInterno(BaseModel):
     valores: dict = Field(default_factory=dict)
 
 
+class VerTesteInterno(BaseModel):
+    """Pergunta pelo resultado de um teste que roda em segundo plano (instrumento lento:
+    vídeo, arquivo, montagem) — pedido pela porta INTERNA."""
+
+    usuario_id: str = Field(min_length=1)
+    teste_id: str = Field(min_length=1)
+
+
 class TestarInstrumentoInterno(BaseModel):
     """Aciona um instrumento que NÃO é conector (o "Acionar" da tela), pedido pela
     porta INTERNA — para a IA testar os outros tipos sem ver segredo. Mesmas três

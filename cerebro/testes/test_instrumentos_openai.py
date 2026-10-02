@@ -212,29 +212,63 @@ def test_modelo_desligado_na_openai_da_o_recado_honesto(monkeypatch):
 # ── Ler página ───────────────────────────────────────────────────────────────────
 
 
-def test_ler_pagina_pela_openai_abre_o_endereco(monkeypatch):
-    cli = _openai_falsa(monkeypatch, [_Resposta(
-        [_busca("open_page"), _mensagem("A página trata da Selic.")],
-        texto="A página trata da Selic.",
-    )])
-    tipo = encaixe.obter_tipo("ler_pagina")
-    with usar_chaves({"openai": "sk-x"}):
-        r = tipo.executar(tipo.Config(), tipo.Args(url="https://pt.wikipedia.org/wiki/Selic"))
-    assert "https://pt.wikipedia.org/wiki/Selic" in cli.pedidos[0]["input"][0]["content"][0]["text"]
-    assert r["conteudo"] == "A página trata da Selic."
-    assert "aviso" not in r
-    assert r["uso"]["leituras"] == 1 and r["uso"]["buscas"] == 0
+def _pagina(monkeypatch, html, status=200, tipo="text/html; charset=utf-8"):
+    from instrumentos import ler_pagina as lp
+
+    pedidos = []
+
+    def get(url, **k):
+        pedidos.append((url, k))
+        return httpx.Response(status, text=html, headers={"content-type": tipo},
+                              request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(lp.httpx, "get", get)
+    return pedidos
 
 
-def test_ler_pagina_avisa_quando_a_ia_nao_abriu_a_pagina(monkeypatch):
-    _openai_falsa(monkeypatch, [_Resposta(
-        [_busca("search"), _mensagem("Não consegui acessar a página.")],
-        texto="Não consegui acessar a página.",
-    )])
+def test_ler_pagina_pela_openai_baixa_a_pagina_ao_vivo(monkeypatch):
+    """A busca da OpenAI chegou a devolver uma cópia velha de um blog (uso real, 02/10):
+    o Batuta baixa a página AGORA e entrega o texto, sem a ferramenta de busca."""
+    baixadas = _pagina(monkeypatch, "<html><head><script>x=1</script></head><body>"
+                       "<h2><a href='https://site.com/a'>Data room</a></h2><time>02/10/2026</time>"
+                       "<style>.a{}</style></body></html>")
+    cli = _openai_falsa(monkeypatch, [_Resposta([_mensagem("Data room, 02/10/2026.")],
+                                                texto="Data room, 02/10/2026.")])
     tipo = encaixe.obter_tipo("ler_pagina")
     with usar_chaves({"openai": "sk-x"}):
-        r = tipo.executar(tipo.Config(), tipo.Args(url="https://exemplo.com.br"))
-    assert "não abriu" in r["aviso"]
+        r = tipo.executar(tipo.Config(), tipo.Args(url="https://site.com/blog/", o_que_extrair="o mais recente"))
+    assert baixadas[0][0] == "https://site.com/blog/"
+    pedido = cli.pedidos[0]
+    assert "tools" not in pedido  # não depende da busca (nem do cache) da OpenAI
+    texto = pedido["input"][0]["content"][0]["text"]
+    assert "Data room" in texto and "02/10/2026" in texto and "https://site.com/a" in texto
+    assert "x=1" not in texto and ".a{}" not in texto  # sem script nem estilo
+    assert r["conteudo"] == "Data room, 02/10/2026." and "aviso" not in r
+
+
+def test_ler_pagina_pela_openai_avisa_quando_corta(monkeypatch):
+    _pagina(monkeypatch, "<p>" + "palavra " * 5000 + "</p>")
+    _openai_falsa(monkeypatch, [_Resposta([_mensagem("ok")], texto="ok")])
+    tipo = encaixe.obter_tipo("ler_pagina")
+    with usar_chaves({"openai": "sk-x"}):
+        r = tipo.executar(tipo.Config(max_tamanho=2000), tipo.Args(url="https://site.com/longa"))
+    assert "só o começo" in r["aviso"]
+
+
+def test_ler_pagina_pela_openai_pagina_bloqueada(monkeypatch):
+    _pagina(monkeypatch, "proibido", status=403)
+    tipo = encaixe.obter_tipo("ler_pagina")
+    with usar_chaves({"openai": "sk-x"}), pytest.raises(FalhaInstrumento) as e:
+        tipo.executar(tipo.Config(), tipo.Args(url="https://site.com/privada"))
+    assert e.value.codigo == "pagina.inacessivel" and not e.value.retentavel
+
+
+def test_ler_pagina_pela_openai_sem_texto_diz_o_porque(monkeypatch):
+    _pagina(monkeypatch, "<html><body><div id='app'></div><script>montar()</script></body></html>")
+    tipo = encaixe.obter_tipo("ler_pagina")
+    with usar_chaves({"openai": "sk-x"}), pytest.raises(FalhaInstrumento) as e:
+        tipo.executar(tipo.Config(), tipo.Args(url="https://site.com/app"))
+    assert e.value.codigo == "pagina.sem_texto"
 
 
 # ── Ler documento ────────────────────────────────────────────────────────────────
@@ -294,6 +328,8 @@ def test_gerar_arquivo_pela_openai_sobe_entrada_gera_guarda_e_limpa(monkeypatch)
     assert "xlsx" in cli.pedidos[0]["instructions"] and "/mnt/data" in cli.pedidos[0]["instructions"]
     assert salvos[0][0].endswith("-vendas.xlsx")
     assert r["arquivos"][0]["nome"] == "vendas.xlsx"
+    assert r["arquivos"][0]["tipo"] == (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     assert r["resumo"] == "Planilha criada com o total e o gráfico."
     assert cli.apagados == ["file-1"]  # a entrada não fica na OpenAI
     # 2.000 × US$ 0,20/M + 600 × US$ 1,20/M + 1 espaço de execução (US$ 0,03)

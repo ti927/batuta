@@ -319,3 +319,96 @@ def test_rastro_do_teste_vai_para_o_banco(cliente, entrar, dados, ligada, monkey
                      headers=LIGADA)
     assert r.status_code == 200, r.text
     assert chamadas and chamadas[-1]["persistir"] is True
+
+
+# ── Teste de instrumento LENTO roda em segundo plano (2026-10-02) ─────────────
+# O teste de vídeo derrubou a conexão do MCP no uso real: uma ligação aberta por
+# minutos. Os lentos respondem "em andamento" na hora e o resultado é lido depois.
+
+
+def _video(dados):
+    from sqlalchemy.orm import object_session
+
+    from modelos import Instrumento
+
+    sessao = object_session(dados["timeA"])
+    inst = Instrumento(time_id=dados["timeA"].id, nome="Vídeo TESTES", tipo="gerar_video",
+                       configuracao={})
+    sessao.add(inst)
+    sessao.flush()
+    return sessao, inst
+
+
+class _SessaoDoTeste:
+    """A sessão do teste, sem fechar nem confirmar de verdade (o teste desfaz tudo)."""
+
+    def __init__(self, sessao):
+        self._s = sessao
+
+    def get(self, *a):
+        return self._s.get(*a)
+
+    def commit(self):
+        self._s.flush()
+
+    def close(self):
+        pass
+
+
+def test_instrumento_lento_responde_em_andamento_e_o_resultado_vem_depois(
+    cliente, dados, ligada, monkeypatch
+):
+    import rotas.interno as mod
+
+    sessao, inst = _video(dados)
+    adiadas = []
+    monkeypatch.setattr(mod, "_em_segundo_plano", adiadas.append)
+    monkeypatch.setattr(mod, "_nova_sessao", lambda: _SessaoDoTeste(sessao))
+    monkeypatch.setattr(mod, "acionar_instrumento", lambda s, i, a: {"url": "https://x/v.mp4", "eco": a})
+
+    r = cliente.post(CAMINHO_INST, json=_corpo_inst(dados["operador"].id, inst.id, {"prompt": "café"}),
+                     headers=LIGADA)
+    assert r.status_code == 200, r.text
+    corpo = r.json()
+    assert corpo["em_andamento"] is True and corpo["ok"] is True and corpo["teste_id"]
+    ver = {"usuario_id": str(dados["operador"].id), "teste_id": corpo["teste_id"]}
+
+    r = cliente.post("/interno/instrumento/teste", json=ver, headers=LIGADA)
+    assert r.json()["em_andamento"] is True  # ainda não rodou
+
+    adiadas[0]()  # o trabalho de segundo plano termina
+    r = cliente.post("/interno/instrumento/teste", json=ver, headers=LIGADA)
+    assert r.json() == {"ok": True, "resultado": {"url": "https://x/v.mp4", "eco": {"prompt": "café"}},
+                        "escreve": False}
+
+
+def test_resultado_do_teste_lento_so_para_quem_pediu(cliente, dados, ligada, monkeypatch):
+    import rotas.interno as mod
+
+    sessao, inst = _video(dados)
+    monkeypatch.setattr(mod, "_em_segundo_plano", lambda f: None)
+    r = cliente.post(CAMINHO_INST, json=_corpo_inst(dados["operador"].id, inst.id), headers=LIGADA)
+    outro = {"usuario_id": str(uuid.uuid4()), "teste_id": r.json()["teste_id"]}
+    r = cliente.post("/interno/instrumento/teste", json=outro, headers=LIGADA)
+    assert r.json()["ok"] is False and "Rode o teste de novo" in r.json()["erro"]
+
+
+def test_queda_no_teste_lento_vira_resultado_honesto(cliente, dados, ligada, monkeypatch):
+    import rotas.interno as mod
+
+    sessao, inst = _video(dados)
+    adiadas = []
+    monkeypatch.setattr(mod, "_em_segundo_plano", adiadas.append)
+    monkeypatch.setattr(mod, "_nova_sessao", lambda: _SessaoDoTeste(sessao))
+    monkeypatch.setattr(mod, "acionar_instrumento", lambda s, i, a: 1 / 0)
+    r = cliente.post(CAMINHO_INST, json=_corpo_inst(dados["operador"].id, inst.id), headers=LIGADA)
+    adiadas[0]()
+    ver = {"usuario_id": str(dados["operador"].id), "teste_id": r.json()["teste_id"]}
+    r = cliente.post("/interno/instrumento/teste", json=ver, headers=LIGADA)
+    assert r.json()["ok"] is False and "erro inesperado" in r.json()["erro"]
+
+
+def test_consulta_do_teste_exige_o_segredo(cliente, dados, ligada):
+    r = cliente.post("/interno/instrumento/teste", json={"usuario_id": "u", "teste_id": "t"},
+                     headers={"X-Batuta-Interno": "errado"})
+    assert r.status_code == 403

@@ -660,3 +660,34 @@ def test_id_curto_ambiguo_pede_o_completo(mcp, dados):
         ids.append(inst.id)
     mcp.flush()
     assert "mais de um registro" in leitura.ver_instrumento(_sub(dados), "abcdef12")
+
+
+def test_testar_instrumento_lento_volta_em_andamento_com_o_numero(mcp, dados, monkeypatch):
+    """Vídeo, arquivo e montagem levam minutos: o MCP não segura a conexão — devolve o
+    número do teste e a IA consulta depois com `ver_teste_instrumento`."""
+    import httpx
+
+    iid = _instrumento_existente(dados, "gerar_video", {})
+    monkeypatch.delenv("COFRE_CHAVE_MESTRA", raising=False)
+    monkeypatch.setenv("BATUTA_INTERNO_SECRET", "segredo-de-teste")
+    monkeypatch.setattr(httpx, "Client", _ClienteFalso(
+        {}, {"ok": True, "em_andamento": True, "teste_id": "abc123", "escreve": False}))
+    saida = json.loads(escrita.testar_instrumento(_sub(dados), iid, {"prompt": "café"}))
+    assert saida["teste_id"] == "abc123" and "ver_teste_instrumento" in saida["mensagem"]
+
+
+def test_ver_teste_instrumento_ainda_rodando_e_pronto(mcp, dados, monkeypatch):
+    import httpx
+
+    monkeypatch.setenv("BATUTA_INTERNO_SECRET", "segredo-de-teste")
+    enviado = {}
+    monkeypatch.setattr(httpx, "Client", _ClienteFalso(enviado, {"em_andamento": True, "segundos": 40}))
+    saida = json.loads(escrita.ver_teste_instrumento(_sub(dados), "abc123"))
+    assert "40 s" in saida["mensagem"]
+    assert enviado["url"].endswith("/interno/instrumento/teste")
+    assert enviado["corpo"] == {"usuario_id": str(dados["admin"].id), "teste_id": "abc123"}
+
+    monkeypatch.setattr(httpx, "Client", _ClienteFalso(
+        {}, {"ok": True, "resultado": {"url": "https://x/v.mp4"}, "escreve": False}))
+    saida = json.loads(escrita.ver_teste_instrumento(_sub(dados), "abc123"))
+    assert saida["resultado"]["resultado"]["url"] == "https://x/v.mp4"
