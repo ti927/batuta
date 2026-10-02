@@ -13,12 +13,13 @@ vem por parâmetro porque o contextvar do token não atravessa a thread).
 
 import functools
 import json
+import re
 import os
 import logging
 import uuid
 
 from fastapi import HTTPException
-from sqlalchemy import and_, or_, select
+from sqlalchemy import String, and_, cast, func, or_, select
 
 _log = logging.getLogger("batuta.mcp")
 # Mensagem honesta (§12-A): nunca despeja stack trace no Claude/consultor; o erro real
@@ -131,6 +132,32 @@ def _uuid(valor) -> uuid.UUID | None:
         return None
 
 
+_PREFIXO_ID = re.compile(r"^[0-9a-f]{6,31}$")
+
+
+def _id_ou_prefixo(sessao, valor, modelo) -> tuple[uuid.UUID | None, str | None]:
+    """Aceita o id completo ou o COMEÇO dele (os 8 primeiros caracteres que aparecem na
+    tela e nos documentos), quando só um registro começa assim. Devolve (id, erro). A
+    permissão continua sendo checada depois, pela função de acesso de cada ferramenta —
+    aqui só se descobre QUAL registro é."""
+    completo = _uuid(valor)
+    if completo is not None:
+        return completo, None
+    prefixo = str(valor or "").strip().lower().replace("-", "")
+    if not _PREFIXO_ID.match(prefixo):
+        return None, None
+    achados = sessao.scalars(
+        select(modelo.id)
+        .where(func.replace(cast(modelo.id, String), "-", "").like(f"{prefixo}%"))
+        .limit(2)
+    ).all()
+    if len(achados) == 1:
+        return achados[0], None
+    if len(achados) > 1:
+        return None, f"O id curto {valor} combina com mais de um registro — use o id completo."
+    return None, None
+
+
 # ───────────────────────────── Organização / time ─────────────────────────────
 
 @_ferramenta
@@ -194,9 +221,9 @@ def listar_agentes(sessao, usuario, time_id) -> str:
 
 @_ferramenta
 def ver_agente(sessao, usuario, agente_id) -> str:
-    aid = _uuid(agente_id)
+    aid, erro = _id_ou_prefixo(sessao, agente_id, Agente)
     if aid is None:
-        return f"Id de agente inválido: {agente_id}."
+        return erro or f"Id de agente inválido: {agente_id}."
     agente = mcp_escopo.agente_acessivel(sessao, usuario, aid)
     cinto = [
         str(iid)
@@ -301,9 +328,9 @@ def listar_instrumentos(sessao, usuario, time_id) -> str:
 
 @_ferramenta
 def ver_instrumento(sessao, usuario, instrumento_id) -> str:
-    iid = _uuid(instrumento_id)
+    iid, erro = _id_ou_prefixo(sessao, instrumento_id, Instrumento)
     if iid is None:
-        return f"Id de instrumento inválido: {instrumento_id}."
+        return erro or f"Id de instrumento inválido: {instrumento_id}."
     inst = mcp_escopo.instrumento_acessivel(sessao, usuario, iid)
     dados = _instrumento_resumido(sessao, inst)
     time = sessao.get(Time, inst.time_id)
@@ -361,9 +388,9 @@ def _url_publica_cerebro() -> str:
 
 @_ferramenta
 def ver_automacao(sessao, usuario, automacao_id) -> str:
-    aid = _uuid(automacao_id)
+    aid, erro = _id_ou_prefixo(sessao, automacao_id, Automacao)
     if aid is None:
-        return f"Id de automação inválido: {automacao_id}."
+        return erro or f"Id de automação inválido: {automacao_id}."
     auto = mcp_escopo.automacao_acessivel(sessao, usuario, aid)
     return json.dumps(
         {
@@ -423,9 +450,9 @@ def listar_execucoes(sessao, usuario, time_id, automacao_id, apenas_problemas, l
 
 @_ferramenta
 def diagnosticar_execucao(sessao, usuario, execucao_id) -> str:
-    eid = _uuid(execucao_id)
+    eid, erro = _id_ou_prefixo(sessao, execucao_id, Execucao)
     if eid is None:
-        return f"Id de execução inválido: {execucao_id}."
+        return erro or f"Id de execução inválido: {execucao_id}."
     # Escopo: execucao_acessivel resolve a org pela automação/conversa e checa o papel.
     mcp_escopo.execucao_acessivel(sessao, usuario, eid)
     diag = diagnostico_execucao.diagnosticar(sessao, eid)

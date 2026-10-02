@@ -25,35 +25,97 @@ TIMEOUT_S = 15.0
 MAX_CORPO = 10_000
 
 
-def _projetar_registros(corpo: Any, campos: list[str]) -> Any:
-    """Mantém só `campos` em cada REGISTRO de uma resposta em lista — corta o custo
-    de respostas grandes (ex.: uma busca no Bubble que traz 14 registros × 30 campos,
-    quando o agente usa 6). Reconhece os formatos comuns: o `response.results` do
-    Bubble, uma lista no topo, e as chaves de lista usadas pelas APIs conhecidas
-    (`results`, `rows`, `items`, `data`, `records`). Formato não reconhecido (ou item
-    que não é dict) → devolve INTACTO: nunca quebra e nunca descarta dado por engano
-    (o pior caso é não economizar). Campo ausente num registro simplesmente não vem."""
-    conjunto = set(campos)
+def _pegar(valor: Any, caminho: str) -> tuple[bool, Any]:
+    """Segue `caminho` dentro de `valor` e devolve (achou, recorte). O NOME INTEIRO vale
+    primeiro: o Bubble tem campos com ponto no próprio nome (`cpo.NomeCliente`), que não
+    podem virar "campo NomeCliente dentro de cpo". Só quando a chave inteira não existe
+    o ponto separa níveis (`analytics.views`). `[]` diz que ali há uma lista e o resto
+    do caminho vale para CADA item (`platforms[].status`). O recorte mantém a estrutura
+    (`{"analytics": {"views": 10}}`), para o agente reconhecer de onde veio."""
+    if not caminho:
+        return True, valor
+    if isinstance(valor, list):
+        itens = [_pegar(item, caminho) for item in valor]
+        return any(a for a, _ in itens), [r for a, r in itens if a]
+    if not isinstance(valor, dict):
+        return False, None
+    if caminho in valor:
+        return True, {caminho: valor[caminho]}
+    partes = caminho.split(".")
+    for corte in range(len(partes) - 1, 0, -1):
+        chave, resto = ".".join(partes[:corte]), ".".join(partes[corte:])
+        lista = chave.endswith("[]")
+        chave = chave[:-2] if lista else chave
+        if chave in valor:
+            achou, recorte = _pegar(valor[chave], resto)
+            return (True, {chave: recorte}) if achou else (False, None)
+    if caminho.endswith("[]") and caminho[:-2] in valor:
+        return True, {caminho[:-2]: valor[caminho[:-2]]}
+    return False, None
 
-    def enxuga(registro: Any) -> Any:
-        if isinstance(registro, dict):
-            return {k: v for k, v in registro.items() if k in conjunto}
-        return registro
+
+def _juntar(a: Any, b: Any) -> Any:
+    """Funde dois recortes do MESMO valor (dois caminhos que passam pelo mesmo lugar)."""
+    if isinstance(a, dict) and isinstance(b, dict):
+        saida = dict(a)
+        for k, v in b.items():
+            saida[k] = _juntar(saida[k], v) if k in saida else v
+        return saida
+    if isinstance(a, list) and isinstance(b, list) and len(a) == len(b):
+        return [_juntar(x, y) for x, y in zip(a, b)]
+    return b
+
+
+def _recortar(valor: Any, caminhos: list[str]) -> tuple[bool, Any]:
+    """Recorta `valor` aos `caminhos` (cada um pelo `_pegar`), fundindo os recortes."""
+    achou_algum, saida = False, None
+    for caminho in caminhos:
+        achou, recorte = _pegar(valor, caminho)
+        if achou:
+            saida = recorte if not achou_algum else _juntar(saida, recorte)
+            achou_algum = True
+    return achou_algum, saida
+
+
+def _vazio(valor: Any) -> bool:
+    return valor in (None, {}, []) or (
+        isinstance(valor, list) and all(_vazio(v) for v in valor)
+    )
+
+
+def _projetar_registros(corpo: Any, campos: list[str]) -> Any:
+    """Mantém só os `campos` de uma resposta — corta o custo de respostas grandes (ex.:
+    uma busca no Bubble que traz 14 registros × 30 campos, quando o agente usa 6).
+
+    Três jeitos de escrever um campo (2026-10-02; os dois primeiros valem como sempre):
+    - nome simples (`id`, `cpo.NomeCliente`): vale para CADA registro da lista que o
+      Batuta reconhece sozinho — o `response.results` do Bubble, uma lista no topo, ou
+      as chaves `results`, `rows`, `items`, `data`, `records`;
+    - com ponto, dentro do registro (`analytics.views`): só aquele pedaço aninhado;
+    - com `[]`, a partir da RAIZ da resposta (`posts[].id`, `posts[].platforms[].status`):
+      diz qual é a lista, em qualquer nível — para APIs cuja lista tem outro nome (as
+      respostas do Zernio voltavam inteiras, com o custo de tokens lá no alto). Com
+      algum campo assim, a resposta inteira passa a ser só o que foi pedido.
+
+    TRAVA CONTRA O ZERO ABSOLUTO (2026-09-22): se o filtro não casa com NADA que tem
+    conteúdo, ele não está economizando — está apagando (o caso clássico é pedir a
+    chave do contêiner, `rows`, em vez dos campos da linha; o agente, sem ter como
+    saber, inventou explicação). Aí a resposta volta INTACTA: devolver inteiro custa
+    tokens, apagar custa a verdade. Formato não reconhecido também volta intacto."""
+    if any("[]" in c for c in campos):
+        achou, recorte = _recortar(corpo, campos)
+        return recorte if achou and not _vazio(recorte) else corpo
 
     def enxuga_lista(lista: list) -> list:
-        enxuto = [enxuga(r) for r in lista]
-        # TRAVA CONTRA O ZERO ABSOLUTO (2026-09-22). Se o filtro esvaziou TODOS os
-        # registros que tinham conteúdo, ele não está economizando — está apagando: os
-        # nomes pedidos não existem em registro nenhum.
-        #
-        # É o caso clássico de pedir a chave do CONTÊINER em vez dos campos da linha.
-        # No Search Console (`campos_resposta: ["rows", …]`) a resposta voltava 200 com
-        # N linhas TODAS vazias, sem cliques nem impressões — e o agente, sem ter como
-        # saber, inventou explicação ("falha de serialização do Google") e seguiu.
-        # Filtro que não casa com nada é engano de configuração; devolver intacto custa
-        # tokens, apagar custa a verdade.
+        enxuto = []
+        for registro in lista:
+            if isinstance(registro, dict):
+                _, recorte = _recortar(registro, campos)
+                enxuto.append(recorte or {})
+            else:
+                enxuto.append(registro)
         tinha = [r for r in lista if isinstance(r, dict) and r]
-        if tinha and all(not enxuga(r) for r in tinha):
+        if tinha and all(not e for r, e in zip(lista, enxuto) if isinstance(r, dict) and r):
             return list(lista)
         return enxuto
 
@@ -100,6 +162,9 @@ def campos_resposta_nao_casam(corpo: Any, campos: list[str]) -> bool:
     dava alarme falso quando os campos escolhidos eram TODOS os da linha — o filtro
     guarda tudo, nada muda, e o aviso dizia que nada batia (visto em 2026-09-26 no
     Search Console, com `keys, clicks, impressions, ctr, position` certinhos)."""
+    if campos and any("[]" in c for c in campos):
+        achou, recorte = _recortar(corpo, campos)
+        return not achou or _vazio(recorte)
     registros = registros_da_resposta(corpo)
     if not registros or not campos:
         return False

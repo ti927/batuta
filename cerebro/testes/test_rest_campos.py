@@ -105,3 +105,51 @@ def test_executar_sem_filtro_devolve_tudo(monkeypatch):
 
 def test_config_default_vazio():
     assert ConfigRest(url="https://x").campos_resposta == []
+
+
+# ---------------- caminhos (2026-10-02): lista com outro nome e campo aninhado ----------------
+
+ZERNIO = {
+    "posts": [
+        {"_id": "p1", "content": "texto longo" * 50, "analytics": {"views": 10, "likes": 2, "extra": "x"},
+         "platforms": [{"platform": "instagram", "status": "published", "raw": {"muito": "dado"}}]},
+        {"_id": "p2", "content": "outro", "analytics": {"views": 5, "likes": 0, "extra": "y"},
+         "platforms": [{"platform": "instagram", "status": "failed", "raw": {}}]},
+    ],
+    "pagination": {"page": 1, "total": 2},
+}
+
+
+def test_caminho_com_lista_de_outro_nome_e_campo_aninhado():
+    out = _projetar_registros(
+        ZERNIO, ["posts[]._id", "posts[].analytics.views", "posts[].platforms[].status"]
+    )
+    assert out == {"posts": [
+        {"_id": "p1", "analytics": {"views": 10}, "platforms": [{"status": "published"}]},
+        {"_id": "p2", "analytics": {"views": 5}, "platforms": [{"status": "failed"}]},
+    ]}
+
+
+def test_ponto_dentro_do_registro_reconhecido_sozinho():
+    corpo = {"data": [{"id": 1, "stats": {"a": 1, "b": 2}}, {"id": 2, "stats": {"a": 3, "b": 4}}]}
+    assert _projetar_registros(corpo, ["id", "stats.a"]) == {
+        "data": [{"id": 1, "stats": {"a": 1}}, {"id": 2, "stats": {"a": 3}}]
+    }
+
+
+def test_nome_com_ponto_do_bubble_continua_valendo_inteiro():
+    corpo = {"response": {"results": [{"_id": "1", "cpo.NomeCliente": "Ana", "outro": 1}]}}
+    assert _projetar_registros(corpo, ["cpo.NomeCliente"]) == {
+        "response": {"results": [{"cpo.NomeCliente": "Ana"}]}
+    }
+
+
+def test_caminho_que_nao_casa_devolve_intacto():
+    assert _projetar_registros(ZERNIO, ["itens[].id"]) == ZERNIO
+
+
+def test_aviso_do_construtor_entende_caminho():
+    from instrumentos.rest import campos_resposta_nao_casam
+
+    assert campos_resposta_nao_casam(ZERNIO, ["itens[].id"]) is True
+    assert campos_resposta_nao_casam(ZERNIO, ["posts[]._id"]) is False

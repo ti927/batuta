@@ -632,3 +632,31 @@ def test_testar_instrumento_ponte_desligada_diz_o_caminho(mcp, dados, monkeypatc
     saida = escrita.testar_instrumento(_sub(dados), iid, {})
     assert escrita.ERRO_INESPERADO not in saida
     assert "BATUTA_INTERNO_SECRET" in saida
+
+
+def test_id_curto_da_tela_funciona_quando_e_unico(mcp, dados):
+    """Os 8 primeiros caracteres do id (o que aparece na tela e nos documentos) bastam
+    para ver um instrumento, quando só um começa assim (uso real, 02/10/2026)."""
+    import mcp_ferramentas as leitura
+
+    criado = json.loads(escrita.configurar_instrumento(
+        _sub(dados), str(dados["timeA"].id), "PDF curto", "gerar_pdf", {}
+    ))
+    curto = criado["id"][:8]
+    detalhe = json.loads(leitura.ver_instrumento(_sub(dados), curto))
+    assert detalhe["nome"] == "PDF curto"
+    assert "inválido" in leitura.ver_instrumento(_sub(dados), "xyz")
+
+
+def test_id_curto_ambiguo_pede_o_completo(mcp, dados):
+    import mcp_ferramentas as leitura
+    from modelos import Instrumento as Inst
+
+    ids = []
+    for nome in ("A", "B"):
+        inst = Inst(id=uuid.UUID("abcdef12-0000-4000-8000-" + uuid.uuid4().hex[:12]),
+                    time_id=dados["timeA"].id, nome=nome, tipo="gerar_pdf", configuracao={})
+        mcp.add(inst)
+        ids.append(inst.id)
+    mcp.flush()
+    assert "mais de um registro" in leitura.ver_instrumento(_sub(dados), "abcdef12")

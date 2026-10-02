@@ -87,7 +87,10 @@ class OperacaoConector(BaseModel):
     campos: list[CampoOperacao] = Field(default_factory=list)
     campos_resposta: list[str] = Field(
         default_factory=list,
-        description="Opcional. Traga só estes campos de cada registro da resposta (corta custo).",
+        description="Opcional. Traga só estes campos da resposta (corta custo). Nome "
+        "simples vale para cada registro da lista (`id`, `nome`); com ponto, um pedaço "
+        "aninhado (`analytics.views`); com [] a partir da raiz, quando a lista tem outro "
+        "nome (`posts[].id`, `posts[].platforms[].status`).",
     )
     # Nem todo POST escreve. A consulta do Google Search Console
     # (`searchAnalytics/query`) é POST porque o filtro não cabe na URL — e só LÊ.

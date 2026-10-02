@@ -154,7 +154,7 @@ async def listar_agentes(time_id: str) -> str:
 
 @mcp.tool()
 async def ver_agente(agente_id: str) -> str:
-    """Mostra os textos completos de um agente (os 4 markdowns: agent_md/skill_md/
+    """(Aceita o id completo ou os 8 primeiros caracteres que aparecem na tela.) Mostra os textos completos de um agente (os 4 markdowns: agent_md/skill_md/
     tools_md/soul_md), o modelo, se a memória está ligada e o cinto de instrumentos."""
     return await anyio.to_thread.run_sync(mcp_ferramentas.ver_agente, _sub(), agente_id)
 
@@ -174,7 +174,7 @@ async def listar_automacoes(time_id: str) -> str:
 
 @mcp.tool()
 async def ver_automacao(automacao_id: str) -> str:
-    """Mostra a cadeia completa (o fluxo/grafo de nós) de uma automação, com o gatilho e
+    """(Aceita o id completo ou os 8 primeiros caracteres que aparecem na tela.) Mostra a cadeia completa (o fluxo/grafo de nós) de uma automação, com o gatilho e
     se está ativa."""
     return await anyio.to_thread.run_sync(mcp_ferramentas.ver_automacao, _sub(), automacao_id)
 
@@ -206,7 +206,7 @@ async def listar_execucoes(
 
 @mcp.tool()
 async def diagnosticar_execucao(execucao_id: str) -> str:
-    """Investiga UMA execução a fundo e devolve o diagnóstico: estado, linha do tempo dos
+    """(Aceita o id completo ou os 8 primeiros caracteres que aparecem na tela.) Investiga UMA execução a fundo e devolve o diagnóstico: estado, linha do tempo dos
     passos e AVISOS (cada um com título, detalhe e ação sugerida). Use para explicar ao
     consultor por que uma execução falhou ou ficou parada e propor o próximo passo. Nunca
     expõe segredos (só diz se um canal 'tem token', nunca o valor).
@@ -330,7 +330,7 @@ async def listar_instrumentos(time_id: str) -> str:
 
 @mcp.tool()
 async def ver_instrumento(instrumento_id: str) -> str:
-    """Mostra um instrumento a fundo: configuração pública, credencial apontada, segredos
+    """(Aceita o id completo ou os 8 primeiros caracteres que aparecem na tela.) Mostra um instrumento a fundo: configuração pública, credencial apontada, segredos
     preenchidos e os que ainda FALTAM para ele funcionar, o `escopo` (time ou
     organização) e `usado_por` (times, agentes, automações e pedidos de aprovação que
     dependem dele). Nunca devolve o valor de um segredo."""
