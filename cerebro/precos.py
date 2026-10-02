@@ -51,6 +51,9 @@ PRECO_PADRAO = (1.0, 5.0)
 # Transcrição (Whisper) é cobrada por MINUTO de áudio, não por token (whisper-1 =
 # US$0,006/min). A entrada de uso traz `segundos` e um `custo_usd` pré-calculado.
 PRECO_WHISPER_MIN = 0.006
+# Pelo Google (Flash-Lite ouvindo o áudio): ~US$ 0,005 por minuto
+# (ai.google.dev/gemini-api/docs/pricing, 2026-10-02).
+PRECO_TRANSCRICAO_GOOGLE_MIN = 0.005
 
 # Geração de imagem é cobrada por IMAGEM (não por token), variando sobretudo pela
 # QUALIDADE (low/medium/high) — aproximado, como todo este módulo (informativo, não
@@ -137,6 +140,13 @@ def custo_usd(
     regular = max(0, (tokens_entrada or 0) - cr - cw)
     entrada = (regular + cr * CACHE_READ_MULT + cw * CACHE_WRITE_MULT) / 1_000_000 * pe
     return entrada + (tokens_saida or 0) / 1_000_000 * ps
+
+
+def custo_transcricao(modelo: str, segundos: float) -> float:
+    """Custo aproximado de uma transcrição, por minuto de áudio e pela IA que transcreveu."""
+    if (modelo or "").startswith("gemini"):
+        return (max(0.0, segundos or 0) / 60.0) * PRECO_TRANSCRICAO_GOOGLE_MIN
+    return custo_whisper(segundos)
 
 
 def custo_whisper(segundos: float) -> float:

@@ -36,7 +36,10 @@ MAX_NOMES = 3
 
 _NA_EMPRESA = {"anthropic": "na Anthropic", "openai": "na OpenAI", "google": "no Google"}
 # Instrumentos cuja config tem um `modelo` de IA.
-_TIPOS_COM_MODELO = ("gerar_imagem", "montar_imagem", "descrever_imagem", "gerar_video")
+_TIPOS_COM_MODELO = (
+    "gerar_imagem", "montar_imagem", "descrever_imagem", "gerar_video",
+    "pesquisar_web", "ler_pagina", "ler_documento", "gerar_arquivo", "narrar_texto",
+)
 
 
 class ModeloSumiu(Exception):
@@ -67,6 +70,7 @@ def modelos_em_uso(sessao) -> dict[str, list[str]]:
             uso[modelo].append(f"instrumento {nome} ({time_nome})")
     uso[MODELO_PADRAO].append("roteamento das automações")
     uso[transcricao.MODELO].append("transcrição dos áudios do Telegram")
+    uso[transcricao.MODELO_GOOGLE].append("transcrição dos áudios do Telegram (chave do Google)")
     return dict(uso)
 
 

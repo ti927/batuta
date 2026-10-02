@@ -33,6 +33,7 @@ from instrumentos import gerar_pdf  # noqa: E402, F401  (efeito colateral: regis
 from instrumentos import gerar_video  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import ler_documento  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import ler_pagina  # noqa: E402, F401  (efeito colateral: registro)
+from instrumentos import narrar_texto  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import mcp  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import montar_imagem  # noqa: E402, F401  (efeito colateral: registro)
 from instrumentos import pedir_aprovacao  # noqa: E402, F401  (efeito colateral: registro)

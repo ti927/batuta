@@ -323,3 +323,73 @@ def test_montar_imagem_pelo_google_respeita_o_limite_de_fotos(monkeypatch):
     with usar_chaves({"google": "g"}), pytest.raises(FalhaInstrumento) as e:
         tipo.executar(cfg, tipo.Args(prompt="x", imagens_url=[f"https://x.com/{i}" for i in range(15)]))
     assert "no máximo 14" in str(e.value)
+
+
+# ── Narrar texto ─────────────────────────────────────────────────────────────────
+
+
+def _resposta_audio(dados, entrada=50, saida=250):
+    partes = [NS(inline_data=NS(data=dados, mime_type="audio/wav"))] if dados else []
+    return NS(candidates=[NS(content=NS(parts=partes), finish_reason="STOP")],
+              usage_metadata=NS(prompt_token_count=entrada, candidates_token_count=saida))
+
+
+def test_narrar_texto_poe_cabecalho_wav_no_audio_cru_e_mede_o_custo(monkeypatch):
+    import wave
+    import io
+    from instrumentos import narrar_texto as nt
+
+    pcm = b"\x00\x01" * 24_000  # 1 s de áudio cru (16 bits, 24 kHz, mono)
+    pedidos = _google_falso(monkeypatch, [_resposta_audio(pcm)])
+    salvos = _guardar(monkeypatch, nt)
+    tipo = encaixe.obter_tipo("narrar_texto")
+    with usar_chaves({"google": "g"}):
+        r = tipo.executar(tipo.Config(voz="Achird", tom="animado"), tipo.Args(texto="Olá, tudo bem?"))
+    conf = pedidos[0]["config"]
+    assert conf.response_modalities == ["AUDIO"]
+    assert conf.speech_config.voice_config.prebuilt_voice_config.voice_name == "Achird"
+    assert conf.speech_config.language_code == "pt-BR"
+    assert "animado" in conf.system_instruction
+    nome, wav, mime = salvos[0]
+    assert mime == "audio/wav" and wav[:4] == b"RIFF" and nome.endswith(".wav")
+    with wave.open(io.BytesIO(wav)) as w:
+        assert (w.getframerate(), w.getnchannels(), w.getsampwidth()) == (24_000, 1, 2)
+    assert r["segundos"] == 1.0
+    # 50 × US$ 0,50/M + 250 × US$ 6/M (Flash-Lite)
+    assert r["uso"]["custo_usd"] == pytest.approx(0.000025 + 0.0015)
+
+
+def test_narrar_texto_sem_tom_nao_manda_instrucao(monkeypatch):
+    pedidos = _google_falso(monkeypatch, [_resposta_audio(b"RIFF....WAVEfmt ")])
+    from instrumentos import narrar_texto as nt
+    _guardar(monkeypatch, nt)
+    tipo = encaixe.obter_tipo("narrar_texto")
+    with usar_chaves({"google": "g"}):
+        tipo.executar(tipo.Config(), tipo.Args(texto="Oi"))
+    assert pedidos[0]["config"].system_instruction is None
+
+
+def test_narrar_texto_sem_audio_vira_falha(monkeypatch):
+    _google_falso(monkeypatch, [_resposta_audio(None)])
+    tipo = encaixe.obter_tipo("narrar_texto")
+    with usar_chaves({"google": "g"}), pytest.raises(FalhaInstrumento) as e:
+        tipo.executar(tipo.Config(), tipo.Args(texto="Oi"))
+    assert e.value.codigo == "google.sem_audio"
+
+
+def test_narrar_texto_e_do_google_e_registrado():
+    from orquestracao import ciclo_modelos as cm
+    from instrumentos import narrar_texto as nt
+
+    tipo = encaixe.obter_tipo("narrar_texto")
+    assert tipo.provedores_ia == ("google",) and tipo.acao_irreversivel is False
+    for m in nt.PRECOS_VOZ:
+        assert cm.obter(m) and cm.obter(m).uso == cm.VOZ
+
+
+def test_imagem_do_google_paga_pela_chave_do_google():
+    import medicao_instrumentos as med
+
+    inst = NS(tipo="gerar_imagem", configuracao={"modelo": "gemini-3.1-flash-image", "qualidade": "2K"})
+    entrada, servico = med._entrada_e_servico(inst)
+    assert servico == "google" and entrada["custo_usd"] == 0.101

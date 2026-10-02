@@ -34,6 +34,7 @@ TEXTO = "texto"  # agentes, IA de conversa, roteamento, ler imagem
 IMAGEM = "imagem"
 VIDEO = "video"
 TRANSCRICAO = "transcricao"
+VOZ = "voz"  # narrar texto
 
 # Quanto antes da saída o Batuta começa a avisar (selo na tela, teste que falha).
 JANELA_ALERTA_DIAS = 60
@@ -115,6 +116,9 @@ REGISTRO: tuple[Modelo, ...] = (
     Modelo("veo-3.1-lite-generate-preview", "google", VIDEO),
     Modelo("veo-3.1-fast-generate-preview", "google", VIDEO),
     Modelo("veo-3.1-generate-preview", "google", VIDEO),
+    # ── Google (voz — Narrar texto) ──
+    Modelo("gemini-3.8-flash-tts", "google", VOZ),
+    Modelo("gemini-3.8-flash-lite-tts", "google", VOZ),
     # ── OpenAI (vídeo) — desligado sem substituto ──
     Modelo("sora-2", "openai", VIDEO, DESLIGADO, date(2026, 9, 24)),
     Modelo("sora-2-pro", "openai", VIDEO, DESLIGADO, date(2026, 9, 24)),

@@ -581,14 +581,16 @@ def _transcrever_pendentes(
     sessao: Session,
     conversa: Conversa,
     token: str,
-    chave_openai: str | None,
-    origem_openai: str | None = None,
+    chaves: dict,
+    origens: dict,
 ) -> list:
     """Transcreve (Fase H) as mensagens de voz ainda sem texto da conversa, para
-    o agente recebê-las como texto. Sem chave OpenAI ou em falha, deixa um aviso
-    gentil no lugar — nunca trava o atendimento. Devolve a LISTA de entradas de
-    uso (categoria 'transcricao'; custo por minuto) das transcrições que de fato
+    o agente recebê-las como texto — pelo Google ou pela OpenAI, conforme a chave
+    (`transcricao.transcrever_com_a_chave_que_houver`). Sem chave ou em falha, deixa
+    um aviso gentil no lugar — nunca trava o atendimento. Devolve a LISTA de entradas
+    de uso (categoria 'transcricao'; custo por minuto) das transcrições que de fato
     rodaram, para a contabilização."""
+    chaves_audio = {p: chaves.get(p) for p in ("google", "openai") if chaves.get(p)}
     pendentes = sessao.scalars(
         select(MensagemConversa)
         .where(
@@ -606,11 +608,14 @@ def _transcrever_pendentes(
         if midia.get("tipo") != "voz":
             continue
         texto = None
+        modelo, provedor = transcricao.MODELO, "openai"
         file_id = midia.get("file_id")
-        if token and chave_openai and file_id:
+        if token and chaves_audio and file_id:
             try:
                 audio = telegram.baixar_arquivo(token, file_id)
-                texto = transcricao.transcrever(audio, chave_openai)
+                texto, modelo, provedor = transcricao.transcrever_com_a_chave_que_houver(
+                    audio, chaves_audio
+                )
             except Exception:
                 texto = None
         m.conteudo = texto or "[áudio recebido — não consegui transcrever agora]"
@@ -620,10 +625,10 @@ def _transcrever_pendentes(
             segundos = midia.get("duracao_s") or 0
             usos.append(
                 {
-                    "modelo": transcricao.MODELO,
+                    "modelo": modelo,
                     "segundos": segundos,
-                    "custo_usd": round(precos.custo_whisper(segundos), 6),
-                    "origem": origem_openai or "desconhecida",
+                    "custo_usd": round(precos.custo_transcricao(modelo, segundos), 6),
+                    "origem": origens.get(provedor) or "desconhecida",
                     "categoria": "transcricao",
                 }
             )
@@ -1061,9 +1066,7 @@ def _rodar_turno(
 
     `ficha` só vem do turno de PORTÃO (há uma execução por trás, com ficha). No chat
     puro não há execução nem ficha — lá quem guarda contexto é a memória entre turnos."""
-    uso_transcricao = _transcrever_pendentes(
-        sessao, conversa, token, chaves.get("openai"), origens.get("openai")
-    )
+    uso_transcricao = _transcrever_pendentes(sessao, conversa, token, chaves, origens)
     # Visão: uma imagem que o contato mandou vira DESCRIÇÃO (texto) que o agente lê —
     # mesma ideia da transcrição de áudio. Usa o modelo do próprio agente (multimodal).
     # Os bytes baixados ficam disponíveis para o instrumento `arquivar_imagem` GUARDAR
