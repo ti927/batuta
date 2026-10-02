@@ -68,13 +68,16 @@ SISTEMA_OPENAI = SISTEMA.replace("$OUTPUT_DIR", "/mnt/data") + (
 # Espaço de execução da OpenAI: 1 GB (US$ 0,03 por sessão de até 20 min).
 MEMORIA_OPENAI = "1g"
 PADROES = {"anthropic": srv.MODELO_PADRAO, "openai": oai.MODELO_PADRAO_WEB}
+# Sem o Google: a execução de código dele não devolve arquivo (só imagem de gráfico).
+PROVEDORES = ("anthropic", "openai")
 
 
 class ConfigArquivo(BaseModel):
     modelo: str = escolha_ia.campo_modelo(
         "Em branco, o Batuta usa o padrão da IA com chave: GPT-5.6 Luna (rápido e "
         "barato, cerca de US$ 0,03 por arquivo) ou Claude Sonnet 5 (cerca de US$ 0,15 a "
-        "0,25, mais demorado)."
+        "0,25, mais demorado).",
+        PROVEDORES,
     )
     formatos: list[Literal["xlsx", "docx", "pptx", "pdf"]] = Field(
         default_factory=lambda: list(HABILIDADES), title="Formatos que a IA sabe montar",
@@ -89,7 +92,7 @@ class ConfigArquivo(BaseModel):
 
     @model_validator(mode="after")
     def _valido(self) -> "ConfigArquivo":
-        escolha_ia.validar(self.modelo, "gerar arquivos")
+        escolha_ia.validar(self.modelo, "gerar arquivos", PROVEDORES)
         return self
 
 
@@ -262,7 +265,7 @@ def _sem_caminho_interno(texto: str) -> str:
 
 class GerarArquivo(TipoInstrumento):
     tipo = "gerar_arquivo"
-    provedores_ia = escolha_ia.PROVEDORES
+    provedores_ia = PROVEDORES
     categoria = "Pesquisa e leitura"
     nome_exibicao = "Gerar arquivo e analisar dados"
     descricao = (

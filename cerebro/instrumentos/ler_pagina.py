@@ -1,16 +1,18 @@
 """Instrumento "Ler página da web" — a IA abre um link e extrai o que o agente pediu.
 
 Mesmo desenho do "Pesquisar na web" (por capacidade: o modelo escolhido diz qual IA lê
-— a Anthropic, com a ferramenta de leitura dela, ou a OpenAI, com a busca dela, que
-abre a página pedida). Substitui o "Ler site" que saiu dos prontos (Tavily/Firecrawl).
+— a Anthropic, com a ferramenta de leitura dela; a OpenAI, com a busca dela, que abre
+a página pedida; ou o Google, com a leitura de link dele, `url_context`). Substitui o "Ler site" que saiu dos prontos (Tavily/Firecrawl).
 Custo: os tokens da página. Limites das duas: não executa JavaScript (site que só
 monta o conteúdo no navegador vem vazio) e não entra em página com login. Só leitura.
 """
 
+from google.genai import types as gtypes
 from pydantic import BaseModel, Field, model_validator
 
 from instrumentos import anthropic_servidor as srv
 from instrumentos import escolha_ia
+from instrumentos import google_servidor as goo
 from instrumentos import openai_servidor as oai
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 
@@ -19,13 +21,16 @@ SISTEMA = (
     "endereço indicado, extraia exatamente o que foi pedido e responda em português. "
     "Se a página não tiver a informação, diga claramente — nunca invente."
 )
-PADROES = {"anthropic": srv.MODELO_PADRAO_WEB, "openai": oai.MODELO_PADRAO_WEB}
+PADROES = {
+    "anthropic": srv.MODELO_PADRAO_WEB, "openai": oai.MODELO_PADRAO_WEB,
+    "google": goo.MODELO_PADRAO_WEB,
+}
 
 
 class ConfigLeitura(BaseModel):
     modelo: str = escolha_ia.campo_modelo(
-        "Em branco, o Batuta usa o mais barato da IA com chave (GPT-5.6 Luna ou Claude "
-        "Haiku) — basta para extrair o que está na página."
+        "Em branco, o Batuta usa o mais barato da IA com chave (Claude Haiku, GPT-5.6 Luna "
+        "ou Gemini Flash-Lite) — basta para extrair o que está na página."
     )
     max_tamanho: int = Field(
         default=30000, ge=2000, le=150000, title="Limite de leitura por página",
@@ -56,7 +61,7 @@ class ArgsLeitura(BaseModel):
 
 class LerPagina(TipoInstrumento):
     tipo = "ler_pagina"
-    provedores_ia = escolha_ia.PROVEDORES
+    provedores_ia = escolha_ia.TODAS
     categoria = "Pesquisa e leitura"
     nome_exibicao = "Ler página da web"
     descricao = (
@@ -79,6 +84,8 @@ class LerPagina(TipoInstrumento):
         pedido = f"Endereço: {url}\n\nO que extrair: {args.o_que_extrair}"
         if escolha_ia.provedor(modelo) == "openai":
             return self._pela_openai(url, pedido, modelo)
+        if escolha_ia.provedor(modelo) == "google":
+            return self._pelo_google(url, pedido, modelo)
         _, leitura = srv.versoes(modelo)
         r = srv.chamar(
             modelo=modelo, sistema=SISTEMA,
@@ -124,6 +131,31 @@ class LerPagina(TipoInstrumento):
         if not abriu:
             # Respondeu sem abrir a página (de memória ou só buscando): o agente precisa
             # saber que a resposta pode não ter vindo dela.
+            resultado["aviso"] = "A IA não abriu esta página; a resposta pode não ter vindo dela."
+        return resultado
+
+    def _pelo_google(self, url: str, pedido: str, modelo: str) -> dict:
+        r = goo.chamar(
+            modelo=modelo, sistema=SISTEMA + " Use só a página indicada.",
+            conteudo=[pedido], ferramentas=[gtypes.Tool(url_context=gtypes.UrlContext())],
+        )
+        situacoes = goo.links_lidos(r["resposta"])
+        abriu = any(s.endswith("SUCCESS") for s in situacoes.values())
+        if not r["texto"]:
+            if situacoes and not abriu:
+                raise FalhaInstrumento(
+                    "a página não pôde ser aberta (fora do ar, exige login ou bloqueia robôs).",
+                    retentavel=False, codigo="google.link_inacessivel",
+                )
+            raise FalhaInstrumento("a leitura da página não trouxe resposta.", retentavel=True)
+        resultado = {
+            "ok": True,
+            "url": url,
+            "conteudo": r["texto"],
+            "avisos": [f"{link}: {s}" for link, s in situacoes.items() if not s.endswith("SUCCESS")],
+            "uso": r["uso"],
+        }
+        if not abriu:
             resultado["aviso"] = "A IA não abriu esta página; a resposta pode não ter vindo dela."
         return resultado
 

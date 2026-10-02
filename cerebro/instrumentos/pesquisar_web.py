@@ -1,21 +1,24 @@
 """Instrumento "Pesquisar na web" — a IA busca na internet e responde com as fontes.
 
 Instrumento POR CAPACIDADE (decisão do maestro, 2026-10-02): o agente pede "pesquise
-X"; QUAL IA faz a busca é configuração — o modelo escolhido (Anthropic ou OpenAI, cada
-uma com a ferramenta de busca que roda nos servidores dela; `escolha_ia`).
+X"; QUAL IA faz a busca é configuração — o modelo escolhido (Anthropic, OpenAI ou
+Google, cada uma com a ferramenta de busca que roda nos servidores dela; `escolha_ia`).
 
 Substitui as buscas de mercado que saíram dos prontos (Tavily, Exa) sem fornecedor de
-fora: a chave é a de IA da organização. Custo real: US$ 10 por mil buscas + tokens,
-medido pelo que a IA informa (na OpenAI, com o Luna, ~US$ 0,012 por pesquisa). Só leitura.
+fora: a chave é a de IA da organização. Custo real: US$ 10 por mil buscas (Anthropic e
+OpenAI) ou US$ 14 por mil depois de 5.000 grátis no mês (Google) + tokens, medido pelo
+que a IA informa (na OpenAI, com o Luna, ~US$ 0,012 por pesquisa). Só leitura.
 """
 
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
+from google.genai import types as gtypes
 from pydantic import BaseModel, Field, model_validator
 
 from instrumentos import anthropic_servidor as srv
 from instrumentos import escolha_ia
+from instrumentos import google_servidor as goo
 from instrumentos import openai_servidor as oai
 from instrumentos.base import FalhaInstrumento, TipoInstrumento, registrar
 
@@ -42,18 +45,22 @@ def _sistema(desde: date | None) -> str:
     return texto
 
 
-PADROES = {"anthropic": srv.MODELO_PADRAO_WEB, "openai": oai.MODELO_PADRAO_WEB}
+PADROES = {
+    "anthropic": srv.MODELO_PADRAO_WEB, "openai": oai.MODELO_PADRAO_WEB,
+    "google": goo.MODELO_PADRAO_WEB,
+}
 
 
 class ConfigPesquisa(BaseModel):
     modelo: str = escolha_ia.campo_modelo(
-        "Em branco, o Batuta usa o mais barato da IA com chave: GPT-5.6 Luna (cerca de "
-        "US$ 0,01 por pesquisa) ou Claude Haiku (de US$ 0,02 a 0,05). Modelos maiores "
-        "aprofundam mais, mas custam até dez vezes mais."
+        "Em branco, o Batuta usa o mais barato da IA com chave: Claude Haiku (de US$ 0,02 "
+        "a 0,05 por pesquisa), GPT-5.6 Luna (cerca de US$ 0,01) ou Gemini Flash-Lite. "
+        "Modelos maiores aprofundam mais, mas custam até dez vezes mais."
     )
     max_buscas: int = Field(
         default=5, ge=1, le=20, title="Máximo de buscas por pesquisa",
-        description="Cada busca custa cerca de US$ 0,01.",
+        description="Cada busca custa cerca de US$ 0,01. Na IA do Google, quem decide "
+        "quantas buscas fazer é ela.",
     )
     sites_preferidos: list[str] = Field(
         default_factory=list, title="Buscar só nestes sites",
@@ -94,7 +101,7 @@ class ArgsPesquisa(BaseModel):
 
 class PesquisarWeb(TipoInstrumento):
     tipo = "pesquisar_web"
-    provedores_ia = escolha_ia.PROVEDORES
+    provedores_ia = escolha_ia.TODAS
     categoria = "Pesquisa e leitura"
     nome_exibicao = "Pesquisar na web"
     descricao = (
@@ -109,6 +116,8 @@ class PesquisarWeb(TipoInstrumento):
         modelo = escolha_ia.resolver(config.modelo, PADROES)
         if escolha_ia.provedor(modelo) == "openai":
             return self._pela_openai(config, args, modelo)
+        if escolha_ia.provedor(modelo) == "google":
+            return self._pelo_google(config, args, modelo)
         busca, _ = srv.versoes(modelo)
         ferramenta: dict = {
             "type": busca, "name": "web_search", "max_uses": config.max_buscas,
@@ -158,6 +167,34 @@ class PesquisarWeb(TipoInstrumento):
             "resposta": oai.sem_marca_no_texto(r["texto"]),
             "fontes": oai.fontes(r["itens"]),
             "avisos": r["erros"],
+            "uso": r["uso"],
+        }
+
+    def _pelo_google(self, config: ConfigPesquisa, args: ArgsPesquisa, modelo: str) -> dict:
+        # A busca do Google filtra por data e exclui sites de verdade; "só nestes sites"
+        # ela não tem — vira regra nas instruções (filtro feito pela IA).
+        busca = gtypes.GoogleSearch()
+        if config.sites_bloqueados:
+            busca.exclude_domains = config.sites_bloqueados
+        if args.desde:
+            busca.time_range_filter = gtypes.Interval(
+                start_time=datetime.combine(args.desde, datetime.min.time(), FUSO),
+                end_time=datetime.now(FUSO),
+            )
+        sistema = _sistema(args.desde)
+        if config.sites_preferidos:
+            sistema += " Use só fontes destes sites: " + ", ".join(config.sites_preferidos) + "."
+        r = goo.chamar(
+            modelo=modelo, sistema=sistema, conteudo=[args.pergunta],
+            ferramentas=[gtypes.Tool(google_search=busca)],
+        )
+        if not r["texto"]:
+            raise FalhaInstrumento("a pesquisa não trouxe resposta.", retentavel=True)
+        return {
+            "ok": True,
+            "resposta": r["texto"],
+            "fontes": goo.fontes(r["resposta"]),
+            "avisos": [],
             "uso": r["uso"],
         }
 

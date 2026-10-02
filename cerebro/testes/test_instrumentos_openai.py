@@ -127,8 +127,8 @@ def test_modelo_fora_da_lista_e_recusado():
     tipo = encaixe.obter_tipo("ler_documento")
     with pytest.raises(ValueError):
         tipo.Config(modelo="gpt-4o")  # não abre página nem lê como os da geração atual
-    with pytest.raises(ValueError):
-        tipo.Config(modelo="gemini-3.8-flash")
+    with pytest.raises(ValueError):  # o Gerar arquivo não tem o Google
+        encaixe.obter_tipo("gerar_arquivo").Config(modelo="gemini-3.8-flash")
 
 
 def test_seletor_mostra_so_as_ias_do_instrumento():

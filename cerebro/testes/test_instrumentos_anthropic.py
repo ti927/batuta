@@ -206,7 +206,7 @@ def test_ler_documento_exige_link_publico_https():
 def test_sao_prontos_de_ia_da_anthropic_e_so_leem():
     for t in ("pesquisar_web", "ler_pagina", "ler_documento"):
         tipo = encaixe.obter_tipo(t)
-        assert tipo.provedores_ia == ("anthropic", "openai")
+        assert tipo.provedores_ia == ("anthropic", "openai", "google")
         assert tipo.acao_irreversivel is False
         assert not encaixe.eh_personalizado(t)
 
