@@ -4,7 +4,7 @@ area: "operacao"
 slug: "uso-e-custos"
 tags: ["uso", "custo", "medicao", "categoria", "origem", "provedor", "consumo",
        "teto", "limite de gastos", "orcamento"]
-revisado_em: "2026-09-26"
+revisado_em: "2026-10-02"
 fontes: ["cerebro/precos.py", "cerebro/medicao_instrumentos.py", "cerebro/custos_time.py",
          "cerebro/orquestracao/cadeia.py", "cerebro/mensageria/config.py"]
 ---
@@ -25,7 +25,7 @@ que corta é o **teto de custo por execução**, abaixo — e ele nasce **deslig
 ## Como usar (na tela)
 1. O **resumo de uso** aparece por organização e a página do time mostra o **custo acumulado** daquele time.
 2. O consumo é quebrado por **categoria** e **origem/provedor**, então você vê de onde vem o gasto (agentes,
-   mensageria, Whisper, imagem…).
+   mensageria, transcrição de áudio, imagem…).
 3. A consultoria tem uma visão própria do que passou pela **chave-mãe** (fallback).
 
 ## Dois custos: a IA do agente e os instrumentos
@@ -36,8 +36,8 @@ e o Batuta mede os dois separados:
 - **IA dos agentes** — o modelo do próprio agente, pensando e respondendo (nas automações e no atendimento
   por canal).
 - **Instrumentos** — o que os instrumentos acionados gastaram por fora: gerar/montar imagem, ler imagem,
-  vídeo, **busca na web Exa**, **leitura de página pela Firecrawl**, transcrição de áudio e as operações de
-  conector com preço informado.
+  vídeo, **pesquisar na web**, **ler página**, **ler documento**, **gerar arquivo**, **narrar texto**,
+  transcrição de áudio e as operações de conector com preço informado.
 
 O resumo do time mostra o total, as duas partes, o custo **por agente** (a IA dele + os instrumentos que
 ele acionou) e os **instrumentos que mais custaram**. Custo de instrumento gravado antes de 2026-09-26 não
@@ -47,9 +47,15 @@ tem o nome do instrumento e aparece como "anteriores".
 o valor em **"custo por chamada (US$)"** na operação (`custo_por_chamada_usd`). Sem isso, a operação conta
 como gratuita.
 
-Preços usados (aproximados): Exa — US$ 7/mil buscas até 10 resultados (a profunda, US$ 12/mil) + US$ 1/mil
-páginas de texto; Firecrawl — 1 crédito por página, a ~US$ 0,0032 (plano de entrada; planos maiores pagam
-menos).
+**Dois jeitos de medir:**
+- **Pelo que a IA informa (custo real):** pesquisar na web, ler página, ler documento, gerar arquivo e
+  narrar texto devolvem os tokens e as buscas que de fato gastaram. Busca: US$ 10 por mil na Anthropic e
+  na OpenAI; no Google, 5.000 grátis por mês e depois US$ 14 por mil (o Batuta mostra sempre o preço
+  cheio, porque não sabe quanto da franquia já foi usado).
+- **Por estimativa da configuração:** gerar/montar imagem (por imagem, conforme o modelo e a qualidade ou
+  resolução), gerar vídeo (por segundo, conforme o modelo e a resolução) e ler imagem. A resposta do teste
+  traz o `custo_estimado_usd`.
+- **Transcrição de áudio:** por minuto — ~US$ 0,005 pelo Google, US$ 0,006 pela OpenAI.
 
 ## O teto de custo por execução
 

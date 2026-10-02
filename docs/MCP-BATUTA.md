@@ -38,7 +38,7 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
 - **Matriz de papéis:** observador lê; **operador** cria/edita; **admin** cria
   organização/time, duplica e exclui.
 
-## As ferramentas (66)
+## As ferramentas (67)
 
 - **Leitura/diagnóstico:** `listar_organizacoes`, `listar_times`, `descrever_time`,
   `listar_agentes`, `ver_agente`, `ver_memoria_agente`, `listar_instrumentos`/
@@ -53,7 +53,7 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
   `consultar_conhecimento` (a Central).
 - **Criação núcleo:** `criar_time`/`editar_time`, `criar_agente`/`editar_agente`/
   `remover_agente`, `configurar_instrumento`/`editar_instrumento`, `montar_conector`/
-  `testar_operacao_conector`/`testar_instrumento`, `encaixar_instrumento`/`desencaixar_instrumento`,
+  `testar_operacao_conector`/`testar_instrumento`/`ver_teste_instrumento`, `encaixar_instrumento`/`desencaixar_instrumento`,
   `criar_automacao`/`renomear_automacao`/`montar_cadeia`/`definir_gatilho`/
   `ativar_automacao`/`desativar_automacao`. Reusa a porta validada `criacao/servicos.py`.
 - **Credenciais/chaves (esqueleto — a IA NUNCA recebe segredo):** `listar_tipos_credencial`,
@@ -81,7 +81,7 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
   do Planilhas UMA vez. `testar_link_quadro` — o que o painel recebe, pelo MESMO código da rota pública
   (`rotas.quadros_publico.ler_linhas`/`ler_totais`), pela URL inteira ou por `link_id` + `consulta`; não
   conta leitura nem gasta o limite do link. O risco aceito: o link fica na conversa do claude.ai. Trocar
-  link segue só pela tela. **Total: 66 ferramentas.**
+  link segue só pela tela. **Total: 67 ferramentas.**
 - **Modelos (2026-09-29):** as docstrings de `criar_agente`/`editar_agente` passaram a listar os modelos
   (inclusive `claude-sonnet-5-5` e `claude-opus-5-5`, em validação) e a mandar a IA ao capítulo
   `times-agentes/agente` da Central, com preços e quando usar cada um. Antes diziam só "senão usa o padrão"

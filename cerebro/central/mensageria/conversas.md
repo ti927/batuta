@@ -3,7 +3,7 @@ titulo: "Conversas (atendimento por mensageria)"
 area: "mensageria"
 slug: "conversas"
 tags: ["conversa", "atendimento", "inbox", "takeover", "humano-assume", "timeout", "audio", "turno-descartado"]
-revisado_em: "2026-08-27"
+revisado_em: "2026-10-02"
 fontes: ["cerebro/mensageria/servico.py", "cerebro/mensageria/sweeper.py", "cerebro/orquestracao/memoria_conversa.py", "cerebro/orquestracao/agente.py", "project_estado-atual-build-plan"]
 ---
 
@@ -44,7 +44,8 @@ conversa e sabe quando chamar uma pessoa. Cada canal tem **um agente atendente**
   propósito continua com ela, até apertar "devolver".
 - O atendimento tem **regras de borda uniformes**: junta mensagens em rajada (debounce), tem **teto** de
   idas e vindas antes de chamar um humano, **timeout** com aviso de retomada (nudge), proteção contra
-  injeção de instruções, transcrição de **áudio** (Whisper) e leitura de **imagem** (visão — o agente
+  injeção de instruções, transcrição de **áudio** (pelo Google, quando a organização tem a chave dele;
+  senão pela OpenAI) e leitura de **imagem** (visão — o agente
   "enxerga" a foto que o contato manda; veja [[instrumentos/arquivar-imagem]] para guardá-la).
 - **O atendimento tem pressa, e o Batuta respeita isso.** Numa automação de fundo o motor insiste por
   minutos quando a IA está lenta (ninguém está olhando); no atendimento, não: a chamada tem espera curta e
