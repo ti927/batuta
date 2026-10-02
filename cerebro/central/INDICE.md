@@ -62,16 +62,17 @@ Manual do Batuta para **dois leitores**: a pessoa (dentro do app, em /ajuda) e a
 | O cinto e os instrumentos | `instrumentos/cinto` | Conceito: encaixe, config × args, ação irreversível, segredos | ✅ | ✍️ |
 | Instrumento do time ou da organização | `instrumentos/escopo-do-instrumento` | "Quem pode usar": da organização (todos os times encaixam, identificação uma vez, só admin configura); Usado por; excluir/rebaixar bloqueado em uso; bot da organização só avisa e aprova | ✅ | ✍️ |
 | **Conteúdo & mídia** | | | | |
-| Gerar imagem | `instrumentos/gerar-imagem` | Texto→imagem; modelo/tamanho/qualidade; proporção | ✅ | ✍️ |
-| Montar imagem | `instrumentos/montar-imagem` | Composição a partir de fotos | ✅ | ✍️ |
-| Gerar vídeo (Sora) | `instrumentos/gerar-video` | FORA DO AR (a OpenAI desligou o Sora em 24/09/2026); volta pelo Google | ✅ | ✍️ |
+| Gerar imagem | `instrumentos/gerar-imagem` | Texto→imagem pela OpenAI ou pelo Google; modelo/tamanho/qualidade; proporção | ✅ | ✍️ |
+| Montar imagem | `instrumentos/montar-imagem` | Composição a partir de fotos (OpenAI ou Google) | ✅ | ✍️ |
+| Gerar vídeo | `instrumentos/gerar-video` | Vídeo de 4 a 8 s com áudio pelo Veo do Google (voltou em 02/10/2026; a Sora saiu em 24/09) | ✅ | ✍️ |
+| Narrar texto (voz) | `instrumentos/narrar-texto` | Texto→áudio falado com uma voz do Google (WAV) | ✅ | ✍️ |
 | Descrever imagem | `instrumentos/descrever-imagem` | Visão (imagem→texto) | ✅ | ✍️ |
 | Guardar imagem recebida | `instrumentos/arquivar-imagem` | Salva a foto do canal → URL pública (comprovantes) | ✅ | ✍️ |
 | Gerar PDF | `instrumentos/gerar-pdf` | Documentos | ✅ | ✍️ |
 | **Pesquisa & leitura** | | | | |
-| Pesquisar na web | `instrumentos/pesquisar-web` | A IA busca e responde com as fontes; custo real (~US$ 0,02 no Haiku) | ✅ | ✍️ |
+| Pesquisar na web | `instrumentos/pesquisar-web` | A IA busca e responde com as fontes (Anthropic, OpenAI ou Google); custo real (~US$ 0,01 a 0,02) | ✅ | ✍️ |
 | Ler página da web | `instrumentos/ler-pagina` | Extrai de um link o que o agente pediu; sem login nem JavaScript pesado | ✅ | ✍️ |
-| Ler documento (PDF) | `instrumentos/ler-documento` | Responde sobre um PDF citando a página | ✅ | ✍️ |
+| Ler documento (PDF) | `instrumentos/ler-documento` | Responde sobre um PDF (com a Anthropic, citando a página) | ✅ | ✍️ |
 | Gerar arquivo e analisar dados | `instrumentos/gerar-arquivo` | Planilha/Word/PowerPoint/PDF/gráfico prontos + análise de CSV; leva minutos; custo real | ✅ | ✍️ |
 | **Dados & integração** | | | | |
 | Chamar API REST | `instrumentos/chamar-rest` | NÃO SE CRIA MAIS (29/09): chamada de API é conector (Construtor / montar_conector); vale para as instâncias antigas — GET/POST/…; leitura × escrita | ✅ | ✍️ |

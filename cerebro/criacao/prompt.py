@@ -270,12 +270,13 @@ dê ao agente o `pesquisar_web`: ele busca e devolve a resposta com as fontes. P
 que já se tem (o artigo que a pesquisa achou, a página de um cliente), o `ler_pagina`, dizendo
 no markdown O QUE extrair. Para ler um PDF (contrato, nota fiscal, relatório), o
 `ler_documento`, que responde (com modelo da Anthropic, citando a página). Os três servem com a
-chave da Anthropic OU da OpenAI, só leem e têm custo real por uso (a pesquisa padrão custa de
+chave da Anthropic, da OpenAI OU do Google, só leem e têm custo real por uso (a pesquisa padrão custa de
 US$ 0,01 a 0,02; modelos maiores, até dez vezes mais). Deixe o `modelo` EM BRANCO — o Batuta usa o
 mais barato da IA que tem chave —, salvo se o consultor pedir outro.
 Quando o trabalho termina num ARQUIVO (planilha, relatório em PDF, apresentação, proposta em
 Word, gráfico) ou precisa de CONTA sobre dados (CSV, planilha recebida), dê ao agente o
-`gerar_arquivo`: ele monta o arquivo e devolve o link. Descreva no markdown o arquivo esperado e
+`gerar_arquivo` (Anthropic ou OpenAI; o Google não gera arquivo): ele monta o arquivo e devolve
+o link. Descreva no markdown o arquivo esperado e
 para onde vai o link. Leva de segundos a minutos e custa por uso (~US$ 0,03 por planilha na
 OpenAI, ~US$ 0,20 na Anthropic).
 Os prontos de IA (`precisa_chave_de_ia` no catálogo) só se criam se a organização tiver a chave
@@ -306,6 +307,11 @@ Google. Gera clipes de 4, 6 ou 8 s COM ÁUDIO, vertical (9:16) ou horizontal (16
 POR SEGUNDO (do Lite a US$ 0,05/s ao completo a US$ 0,60/s) — deixe o padrão (Lite, 720p,
 8 s) salvo pedido. Leva de segundos a minutos. O roteiro (`prompt`) pode descrever falas e
 sons; `imagem_referencia_url` anima a partir de uma imagem (ex.: a arte gerada antes).
+VOZ: o `narrar_texto` (chave do Google) transforma um texto em áudio falado (WAV, 30 vozes,
+`tom` opcional) — para a versão em áudio de um conteúdo ou a locução de um vídeo.
+IMAGEM: `gerar_imagem` e `montar_imagem` servem com a chave da OpenAI OU do Google — o modelo
+diz qual. Nos modelos do Google (`gemini-…-image`) o `tamanho` é a proporção (ex.: `4:5`) e a
+`qualidade` é a resolução (`1K`, `2K`, `4K`).
 
 CANCELAR é embutido (não é uma saída que você desenha): sempre que o fluxo estiver
 esperando uma aprovação, além de aprovar/reprovar a pessoa pode ENCERRAR — na tela há um

@@ -21,10 +21,15 @@ chave da **consultoria** (fallback).
 - É **uma chave por provedor** — a escolha de qual IA usar fica no **modelo** do agente.
 - Os **prontos de IA** não pedem chave própria: reusam a do pool.
 - **A chave libera os instrumentos daquela IA** (desde 01/10/2026): com a chave da **OpenAI**, a
-  organização ganha **Gerar imagem** e **Montar imagem** (o Gerar vídeo está fora do ar: a OpenAI
-  desligou o Sora em 24/09/2026); com a da **Anthropic ou a da OpenAI**, **Pesquisar na web**, **Ler
-  página da web**, **Ler documento (PDF)** e **Gerar arquivo e analisar dados** (a IA que faz o trabalho
-  é a do modelo escolhido no instrumento); com a de **qualquer** IA, **Descrever imagem**. Sem a chave, esses instrumentos não aparecem em "Instrumento pronto" e criar
+  organização ganha **Gerar imagem** e **Montar imagem**; com a do **Google**, também Gerar imagem e
+  Montar imagem, além de **Gerar vídeo** (Veo) e **Narrar texto**; com a de **qualquer uma das três**,
+  **Pesquisar na web**, **Ler página da web** e **Ler documento (PDF)**; com a da **Anthropic ou a da
+  OpenAI**, **Gerar arquivo e analisar dados**; e **Descrever imagem** com qualquer uma. A IA que faz o
+  trabalho é a do modelo escolhido no instrumento.
+- **Áudio do Telegram:** com a chave do Google, a transcrição vai por ele (aceita o áudio como chega);
+  sem ela, pela OpenAI. Se o Google falhar e houver chave da OpenAI, a OpenAI transcreve.
+- **Conta do Google pré-paga:** se o crédito acabar, os instrumentos do Google avisam "a conta do Google
+  da empresa está sem crédito" com o caminho (ai.studio/projects → Billing). Sem a chave, esses instrumentos não aparecem em "Instrumento pronto" e criar
   um é recusado, dizendo qual chave falta. A tela de chaves mostra o que cada chave libera.
 
 ## Como usar (na tela)

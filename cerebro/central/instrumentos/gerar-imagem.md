@@ -2,8 +2,8 @@
 titulo: "Instrumento — Gerar imagem"
 area: "instrumentos"
 slug: "gerar-imagem"
-tags: ["gerar-imagem", "imagem", "arte", "openai", "gpt-image", "tamanho", "proporcao", "formato", "png", "jpeg", "413", "instrumento"]
-revisado_em: "2026-10-01"
+tags: ["gerar-imagem", "imagem", "arte", "openai", "gpt-image", "google", "gemini", "tamanho", "proporcao", "formato", "png", "jpeg", "413", "instrumento"]
+revisado_em: "2026-10-02"
 fontes: ["cerebro/instrumentos/gerar_imagem.py", "PRODUTO.md §13"]
 ---
 
@@ -17,24 +17,31 @@ Ilustrar conteúdo, criar artes e mockups. A imagem gerada fica numa **URL públ
 próximo passo (ex.: publicar no Instagram, animar num vídeo).
 
 ## Como usar (na tela)
-1. Crie o instrumento **Gerar imagem** (provedor OpenAI, família gpt-image).
-2. Escolha o **Modelo** (**GPT Image 2**, o padrão; **2.5 Flare**, rápido para o dia a dia; **2.5
-   Sunburst**, a edição mais precisa), o **Tamanho** e a **Qualidade** (as opções de tamanho dependem do modelo; ao
-   lado do tamanho há uma **ilustração da proporção** para você bater o olho).
+1. Crie o instrumento **Gerar imagem** (aparece quando a organização tem a chave da OpenAI ou a do
+   Google).
+2. Escolha o **Modelo** — da OpenAI: **GPT Image 2**, o padrão; **2.5 Flare**, rápido para o dia a dia;
+   **2.5 Sunburst**, a edição mais precisa; do Google: **Gemini 3.1 Flash Image**, **Flash-Lite Image**
+   (o mais barato) e **3 Pro Image** (acabamento superior). Só funciona o modelo da IA que tem chave.
+   Depois, o **Tamanho** e a **Qualidade** (as opções dependem do modelo; ao lado do tamanho há uma
+   **ilustração da proporção**). Nos modelos do Google, o tamanho é a **proporção** (1:1, 4:5, 9:16…) e a
+   qualidade é a **resolução** (1K, 2K, 4K).
 3. Escolha o **Formato**: **PNG** (padrão, sem perdas, mais pesado) ou **JPEG** (mesma resolução, bem
    mais leve). Prefira **JPEG** quando a imagem for **subir para um site** (ex.: WordPress) — evita a
    recusa por tamanho (ver abaixo).
-4. A **chave** de imagem reusa a chave OpenAI da organização (deixe em branco para usar a do pool).
+4. A **chave** de imagem reusa a chave da organização (deixe em branco para usar a do pool).
 
 ## Exemplos
 - Arte quadrada para feed: tamanho `1024x1024` (1:1).
 - Arte de **Story/Reels** (vertical, tela cheia): tamanho **`864x1536`** (9:16).
 - Feed em retrato: `1024x1280` (4:5).
+- No Google: Story em `9:16` e `1K`; feed em `4:5`.
 
 ## Limites e cuidados
 - **Modelos antigos saíram** (gpt-image-1 em 23/10/2026; 1-mini e 1.5 em 01/12/2026, pela OpenAI). Um
   instrumento antigo configurado com eles passa a usar o GPT Image 2 sozinho, sem precisar editar.
-- **Custo por imagem**, e maior na qualidade `high`.
+- **Custo por imagem**, e maior na qualidade `high`. No Google, por resolução: Flash Image US$ 0,067
+  (1K), 0,101 (2K) e 0,151 (4K); Flash-Lite US$ 0,034; Pro US$ 0,134 (até 2K) e 0,24 (4K).
+- Toda imagem do Google sai com uma marca invisível (SynthID) que a identifica como feita por IA.
 - O instrumento é **texto→imagem** (cria do zero, não recebe foto de entrada). Para montar com uma foto
   existente, use [[instrumentos/montar-imagem]].
 - A combinação modelo × tamanho × qualidade precisa ser válida (a tela já filtra).
@@ -48,7 +55,8 @@ Parâmetros no catálogo (`gerar_imagem`), incluindo o campo **`formato`** (`png
 **Story/Reels**, oriente gerar em **9:16** (`864x1536`); para feed vertical, 4:5 (`1024x1280`). Se a
 imagem vai ser **publicada num site** (WordPress etc.), oriente **Formato = JPEG** — o PNG costuma passar
 do limite de upload (erro 413). A imagem sai numa URL pública — encadeie-a no passo que publica ou anima.
-Não peça "chave própria" se a organização já tem chave OpenAI no pool.
+Não peça "chave própria" se a organização já tem a chave no pool. Com só a chave do Google, escolha
+um modelo `gemini-…-image` (tamanho = proporção, qualidade = `1K`/`2K`/`4K`).
 
 ## Relacionado
 - [[instrumentos/montar-imagem]]

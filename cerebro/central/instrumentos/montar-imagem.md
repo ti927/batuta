@@ -2,8 +2,8 @@
 titulo: "Instrumento — Montar imagem (a partir de fotos)"
 area: "instrumentos"
 slug: "montar-imagem"
-tags: ["montar-imagem", "imagem", "foto", "rosto", "composicao", "arte", "instrumento"]
-revisado_em: "2026-07-17"
+tags: ["montar-imagem", "imagem", "foto", "rosto", "composicao", "arte", "openai", "google", "gemini", "instrumento"]
+revisado_em: "2026-10-02"
 fontes: ["cerebro/instrumentos/montar_imagem.py"]
 ---
 
@@ -19,10 +19,11 @@ por exemplo. É diferente do [[instrumentos/gerar-imagem]], que cria do zero só
 agente também passa a **URL da(s) foto(s)-base**.
 
 ## Como usar (na tela)
-1. Crie o instrumento **Montar imagem (a partir de fotos)**.
-2. Escolha o **Modelo**, o **Tamanho** e a **Qualidade** (as opções de tamanho/qualidade dependem do
-   modelo; ao lado, a ilustração da proporção). O padrão já vem bom para rosto: retrato, qualidade alta.
-3. A **chave** reusa a chave OpenAI da organização (deixe em branco para usar a do pool).
+1. Crie o instrumento **Montar imagem (a partir de fotos)** (com a chave da OpenAI ou a do Google).
+2. Escolha o **Modelo** (GPT Image da OpenAI ou Gemini Image do Google), o **Tamanho** e a **Qualidade**
+   (as opções dependem do modelo; ao lado, a ilustração da proporção). O padrão já vem bom para rosto:
+   retrato, qualidade alta. No Google, o tamanho é a proporção (ex.: 4:5) e a qualidade, a resolução.
+3. A **chave** reusa a chave da organização (deixe em branco para usar a do pool).
 4. Pendure no cinto do agente que monta a arte; explique no `tools.md` qual foto vem primeiro.
 
 ## Exemplos
@@ -31,7 +32,8 @@ agente também passa a **URL da(s) foto(s)-base**.
 
 ## Limites e cuidados
 - **A 1ª foto é a mais preservada** (rosto/textura). Passe a foto principal primeiro.
-- As fotos-base precisam estar em **URLs públicas** (o cérebro as baixa). De 1 a 16 fotos.
+- As fotos-base precisam estar em **URLs públicas** (o cérebro as baixa). De 1 a 16 fotos na OpenAI;
+  até 14 no Google.
 - Montagem em qualidade alta é **pesada** — leva minutos e tem um custo por imagem maior.
 - Os modelos atuais já preservam a entrada em alta fidelidade; para rosto e produto, o **GPT Image 2.5
   Sunburst** é o que edita com mais precisão.

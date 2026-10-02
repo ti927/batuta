@@ -70,7 +70,7 @@ def test_rota_indice_e_capitulo(cliente, entrar, dados):
 def test_prompt_da_criadora_referencia_a_central():
     prompt = montar_prompt_criadora()
     assert "consultar_conhecimento" in prompt
-    assert "Gerar vídeo (Sora)" in prompt  # o índice de títulos foi injetado
+    assert "Narrar texto (voz)" in prompt  # o índice de títulos foi injetado
 
 
 def test_system_criadora_marca_o_cache():

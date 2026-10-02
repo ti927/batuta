@@ -1,21 +1,17 @@
 ---
-titulo: "Instrumento — Gerar vídeo (Sora)"
+titulo: "Instrumento — Gerar vídeo"
 area: "instrumentos"
 slug: "gerar-video"
-tags: ["gerar-video", "video", "sora", "openai", "reels", "texto-para-video", "instrumento"]
-revisado_em: "2026-07-17"
-fontes: ["cerebro/instrumentos/gerar_video.py"]
+tags: ["gerar-video", "video", "veo", "google", "gemini", "sora", "reels", "stories", "texto-para-video", "audio", "instrumento"]
+revisado_em: "2026-10-02"
+fontes: ["cerebro/instrumentos/gerar_video.py", "cerebro/precos.py"]
 ---
 
-# Instrumento — Gerar vídeo (Sora)
-
-> **Fora do ar (desde 24/09/2026).** A OpenAI desligou a API de vídeo dela (Sora), sem substituto.
-> Criar um Gerar vídeo é recusado. O vídeo vai voltar pelo Google (Veo); este capítulo fica como
-> registro de como o instrumento funcionava.
+# Instrumento — Gerar vídeo
 
 ## Em uma frase
-Gera um vídeo curto a partir de uma descrição (e, opcionalmente, de uma imagem inicial), com a IA de
-vídeo da OpenAI (Sora), e devolve um link público para o MP4.
+Gera um vídeo curto, **com áudio**, a partir de uma descrição (e, se quiser, de uma imagem inicial),
+com a IA de vídeo do Google (Veo 3.1), e devolve um link público para o MP4.
 
 ## Para que serve / quando usar
 Produzir um Reels, um Story de vídeo ou um item de vídeo de um carrossel. Faz **texto→vídeo** e também
@@ -23,28 +19,38 @@ Produzir um Reels, um Story de vídeo ou um item de vídeo de um carrossel. Faz 
 serve direto ao instrumento personalizado que publica (ex.: o conector da rede social).
 
 ## Como usar (na tela)
-1. Crie o instrumento **Gerar vídeo** (provedor OpenAI/Sora).
-2. Escolha o **Modelo** (`sora-2`, mais barato e 720p; `sora-2-pro`, até 1080p), o **Tamanho** e a
-   **Duração** (as opções dependem do modelo). O padrão é vertical (720x1280), bom para Reels/Stories.
-3. A **chave** reusa a chave OpenAI da organização (deixe em branco para usar a do pool).
+1. Crie o instrumento **Gerar vídeo** (aparece quando a organização tem a chave do Google).
+2. Escolha o **Modelo** — **Veo 3.1 Lite** (o padrão, o mais barato), **Fast** (rápido, até 4K) ou o
+   **completo** (melhor qualidade) —, a **Proporção** (9:16 vertical, para Reels/Stories, ou 16:9
+   horizontal), a **Resolução** e a **Duração** (4, 6 ou 8 segundos).
+3. Pendure no cinto do agente e diga no markdown dele o que o vídeo deve mostrar e para onde vai o link.
 
 ## Exemplos
-- Um Reels vertical de 8s a partir de um roteiro.
-- Animar uma arte gerada antes: passe a URL da imagem como quadro inicial (mesma resolução do vídeo).
+- Um Reels vertical de 8 s a partir de um roteiro, com a fala do apresentador e o som ambiente.
+- Animar uma arte gerada antes: passe a URL da imagem como quadro inicial.
 
 ## Limites e cuidados
-- **Leva alguns minutos** para ficar pronto — o passo aguarda dentro do próprio fluxo.
-- **Cobrado por segundo:** um clipe mais longo custa proporcionalmente mais. Prefira clipes curtos.
-- A OpenAI embute uma **marca d'água "Sora"** visível — não há como removê-la pela API.
-- **Sem pessoas reais / figuras públicas** (no roteiro e na imagem de referência) — a Sora recusa.
-- Se usar imagem de referência, ela precisa ter **exatamente o tamanho** do vídeo.
+- **Leva de segundos a alguns minutos** (o Google diz de 11 s a 6 min). A tela mostra "Gerando o
+  vídeo… (2 min)" enquanto espera.
+- **Cobrado por segundo, já com o áudio:** Lite US$ 0,05 (720p) a 0,08 (1080p); Fast US$ 0,10 a 0,30
+  (4K); completo US$ 0,40 a 0,60. Um Reels de 8 s no padrão custa cerca de **US$ 0,40**.
+- **1080p e 4K só saem com 8 segundos.** O Lite não faz 4K.
+- O Google recusa conteúdo pela política dele (ex.: pessoa pública reconhecível); o instrumento diz o
+  motivo, e o agente deve ajustar o roteiro em vez de insistir.
+- Todo vídeo do Google sai com uma marca invisível (SynthID) que o identifica como feito por IA.
+- O vídeo fica só 2 dias no Google; o Batuta baixa e guarda no armazenamento dele na hora.
 - Não é irreversível (só gera o arquivo) — quem PUBLICA é que pede aprovação, num passo seguinte.
+- **História:** até 24/09/2026 este instrumento usava a Sora, da OpenAI, que a OpenAI desligou. Uma
+  configuração antiga de Sora passa a usar o Veo sozinha, com a mesma orientação.
 
 ## Para a IA
-Parâmetros no catálogo (`gerar_video`): `prompt` (roteiro) e `imagem_referencia_url` (opcional, quadro
-inicial). Para Reels/Stories, gere em vertical. Encadeie a URL do MP4 no passo que publica. Conteúdo com
-rosto real a Sora bloqueia — e não há pronto do Batuta para isso.
+Parâmetros no catálogo (`gerar_video`): `prompt` (roteiro — cena, movimento de câmera, clima, falas e
+sons) e `imagem_referencia_url` (opcional, quadro inicial). Na configuração: `modelo`, `tamanho` (a
+proporção, `9:16` ou `16:9`), `resolucao` (`720p`, `1080p`, `4k`) e `duracao_s` (`4`, `6`, `8`).
+Deixe o padrão (Lite, 9:16, 720p, 8 s) salvo pedido. Devolve `url` (MP4), `modelo`, `duracao_s` e
+`resolucao`. Encadeie a URL no passo que publica. Sem a chave do Google, a criação é recusada.
 
 ## Relacionado
 - [[instrumentos/gerar-imagem]]
 - [[instrumentos/montar-imagem]]
+- [[instrumentos/narrar-texto]]
