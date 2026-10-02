@@ -42,6 +42,8 @@ próximo passo (ex.: publicar no Instagram, animar num vídeo).
 - **Custo por imagem**, e maior na qualidade `high`. No Google, por resolução: Flash Image US$ 0,067
   (1K), 0,101 (2K) e 0,151 (4K); Flash-Lite US$ 0,034; Pro US$ 0,134 (até 2K) e 0,24 (4K).
 - Toda imagem do Google sai com uma marca invisível (SynthID) que a identifica como feita por IA.
+- A resposta traz o `custo_estimado_usd` da imagem (o painel de uso conta o mesmo valor). O Google
+  devolve JPEG; se o formato pedido for PNG, o Batuta converte.
 - O instrumento é **texto→imagem** (cria do zero, não recebe foto de entrada). Para montar com uma foto
   existente, use [[instrumentos/montar-imagem]].
 - A combinação modelo × tamanho × qualidade precisa ser válida (a tela já filtra).

@@ -39,6 +39,9 @@ serve direto ao instrumento personalizado que publica (ex.: o conector da rede s
   motivo, e o agente deve ajustar o roteiro em vez de insistir.
 - Todo vídeo do Google sai com uma marca invisível (SynthID) que o identifica como feito por IA.
 - O vídeo fica só 2 dias no Google; o Batuta baixa e guarda no armazenamento dele na hora.
+- **Imagem de partida em outra proporção** (ex.: uma arte quadrada num vídeo 9:16): o Batuta recorta
+  no centro para a proporção do vídeo, em vez de sair com faixas pretas, e o resultado avisa.
+- A resposta traz o `custo_estimado_usd` do vídeo (o painel de uso conta o mesmo valor).
 - Não é irreversível (só gera o arquivo) — quem PUBLICA é que pede aprovação, num passo seguinte.
 - **História:** até 24/09/2026 este instrumento usava a Sora, da OpenAI, que a OpenAI desligou. Uma
   configuração antiga de Sora passa a usar o Veo sozinha, com a mesma orientação.

@@ -33,9 +33,12 @@ só isso, não a página inteira.
 - **Não abre página com login** nem site que só monta o conteúdo no navegador (JavaScript pesado) —
   nesses casos a página vem vazia ou o instrumento avisa que não conseguiu abrir.
 - Lê texto, HTML e PDF. Endereço com até 250 caracteres.
-- Na OpenAI e no Google, se a IA não conseguir abrir a página, o resultado traz um `aviso` dizendo que
-  a resposta pode não ter vindo dela. No Google, página com login ou bloqueada falha com "não pôde ser
-  aberta".
+- **Na OpenAI, o Batuta baixa a página na hora** e entrega o texto à IA: a busca da OpenAI chegou a
+  devolver uma cópia velha de um blog (os artigos de agosto como "os mais recentes"). Se a página for
+  maior que o limite de leitura, o resultado avisa que só o começo foi lido; página que só monta o
+  conteúdo com JavaScript falha com "não tem texto".
+- No Google, se a IA não conseguir abrir a página, o resultado traz um `aviso` dizendo que a resposta
+  pode não ter vindo dela; página com login ou bloqueada falha com "não pôde ser aberta".
 - Custo: só os tokens da página. Medido em 02/10/2026: US$ 0,018 listando os 6 artigos mais recentes de
   um blog no Haiku (mais atual que um serviço de busca, que devolveu uma cópia velha da página); US$ 0,05
   numa página da Wikipédia no Sonnet.

@@ -94,6 +94,11 @@ conta de API do Batuta, de forma legítima, cada um na própria assinatura (cust
   um aviso `atencao`. Como o serviço MCP não tem a chave do cofre, o teste é pedido ao cérebro pela
   porta interna (`docs/ARQUITETURA.md §9-bis`) — **só funciona com `BATUTA_INTERNO_SECRET`
   configurado nos dois serviços**; sem ela, a ferramenta diz isso e manda testar pela tela.
+  **Instrumentos lentos (2026-10-02):** `gerar_video`, `gerar_arquivo` e `montar_imagem` levam de
+  segundos a minutos — o teste de vídeo derrubou a conexão do MCP no uso real. Eles respondem na hora
+  "em andamento" com um `teste_id`; o cérebro roda o teste em segundo plano e a IA lê o resultado com
+  **`ver_teste_instrumento(teste_id)`** (guardado 1 hora; se o cérebro reiniciar no meio, a consulta diz
+  para rodar de novo). Porta interna `/interno/instrumento/teste`.
 
 > **Nomes que mudaram (2026-08-26):** `ativar_time`/`desativar_time` viraram
 > `ativar_automacao`/`desativar_automacao` — recebiam `automacao_id` e operavam sobre uma

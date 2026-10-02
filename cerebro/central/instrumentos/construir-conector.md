@@ -197,7 +197,9 @@ time: o Batuta não tem como saber o preço de uma API qualquer. Vazio ou `0` = 
 - Teste VOCÊ mesmo com **`testar_operacao_conector(conector_id, operacao, valores?)`** antes de
   encaixar no cinto — cada operação, inclusive as que gravam (marcando TESTES; ver acima). Os outros
   tipos de instrumento se testam com **`testar_instrumento(instrumento_id, argumentos?)`** (só pelo
-  MCP).
+  MCP). Os lentos (gerar vídeo, gerar arquivo, montar imagem) respondem "em andamento" com um
+  `teste_id`: busque o resultado com **`ver_teste_instrumento(teste_id)`** daqui a ~30 s — sem rodar o
+  teste de novo (cada rodada é cobrada).
 - Encaixe as ferramentas no cinto encaixando o CONECTOR no agente (`encaixar_instrumento`): cada
   operação declarada vira uma ação separada para o agente.
 - O antigo "um endpoint só, sem operações" é o [[instrumentos/chamar-rest]] (não se cria mais).
