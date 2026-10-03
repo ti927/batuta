@@ -948,7 +948,7 @@ encerra, vigia no agendador), **G** (guarda-corpo anti prompt-injection) e **H**
      por-instrumento-por-time" confuso. A conversa evoluiu para a **Caixa-forte de Credenciais** (item logo
      abaixo), JÁ ENTREGUE E EM PRODUÇÃO — `inventario-credenciais.tsx` removido e `cerebro/rotas/credenciais.py`
      reescrito como o CRUD do cofre.
-4. ✅ **FASE — Caixa-forte de Credenciais** (CONCLUÍDA, VALIDADA AO VIVO E EM PRODUÇÃO — 2026-06-15, merge
+4. ⚰️ **(REMOVIDA em 2026-10-02/03 — ver o fim deste arquivo e `PRODUTO.md §26`)** ✅ **FASE — Caixa-forte de Credenciais** (CONCLUÍDA, VALIDADA AO VIVO E EM PRODUÇÃO — 2026-06-15, merge
    `9dd93e4`; migração `crd00cofre001`; ~228 testes; núcleo intocado). Substituiu a "seção B" (inventário) por
    um cofre de **credenciais nomeadas, tipadas e referenciadas** — resolveu a confusão da seção B E o desenho
    à prova de futuro (MCP, Google Drive/OAuth, Nano Banana). E2E ao vivo: credencial WordPress na caixa-forte →
@@ -1479,7 +1479,7 @@ endpoints existentes). Validado ao vivo.
 
 ---
 
-## FASE — IA de conversa lida com credenciais nomeadas  📋 BACKLOG (anotado 2026-06-21, não iniciar sem o sinal do maestro)
+## FASE — IA de conversa lida com credenciais nomeadas  ❌ CANCELADA (2026-10-03: a caixa-forte foi removida; o segredo mora no próprio instrumento)
 
 Gatilho: na entrega dos instrumentos de Instagram, a IA criadora **monta** o agente/automação e
 **aplica o portão certo** (deriva de `acao_irreversivel`, sem lista fixa), mas **não pluga o

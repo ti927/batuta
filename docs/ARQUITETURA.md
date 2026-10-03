@@ -340,7 +340,7 @@ no-store`) + uma **ilha cliente** (`"use client"`) que muta via `lib/api.ts` e d
 O shell é uma **sidebar** escura, separada em **dois blocos**:
 - **Organização** (todo usuário da org): Início (`/`) com sub-links **Gerenciar Times**
   (`/organizacoes/[id]`) e **Gerenciar Organizações** (`/organizacoes`); a lista de **Times**;
-  Biblioteca; Uso e custos; e — só para admin da org — Acesso e papéis, Chaves e credenciais,
+  Biblioteca; Uso e custos; e — só para admin da org — Acesso e papéis, Chaves de IA (só as chaves das IAs; desde 2026-10-02),
   Configurações da organização (`/organizacoes/[id]/configuracoes`).
 - **Consultoria** (visível **só ao `admin_consultoria`**): Chaves da consultoria, Uso da consultoria,
   Configurações da consultoria (`/configuracoes-consultoria`).
