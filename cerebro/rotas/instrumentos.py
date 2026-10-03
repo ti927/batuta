@@ -27,43 +27,11 @@ from esquemas import (
     TestarOperacaoConector,
     TipoInstrumentoLer,
 )
-from modelos import Automacao, Credencial, Instrumento, Usuario
+from modelos import Automacao, Instrumento, Usuario
 from rotas._comum import instrumento_acessivel, time_acessivel
 from sessao import obter_sessao
 
 rotas = APIRouter(tags=["instrumentos"])
-
-
-def _validar_credencial(
-    sessao: Session,
-    tipo_instrumento: str,
-    organizacao_id: uuid.UUID,
-    credencial_id: uuid.UUID | None,
-) -> None:
-    """Se o instrumento aponta para uma credencial da caixa-forte, valida que ela
-    existe, é acessível (da própria org, ou da consultoria E compartilhável) e é
-    de um tipo que este instrumento aceita. Levanta 422 caso contrário."""
-    if credencial_id is None:
-        return
-    cred = sessao.get(Credencial, credencial_id)
-    if cred is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Credencial não encontrada.")
-    if cred.organizacao_id is not None and cred.organizacao_id != organizacao_id:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "Credencial de outra organização."
-        )
-    if cred.organizacao_id is None and not cred.compartilhavel:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "Esta credencial da consultoria não está compartilhada.",
-        )
-    tipo = encaixe.obter_tipo(tipo_instrumento)
-    aceitos = getattr(tipo, "tipos_credencial_aceitos", ()) if tipo else ()
-    if cred.tipo not in aceitos:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            f"Este instrumento não aceita credencial do tipo '{cred.tipo}'.",
-        )
 
 
 def _validar_alvo_agendamento(
@@ -119,7 +87,6 @@ def listar_tipos(usuario: Usuario = Depends(usuario_atual)):
             chave_compartilhada=(
                 list(t.chave_compartilhada) if t.chave_compartilhada else None
             ),
-            tipos_credencial_aceitos=list(t.tipos_credencial_aceitos),
             acao_irreversivel=t.acao_irreversivel,
             dependencias=t.dependencias_ui(),
             criado_no_construtor=bool(getattr(t, "criado_no_construtor", False)),
@@ -208,7 +175,6 @@ def criar(
         )
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
-    _validar_credencial(sessao, dados.tipo, time.organizacao_id, dados.credencial_id)
     _validar_alvo_agendamento(sessao, dados.tipo, time.organizacao_id, config_limpa)
     inst = Instrumento(
         time_id=time_id,
@@ -216,7 +182,6 @@ def criar(
         tipo=dados.tipo,
         configuracao=config_limpa,
         icone=dados.icone,
-        credencial_id=dados.credencial_id,
         escopo=dados.escopo,
     )
     sessao.add(inst)
@@ -279,12 +244,10 @@ def editar(
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
     org_id_inst = auditoria.org_do_time(sessao, inst.time_id)
-    _validar_credencial(sessao, inst.tipo, org_id_inst, dados.credencial_id)
     _validar_alvo_agendamento(sessao, inst.tipo, org_id_inst, config_limpa)
     inst.nome = dados.nome
     inst.configuracao = config_limpa
     inst.icone = dados.icone
-    inst.credencial_id = dados.credencial_id
     if muda_escopo:
         auditoria.registrar(
             sessao, usuario=usuario, acao="instrumento.escopo_alterado",
@@ -400,9 +363,9 @@ def acionar_instrumento(sessao: Session, inst, argumentos: dict | None) -> dict:
     tipo = encaixe.obter_tipo(inst.tipo)
     if tipo is None:
         raise ValueError(f"Tipo de instrumento desconhecido: {inst.tipo!r}")
-    # Resolve os segredos como na execução real (borda): inline próprio +
-    # credencial da central + pool de serviço (os prontos de IA reusam
-    # a chave da org). Sem isso, "Testar" não enxergaria credencial nem pool.
+    # Resolve os segredos como na execução real (borda): segredo próprio + pool
+    # de serviço (os prontos de IA reusam a chave da org). Sem isso, "Testar" não
+    # enxergaria o pool.
     #
     # As chaves da organização ficam ligadas durante o TESTE INTEIRO, não só durante
     # a leitura dos segredos: os instrumentos de IA (pesquisar, ler, imagem e vídeo do

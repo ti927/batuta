@@ -31,7 +31,6 @@ import instrumentos as encaixe
 import memoria_agente
 import precos
 import segredos_instrumento as segredos
-import tipos_credencial
 from criacao import memoria, servicos
 from criacao.servicos import ConflitoDominio
 from orquestracao import atividade, grafo
@@ -40,7 +39,6 @@ from modelos import (
     AgenteInstrumento,
     Automacao,
     ConversaCriacao,
-    Credencial,
     Execucao,
     Instrumento,
     SegredoInstrumento,
@@ -276,24 +274,9 @@ def _snapshot_time(ctx: ContextoCriacao) -> dict:
         .where(escopo_instrumento.filtro_visiveis(time))
     ).all():
         guardados.setdefault(str(iid), set()).add(campo)
-    # Cobertura de segredos pelas OUTRAS fontes além do inline: credenciais nomeadas
-    # apontadas pelos instrumentos (campos do tipo da credencial) e chaves de serviço
-    # compartilhadas resolvíveis pelo pool. Tudo para o cálculo honesto de pendentes.
-    cred_ids = {i.credencial_id for i in instrumentos if i.credencial_id}
-    tipo_por_credencial: dict[uuid.UUID, str] = (
-        {
-            c.id: c.tipo
-            for c in sess.scalars(select(Credencial).where(Credencial.id.in_(cred_ids)))
-        }
-        if cred_ids
-        else {}
-    )
+    # Cobertura pelo pool de chaves de serviço (além do segredo próprio), para o
+    # cálculo honesto de pendentes.
     servicos_resolviveis = segredos.servicos_resolviveis(sess, time.organizacao_id)
-
-    def _cobertos_por_credencial(i: Instrumento) -> set[str]:
-        tipo = tipo_por_credencial.get(i.credencial_id) if i.credencial_id else None
-        tc = tipos_credencial.obter_tipo(tipo) if tipo else None
-        return set(tc.nomes_campos) if tc else set()
 
     autos = sess.scalars(
         select(Automacao).where(Automacao.time_id == time.id).order_by(Automacao.criado_em)
@@ -332,7 +315,6 @@ def _snapshot_time(ctx: ContextoCriacao) -> dict:
                 "segredos_pendentes": segredos.pendentes(
                     i.tipo,
                     guardados=guardados.get(str(i.id), set()),
-                    cobertos_por_credencial=_cobertos_por_credencial(i),
                     servicos_resolviveis=servicos_resolviveis,
                     configuracao=i.configuracao,
                 ),

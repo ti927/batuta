@@ -10,8 +10,7 @@ endpoint do banco, apresentando o mesmo certificado, e que dura pouco (~1 hora).
 
 O agente não tem como fazer isso sozinho: os cabeçalhos de um instrumento são
 configuração fixa, então um token obtido numa chamada não teria como viajar até a
-chamada seguinte. Quem resolve é a BORDA — aqui —, exatamente como já se faz com
-o Google (`google_oauth.garantir_token`): na hora de montar o cinto do agente, o
+chamada seguinte. Quem resolve é a BORDA — aqui —, na hora de montar o cinto do agente, o
 token é conferido e, se estiver vencendo, renovado e persistido. O instrumento
 sempre recebe um token fresco e não sabe de nada disso.
 
@@ -116,8 +115,8 @@ def _vencimento(dados: dict) -> datetime | None:
 
 def garantir_material(material: dict, guardar) -> str:
     """O NÚCLEO: dado o material de uma conexão, devolve um `access_token` válido,
-    renovando sob demanda. Uma fonte só para os dois caminhos que existem hoje —
-    a credencial da caixa-forte e o instrumento que traz o OAuth em si mesmo.
+    renovando sob demanda. Hoje o único caminho é o instrumento que traz o OAuth
+    em si mesmo (a caixa-forte de credenciais saiu em 2026-10-02).
 
     `material` usa as chaves canônicas `url_token`, `client_id`, `client_secret`,
     `escopo`, `certificado`, `chave_privada`, `access_token`, `token_expira_em`
@@ -156,19 +155,9 @@ def garantir_material(material: dict, guardar) -> str:
     return token
 
 
-def garantir_token(credencial) -> str:
-    """Token de uma credencial `certificado_mtls` da caixa-forte."""
-    import credenciais_cofre
-
-    dados = credenciais_cofre.decifrar(credencial)
-    return garantir_material(
-        dados, lambda token, expira: _persistir_token(credencial.id, token, expira)
-    )
-
-
 def garantir_token_instrumento(instrumento_id, config: dict, segredos: dict) -> str:
     """Token de um instrumento que traz o OAuth EM SI MESMO (montado no
-    Construtor, sem passar pela caixa-forte).
+    Construtor).
 
     Traduz os nomes de casa do conector para as chaves canônicas: `auth_usuario`
     é o Client ID e `auth_segredo` é o Client Secret — o mesmo par que serve o
@@ -207,35 +196,6 @@ def _persistir_no_instrumento(instrumento_id, token: str, expira_em: datetime) -
             },
         )
         sessao.commit()
-    except Exception:  # noqa: BLE001 — cache é conveniência, nunca derruba a execução
-        sessao.rollback()
-    finally:
-        sessao.close()
-
-
-def _persistir_token(credencial_id, token: str, expira_em: datetime) -> None:
-    """Guarda o token renovado numa sessão própria e curta — não toca a transação
-    da execução. Best-effort: falhar aqui só significa não cachear (o token recém
-    obtido já vai ser usado nesta execução).
-
-    NÃO mexe em `Credencial.expira_em`: aquele campo é o vencimento do
-    CERTIFICADO (~1 ano). O do token vive no saco, em `token_expira_em`."""
-    import credenciais_cofre
-    from modelos import Credencial
-    from sessao import CriadorDeSessao
-
-    sessao = CriadorDeSessao()
-    try:
-        cred = sessao.get(Credencial, credencial_id)
-        if cred is not None:
-            credenciais_cofre.gravar(
-                cred,
-                {
-                    "access_token": token,
-                    "token_expira_em": expira_em.astimezone(timezone.utc).isoformat(),
-                },
-            )
-            sessao.commit()
     except Exception:  # noqa: BLE001 — cache é conveniência, nunca derruba a execução
         sessao.rollback()
     finally:

@@ -262,18 +262,17 @@ havendo IPv4 alcançável, porque o erro que sobra é o da última tentativa —
 para linguagem humana, nomeando o host. Instrumentos de serviço fixo (Telegram, Instagram, OpenAI,
 Firecrawl, Tavily) seguem com o cliente HTTP direto.
 
-**Material de conexão vindo do cofre (2026-08-22).** Além de segredos escalares (um token, uma senha),
-um instrumento pode receber material de conexão mais rico por referência a uma credencial nomeada. O
+**Material de conexão no cofre do instrumento (2026-08-22; caixa-forte removida em 2026-10-02).** Além de
+segredos escalares (um token, uma senha), um instrumento guarda material de conexão mais rico — sobe o
+arquivo no Construtor e o par PEM fica no cofre do próprio instrumento. O
 caso que motivou isso é a **API bancária**: ela exige um **certificado digital de cliente** no aperto de
 mão TLS (mTLS) e, quase sempre, um **token de acesso de vida curta** emitido apresentando esse mesmo
 certificado. Duas peças estruturais saíram daí:
 - `TipoInstrumento.campos_secretos_opcionais` — segredo que só existe para quem precisa; vazio **não** é
   pendência (senão todo REST/conector nasceria "faltando certificado").
-- `CampoCredencial.interno` — campo da credencial que **não** vai para a Config de instrumento nenhum
-  (dado de exibição, ou material que só a borda usa, como a URL do token).
 
-O token é obtido e renovado **pela borda**, em `segredos_instrumento.anexar_aos_instrumentos` — o mesmo
-ponto onde o token do Google já é renovado —, porque o agente não teria como carregar um token de uma
+O token é obtido e renovado **pela borda**, em `segredos_instrumento.anexar_aos_instrumentos`
+(`oauth_mtls.garantir_token_instrumento`), porque o agente não teria como carregar um token de uma
 chamada para a seguinte (cabeçalho é configuração fixa). Ver `certificados.py`, `oauth_mtls.py` e o
 capítulo `segredos/certificado-digital-mtls` da Central.
 

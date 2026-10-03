@@ -1,21 +1,18 @@
 """Cálculo HONESTO de segredos pendentes (fix do falso-alerta de 'faltam segredos').
 
 Antes, um segredo só não era 'pendente' se estivesse preenchido inline no próprio
-instrumento — ignorando as outras duas fontes que a borda usa de verdade: a
-credencial nomeada apontada e a chave de serviço compartilhada do pool
-(org → consultoria). Resultado: a tela /criar e a fala da IA acusavam falta de
+instrumento — ignorando a outra fonte que a borda usa de verdade: a chave de serviço
+compartilhada do pool (org → consultoria). Resultado: a tela /criar e a fala da IA acusavam falta de
 chave Tavily / senha do WordPress mesmo com o cofre cobrindo. Estes testes fixam o
-comportamento correto: pendente = o que NENHUMA das três fontes cobre.
+comportamento correto: pendente = o que NENHUMA das fontes cobre.
 """
 
 import json
-import uuid
 
 import cofre
-import credenciais_cofre
 import segredos_instrumento as segredos
 from criacao.ferramentas import ContextoCriacao, ferramenta_por_nome
-from modelos import ChaveApi, ConversaCriacao, Credencial, Instrumento
+from modelos import ChaveApi, ConversaCriacao
 
 
 # ───────────────────────── unidade: pendentes() ─────────────────────────
@@ -50,17 +47,6 @@ def test_pendentes_compartilhada_sem_pool_continua_pendente():
 
 def test_pendentes_banco_sem_fonte():
     assert segredos.pendentes("banco_sql", guardados=set()) == ["senha"]
-
-
-def test_pendentes_banco_credencial_cobre():
-    assert (
-        segredos.pendentes(
-            "banco_sql",
-            guardados=set(),
-            cobertos_por_credencial={"usuario", "senha"},
-        )
-        == []
-    )
 
 
 # ──────────────────── unidade: servicos_resolviveis() ───────────────────
@@ -140,30 +126,3 @@ def test_banco_pendente_sem_fonte(sessao, dados, monkeypatch):
         configuracao={"host": "db.x", "banco": "erp", "usuario": "u"},
     )
     assert r["segredos_pendentes"] == ["senha"]
-
-
-def test_banco_nao_pendente_apontando_credencial(sessao, dados, monkeypatch):
-    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
-    _ctx, f = _ferramentas(sessao, dados)
-    _chamar(f, "definir_time", nome="T")
-    r = _chamar(
-        f,
-        "configurar_instrumento",
-        nome="WP",
-        tipo="banco_sql",
-        configuracao={"host": "db.x", "banco": "erp", "usuario": "u"},
-    )
-    # Cria uma credencial de banco na central e aponta o instrumento para ela.
-    cred = Credencial(
-        organizacao_id=dados["orgA"].id, nome="Banco central", tipo="sql"
-    )
-    credenciais_cofre.gravar(cred, {"usuario": "u", "senha": "s"})
-    sessao.add(cred)
-    sessao.flush()
-    inst = sessao.get(Instrumento, uuid.UUID(r["id"]))
-    inst.credencial_id = cred.id
-    sessao.flush()
-
-    visto = _chamar(f, "ver_time")
-    wp = next(i for i in visto["instrumentos"] if i["id"] == r["id"])
-    assert wp["segredos_pendentes"] == []

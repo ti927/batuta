@@ -156,13 +156,6 @@ class Instrumento(IdData, Base):
     icone_auto_em: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    # Caixa-forte de credenciais: aponta para uma credencial nomeada da central
-    # (da organização ou da consultoria) em vez de guardar o segredo inline. NULL
-    # = sem referência (usa segredo próprio inline / pool, como antes). A borda
-    # mescla os campos da credencial na config ao executar (núcleo intocado).
-    credencial_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("credenciais.id", ondelete="SET NULL"), nullable=True
-    )
     # Crachá do webhook de um canal de mensageria (Telegram): o segredo que valida
     # a origem das chamadas de ENTRADA. Fica em COLUNA PRÓPRIA (não no `configuracao`
     # JSONB) de propósito: assim editar a config do instrumento — pelo formulário ou
@@ -638,52 +631,6 @@ class SegredoInstrumento(IdData, Base):
             "instrumento_id",
             "campo",
             unique=True,
-        ),
-    )
-
-
-class Credencial(IdData, Base):
-    """Caixa-forte de credenciais nomeadas (PRODUTO §26).
-
-    Uma credencial é um SACO tipado e cifrado de campos (ex.: WordPress =
-    usuario+senha_app; SQL = usuario+senha; ou um token solto). Um instrumento
-    APONTA para uma credencial (via `instrumentos.credencial_id`) em vez de
-    guardar o segredo inline — trocá-la num lugar só vale para todos os
-    instrumentos que a usam. O saco inteiro é cifrado num único blob JSON
-    (`dados_cifrado`, reusa o `cofre.py`); `resumo` guarda só os últimos 4 de cada
-    campo, para exibição (o valor pleno nunca volta à interface, PRODUTO §26).
-
-    Pertence a uma organização; quando `organizacao_id` é nulo, é uma credencial
-    DA CONSULTORIA, disponível às organizações só se `compartilhavel` — e por
-    ESCOLHA EXPLÍCITA no seletor do instrumento (credencial nomeada nunca cai por
-    fallback automático, pois aponta para um sistema específico). `compartilhavel`
-    nasce False: uma credencial nova é privada do seu escopo até ser liberada.
-
-    `expira_em` (nulo agora) abre espaço para credenciais OAuth no futuro (token
-    que se renova), sem mudar o schema."""
-
-    __tablename__ = "credenciais"
-    organizacao_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("organizacoes.id", ondelete="CASCADE"), nullable=True
-    )
-    nome: Mapped[str] = mapped_column(String(200), nullable=False)
-    tipo: Mapped[str] = mapped_column(String(50), nullable=False)
-    dados_cifrado: Mapped[str] = mapped_column(Text, nullable=False)
-    resumo: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    compartilhavel: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("false")
-    )
-    expira_em: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-
-    __table_args__ = (
-        Index(
-            "uq_credencial_org_nome",
-            "organizacao_id",
-            "nome",
-            unique=True,
-            postgresql_nulls_not_distinct=True,
         ),
     )
 

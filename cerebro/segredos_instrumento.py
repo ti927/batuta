@@ -93,9 +93,6 @@ def anexar_aos_instrumentos(sessao: Session, instrumentos: list) -> None:
     from instrumentos.base import obter_tipo
     from orquestracao.llm import chaves_atuais
 
-    import credenciais_cofre
-    from modelos import Credencial
-
     ids = [inst.id for inst in instrumentos]
     por_instrumento: dict[uuid.UUID, dict[str, str]] = {}
     if ids:
@@ -108,50 +105,18 @@ def anexar_aos_instrumentos(sessao: Session, instrumentos: list) -> None:
                 s.valor_cifrado
             )
 
-    # Caixa-forte: decifra (em memória) as credenciais nomeadas referenciadas.
-    cred_ids = {
-        inst.credencial_id
-        for inst in instrumentos
-        if getattr(inst, "credencial_id", None)
-    }
-    por_credencial: dict[uuid.UUID, dict[str, str]] = {}
-    if cred_ids:
-        import google_oauth
-
-        for c in sessao.scalars(
-            select(Credencial).where(Credencial.id.in_(cred_ids))
-        ):
-            valores_cred = credenciais_cofre.decifrar(c)
-            # Credencial `google` (OAuth): o access_token dura ~1h. Garante um token
-            # fresco sob demanda (renova pelo refresh_token e persiste), para o
-            # instrumento sempre receber um token válido. Nunca levanta.
-            if c.tipo == "google":
-                valores_cred["access_token"] = google_oauth.garantir_token(c)
-            # Certificado mTLS com OAuth (banco): mesma ideia — troca
-            # client_id/secret por um access_token APRESENTANDO o certificado, e
-            # renova antes de vencer. Sem OAuth configurado devolve "" (a conexão
-            # usa só o certificado, cenário legítimo). Nunca levanta.
-            elif c.tipo == "certificado_mtls":
-                import oauth_mtls
-
-                valores_cred["access_token"] = oauth_mtls.garantir_token(c)
-            por_credencial[c.id] = valores_cred
-
     pool = chaves_atuais()
     for inst in instrumentos:
-        proprios = por_instrumento.get(inst.id, {})
-        credencial = por_credencial.get(getattr(inst, "credencial_id", None), {})
-        # Prioridade: inline próprio > credencial central > pool de serviço.
-        valores = {**credencial, **proprios}
+        # Prioridade: segredo próprio do instrumento > pool de serviço.
+        valores = dict(por_instrumento.get(inst.id, {}))
         tipo = obter_tipo(inst.tipo)
         compart = getattr(tipo, "chave_compartilhada", None) if tipo else None
         if compart:
             campo, servico = compart
-            # Campo ainda vazio (nem inline nem credencial) → reusa a do pool.
+            # Campo ainda vazio (sem segredo próprio) → reusa a do pool.
             if not (valores.get(campo) or "").strip() and pool.get(servico):
                 valores = {**valores, campo: pool[servico]}
-        # (4) OAuth 2.0 declarado NO PRÓPRIO INSTRUMENTO (montado no Construtor,
-        # sem caixa-forte): troca usuário+segredo por um token de acesso e o
+        # (4) OAuth 2.0 declarado NO PRÓPRIO INSTRUMENTO (montado no Construtor): troca usuário+segredo por um token de acesso e o
         # renova antes de vencer, apresentando o certificado se houver um. Nunca
         # levanta — no pior caso o instrumento recebe o token velho e o serviço
         # responde 401 com recado claro.
@@ -229,21 +194,20 @@ def pendentes(
     tipo: str,
     *,
     guardados: set[str],
-    cobertos_por_credencial: frozenset[str] | set[str] = frozenset(),
     servicos_resolviveis: frozenset[str] | set[str] = frozenset(),
     configuracao: dict | None = None,
 ) -> list[str]:
-    """Campos secretos de um instrumento que NENHUMA das três fontes de resolução
+    """Campos secretos de um instrumento que NENHUMA das fontes de resolução
     cobre — só esses faltam de verdade. As fontes são as mesmas (e na mesma ordem)
-    que a borda aplica em `anexar_aos_instrumentos`: (1) segredo inline guardado no
-    próprio instrumento; (2) credencial nomeada apontada; (3) chave de serviço
-    compartilhada resolvível pelo pool da org/consultoria.
+    que a borda aplica em `anexar_aos_instrumentos`: (1) segredo guardado no
+    próprio instrumento; (2) chave de serviço compartilhada resolvível pelo pool
+    da org/consultoria.
 
     Antes este cálculo olhava só a fonte (1), o que gerava falso-alerta de 'faltam
     segredos' para instrumentos já cobertos pelo cofre."""
     from instrumentos.base import campos_secretos, obter_tipo
 
-    cobertos = set(guardados) | set(cobertos_por_credencial)
+    cobertos = set(guardados)
     tipo_obj = obter_tipo(tipo)
     compart = getattr(tipo_obj, "chave_compartilhada", None) if tipo_obj else None
     # (4) segredos OPCIONAIS do tipo: vazio é o estado normal, não pendência (ex.:

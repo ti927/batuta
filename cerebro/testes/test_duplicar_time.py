@@ -241,7 +241,6 @@ def test_canal_nasce_desconectado(cliente, entrar, dados, sessao, time_rico):
     # canal nasce "a conectar": sem crachá (webhook_secret); config preservada
     assert bot.webhook_secret is None
     assert bot.configuracao.get("destinatario_padrao") == "555"
-    assert bot.credencial_id is None
 
 
 def test_memoria_da_ia_herdada(cliente, entrar, dados, sessao, time_rico):

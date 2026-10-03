@@ -1,8 +1,8 @@
 """Fundação bancária, Fatia A — o cofre guarda o certificado digital (mTLS).
 
-Cobre a leitura/normalização do certificado (`certificados.normalizar`) e a
-gravação cifrada no cofre (`credenciais_cofre.gravar_com_certificado`), offline —
-sem banco nem rede. Gera certificados de teste em memória (auto-assinados)."""
+Cobre a leitura/normalização do certificado (`certificados.normalizar`), a
+apresentação na conexão e o token OAuth obtido com ele, offline — sem banco nem
+rede. Gera certificados de teste em memória (auto-assinados)."""
 
 import base64
 import datetime
@@ -21,9 +21,6 @@ from cryptography.fernet import Fernet
 os.environ.setdefault("COFRE_CHAVE_MESTRA", Fernet.generate_key().decode())
 
 import certificados
-import credenciais_cofre as cofre_cred
-import tipos_credencial  # noqa: F401 — registra o tipo certificado_mtls
-from modelos import Credencial
 
 CN = "EMPRESA TESTE LTDA:12345678000199"
 
@@ -121,59 +118,6 @@ def test_arquivo_lixo():
 def test_arquivo_vazio():
     with pytest.raises(certificados.CertificadoInvalido):
         certificados.normalizar("")
-
-
-# ──────────────────── credenciais_cofre.gravar_com_certificado ─────────────────
-
-
-def test_grava_certificado_cifra_e_mascara():
-    cred = Credencial(tipo="certificado_mtls", nome="Itaú Pix")
-    cofre_cred.gravar_com_certificado(
-        cred,
-        {
-            "arquivo": _pfx_b64(b"s3nha"),
-            "senha_certificado": "s3nha",
-            "client_id": "cli-123",
-            "client_secret": "seg-abc-9999",
-        },
-    )
-    # O saco decifrado tem o PEM e o OAuth; a senha do .pfx NÃO é guardada.
-    saco = cofre_cred.decifrar(cred)
-    assert "BEGIN CERTIFICATE" in saco["certificado"]
-    assert "BEGIN PRIVATE KEY" in saco["chave_privada"]
-    assert saco["client_id"] == "cli-123"
-    assert saco["client_secret"] == "seg-abc-9999"
-    assert "senha_certificado" not in saco
-    assert "12345678000199" in saco["titular"]
-    # Resumo: segredos mascarados; identidade visível.
-    r = cred.resumo
-    assert r["certificado"]["secreto"] is True
-    assert r["chave_privada"]["secreto"] is True
-    assert r["client_secret"]["secreto"] is True and r["client_secret"]["ultimos4"] == "9999"
-    assert r["client_id"]["valor"] == "cli-123"
-    assert "12345678000199" in r["titular"]["valor"]
-    assert r["validade"]["valor"]  # dd/mm/aaaa
-    # expira_em derivado do certificado.
-    assert cred.expira_em is not None
-
-
-def test_edicao_sem_arquivo_preserva_certificado():
-    cred = Credencial(tipo="certificado_mtls", nome="Inter boleto")
-    cofre_cred.gravar_com_certificado(
-        cred, {"arquivo": _pfx_b64(None), "client_secret": "antigo-0001"}
-    )
-    cert_antes = cofre_cred.decifrar(cred)["certificado"]
-    # Edição só do client_secret, sem reenviar o arquivo.
-    cofre_cred.gravar_com_certificado(cred, {"client_secret": "novo-0002"})
-    saco = cofre_cred.decifrar(cred)
-    assert saco["certificado"] == cert_antes  # preservado
-    assert saco["client_secret"] == "novo-0002"  # atualizado
-
-
-def test_criar_sem_arquivo_recusa():
-    cred = Credencial(tipo="certificado_mtls", nome="sem cert")
-    with pytest.raises(certificados.CertificadoInvalido):
-        cofre_cred.gravar_com_certificado(cred, {"client_id": "x"})
 
 
 # ═══════════════ Fatia B — apresentar o certificado na conexão ════════════════
@@ -424,83 +368,62 @@ def test_obter_token_sem_access_token_vira_erro_humano(monkeypatch):
         oauth_mtls.obter_token(url_token="https://b/token", client_id="c", client_secret="s")
 
 
-def _cred_com_oauth(**extra) -> Credencial:
-    cred = Credencial(tipo="certificado_mtls", nome="Banco")
-    cofre_cred.gravar_com_certificado(
-        cred,
-        {
-            "arquivo": _pfx_b64(None),
-            "client_id": "cli", "client_secret": "seg",
-            "url_token": "https://banco.exemplo/oauth/token",
-            **extra,
-        },
-    )
-    return cred
+def _material(**extra) -> dict:
+    return {
+        "client_id": "cli", "client_secret": "seg",
+        "url_token": "https://banco.exemplo/oauth/token",
+        "certificado": CERT_PEM, "chave_privada": CHAVE_PEM,
+        **extra,
+    }
 
 
 def test_garantir_token_sem_oauth_configurado_devolve_vazio():
     """Certificado sem OAuth é cenário legítimo (a conexão usa só o certificado):
     não pode explodir nem inventar chamada de rede."""
-    cred = Credencial(tipo="certificado_mtls", nome="Só certificado")
-    cofre_cred.gravar_com_certificado(cred, {"arquivo": _pfx_b64(None)})
-    assert oauth_mtls.garantir_token(cred) == ""
+    guardados = []
+    assert oauth_mtls.garantir_material(
+        {"certificado": CERT_PEM}, lambda *a: guardados.append(a)
+    ) == ""
+    assert guardados == []
 
 
 def test_garantir_token_reusa_o_cacheado_enquanto_vale(monkeypatch):
-    cred = _cred_com_oauth()
     futuro = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)
-    cofre_cred.gravar(
-        cred, {"access_token": "cacheado", "token_expira_em": futuro.isoformat()}
-    )
 
     def _nao_chama(**k):
         raise AssertionError("não deveria buscar token novo com o cache válido")
 
     monkeypatch.setattr(oauth_mtls, "obter_token", _nao_chama)
-    assert oauth_mtls.garantir_token(cred) == "cacheado"
+    material = _material(access_token="cacheado", token_expira_em=futuro.isoformat())
+    assert oauth_mtls.garantir_material(material, lambda *a: None) == "cacheado"
 
 
 def test_garantir_token_renova_o_vencido(monkeypatch):
-    cred = _cred_com_oauth()
     passado = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=1)
-    cofre_cred.gravar(
-        cred, {"access_token": "velho", "token_expira_em": passado.isoformat()}
-    )
     monkeypatch.setattr(
         oauth_mtls, "obter_token",
         lambda **k: ("novo", datetime.datetime.now(datetime.timezone.utc)
                      + datetime.timedelta(hours=1)),
     )
-    monkeypatch.setattr(oauth_mtls, "_persistir_token", lambda *a, **k: None)
-    assert oauth_mtls.garantir_token(cred) == "novo"
+    guardados = []
+    material = _material(access_token="velho", token_expira_em=passado.isoformat())
+    assert oauth_mtls.garantir_material(
+        material, lambda tok, exp: guardados.append(tok)
+    ) == "novo"
+    assert guardados == ["novo"]  # o renovado é guardado onde mora
 
 
 def test_garantir_token_nunca_derruba_o_cinto(monkeypatch):
     """Se a renovação falhar, devolve o token atual — o instrumento trata o 401
-    com recado claro. Uma credencial ruim não pode impedir o agente de carregar."""
-    cred = _cred_com_oauth()
+    com recado claro. Um OAuth ruim não pode impedir o agente de carregar."""
     passado = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=1)
-    cofre_cred.gravar(
-        cred, {"access_token": "velho", "token_expira_em": passado.isoformat()}
-    )
 
     def _explode(**k):
         raise FalhaInstrumento("banco fora do ar", retentavel=True)
 
     monkeypatch.setattr(oauth_mtls, "obter_token", _explode)
-    assert oauth_mtls.garantir_token(cred) == "velho"
-
-
-def test_trocar_o_oauth_invalida_o_token_cacheado():
-    """Trocar client_id/segredo/URL (ou o próprio certificado) não pode deixar o
-    agente seguir usando o token da conta antiga."""
-    cred = _cred_com_oauth()
-    cofre_cred.gravar(cred, {"access_token": "da-conta-antiga"})
-    assert cofre_cred.decifrar(cred)["access_token"] == "da-conta-antiga"
-    cofre_cred.gravar_com_certificado(cred, {"client_id": "outra-conta"})
-    saco = cofre_cred.decifrar(cred)
-    assert "access_token" not in saco
-    assert "token_expira_em" not in saco
+    material = _material(access_token="velho", token_expira_em=passado.isoformat())
+    assert oauth_mtls.garantir_material(material, lambda *a: None) == "velho"
 
 
 def test_rest_usa_o_token_obtido_pela_borda(monkeypatch):
@@ -526,7 +449,9 @@ def test_rest_token_colado_a_mao_tem_precedencia(monkeypatch):
 
 def test_conector_usa_o_token_obtido_pela_borda(monkeypatch):
     capturado = _espionar_httpx(monkeypatch, conector_mod)
-    _executar_operacao(ConfigConector(access_token="tok-borda"), _op(), {})
+    _executar_operacao(
+        ConfigConector(auth_tipo="oauth2", access_token="tok-borda"), _op(), {}
+    )
     assert capturado["cabecalhos"]["Authorization"] == "Bearer tok-borda"
 
 
@@ -541,7 +466,7 @@ def test_conector_auth_declarada_tem_precedencia(monkeypatch):
 
 # ═════ O instrumento se basta: certificado e OAuth montados no Construtor ═════
 # Decisão do maestro (2026-08-22): tudo o que um instrumento precisa vive na
-# criação DELE; a caixa-forte fica para chaves de IA. Aqui o certificado é subido
+# criação DELE; a página de chaves fica só para as chaves de IA. Aqui o certificado é subido
 # no próprio instrumento — sem passar por credencial nomeada.
 
 
@@ -641,11 +566,9 @@ def test_certificado_vazio_nao_vira_segredo_pendente():
         assert "client_secret" not in faltando
 
 
-def test_os_dois_caminhos_de_saida_aceitam_a_credencial_do_cofre():
-    # A capacidade vale nos DOIS instrumentos que fazem chamada externa — e por
-    # REFERÊNCIA ao cofre (o segredo não é digitado no instrumento).
-    assert "certificado_mtls" in ChamarApiRest.tipos_credencial_aceitos
-    assert "certificado_mtls" in conector_mod.Conector.tipos_credencial_aceitos
+def test_os_dois_caminhos_de_saida_guardam_o_certificado():
+    # A capacidade vale nos DOIS instrumentos que fazem chamada externa, com o
+    # certificado guardado como segredo do próprio instrumento.
     for tipo in (ChamarApiRest, conector_mod.Conector):
         assert "certificado" in tipo.campos_secretos
         assert "chave_privada" in tipo.campos_secretos

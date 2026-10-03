@@ -199,8 +199,8 @@ class ConfigRest(BaseModel):
             "Aplica-se a respostas em lista, inclusive o formato \"results\" do Bubble."
         ),
     )
-    # Certificado de cliente (mTLS) — chega da caixa-forte, por referência a uma
-    # credencial do tipo `certificado_mtls`; NÃO se digita aqui. É o que APIs
+    # Certificado de cliente (mTLS) — instrumento LEGADO: só quem já tinha o
+    # certificado guardado no próprio instrumento o usa (o novo é o conector). É o que APIs
     # bancárias (Pix, boleto) exigem além do token. Vazio = chamada sem
     # certificado, como sempre foi.
     certificado: str = Field(
@@ -209,16 +209,13 @@ class ConfigRest(BaseModel):
     chave_privada: str = Field(
         default="", description="Chave privada do certificado em PEM (vem do cofre)."
     )
-    # OAuth do banco: vem junto da mesma credencial. O transporte (esta fatia) não
-    # os usa — quem os usa é o passo de obter/renovar o token de acesso. Existem
-    # aqui porque a credencial é UMA só: aceitar o tipo obriga a ter onde injetar
-    # cada campo dele (regra conferida em test_tipos_credencial).
+    # OAuth do banco: o transporte não os usa — quem os usa é o passo de
+    # obter/renovar o token de acesso.
     client_id: str = Field(default="", description="Client ID do OAuth (vem do cofre).")
     client_secret: str = Field(
         default="", description="Client Secret do OAuth (vem do cofre)."
     )
-    # Token de acesso obtido e renovado pela BORDA a partir da credencial mTLS
-    # (ver `oauth_mtls`). Não se digita: chega pronto e vira o Authorization.
+    # Token de acesso obtido e renovado pela BORDA (ver `oauth_mtls`). Não se digita: chega pronto e vira o Authorization.
     access_token: str = Field(
         default="", description="Token de acesso OAuth (obtido automaticamente)."
     )
@@ -257,7 +254,6 @@ class ChamarApiRest(TipoInstrumento):
     campos_secretos_opcionais = (
         "certificado", "chave_privada", "client_secret", "access_token",
     )
-    tipos_credencial_aceitos = ("token_bearer", "certificado_mtls")
     # Baseline irreversível (default seguro), mas a irreversibilidade REAL depende
     # do método: uma leitura (GET/HEAD/OPTIONS) não muda nada e não exige portão.
     acao_irreversivel = True
@@ -271,14 +267,14 @@ class ChamarApiRest(TipoInstrumento):
 
     def executar(self, config: ConfigRest, args: ArgsRest) -> dict:
         cabecalhos = dict(config.cabecalhos or {})
-        # O token colado à mão manda; na falta dele, o obtido pela borda a partir
-        # da credencial mTLS (OAuth do banco). Nenhum dos dois = sem Authorization.
+        # O token colado à mão manda; na falta dele, o obtido pela borda (OAuth
+        # do banco). Nenhum dos dois = sem Authorization.
         bearer = config.token_bearer or config.access_token
         if bearer:
             cabecalhos["Authorization"] = f"Bearer {bearer}"
         validar_cabecalhos_ascii(cabecalhos)
         try:
-            # mTLS: se houver certificado de cliente (credencial do cofre), ele é
+            # mTLS: se houver certificado de cliente guardado, ele é
             # apresentado no aperto de mão TLS. Sem certificado, `par` é None e a
             # chamada sai idêntica à de sempre.
             with certificados.material_mtls(

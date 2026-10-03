@@ -267,13 +267,6 @@ def test_segredos_pendentes_dependem_do_modo(config, faltam):
     assert pendentes("conectar_mcp", guardados=set(), configuracao=config) == faltam
 
 
-def test_credencial_antiga_da_central_continua_cobrindo():
-    assert pendentes(
-        "conectar_mcp", guardados=set(), cobertos_por_credencial={"url", "token_bearer"},
-        configuracao={"auth_modo": "bearer"},
-    ) == []
-
-
 # ───────────────────────────── estado da conexão guardado ─────────────────────────
 
 def _instrumento_mcp(sessao, dados, config: dict, segredos_: dict):

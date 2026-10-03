@@ -262,21 +262,17 @@ class InstrumentoCriar(BaseModel):
     configuracao: dict = Field(default_factory=dict)
     # Ícone escolhido na UI (ex.: "fab:whatsapp"). NULL = ícone genérico.
     icone: str | None = Field(default=None, max_length=60)
-    # Caixa-forte: se preenchido, o instrumento usa uma credencial nomeada da
-    # central em vez de segredo inline. NULL = inline/pool, como antes.
-    credencial_id: uuid.UUID | None = None
     # "time" (padrão) ou "organizacao" (todos os times encaixam; só admin).
     escopo: Literal["time", "organizacao"] = "time"
 
 
 class InstrumentoEditar(BaseModel):
     """Edita um instrumento. O tipo é fixo após a criação; muda-se nome,
-    configuração, ícone e a credencial."""
+    configuração e ícone."""
 
     nome: str = Field(min_length=1, max_length=200)
     configuracao: dict = Field(default_factory=dict)
     icone: str | None = Field(default=None, max_length=60)
-    credencial_id: uuid.UUID | None = None
     # Promover/rebaixar (só admin). None = não muda.
     escopo: Literal["time", "organizacao"] | None = None
 
@@ -298,7 +294,6 @@ class InstrumentoLer(BaseModel):
     icone: str | None = None
     segredos: dict[str, str] = Field(default_factory=dict)
     acao_irreversivel: bool = False
-    credencial_id: uuid.UUID | None = None
     # O que o último teste de conexão descobriu (servidor MCP). Sem segredo.
     conexao: dict | None = None
     # "time" ou "organizacao" (todos os times da organização encaixam).
@@ -350,10 +345,6 @@ class TipoInstrumentoLer(BaseModel):
     # (campo_secreto, serviço), ex.: ["chave_api", "openai"]. O front mostra esse
     # campo como OPCIONAL ("usa a chave de IA da organização por padrão").
     chave_compartilhada: list[str] | None = None
-    # Caixa-forte: tipos de credencial nomeada que este instrumento aceita
-    # referenciar (filtra o seletor "usar uma credencial da central"). Vazio = não
-    # aceita credencial da central.
-    tipos_credencial_aceitos: list[str] = Field(default_factory=list)
     # Ação irreversível (publicar/enviar/gravar externo): o front mostra um aviso
     # e a parede de ativação exige portão humano antes de um agente que a use.
     acao_irreversivel: bool = False
@@ -758,64 +749,6 @@ class ChaveApiLer(BaseModel):
     apelido: str | None
     ativa: bool
     compartilhavel: bool
-    criado_em: datetime
-    atualizado_em: datetime
-
-
-# ─────────────────── Caixa-forte de credenciais nomeadas ───────────────────
-# Credenciais nomeadas, tipadas e referenciadas pelos instrumentos (ver
-# docs/CAIXA-FORTE-PLANO.md). Substitui o antigo "inventário por-instrumento".
-
-
-class CampoCredencialLer(BaseModel):
-    """Um campo de um tipo de credencial — para a interface montar o formulário."""
-
-    nome: str
-    rotulo: str
-    secreto: bool
-
-
-class TipoCredencialLer(BaseModel):
-    """Um tipo de credencial disponível na caixa-forte (formato de uma conexão)."""
-
-    tipo: str
-    nome_exibicao: str
-    campos: list[CampoCredencialLer]
-
-
-class CredencialCriar(BaseModel):
-    """Cria uma credencial nomeada. `dados` traz os campos do tipo (ex.:
-    {usuario, senha_app}); os secretos entram cifrados e nunca voltam."""
-
-    nome: str = Field(min_length=1, max_length=200)
-    tipo: str = Field(min_length=1, max_length=50)
-    dados: dict[str, str] = Field(default_factory=dict)
-    compartilhavel: bool = False  # só faz efeito numa credencial da consultoria
-
-
-class CredencialEditar(BaseModel):
-    """Edita uma credencial. O tipo é fixo após a criação. Um campo secreto em
-    branco preserva o valor atual; um campo de identidade em branco também."""
-
-    nome: str = Field(min_length=1, max_length=200)
-    dados: dict[str, str] = Field(default_factory=dict)
-    compartilhavel: bool = False
-
-
-class CredencialLer(BaseModel):
-    """Uma credencial como a API a devolve: metadados + `resumo` mascarado
-    (identidade visível, segredo só os últimos 4) + `usado_por`. O valor pleno de
-    um segredo nunca é reexibido (PRODUTO §26). `organizacao_id` nulo = consultoria."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    organizacao_id: uuid.UUID | None
-    nome: str
-    tipo: str
-    resumo: dict | None
-    compartilhavel: bool
-    usado_por: int = 0
     criado_em: datetime
     atualizado_em: datetime
 

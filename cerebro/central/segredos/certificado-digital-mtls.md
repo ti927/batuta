@@ -4,7 +4,7 @@ area: "segredos"
 slug: "certificado-digital-mtls"
 tags: ["certificado", "mtls", "banco", "pix", "boleto", "inter", "itau", "oauth", "pfx", "p12", "icp-brasil"]
 revisado_em: "2026-08-22"
-fontes: ["cerebro/tipos_credencial.py", "cerebro/certificados.py", "cerebro/oauth_mtls.py", "cerebro/instrumentos/rest.py"]
+fontes: ["cerebro/instrumentos/conector.py", "cerebro/certificados.py", "cerebro/oauth_mtls.py", "cerebro/instrumentos/rest.py"]
 ---
 
 # Certificado digital (mTLS) — Pix, boleto e APIs bancárias

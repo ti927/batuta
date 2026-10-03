@@ -54,7 +54,7 @@ def _condicoes(
     ]
     # A chave-mãe da consultoria só serve de reserva às organizações se estiver
     # marcada como compartilhável (toggle). A chave PRÓPRIA da organização não
-    # passa por esse filtro (é dela). Ver docs/CAIXA-FORTE-PLANO.md.
+    # passa por esse filtro (é dela).
     if mae:
         condicoes.append(ChaveApi.compartilhavel.is_(True))
     return condicoes

@@ -63,7 +63,6 @@ import mcp_escopo
 import memoria_agente
 import precos
 import segredos_instrumento
-import tipos_credencial as tc
 from chaves import PROVEDORES
 from criacao.ferramentas import catalogo_de_instrumentos
 from instrumentos.base import acao_irreversivel
@@ -74,7 +73,6 @@ from modelos import (
     Automacao,
     ChaveApi,
     Conversa,
-    Credencial,
     Execucao,
     Instrumento,
     MensagemConversa,
@@ -287,21 +285,10 @@ def _instrumento_resumido(sessao, inst) -> dict:
         "descricao_do_tipo": tipo.descricao if tipo else "(tipo desconhecido)",
         "configuracao": inst.configuracao or {},  # pública: os segredos vivem no cofre
         "segredos_preenchidos": sorted(segredos_instrumento.resumo(sessao, inst.id)),
-        "credencial_id": str(inst.credencial_id) if inst.credencial_id else None,
         "acao_irreversivel": acao_irreversivel(inst.tipo, inst.configuracao or {}),
         # "time" ou "organizacao" (todos os times encaixam; só admin configura).
         "escopo": inst.escopo or "time",
     }
-
-
-def _cobertos_por_credencial(sessao, inst) -> frozenset:
-    """Campos que a credencial nomeada apontada já cobre (mesma regra da fotografia
-    do time em `criacao/ferramentas.py`)."""
-    if not inst.credencial_id:
-        return frozenset()
-    cred = sessao.get(Credencial, inst.credencial_id)
-    tipo = tc.obter_tipo(cred.tipo) if cred else None
-    return frozenset(tipo.nomes_campos) if tipo else frozenset()
 
 
 @_ferramenta
@@ -342,7 +329,6 @@ def ver_instrumento(sessao, usuario, instrumento_id) -> str:
     dados["segredos_pendentes"] = segredos_instrumento.pendentes(
         inst.tipo,
         guardados=set(dados["segredos_preenchidos"]),
-        cobertos_por_credencial=_cobertos_por_credencial(sessao, inst),
         servicos_resolviveis=segredos_instrumento.servicos_resolviveis(
             sessao, time.organizacao_id if time else None
         ),

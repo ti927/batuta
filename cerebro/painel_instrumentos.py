@@ -18,9 +18,8 @@ from sqlalchemy.orm import Session
 
 import instrumentos as encaixe
 import segredos_instrumento as segredos
-import tipos_credencial as tc
 from medicao_instrumentos import TIPOS_PAGOS
-from modelos import Agente, AgenteInstrumento, Credencial, Instrumento, SegredoInstrumento, Time
+from modelos import Agente, AgenteInstrumento, Instrumento, SegredoInstrumento, Time
 
 # Situações que pedem a atenção de quem cuida do time (o selo laranja).
 FALTA_CHAVE = "falta_chave"
@@ -107,14 +106,6 @@ def enriquecer(sessao: Session, time: Time, lista: list[Instrumento]) -> None:
         )
     ):
         guardados[inst_id].add(campo)
-    creds = {
-        c.id: frozenset(t.nomes_campos) if (t := tc.obter_tipo(c.tipo)) else frozenset()
-        for c in sessao.scalars(
-            select(Credencial).where(
-                Credencial.id.in_({i.credencial_id for i in lista if i.credencial_id})
-            )
-        )
-    }
     resolviveis = segredos.servicos_resolviveis(sessao, time.organizacao_id)
 
     # De onde vem o instrumento da organização que mora em outro time.
@@ -136,7 +127,6 @@ def enriquecer(sessao: Session, time: Time, lista: list[Instrumento]) -> None:
         pend = segredos.pendentes(
             inst.tipo,
             guardados=guardados[inst.id],
-            cobertos_por_credencial=creds.get(inst.credencial_id, frozenset()),
             servicos_resolviveis=resolviveis,
             configuracao=inst.configuracao,
         )

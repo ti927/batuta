@@ -15,7 +15,7 @@ senha só é usada AQUI, para abrir o arquivo; ela NÃO é guardada — o par PE
 resultante é protegido pelo cofre (Fernet) como todo segredo do Batuta.
 
 Nada de rede nem de banco aqui: é só leitura de bytes. A gravação cifrada é do
-`credenciais_cofre`; a apresentação do certificado na conexão é da fatia B.
+cofre do instrumento (`segredos_instrumento`); a apresentação do certificado na conexão é da fatia B.
 """
 
 import base64

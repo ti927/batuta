@@ -310,7 +310,6 @@ class ConectarMCP(TipoInstrumento):
     )
     # Só existem na hora de salvar (viram o par PEM em `normalizar_config`).
     _TRANSITORIOS = ("arquivo", "chave_arquivo", "senha_certificado")
-    tipos_credencial_aceitos = ("mcp", "token_bearer")
     # Baseline do TIPO. A irreversibilidade real é por instância (e, aqui, por
     # ferramenta) — ver `irreversivel_para`.
     acao_irreversivel = True

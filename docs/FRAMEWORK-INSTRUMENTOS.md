@@ -239,6 +239,7 @@ instrumentos**: o segredo fica **no próprio instrumento**. Consequências:
   funções **nativas** do Batuta) é **outra coisa** (chaves das capacidades pagas da plataforma, não credencial de
   instrumento do usuário) e pode continuar como está.
 - **Migração:** as credenciais nomeadas existentes se **dobram** no instrumento que as usa.
+- **✅ Feito em 2026-10-02:** a caixa-forte saiu inteira (tela, MCP, código, tabela — migração `crd01remover001`). Não havia nenhuma credencial em produção para dobrar.
 
 ---
 

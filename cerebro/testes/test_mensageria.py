@@ -994,7 +994,6 @@ def test_editar_instrumento_preserva_webhook_secret(cliente, entrar, dados, sess
             "nome": inst.nome,
             "configuracao": {"destinatario_padrao": "999"},
             "icone": None,
-            "credencial_id": None,
         },
     )
     assert r.status_code == 200, r.text

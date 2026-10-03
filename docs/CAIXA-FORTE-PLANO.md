@@ -1,5 +1,10 @@
 # Caixa-forte de Credenciais — plano de implementação
 
+> **⚰️ REMOVIDA em 2026-10-02 (documento histórico).** Decisão do maestro: a página de chaves guarda só as
+> chaves de IA; toda credencial de outra plataforma mora no próprio instrumento. Saíram a tela, o MCP e a
+> conexão Google (`3c36583`) e depois o código e a tabela (`credenciais`, `instrumentos.credencial_id`;
+> migração `crd01remover001`). Produção tinha zero credenciais. Ver `PRODUTO.md §26`.
+
 > Desenho **aprovado pelo maestro** (2026-06-15). Substitui a "seção B" (inventário de credenciais
 > por-instrumento) por um cofre de **credenciais nomeadas, tipadas e referenciadas**. Resolve a confusão
 > que o maestro apontou na validação E deixa o desenho à prova de futuro (MCP, Google Drive/OAuth, Nano

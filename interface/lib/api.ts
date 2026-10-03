@@ -262,8 +262,6 @@ export type Instrumento = {
   // Interruptor de aprovação humana: null = automático, true = sempre, false = nunca.
   // Resolvido (tipo+config+interruptor): se este instrumento exige portão.
   acao_irreversivel: boolean;
-  // Caixa-forte: credencial nomeada da central que este instrumento usa (ou null).
-  credencial_id: string | null;
   // O que o último "Conectar" descobriu (servidor MCP). Null = nunca testado.
   conexao?: ConexaoInstrumento | null;
   // "time" (só o time dono) ou "organizacao" (todos os times da organização usam).
@@ -323,8 +321,6 @@ export type TipoInstrumento = {
   // Se o tipo reusa uma chave de serviço compartilhada da org: [campo, serviço]
   // (ex.: ["chave_api","openai"]). Esse campo é OPCIONAL no formulário.
   chave_compartilhada: [string, string] | null;
-  // Caixa-forte: tipos de credencial nomeada que este instrumento aceita.
-  tipos_credencial_aceitos: string[];
   // Baseline do tipo: este tipo PODE escrever/agir de forma irreversível? (a
   // irreversibilidade real da instância depende da config — método, somente_leitura).
   acao_irreversivel: boolean;

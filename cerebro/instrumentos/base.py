@@ -91,7 +91,7 @@ class TipoInstrumento(ABC):
     # certificado de cliente (mTLS) que APIs bancárias pedem: cobrar um
     # certificado de todo instrumento REST/conector seria alarme falso. O cálculo
     # de "faltam segredos" (`segredos_instrumento.pendentes`) os ignora; quando
-    # preenchidos (via credencial do cofre), valem normalmente.
+    # preenchidos, valem normalmente.
     campos_secretos_opcionais: tuple[str, ...] = ()
     # AÇÃO IRREVERSÍVEL: o instrumento age no mundo externo de forma que não dá
     # para desfazer (publicar, enviar, gravar em sistema de terceiros). É a base
@@ -108,12 +108,6 @@ class TipoInstrumento(ABC):
     # Declara `(campo_secreto, servico)`: se o campo próprio estiver vazio, a borda
     # injeta a chave do pool. None = o instrumento não reusa chave compartilhada.
     chave_compartilhada: tuple[str, str] | None = None
-    # CAIXA-FORTE DE CREDENCIAIS: tipos de credencial nomeada (ver
-    # `tipos_credencial.py`) que esta instância pode REFERENCIAR via
-    # `instrumentos.credencial_id`, em vez de guardar o segredo inline. Filtra o
-    # seletor "usar uma credencial da central" na UI. Vazio = o instrumento não
-    # aceita credencial da central (usa segredo inline próprio / pool, como antes).
-    tipos_credencial_aceitos: tuple[str, ...] = ()
     # MENSAGEM APRESENTADA A UM HUMANO: o nome do campo do `Args` cujo valor é o
     # texto que uma pessoa lê quando o agente aciona este instrumento (ex.: um
     # canal de mensageria). Usado pelo portão de aprovação para carregar adiante
@@ -162,8 +156,7 @@ class TipoInstrumento(ABC):
         Serve para campos que a pessoa PREENCHE de um jeito e o instrumento
         GUARDA de outro. O caso que motivou: o certificado digital — quem monta o
         instrumento sobe um arquivo `.pfx`, e o que fica guardado é o par PEM que
-        a conexão usa. Assim o Construtor não precisa mandar ninguém à caixa-forte
-        para completar o instrumento.
+        a conexão usa. Assim o instrumento se basta, sem cadastro em outra tela.
 
         Os campos de entrada (o arquivo, a senha) são TRANSITÓRIOS: existem só
         nesta passagem e não viram configuração nem segredo.

@@ -166,8 +166,8 @@ class ConfigConector(BaseModel):
         "obrigatório (ex.: https://www.googleapis.com/auth/webmasters.readonly) — "
         "pedir acesso amplo seria pior do que pedir de menos.",
     )
-    # Certificado de cliente (mTLS) — vem da caixa-forte por referência a uma
-    # credencial `certificado_mtls`, nunca digitado. Vale para TODAS as operações
+    # Certificado de cliente (mTLS) — sobe como arquivo no Construtor e fica
+    # guardado no próprio instrumento (ver `normalizar_config`). Vale para TODAS as operações
     # do conector (é propriedade da conexão com o serviço, não de uma chamada).
     # Vazio = sem certificado, como sempre foi.
     certificado: str = Field(
@@ -176,15 +176,14 @@ class ConfigConector(BaseModel):
     chave_privada: str = Field(
         default="", description="Chave privada do certificado em PEM (vem do cofre)."
     )
-    # OAuth do banco: acompanha a mesma credencial. O transporte não os usa; estão
-    # aqui porque aceitar um tipo de credencial obriga a ter onde injetar cada
-    # campo dele (regra conferida em test_tipos_credencial).
+    # OAuth do banco: o transporte não os usa; quem os usa é a BORDA, ao obter e
+    # renovar o token de acesso (`oauth_mtls.garantir_token_instrumento`).
     client_id: str = Field(default="", description="Client ID do OAuth (vem do cofre).")
     client_secret: str = Field(
         default="", description="Client Secret do OAuth (vem do cofre)."
     )
-    # Token de acesso obtido e renovado pela BORDA a partir da credencial mTLS
-    # (ver `oauth_mtls`). Não se digita: chega pronto.
+    # Token de acesso obtido e renovado pela BORDA (OAuth 2.0 do instrumento,
+    # ver `oauth_mtls`). Não se digita: chega pronto.
     access_token: str = Field(
         default="", description="Token de acesso OAuth (obtido automaticamente)."
     )
@@ -461,10 +460,6 @@ def _executar_operacao(
             cabecalhos[config.auth_nome or "Authorization"] = config.auth_segredo
         elif config.auth_tipo == "query":
             params[config.auth_nome or "api_key"] = config.auth_segredo
-    # Token vindo de uma CREDENCIAL da caixa-forte (o caminho antigo, preservado):
-    # entra como Bearer quando a autenticação declarada não definiu nenhum.
-    elif config.access_token:
-        cabecalhos["Authorization"] = f"Bearer {config.access_token}"
     validar_cabecalhos_ascii(cabecalhos)
 
     # 4) certificado de cliente (mTLS), se a conexão tiver um: vale para toda
@@ -562,9 +557,6 @@ class Conector(TipoInstrumento):
     campos_secretos_opcionais = (
         "certificado", "chave_privada", "client_secret", "access_token",
     )
-    # Caixa-forte: o conector aceita apontar para um certificado guardado no cofre
-    # (o segredo não é digitado aqui nem passa pela IA).
-    tipos_credencial_aceitos = ("certificado_mtls",)
     # Baseline seguro; a irreversibilidade REAL depende das operações (ver abaixo).
     acao_irreversivel = True
     # Fase 1 (o motor): o tipo é REAL e executável, mas fica FORA do dropdown de
@@ -578,8 +570,7 @@ class Conector(TipoInstrumento):
 
     def normalizar_config(self, bruta: dict) -> dict:
         """Converte o ARQUIVO de certificado enviado pelo Construtor no par PEM
-        que a conexão usa — para o instrumento ser completo sem passar pela
-        caixa-forte. Sem arquivo, não mexe em nada (o certificado guardado antes
+        que a conexão usa — para o instrumento ser completo em si mesmo. Sem arquivo, não mexe em nada (o certificado guardado antes
         é preservado, como todo campo secreto em branco).
 
         A senha do arquivo abre o `.pfx` e NÃO é guardada."""

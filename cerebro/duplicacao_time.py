@@ -9,14 +9,14 @@ trabalho central é **remapear** essas referências dos ids velhos para os novos
 o portão por canal vaza cross-time).
 
 Decisões de produto (maestro, 2026-06-20):
-- **Escopo = mesma organização** (credenciais e memória continuam válidas).
+- **Escopo = mesma organização** (chaves de IA e memória continuam válidas).
 - **Memória da IA = herdar** (a cópia já "sabe" as decisões lembradas).
 
 Princípios herdados do molde:
 - A cópia das automações nasce **inativa** (`ativa=False`) — não dispara em dobro.
 - Dados de runtime (execuções, conversas de atendimento, uso) **não** são copiados.
 - Instrumentos de **canal** (Telegram/WhatsApp) nascem **desconectados** — sem
-  token, sem `webhook_secret`, sem credencial — para dois times nunca brigarem pelo
+  token, sem `webhook_secret` — para dois times nunca brigarem pelo
   mesmo bot (um webhook por bot). O usuário pluga um bot novo na cópia.
 - **Segredos NÃO são copiados** (decisão do maestro, 2026-09-29): todo instrumento da
   cópia nasce com os segredos PENDENTES e o login OAuth nunca vai junto (a cópia
@@ -161,8 +161,6 @@ def duplicar_time(
             tipo=inst.tipo,
             configuracao=config,
             icone=inst.icone,
-            # canal: zera a credencial p/ não resolver o mesmo bot; senão mantém.
-            credencial_id=None if eh_canal else inst.credencial_id,
         )
         sessao.add(copia)
         map_inst_obj[inst.id] = copia
