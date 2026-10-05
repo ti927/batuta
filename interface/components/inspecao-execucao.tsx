@@ -1292,9 +1292,12 @@ export function InspecaoExecucao({
     setRespondendo(true);
     setErro(null);
     try {
+      // O passo que esta tela mostra como "esperando você": o Batuta só aceita a
+      // resposta se ainda for ele que espera (a página pode estar segundos atrasada).
+      const pausado = execucao.passos[execucao.passos.length - 1];
       const r = await api.post<ExecucaoComPassos>(
         `/execucoes/${execucao.id}/responder`,
-        { resposta: texto },
+        { resposta: texto, ...(pausado ? { passo_id: pausado.id } : {}) },
       );
       setExecucao(r);
       setResposta("");

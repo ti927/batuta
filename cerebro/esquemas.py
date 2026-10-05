@@ -499,6 +499,9 @@ class ResponderHumano(BaseModel):
     """Resposta do humano a uma execução pausada (espera-por-humano, 4.6)."""
 
     resposta: str = Field(min_length=1)
+    # O passo que a tela mostrava ao responder. Opcional (o MCP e clientes antigos não
+    # mandam); quando vem, a resposta só vale se ainda for ele que espera.
+    passo_id: uuid.UUID | None = None
 
 
 class AgendamentoEditar(BaseModel):

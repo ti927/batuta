@@ -770,6 +770,25 @@ def _ultima_msg_contato(sessao: Session, conversa_id: uuid.UUID) -> str:
     return (m.conteudo or "").strip() if m else ""
 
 
+def _resposta_anterior_a_pergunta(
+    sessao: Session, conversa_id: uuid.UUID, passo_pausado: PassoExecucao
+) -> bool:
+    """A última mensagem do contato foi escrita ANTES de a execução parar no passo em
+    que espera agora? Então ela não pode responder a esse passo. Compara com o FIM do
+    passo (quando a pergunta foi feita), não com o início."""
+    feito_em = passo_pausado.finalizado_em or passo_pausado.criado_em
+    if feito_em is None:
+        return False
+    m = sessao.scalars(
+        select(MensagemConversa)
+        .where(MensagemConversa.conversa_id == conversa_id)
+        .where(MensagemConversa.papel == "contato")
+        .order_by(MensagemConversa.criado_em.desc())
+        .limit(1)
+    ).first()
+    return bool(m and m.criado_em and m.criado_em < feito_em)
+
+
 def _ack_aprovacao(execucao: Execucao) -> str:
     """Confirmação curta ao aprovador depois de religar (ou tentar religar) o fluxo."""
     if execucao.estado == "aguardando_humano":
@@ -1387,6 +1406,26 @@ def _turno_de_portao_com_posse(
     except ValueError:
         _processar_aprovacao(sessao, conversa, execucao, token, resolver_config(sessao, conversa))
         return
+    # Uma resposta só responde à pergunta que a pessoa viu. Mensagem escrita ANTES do
+    # passo em que a execução espera agora era para uma pergunta anterior — e já foi
+    # lida pelo turno que a consumiu. Sem isto, dois "aprovado" seguidos para a capa
+    # aprovavam também o Carrossel, que ninguém tinha visto (achado pelos testes de
+    # combinações, 2026-10-05; o mesmo desenho da execução f941b1b1).
+    if _resposta_anterior_a_pergunta(sessao, conversa.id, ultimo):
+        _enviar_e_registrar(
+            sessao, conversa, token,
+            "✅ Já recebi sua resposta. Se houver um pedido mais novo acima, responda a ele.",
+        )
+        if _estado_fresco(sessao, conversa.id) == "bot_respondendo":
+            conversa.estado = "aguardando_resposta"
+        registrar_evento(
+            categoria="mensageria", acao="portao.resposta_anterior_ignorada",
+            nivel="warning", persistir=True, recurso_tipo="execucao",
+            recurso_id=execucao.id,
+            detalhe={"no": no_id, "conversa_id": str(conversa.id)},
+        )
+        sessao.commit()
+        return
     # Só as CONDICIONAIS entram na decisão do portão: as saídas de erro e "senão" são
     # do motor (falha do nó / nenhuma condição atendida), não opções de escolha.
     saidas, _, _ = grafo.separar_saidas(no.get("saidas"))
@@ -1537,7 +1576,19 @@ def _turno_de_portao_com_posse(
         # curto à pessoa (mesma regra do portão mecânico), p/ ela não ficar no vácuo.
         if not falou and not _agente_falou_por_ultimo(sessao, conversa.id):
             _enviar_e_registrar(sessao, conversa, token, _ack_aprovacao(execucao))
-    elif not pausa:
+    elif pausa:
+        # Pediu aprovação DE NOVO (refez o material depois de uma reprovação): o pedido
+        # novo precisa ser registrado, como a tela faz (`vincular_pausa`). Sem isto o
+        # pedido ativo continuava sendo o ANTIGO — responder arrastando a mensagem nova
+        # não achava pedido nenhum e o botão dela dizia "já foi respondido". Achado
+        # pelos testes de combinações (test_combinacoes_aprovacao), 2026-10-05.
+        cfg = aprovacao.config_aprovacao(sessao, execucao) or {}
+        if cfg.get("instrumento_id"):
+            aprovacao.registrar_pedido(
+                sessao, execucao, uuid.UUID(str(cfg["instrumento_id"])),
+                conversa.contato_chave, cfg,
+            )
+    else:
         # Só conversou: se o nó tinha caminhos e isso já se repetiu, vira alarme em vez
         # de silêncio (§12-A). Mesma régua da tela (`retoma._retomar_conversando_tela`).
         retoma.alertar_portao_indeciso(

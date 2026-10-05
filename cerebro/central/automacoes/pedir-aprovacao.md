@@ -157,6 +157,10 @@ de "continue esperando". Escrever no markdown que **declarar é a última coisa 
   daquela pessoa — e, se houver **dois ou mais** abertos no mesmo bot, o bot pergunta qual, em vez de
   adivinhar. Botões de pedidos antigos ainda funcionam. Mensagens que chegam **depois** de a
   aprovação já ter sido decidida não fazem nada — o bot avisa que a resposta anterior já valeu.
+- **Uma resposta só vale para o pedido que a pessoa viu.** Mandar "aprovado" duas vezes não
+  aprova também o pedido seguinte: a segunda mensagem foi escrita antes de ele existir, e o bot
+  responde "Já recebi sua resposta". Na tela, se a página estava desatualizada e o fluxo já parou
+  noutra aprovação, o clique é recusado com "Esta aprovação mudou desde que a página foi aberta".
 - **Uma porta de cada vez.** A mesma aprovação pode ser respondida na **tela** ou pelo
   **canal**, e as duas conversam com a mesma execução. Enquanto uma está processando, a
   outra é recusada com um aviso claro ("esta aprovação está sendo respondida pelo Telegram

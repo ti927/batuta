@@ -331,7 +331,9 @@ def _montar_com_passos(sessao: Session, execucao: Execucao) -> ExecucaoComPassos
     passos = sessao.scalars(
         select(PassoExecucao)
         .where(PassoExecucao.execucao_id == execucao.id)
-        .order_by(PassoExecucao.ordem)
+        # Mesmo desempate de `retoma.localizar_no_pausado`: a tela mostra como "o que
+        # espera você" o ÚLTIMO desta lista, e ele precisa ser o mesmo que o Batuta retoma.
+        .order_by(PassoExecucao.ordem, PassoExecucao.criado_em)
     ).all()
     base = ExecucaoLer.model_validate(execucao).model_dump()
     auto = (
@@ -431,11 +433,22 @@ def responder(
     # para devolver 422 na hora, em vez de enfileirar uma retomada que o worker só
     # descobriria impossível depois. Falta de passo de pausa → 422.
     try:
-        retoma.localizar_no_pausado(sessao, execucao)
+        pausado, *_ = retoma.localizar_no_pausado(sessao, execucao)
     except ValueError:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "Não foi possível retomar: passo de pausa ausente.",
+        )
+    # A resposta é para a pergunta que a pessoa VIU. Se a página estava atrasada e o
+    # fluxo já parou noutra aprovação, o clique não pode valer para esta — ela nem a viu
+    # (achado pelos testes de combinações, 2026-10-05).
+    if dados.passo_id is not None and dados.passo_id != pausado.id:
+        dono.devolver(sessao, execucao.id, dono.TELA)
+        sessao.commit()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Esta aprovação mudou desde que a página foi aberta. Veja o pedido novo "
+            "e responda de novo.",
         )
 
     # Auditoria (§3.7): a aprovação humana de um portão é ação sensível.

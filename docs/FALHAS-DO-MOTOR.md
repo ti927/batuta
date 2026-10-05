@@ -157,6 +157,10 @@ próximo — foi exatamente o que aconteceu nas correções anteriores.
 | E9 | destinatário nunca deu `/start` no bot | o envio falha; o motivo aparece no rastro | 🟡 | detectar na hora de amarrar e avisar antes de o fluxo parar |
 | E11 | **duas execuções esperam a MESMA pessoa no MESMO bot** | até 29/09 a resposta era roteada pela conversa (bot + chat), que guarda uma execução: ia para a mais recente, a outra ficava órfã — ou recebia a aprovação dada à outra | 🟢 | **resolvido 2026-09-29**: `pedidos_aprovacao` (execução + código + id da mensagem); botões Aprovar/Recusar e "Responder" apontam o pedido; sem apontar só vale com UM aberto, senão o bot pergunta; pedido substituído não aprova a pergunta nova; turno de outro pedido rodando → "reenvie". Pré-requisito do bot da organização |
 | E12 | **aprovação num nó de UMA saída: tela e canal faziam coisas diferentes** | pelo canal o agente não voltava (fluxo seguia direto, "aprova e depois publica" nunca publicava); pela tela ele voltava, mas a execução reapresentava a mesma aprovação 2–3 vezes | 🟢 | **resolvido 2026-10-02**: igual nas duas portas — o agente volta, age e o fluxo segue pela única saída (`segue_sozinho`), salvo se pedir aprovação de novo; forma "direto" segue mecânica |
+| E13 | **duas respostas da MESMA porta (várias mensagens no Telegram, duplo clique)** | a trava era da superfície ("canal"), não de quem a pegou: a 2ª mensagem achava o dono "canal" e entrava, re-rodando o agente que já tinha decidido (execução f941b1b1, 05/10) | 🟢 | **resolvido 2026-10-05**: `dono.tomar(exigir_estado=...)` — o estado entra no mesmo UPDATE da trava; a mensagem atrasada recebe "já foi recebida" |
+| E14 | **resposta escrita para uma pergunta aplicada à SEGUINTE** | "aprovado" duas vezes para a capa aprovava também o Carrossel, que ninguém viu; na tela, um clique numa página atrasada valia para o pedido novo | 🟢 | **resolvido 2026-10-05**: mensagem mais antiga que o passo em espera é recusada (`_resposta_anterior_a_pergunta`); a tela manda o `passo_id` que mostrava e o Batuta recusa se não for mais ele |
+| E15 | **reprovar pelo Telegram não registrava o pedido refeito** | o pedido ativo continuava o antigo: responder arrastando a mensagem nova não achava pedido | 🟢 | **resolvido 2026-10-05**: o turno do canal registra o pedido novo (`registrar_pedido`), como a tela |
+| E16 | **dois passos com o mesmo número** | "o último passo" era escolhido ao acaso — a tela mostrava e o Batuta retomava o passo errado, e o pedido do Telegram ficava sem registro | 🟢 | **resolvido 2026-10-05**: desempate pelo gravado por último em todas as buscas de "último passo" |
 | E10 | dois nós pedem aprovação na mesma onda (fan-out) | o segundo vira pendência e só é apresentado depois | 🟡 | documentar na tela; hoje parece que "sumiu" |
 
 ### F. A retomada
@@ -307,3 +311,14 @@ Honestidade sobre o alcance deste estudo:
    execução.** Encontrei dois (tela e canal); não varri o projeto inteiro.
 
 Estes quatro pontos entram na próxima passada.
+
+## 6. Testes de combinações (2026-10-05)
+
+`cerebro/testes/test_combinacoes_aprovacao.py` sorteia sequências de eventos (mensagens no
+Telegram que chegam e são processadas depois, cliques na tela, página desatualizada, trabalhador
+da fila) e confere depois de cada um: **uma resposta só vale para a pergunta que a pessoa viu, e
+no máximo uma vez**; números de passo não se repetem; ninguém fica com a trava; a espera aponta um
+passo que ainda não decidiu; pedido pelo Telegram fica registrado. Na primeira rodada achou E14 e
+E15. As sequências que já acharam defeito ficam como testes fixos no mesmo arquivo. Antes de mexer
+em aprovação/retomada/mensageria, rode a busca funda: `BATUTA_COMBINACOES=1000 uv run pytest
+testes/test_combinacoes_aprovacao.py`.
