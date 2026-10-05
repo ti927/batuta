@@ -73,11 +73,6 @@ def test_resposta_arrastada_traz_a_mensagem_respondida():
     assert m.responde_a == 101
 
 
-def test_botoes_carregam_o_codigo():
-    [[aprovar, recusar]] = telegram.botoes_de_aprovacao("abc")
-    assert aprovar["callback_data"] == "apv:abc:s" and recusar["callback_data"] == "apv:abc:n"
-
-
 # ───────────────────────────── o roteamento ─────────────────────────────
 
 def test_duas_esperando_e_texto_solto_pergunta_qual(sessao, dois_pedidos):
@@ -159,9 +154,11 @@ def test_registro_do_pedido_guarda_codigo_e_mensagem(sessao, dois_pedidos):
     assert p.execucao_id == dois_pedidos["b"].id and p.mensagem_id == 202 and p.ativo
 
 
-# ───────────────────────────── o envio com botões ─────────────────────────────
+# ───────────────────────────── o envio ─────────────────────────────
 
-def test_pedido_sai_com_botoes_e_o_webhook_passa_a_receber_toques(sessao, dados, monkeypatch):
+def test_pedido_sai_sem_botoes(sessao, dados, monkeypatch):
+    """Execução f941b1b1 (2026-10-05): o toque em "Aprovar" não dava sinal na hora, o
+    maestro tocou várias vezes e cada toque virou uma resposta. O pedido sai em texto."""
     from instrumentos import pedir_aprovacao as pa
     from instrumentos.enviar_telegram import EnviarTelegram
 
@@ -170,33 +167,10 @@ def test_pedido_sai_com_botoes_e_o_webhook_passa_a_receber_toques(sessao, dados,
     si.salvar_segredos(sessao, canal.id, {"token_bot": "tok-x"})
     sessao.flush()
     monkeypatch.setattr(pa, "CriadorDeSessao", lambda: _SessaoFake(sessao))
-    webhooks: list = []
-    monkeypatch.setattr(telegram, "configurar_webhook",
-                        lambda token, url, segredo: webhooks.append((url, segredo)) or {"ok": True})
-    enviados: list = []
-    monkeypatch.setattr(EnviarTelegram, "enviar",
-                        lambda self, cfg, args, botoes=None: enviados.append(botoes) or {"ok": True, "mensagem_id": 77})
-    tipo = pa.PedirAprovacao()
-    r = tipo.executar(tipo.Config(canal_instrumento_id=str(canal.id)), tipo.Args(mensagem="Aprova?"))
-    assert r["mensagem_id"] == 77 and r["codigo"]
-    assert enviados[0][0][0]["callback_data"] == f"apv:{r['codigo']}:s"
-    assert webhooks and webhooks[0][1] == "cracha" and webhooks[0][0].endswith(f"/mensageria/{canal.id}/entrada")
-    assert canal.conexao["botoes"] is True
-    tipo.executar(tipo.Config(canal_instrumento_id=str(canal.id)), tipo.Args(mensagem="De novo?"))
-    assert len(webhooks) == 1  # só na primeira vez
-
-
-def test_canal_nao_conectado_manda_sem_botoes(sessao, dados, monkeypatch):
-    from instrumentos import pedir_aprovacao as pa
-    from instrumentos.enviar_telegram import EnviarTelegram
-
-    canal = _canal(sessao, dados, destinatario="555")
-    si.salvar_segredos(sessao, canal.id, {"token_bot": "tok-x"})
-    sessao.flush()
-    monkeypatch.setattr(pa, "CriadorDeSessao", lambda: _SessaoFake(sessao))
     chamadas: list = []
     monkeypatch.setattr(EnviarTelegram, "enviar",
                         lambda self, cfg, args, botoes=None: chamadas.append(botoes) or {"ok": True, "mensagem_id": 5})
     tipo = pa.PedirAprovacao()
-    tipo.executar(tipo.Config(canal_instrumento_id=str(canal.id)), tipo.Args(mensagem="Aprova?"))
+    r = tipo.executar(tipo.Config(canal_instrumento_id=str(canal.id)), tipo.Args(mensagem="Aprova?"))
     assert chamadas == [None]
+    assert r["mensagem_id"] == 5 and r["codigo"]

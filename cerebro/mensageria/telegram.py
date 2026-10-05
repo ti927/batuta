@@ -40,13 +40,6 @@ class MensagemEntrante:
 TEXTO_DO_BOTAO = {"s": "Aprovado", "n": "Recusado"}
 
 
-def botoes_de_aprovacao(codigo: str) -> list:
-    return [[
-        {"text": "✅ Aprovar", "callback_data": f"apv:{codigo}:s"},
-        {"text": "⛔ Recusar", "callback_data": f"apv:{codigo}:n"},
-    ]]
-
-
 def _do_botao(corpo: dict) -> "MensagemEntrante | None":
     cb = corpo.get("callback_query")
     if not isinstance(cb, dict):

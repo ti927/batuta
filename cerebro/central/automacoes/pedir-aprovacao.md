@@ -150,14 +150,13 @@ de "continue esperando". Escrever no markdown que **declarar é a última coisa 
   é do fluxo e responde ao *Teto de custo por execução*. Sem essa separação, um carrossel
   de três imagens estourava sozinho o teto de uma conversa inteira na primeira
   reprovação.
-- **Botões Aprovar / Recusar, e cada resposta vai para o pedido certo.** Pelo Telegram, o pedido chega
-  com dois botões; tocar num deles responde **aquele** pedido. Também dá para responder em texto
-  **arrastando a mensagem do pedido** ("Responder"). Uma resposta solta vale para o pedido aberto
+- **Responde-se escrevendo, e cada resposta vai para o pedido certo.** Pelo Telegram, o pedido chega
+  em texto, **sem botões** (os botões Aprovar/Recusar saíram em 05/10/2026: o toque não dava sinal
+  na hora, a pessoa tocava várias vezes e cada toque virava uma resposta). Para responder um pedido
+  específico, **arraste a mensagem dele** ("Responder"). Uma resposta solta vale para o pedido aberto
   daquela pessoa — e, se houver **dois ou mais** abertos no mesmo bot, o bot pergunta qual, em vez de
-  adivinhar. Um botão de um pedido que já foi respondido (ou trocado por um mais novo da mesma
-  execução) não aprova a pergunta seguinte. Antes (até 29/09/2026) a resposta ia sempre para o pedido
-  mais recente daquele bot, e com dois esperando um deles ficava órfão — ou recebia a aprovação dada
-  ao outro.
+  adivinhar. Botões de pedidos antigos ainda funcionam. Mensagens que chegam **depois** de a
+  aprovação já ter sido decidida não fazem nada — o bot avisa que a resposta anterior já valeu.
 - **Uma porta de cada vez.** A mesma aprovação pode ser respondida na **tela** ou pelo
   **canal**, e as duas conversam com a mesma execução. Enquanto uma está processando, a
   outra é recusada com um aviso claro ("esta aprovação está sendo respondida pelo Telegram

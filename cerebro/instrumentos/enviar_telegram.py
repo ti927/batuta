@@ -136,9 +136,8 @@ class EnviarTelegram(TipoInstrumento):
         return self.enviar(config, args)
 
     def enviar(self, config: ConfigTelegram, args: ArgsTelegram, *, botoes: list | None = None) -> dict:
-        """Envia; `botoes` (opcional) vira um teclado sob a mensagem — é como o pedido
-        de aprovação leva Aprovar/Recusar com o código do pedido. Não é da IA: o
-        agente continua mandando só texto (`executar`)."""
+        """Envia; `botoes` (opcional) vira um teclado sob a mensagem. Hoje ninguém o usa:
+        o pedido de aprovação saiu dos botões em 2026-10-05 (ver `pedir_aprovacao`)."""
         if not config.token_bot:
             raise FalhaInstrumento(
                 "token do bot do Telegram não configurado.", retentavel=False
