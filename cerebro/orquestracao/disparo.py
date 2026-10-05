@@ -458,7 +458,7 @@ def _entrada_recusada(sessao: Session, execucao: Execucao, erro: Exception) -> b
     ultimo = sessao.scalars(
         select(PassoExecucao)
         .where(PassoExecucao.execucao_id == execucao.id)
-        .order_by(PassoExecucao.ordem.desc())
+        .order_by(PassoExecucao.ordem.desc(), PassoExecucao.criado_em.desc())
     ).first()
     if ultimo is None or ultimo.tipo != "espera_humano":
         return False

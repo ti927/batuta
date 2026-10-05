@@ -146,6 +146,50 @@ def test_a_mesma_superficie_renova_sem_conflito(sessao, dados):
     assert dono.tomar(sessao, execucao.id, dono.TELA)
 
 
+def test_a_mesma_superficie_nao_responde_espera_ja_resolvida(sessao, dados):
+    """Execução f941b1b1 (2026-10-05): quatro mensagens no Telegram em 30 s. A 1ª
+    decidiu e o fluxo seguiu; a 4ª achou o dono "canal" (dela também) e re-rodou o agente
+    que já tinha decidido. Com o estado na trava, quem chega depois da decisão é barrado."""
+    canal, ag, auto = _monta(sessao, dados)
+    execucao = _exec_pausada(sessao, auto, ag, canal)
+    assert dono.tomar(sessao, execucao.id, dono.CANAL, exigir_estado="aguardando_humano")
+    execucao.estado = "em_andamento"  # a 1ª mensagem decidiu; o fluxo anda
+    sessao.flush()
+
+    assert not dono.tomar(
+        sessao, execucao.id, dono.CANAL, exigir_estado="aguardando_humano"
+    )
+    assert not dono.tomar(sessao, execucao.id, dono.TELA, exigir_estado="aguardando_humano")
+
+
+def test_segunda_mensagem_do_canal_nao_re_roda_o_agente(sessao, dados, monkeypatch):
+    """A borda inteira: a mensagem atrasada não religa o agente e diz à pessoa que a
+    resposta anterior já valeu — em vez de "reenvie", que convidaria a repetir."""
+    enviados: list[str] = []
+    canal, ag, auto, execucao = _setup_canal(sessao, dados, monkeypatch, enviados)
+    rodou = []
+    monkeypatch.setattr(servico, "_rodar_turno", lambda *a, **k: rodou.append(1))
+    conv, _ = servico.registrar_entrada(
+        sessao, canal,
+        telegram.MensagemEntrante(
+            contato_chave="555", contato_nome="Julio", texto="aprovado", midia=None
+        ),
+    )
+    # A 1ª mensagem já decidiu e o fluxo está andando — ainda com o dono "canal".
+    dono.tomar(sessao, execucao.id, dono.CANAL)
+    sessao.execute(
+        Execucao.__table__.update()
+        .where(Execucao.id == execucao.id)
+        .values(estado="em_andamento")
+    )
+
+    servico._turno_de_portao(sessao, conv, canal, "tok", execucao)
+
+    assert rodou == []
+    assert len(_passos(sessao, execucao.id)) == 1
+    assert any("já foi recebida" in t for t in enviados)
+
+
 def test_dono_vencido_e_assumido_pelo_proximo(sessao, dados):
     """Todo dono tem prazo: um processo que morre segurando a trava não pode deixar a
     execução inacessível para sempre — seria trocar um caos por uma paralisia."""

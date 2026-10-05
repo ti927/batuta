@@ -77,7 +77,7 @@ def _onde_parou(sessao: Session, execucao: Execucao) -> str:
     ultimo = sessao.scalars(
         select(PassoExecucao)
         .where(PassoExecucao.execucao_id == execucao.id)
-        .order_by(PassoExecucao.ordem.desc())
+        .order_by(PassoExecucao.ordem.desc(), PassoExecucao.criado_em.desc())
     ).first()
     if ultimo is None:
         return ""

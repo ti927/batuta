@@ -57,7 +57,7 @@ def no_pausado(sessao: Session, execucao: Execucao) -> dict | None:
     ultimo = sessao.scalars(
         select(PassoExecucao)
         .where(PassoExecucao.execucao_id == execucao.id)
-        .order_by(PassoExecucao.ordem.desc())
+        .order_by(PassoExecucao.ordem.desc(), PassoExecucao.criado_em.desc())
     ).first()
     no_id = (ultimo.no_id if ultimo else None) or (
         str(ultimo.agente_id) if ultimo and ultimo.agente_id else None
@@ -75,7 +75,7 @@ def passo_pausado(sessao: Session, execucao: Execucao) -> PassoExecucao | None:
     return sessao.scalars(
         select(PassoExecucao)
         .where(PassoExecucao.execucao_id == execucao.id)
-        .order_by(PassoExecucao.ordem.desc())
+        .order_by(PassoExecucao.ordem.desc(), PassoExecucao.criado_em.desc())
     ).first()
 
 
@@ -364,7 +364,7 @@ def _avisar_expectativa(
     ultimo = sessao.scalars(
         select(PassoExecucao)
         .where(PassoExecucao.execucao_id == execucao.id)
-        .order_by(PassoExecucao.ordem.desc())
+        .order_by(PassoExecucao.ordem.desc(), PassoExecucao.criado_em.desc())
     ).first()
     if ultimo is None:
         return
@@ -412,7 +412,7 @@ def _registrar_apresentado(
     ultimo = sessao.scalars(
         select(PassoExecucao)
         .where(PassoExecucao.execucao_id == execucao.id)
-        .order_by(PassoExecucao.ordem.desc())
+        .order_by(PassoExecucao.ordem.desc(), PassoExecucao.criado_em.desc())
     ).first()
     if ultimo is None:
         return

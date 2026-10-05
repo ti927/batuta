@@ -1340,14 +1340,25 @@ def _turno_de_portao(
     # perde: a mensagem dela já está gravada na thread e ela pode reenviar, que é barato
     # e seguro (o mesmo critério do vigia de turno preso — não reprocessar sozinho algo
     # que pode ter efeito externo).
-    if not dono.tomar(sessao, execucao.id, dono.CANAL):
+    # O estado entra na trava: uma segunda mensagem do MESMO canal, que esperou a primeira
+    # terminar de decidir, não pode re-rodar o agente que já decidiu (execução f941b1b1).
+    if not dono.tomar(
+        sessao, execucao.id, dono.CANAL, exigir_estado="aguardando_humano"
+    ):
         quem = dono.quem_tem(sessao, execucao.id)
-        _enviar_e_registrar(
-            sessao, conversa, token,
-            f"⏳ Esta aprovação está sendo respondida {dono.em_portugues(quem)} neste "
-            "momento — para não atropelar o que já está rodando, não processei sua "
-            "mensagem agora. Se ela ainda valer, reenvie em instantes.",
-        )
+        sessao.refresh(execucao)
+        if execucao.estado != "aguardando_humano":
+            aviso = (
+                "✅ Sua resposta anterior já foi recebida e o fluxo seguiu. Esta "
+                "mensagem não mudou nada."
+            )
+        else:
+            aviso = (
+                f"⏳ Esta aprovação está sendo respondida {dono.em_portugues(quem)} neste "
+                "momento — para não atropelar o que já está rodando, não processei sua "
+                "mensagem agora. Se ela ainda valer, reenvie em instantes."
+            )
+        _enviar_e_registrar(sessao, conversa, token, aviso)
         if _estado_fresco(sessao, conversa.id) == "bot_respondendo":
             conversa.estado = "aguardando_resposta"
         registrar_evento(

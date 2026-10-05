@@ -412,8 +412,15 @@ def responder(
     # Anthropic recusou o histórico pela metade com um 400 e quase quatro horas de
     # trabalho morreram. Agora quem chega segundo é recusado — com uma frase que diz o
     # que está acontecendo, não um "409" seco (§12-A).
-    if not dono.tomar(sessao, execucao.id, dono.TELA):
+    if not dono.tomar(sessao, execucao.id, dono.TELA, exigir_estado="aguardando_humano"):
         sessao.commit()
+        sessao.refresh(execucao)
+        if execucao.estado != "aguardando_humano":
+            # Dois cliques: o primeiro já respondeu (ver `dono.tomar`).
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Esta aprovação já foi respondida e o fluxo seguiu. Atualize a página.",
+            )
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             f"Esta aprovação está sendo respondida {dono.em_portugues(dono.quem_tem(sessao, execucao.id))} "
@@ -1095,7 +1102,7 @@ def rodar_de_novo(
         select(PassoExecucao)
         .where(PassoExecucao.execucao_id == execucao.id)
         .where(PassoExecucao.no_id == dados.no_id)
-        .order_by(PassoExecucao.ordem.desc())
+        .order_by(PassoExecucao.ordem.desc(), PassoExecucao.criado_em.desc())
     ).first()
     if passo is None:
         raise HTTPException(

@@ -77,7 +77,10 @@ def localizar_no_pausado(sessao: Session, execucao: Execucao):
     ultimo = sessao.scalars(
         select(PassoExecucao)
         .where(PassoExecucao.execucao_id == execucao.id)
-        .order_by(PassoExecucao.ordem.desc())
+        # Desempate pelo gravado por último: dois passos com a mesma ordem (ramos da
+        # mesma onda) deixavam a escolha ao acaso — e na f941b1b1 caiu no agente que já
+        # tinha decidido, em vez do Carrossel que de fato pediu a aprovação.
+        .order_by(PassoExecucao.ordem.desc(), PassoExecucao.criado_em.desc())
     ).first()
     no_id = (ultimo.no_id if ultimo else None) or (
         str(ultimo.agente_id) if ultimo and ultimo.agente_id else None

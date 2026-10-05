@@ -80,15 +80,24 @@ def _agora() -> datetime:
 
 
 def tomar(
-    sessao: Session, execucao_id, quem: str, *, minutos: int = MINUTOS_PADRAO
+    sessao: Session, execucao_id, quem: str, *, minutos: int = MINUTOS_PADRAO,
+    exigir_estado: str | None = None,
 ) -> bool:
     """Toma (ou renova) o dono desta execução. Devolve se conseguiu.
 
     É um UPDATE condicional ÚNICO — a atomicidade é do banco, não nossa. Consegue quem
     chega e encontra a execução livre, com dono vencido, ou já sua (renovação). Não comita:
-    quem chama fecha a transação junto com o resto do seu trabalho."""
+    quem chama fecha a transação junto com o resto do seu trabalho.
+
+    `exigir_estado` (a porta que RESPONDE uma espera passa "aguardando_humano"): o estado
+    entra na MESMA condição do UPDATE. Sem isto, "já é sua" deixava passar a segunda
+    resposta da MESMA superfície — em 2026-10-05 (execução f941b1b1) quatro mensagens no
+    Telegram em 30 s: a 1ª liberou os caminhos e seguiu o fluxo; a 4ª esperou a trava da
+    linha, achou o dono "canal" (dela também), entrou e re-rodou o agente que JÁ tinha
+    decidido, em paralelo com o passo seguinte. O Postgres reavalia a condição depois da
+    espera pela trava, então quem chega segundo vê o estado novo e é recusado."""
     agora = _agora()
-    r = sessao.execute(
+    consulta = (
         update(Execucao)
         .where(Execucao.id == execucao_id)
         .where(
@@ -97,7 +106,11 @@ def tomar(
             | (Execucao.dono_ate.is_(None))
             | (Execucao.dono_ate < agora)
         )
-        .values(dono=quem, dono_ate=agora + timedelta(minutes=minutos))
+    )
+    if exigir_estado is not None:
+        consulta = consulta.where(Execucao.estado == exigir_estado)
+    r = sessao.execute(
+        consulta.values(dono=quem, dono_ate=agora + timedelta(minutes=minutos))
     )
     return bool(r.rowcount)
 
