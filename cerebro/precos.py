@@ -20,6 +20,10 @@ PRECOS_USD_POR_MTOK = {
     "opus": (5.0, 25.0),
     "sonnet-5": (2.0, 10.0),
     "sonnet": (3.0, 15.0),
+    # Haiku 5.5 (out/2026): $0,10/$0,50 com prompt de até 100 mil tokens; acima disso,
+    # $0,50/$2,50. A entrada de uso SOMA as chamadas de um passo, então não dá para saber
+    # o tamanho de cada prompt — cobramos a faixa de baixo (o caso de quase todo passo).
+    "haiku-5-5": (0.10, 0.50),
     "haiku": (1.0, 5.0),
     # OpenAI GPT-5.6 (Luna teve corte de 80% em 30/jul/2026)
     "gpt-5.6-luna": (0.20, 1.20),
@@ -82,6 +86,7 @@ PRECO_IMAGEM_PADRAO = 0.042
 PRECOS_DESCRICAO_USD = {
     "opus": 0.02,
     "sonnet": 0.006,
+    "haiku-5-5": 0.0002,
     "haiku": 0.002,
     "gpt-4.1": 0.006,
     "gpt-4o-mini": 0.001,

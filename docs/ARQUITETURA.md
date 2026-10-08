@@ -292,12 +292,12 @@ Existem **três papéis de IA** (o cofre modela os três), mas hoje só dois ope
 **Catálogo de modelos — fonte única** (`orquestracao/modelos_ia.py`, espelhado em `interface/lib/modelos.ts`):
 alimenta o seletor do agente, o da IA de conversa e o instrumento de visão. Anthropic desde 2026-09-29:
 `claude-sonnet-5-5`, `claude-opus-5-5`, `claude-opus-5`, `claude-opus-4-8`, `claude-sonnet-5`,
-`claude-sonnet-4-6`, `claude-haiku-4-5`. Tudo passa por **um só construtor de cliente**
+`claude-sonnet-4-6`, `claude-haiku-5-5` (desde 2026-10-08), `claude-haiku-4-5`. Tudo passa por **um só construtor de cliente**
 (`orquestracao/llm.py::construir_modelo`), com duas regras que valem para agentes, criadora, resumos e visão:
-- **`temperature` por GERAÇÃO** (`_claude_aceita_temperatura`): só a família 3, os Haiku, os Sonnet 4.x e os
-  Opus até o 4.6 recebem; do Opus 4.7 em diante a API recusa (400). Lista de quem ACEITA, para modelo novo
+- **`temperature` por GERAÇÃO** (`_claude_aceita_temperatura`): só a família 3, os Haiku 3/4.x, os Sonnet 4.x e os
+  Opus até o 4.6 recebem (o Haiku 5.5 recusa); do Opus 4.7 em diante a API recusa (400). Lista de quem ACEITA, para modelo novo
   já nascer certo (antes era uma lista de quem recusa, e cada lançamento nascia quebrado).
-- **Pensamento vinculado à conversa** (`MODELOS_PENSAMENTO_VINCULADO`: Sonnet 5.5, Opus 5.5): o Batuta
+- **Pensamento vinculado à conversa** (`MODELOS_PENSAMENTO_VINCULADO`: Sonnet 5.5, Opus 5.5, Haiku 5.5): o Batuta
   RESUME o começo das conversas longas (memória entre turnos, resumo da criadora), o que invalida os blocos
   de pensamento; em contas Anthropic criadas a partir de 2026-08-31 a API responderia 400. Envia-se
   `thinking: {type: "adaptive", block_binding: {prefix_mismatch_behavior: "drop_block"}}` + beta

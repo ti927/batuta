@@ -37,6 +37,7 @@ saída:
 | Modelo | Para quê | Preço |
 |---|---|---|
 | `claude-haiku-4-5` | passos mecânicos: publicar, rotear, formatar (é o padrão de quem não escolhe) | US$ 1 / 5 |
+| `claude-haiku-5-5` | sucessor do Haiku 4.5: segue melhor as instruções e custa um décimo (out/2026 — em validação no Batuta). Prompt acima de 100 mil tokens custa US$ 0,50 / 2,50 | US$ 0,10 / 0,50 |
 | `claude-sonnet-5` | o padrão para escrever, julgar e curar | US$ 2 / 10 |
 | `claude-sonnet-5-5` | sucessor do Sonnet 5, mesmo preço (set/2026 — em validação no Batuta) | US$ 2 / 10 |
 | `claude-opus-5-5` | raciocínio mais exigente; mais barato que os outros Opus (set/2026 — em validação) | US$ 4 / 20 |
@@ -51,8 +52,9 @@ que vai sair aparece com **"— sai em dd/mm/aaaa"** e um aviso embaixo; o já d
 agente que ainda o usa ganha o selo **precisa de atenção** no cartão. Troque o modelo antes da data —
 o aviso traz a sugestão de substituto.
 
-Nos modelos mais novos da Anthropic (do Opus 4.7 em diante: Opus 4.8, Opus 5/5.5, Sonnet 5/5.5) o Batuta
-não envia "temperatura" (eles recusam) e deixa o raciocínio do modelo ligado. No Sonnet 5.5 e no Opus 5.5,
+Nos modelos mais novos da Anthropic (do Opus 4.7 em diante: Opus 4.8, Opus 5/5.5, Sonnet 5/5.5, Haiku 5.5)
+o Batuta não envia "temperatura" (eles recusam) e deixa o raciocínio do modelo ligado. No Sonnet 5.5, no
+Opus 5.5 e no Haiku 5.5,
 quando uma conversa longa é resumida, o raciocínio dos turnos antigos é descartado em vez de dar erro — o
 agente segue normalmente.
 

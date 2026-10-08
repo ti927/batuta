@@ -315,7 +315,7 @@ def test_temperatura_por_geracao_modelo_novo_ja_nasce_certo():
         assert llm._envia_temperatura(aceita) is True, aceita
     for recusa in ("claude-opus-4-7", "claude-opus-4-8", "claude-opus-5", "claude-opus-5-5",
                    "claude-sonnet-5", "claude-sonnet-5-5", "claude-fable-5-1",
-                   "claude-sonnet-6"):
+                   "claude-sonnet-6", "claude-haiku-5-5", "claude-haiku-6"):
         assert llm._envia_temperatura(recusa) is False, recusa
 
 
@@ -324,7 +324,7 @@ def test_novos_no_catalogo_e_na_visao():
     from orquestracao import modelos_ia
 
     anthropic = modelos_ia.MODELOS_POR_PROVEDOR[modelos_ia.PROVEDOR_ANTHROPIC]
-    for m in ("claude-sonnet-5-5", "claude-opus-5-5", "claude-opus-5"):
+    for m in ("claude-sonnet-5-5", "claude-opus-5-5", "claude-opus-5", "claude-haiku-5-5"):
         assert m in anthropic and m in MODELOS_VISAO
         assert modelos_ia.provedor_do_modelo(m) == "anthropic"
 
@@ -334,6 +334,9 @@ def test_precos_sonnet_5_5_e_opus_5_5():
     assert precos.custo_usd("claude-opus-5-5", 1_000_000, 1_000_000) == 24.0
     assert precos.custo_usd("claude-opus-5", 1_000_000, 1_000_000) == 30.0
     assert precos.custo_usd("claude-sonnet-4-6", 1_000_000, 1_000_000) == 18.0
+    # Haiku 5.5 custa um décimo do 4.5 — não pode cair na família "haiku".
+    assert precos.custo_usd("claude-haiku-5-5", 1_000_000, 1_000_000) == round(0.10 + 0.50, 10)
+    assert precos.custo_usd("claude-haiku-4-5", 1_000_000, 1_000_000) == 6.0
 
 
 def test_pensamento_vinculado_descarta_em_vez_de_recusar(monkeypatch):
@@ -349,3 +352,6 @@ def test_pensamento_vinculado_descarta_em_vez_de_recusar(monkeypatch):
     assert m.temperature is None
     antigo = llm.construir_modelo("claude-sonnet-5")
     assert antigo.thinking is None and not antigo.betas
+    haiku = llm.construir_modelo("claude-haiku-5-5")
+    assert haiku.thinking == m.thinking and haiku.temperature is None
+    assert llm.construir_modelo("claude-haiku-4-5").thinking is None

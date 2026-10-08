@@ -66,14 +66,16 @@ MAX_RETENTATIVAS_IA_CHAT = 1
 
 def _claude_aceita_temperatura(m: str) -> bool:
     """Os Claude que AINDA aceitam `temperature`: os anteriores à geração do adaptive
-    thinking — a família 3, os Haiku, os Sonnet 4.x e os Opus até o 4.6. Do Opus 4.7
-    em diante (Opus 4.8, Opus 5/5.5, Sonnet 5/5.5, Fable…) a API responde 400.
+    thinking — a família 3, o Haiku 4.x, os Sonnet 4.x e os Opus até o 4.6. Do Opus 4.7
+    em diante (Opus 4.8, Opus 5/5.5, Sonnet 5/5.5, Haiku 5.5, Fable…) a API responde 400.
+    (Até 2026-10-08 o prefixo era "claude-haiku" inteiro, e o Haiku 5.5 nasceria
+    quebrado — a regra por geração vale também DENTRO de cada família.)
 
     A regra é por GERAÇÃO, listando quem aceita, de propósito. Até 2026-09-29 era uma
     lista de quem NÃO aceita, e cada modelo novo nascia quebrado até alguém lembrar de
     incluí-lo (o Sonnet 5.5 teria dado erro em todo agente). Agora o modelo novo já
     nasce certo."""
-    if m.startswith(("claude-3", "claude-haiku", "claude-sonnet-4")):
+    if m.startswith(("claude-3", "claude-haiku-4", "claude-haiku-3", "claude-sonnet-4")):
         return True
     if m.startswith("claude-opus-4-"):
         versao = m.removeprefix("claude-opus-4-").split("-", 1)[0]
@@ -101,13 +103,14 @@ def _envia_temperatura(modelo: str) -> bool:
     return True
 
 
-# Modelos cujo "pensamento" fica PRESO à conversa que o gerou (Sonnet 5.5, Opus 5.5):
+# Modelos cujo "pensamento" fica PRESO à conversa que o gerou (Sonnet 5.5, Opus 5.5,
+# Haiku 5.5):
 # se algo ANTES de um bloco de pensamento muda — e o Batuta muda, ao resumir o começo
 # das conversas longas (memória entre turnos dos agentes, resumo da IA criadora) —, a
 # API responde 400 nas contas criadas a partir de 2026-08-31. A chave pode ser de um
 # CLIENTE, com conta nova. A saída oficial é pedir que o bloco afetado seja DESCARTADO
 # em vez de recusado: perde-se o raciocínio de turnos antigos, não o turno.
-MODELOS_PENSAMENTO_VINCULADO = {"claude-sonnet-5-5", "claude-opus-5-5"}
+MODELOS_PENSAMENTO_VINCULADO = {"claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"}
 BETA_VINCULO_PENSAMENTO = "thinking-binding-controls-2026-08-01"
 PENSAMENTO_TOLERANTE_A_RESUMO = {
     "type": "adaptive",

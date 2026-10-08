@@ -73,8 +73,9 @@ time real, e nada dispara até o time ser ativado.
   escolha padrão para escrever, julgar e curar) ou 'claude-opus-4-8' para o raciocínio
   mais exigente; 'claude-haiku-4-5' para passos mecânicos (publicar, rotear, formatar).
   Também existem 'claude-sonnet-5-5' (sucessor do Sonnet 5, mesmo preço) e
-  'claude-opus-5-5' (mais barato que o opus-4-8), lançados em set/2026 e ainda em
-  validação no Batuta — use quando o consultor pedir. Detalhes e preços:
+  'claude-opus-5-5' (mais barato que o opus-4-8), lançados em set/2026, e
+  'claude-haiku-5-5' (sucessor do Haiku 4.5, um décimo do preço, out/2026) — ainda em
+  validação no Batuta; use quando o consultor pedir. Detalhes e preços:
   consultar_conhecimento "agente".
 - Instrumento: uma capacidade que um agente aciona. Dois tipos: PERSONALIZADO (ligação com serviço de
   fora, montada no Construtor — API com montar_conector, ou servidor MCP) e PRONTO DO BATUTA (o

@@ -85,6 +85,7 @@ REGISTRO: tuple[Modelo, ...] = (
     Modelo("claude-opus-4-8", "anthropic", TEXTO),
     Modelo("claude-sonnet-5", "anthropic", TEXTO),
     Modelo("claude-sonnet-4-6", "anthropic", TEXTO),
+    Modelo("claude-haiku-5-5", "anthropic", TEXTO),
     Modelo("claude-haiku-4-5", "anthropic", TEXTO, apelidos=("claude-haiku-4-5-20251001",)),
     # ── OpenAI (texto) — sem data de saída publicada ──
     Modelo("gpt-5.6-luna", "openai", TEXTO),

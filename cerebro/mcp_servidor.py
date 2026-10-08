@@ -392,7 +392,8 @@ async def criar_agente(
     `claude-haiku-4-5` (passos mecânicos), `claude-sonnet-5` (o padrão para escrever e
     julgar), `claude-sonnet-5-5` e `claude-opus-5-5` (set/2026, em validação no Batuta —
     use quando o consultor pedir; o Opus 5.5 é mais barato que o `claude-opus-4-8`),
-    `claude-opus-5`, `claude-opus-4-8`, `claude-sonnet-4-6`. OpenAI/Gemini só funcionam se
+    `claude-haiku-5-5` (out/2026, em validação; sucessor do Haiku 4.5 a um décimo do
+    preço), `claude-opus-5`, `claude-opus-4-8`, `claude-sonnet-4-6`. OpenAI/Gemini só funcionam se
     a organização tiver a chave (veja `ver_chaves_de_ia`). Preços e quando usar cada um:
     `consultar_conhecimento` "agente"."""
     return await anyio.to_thread.run_sync(
