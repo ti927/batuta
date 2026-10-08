@@ -74,17 +74,24 @@ def test_prompt_da_criadora_referencia_a_central():
 
 
 def test_system_criadora_marca_o_cache():
-    # Parte D: o prompt vira SystemMessage com o bloco estável marcado para cache.
+    # Parte D: o prompt vira SystemMessage SÓ com o bloco estável, marcado para cache.
     sm = montar_system_criadora()
-    assert isinstance(sm.content, list) and sm.content
+    assert isinstance(sm.content, list) and len(sm.content) == 1
     assert sm.content[0]["cache_control"] == {"type": "ephemeral"}
     assert "consultar_conhecimento" in sm.content[0]["text"]  # é o bloco estável
-    # Com fotografia + memória, ganha um 2º bloco (volátil) também marcado.
-    sm2 = montar_system_criadora(
-        {"time": {"nome": "X"}}, [{"categoria": "fato", "conteudo": "y"}]
-    )
-    assert len(sm2.content) == 2
-    assert all(b["cache_control"] == {"type": "ephemeral"} for b in sm2.content)
+
+
+def test_volatil_sai_do_sistema_na_anthropic():
+    # A foto/memória mudam a cada edição; no sistema, à frente do histórico, derrubavam o
+    # cache da conversa inteira. Na Anthropic vêm À PARTE (o laço as põe depois da fala).
+    snap = {"time": {"nome": "X"}}
+    mem = [{"categoria": "fato", "conteudo": "y"}]
+    estavel, volatil = _blocos_criadora(snap, mem)
+    sm, vol = prompt_criadora("claude-sonnet-5", snap, mem)
+    assert sm.content[0]["text"] == estavel and len(sm.content) == 1
+    assert vol == volatil
+    # Sem nada volátil, não há o que mandar à parte.
+    assert prompt_criadora("claude-sonnet-5")[1] is None
 
 
 def test_prompt_texto_igual_a_juncao_dos_blocos():
@@ -99,8 +106,10 @@ def test_prompt_texto_igual_a_juncao_dos_blocos():
 def test_prompt_criadora_escolhe_formato_por_provedor():
     # Cache é só da Anthropic: SystemMessage lá; texto puro em OpenAI/Google/desconhecido
     # (a criadora aceita outros provedores — cache_control quebraria/seria ignorado lá).
-    assert isinstance(prompt_criadora("claude-sonnet-5"), SystemMessage)
-    assert isinstance(prompt_criadora("claude-opus-4-8"), SystemMessage)
-    assert isinstance(prompt_criadora("gpt-4o"), str)
-    assert isinstance(prompt_criadora("gemini-2.5-pro"), str)
-    assert isinstance(prompt_criadora("modelo-desconhecido-xyz"), str)  # seguro
+    assert isinstance(prompt_criadora("claude-sonnet-5")[0], SystemMessage)
+    assert isinstance(prompt_criadora("claude-opus-4-8")[0], SystemMessage)
+    # Fora da Anthropic, tudo como antes: texto puro COMPLETO, nada à parte.
+    snap = {"time": {"nome": "X"}}
+    assert prompt_criadora("gpt-4o", snap) == (montar_prompt_criadora(snap), None)
+    assert isinstance(prompt_criadora("gemini-2.5-pro")[0], str)
+    assert isinstance(prompt_criadora("modelo-desconhecido-xyz")[0], str)  # seguro

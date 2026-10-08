@@ -530,7 +530,8 @@ def _blocos_criadora(
     - **estável**: base + catálogo de instrumentos + índice da Central. Não muda no
       curso da conversa → é o prefixo cacheável ENTRE turnos.
     - **volátil**: resumo do projeto (Parte A) + fotografia do time + memória de longo
-      prazo. Muda ao longo da conversa → só se aproveita DENTRO do mesmo turno.
+      prazo. Muda ao longo da conversa → na Anthropic vai DEPOIS da fala do consultor
+      (`prompt_criadora`), para não derrubar o cache do histórico.
 
     Sem `resumo`/snapshot/memórias, a junção das duas com "\\n\\n" é IDÊNTICA ao prompt
     de antes — o ponto de corte só existe para marcar o cache sem alterar o conteúdo."""
@@ -552,7 +553,7 @@ def _blocos_criadora(
     if resumo:
         volateis.append(
             "# Resumo do projeto (o painel 'Sobre este time' — os turnos antigos foram "
-            "condensados aqui; os recentes seguem na íntegra na conversa abaixo). "
+            "condensados aqui; os recentes seguem na íntegra na conversa). "
             "Mantenha-o em dia com atualizar_resumo quando algo importante mudar:\n"
             + resumo
         )
@@ -589,28 +590,15 @@ def montar_prompt_criadora(
     return "\n\n".join([estavel, volatil]) if volatil else estavel
 
 
-def montar_system_criadora(
-    snapshot_time: dict | None = None,
-    memorias: list[dict] | None = None,
-    resumo: str | None = None,
-) -> SystemMessage:
-    """O MESMO prompt de sistema, mas como `SystemMessage` com PONTOS DE CACHE
-    (`cache_control: ephemeral`) — a Parte D da economia de tokens (Frente B).
-
-    Bloco 1 (estável) é marcado para a Anthropic reaproveitá-lo ENTRE turnos da mesma
-    sessão (releitura a ~10% do preço); bloco 2 (volátil) é marcado para a economia
-    DENTRO do turno (o laço de ferramentas repete o sistema). Zero perda de informação —
-    o conteúdo é o de `montar_prompt_criadora`. Fora do TTL do cache (poucos minutos),
-    cai no custo normal; abrir um time frio é a Parte A (resumo/janela) que resolve."""
-    estavel, volatil = _blocos_criadora(snapshot_time, memorias, resumo)
-    blocos: list[dict] = [
-        {"type": "text", "text": estavel, "cache_control": {"type": "ephemeral"}}
-    ]
-    if volatil:
-        blocos.append(
-            {"type": "text", "text": volatil, "cache_control": {"type": "ephemeral"}}
-        )
-    return SystemMessage(content=blocos)
+def montar_system_criadora() -> SystemMessage:
+    """Só a parte ESTÁVEL do prompt, como `SystemMessage` com ponto de cache — a Parte D
+    da economia de tokens (Frente B). A parte volátil (foto do time, memória, resumo) NÃO
+    entra aqui: ela muda a cada edição do time e, à frente do histórico, derrubava o cache
+    da conversa inteira. Vai depois da fala do consultor — ver `prompt_criadora`."""
+    estavel, _ = _blocos_criadora(None, None, None)
+    return SystemMessage(
+        content=[{"type": "text", "text": estavel, "cache_control": {"type": "ephemeral"}}]
+    )
 
 
 def prompt_criadora(
@@ -618,17 +606,20 @@ def prompt_criadora(
     snapshot_time: dict | None = None,
     memorias: list[dict] | None = None,
     resumo: str | None = None,
-) -> "SystemMessage | str":
-    """O prompt de sistema no formato certo para o PROVEDOR do `modelo`:
+) -> "tuple[SystemMessage | str, str | None]":
+    """(prompt de sistema, contexto volátil) no formato certo para o PROVEDOR do `modelo`:
 
-    - **Anthropic** → `SystemMessage` com pontos de cache (`montar_system_criadora`),
-      a economia da Parte D.
-    - **OpenAI / Google** (a criadora também aceita esses modelos) → **texto puro**
-      (`montar_prompt_criadora`). O `cache_control` é específico da Anthropic; enviá-lo a
-      outro provedor quebraria ou seria ignorado. Modelo desconhecido cai aqui também
-      (seguro).
+    - **Anthropic** → (`SystemMessage` só com a parte estável e ponto de cache, o texto
+      volátil à parte). O laço manda o volátil numa mensagem LOGO DEPOIS da fala do
+      consultor (`cache_prompt.mensagem_de_contexto_volatil`), para o histórico até a fala
+      ser relido do cache no turno seguinte.
+    - **OpenAI / Google** (a criadora também aceita esses modelos) → (texto puro completo,
+      None), como sempre. O `cache_control` é específico da Anthropic; enviá-lo a outro
+      provedor quebraria ou seria ignorado. Modelo desconhecido cai aqui também (seguro).
 
-    É o ponto único que evita o cache vazar para um provedor que não o entende."""
+    É o ponto único que evita o cache vazar para um provedor que não o entende. O conteúdo
+    é o mesmo nos dois casos — muda só onde a parte volátil é posta."""
     if provedor_do_modelo_seguro(modelo) == PROVEDOR_ANTHROPIC:
-        return montar_system_criadora(snapshot_time, memorias, resumo)
-    return montar_prompt_criadora(snapshot_time, memorias, resumo)
+        _, volatil = _blocos_criadora(snapshot_time, memorias, resumo)
+        return montar_system_criadora(), (volatil or None)
+    return montar_prompt_criadora(snapshot_time, memorias, resumo), None

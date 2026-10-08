@@ -2,12 +2,13 @@
 
 Garantem que um turno persiste o histórico, mede os tokens, escreve no TIME REAL
 pelas ferramentas, e que o turno seguinte recebe o histórico anterior. Sem LLM real:
-`create_react_agent` e `construir_modelo` são substituídos."""
+`create_agent` e `construir_modelo` são substituídos."""
 
 from langchain_core.messages import AIMessage, ToolMessage
 from sqlalchemy import select
 
 import criacao.loop as loop
+from orquestracao.cache_prompt import CONTEXTO_VOLATIL
 from criacao.loop import responder_turno
 from modelos import ConversaCriacao, Time
 
@@ -17,7 +18,7 @@ def _uso(entrada, saida):
 
 
 def test_turno_persiste_mensagens_e_cria_time(monkeypatch, sessao, dados):
-    def fake_create(modelo, ferramentas, prompt=None):
+    def fake_create(modelo, ferramentas, system_prompt=None, middleware=None):
         porta = {t.name: t for t in ferramentas}
 
         class App:
@@ -31,7 +32,7 @@ def test_turno_persiste_mensagens_e_cria_time(monkeypatch, sessao, dados):
 
         return App()
 
-    monkeypatch.setattr(loop, "create_react_agent", fake_create)
+    monkeypatch.setattr(loop, "create_agent", fake_create)
     monkeypatch.setattr(loop, "construir_modelo", lambda *a, **k: object())
 
     conversa = ConversaCriacao(
@@ -60,7 +61,7 @@ def test_texto_vem_de_turno_anterior_quando_o_ultimo_vem_vazio(
     ferramenta; o ÚLTIMO AIMessage, depois das ferramentas, vem vazio. A resposta
     NÃO pode ficar vazia — juntamos o texto de todos os turnos do modelo."""
 
-    def fake_create(modelo, ferramentas, prompt=None):
+    def fake_create(modelo, ferramentas, system_prompt=None, middleware=None):
         porta = {t.name: t for t in ferramentas}
 
         class App:
@@ -77,7 +78,7 @@ def test_texto_vem_de_turno_anterior_quando_o_ultimo_vem_vazio(
 
         return App()
 
-    monkeypatch.setattr(loop, "create_react_agent", fake_create)
+    monkeypatch.setattr(loop, "create_agent", fake_create)
     monkeypatch.setattr(loop, "construir_modelo", lambda *a, **k: object())
 
     conversa = ConversaCriacao(organizacao_id=dados["orgA"].id)
@@ -92,7 +93,7 @@ def test_texto_vem_de_turno_anterior_quando_o_ultimo_vem_vazio(
 def test_turno_recebe_o_historico_anterior(monkeypatch, sessao, dados):
     capturado = {}
 
-    def fake_create(modelo, ferramentas, prompt=None):
+    def fake_create(modelo, ferramentas, system_prompt=None, middleware=None):
         class App:
             def invoke(self, payload):
                 capturado["messages"] = payload["messages"]
@@ -103,7 +104,7 @@ def test_turno_recebe_o_historico_anterior(monkeypatch, sessao, dados):
 
         return App()
 
-    monkeypatch.setattr(loop, "create_react_agent", fake_create)
+    monkeypatch.setattr(loop, "create_agent", fake_create)
     monkeypatch.setattr(loop, "construir_modelo", lambda *a, **k: object())
 
     conversa = ConversaCriacao(
@@ -129,20 +130,21 @@ def test_janela_envia_so_a_partir_de_resumo_ate_e_injeta_o_resumo(
     monkeypatch, sessao, dados
 ):
     """Parte A: com `resumo_ate`>0, o modelo recebe SÓ a janela (mensagens[resumo_ate:]) +
-    a nova pergunta — não a conversa inteira — e o `resumo` entra no prompt de sistema."""
+    a nova pergunta — não a conversa inteira. O `resumo` (volátil) vai numa mensagem de
+    contexto DEPOIS da pergunta, fora do prompt de sistema — lá ele derrubava o cache."""
     capturado = {}
 
-    def fake_create(modelo, ferramentas, prompt=None):
+    def fake_create(modelo, ferramentas, system_prompt=None, middleware=None):
         class App:
             def invoke(self, payload):
                 capturado["messages"] = payload["messages"]
-                capturado["prompt"] = prompt
+                capturado["prompt"] = system_prompt
                 return {"messages": payload["messages"]
                         + [AIMessage(content="ok", usage_metadata=_uso(0, 0))]}
 
         return App()
 
-    monkeypatch.setattr(loop, "create_react_agent", fake_create)
+    monkeypatch.setattr(loop, "create_agent", fake_create)
     monkeypatch.setattr(loop, "construir_modelo", lambda *a, **k: object())
 
     conversa = ConversaCriacao(
@@ -166,14 +168,13 @@ def test_janela_envia_so_a_partir_de_resumo_ate_e_injeta_o_resumo(
     # Os antigos (dentro do resumo) NÃO vão; só a janela recente + a nova pergunta.
     assert "t1-antigo" not in conteudos and "t2-antigo" not in conteudos
     assert "t3-recente" in conteudos and "nova pergunta" in conteudos
-    # E o resumo entrou no prompt de sistema (SystemMessage, criadora Anthropic padrão).
-    prompt = capturado["prompt"]
-    texto = (
-        prompt.content
-        if isinstance(prompt.content, str)
-        else " ".join(b.get("text", "") for b in prompt.content)
-    )
-    assert "Resumo do que já foi feito." in texto
+    # O resumo vai na mensagem de contexto LOGO DEPOIS da pergunta (criadora Anthropic
+    # padrão) — e NÃO no prompt de sistema, que fica só com a parte estável.
+    assert conteudos[-2] == "nova pergunta"
+    assert "Resumo do que já foi feito." in conteudos[-1]
+    assert capturado["messages"][-1].additional_kwargs.get(CONTEXTO_VOLATIL)
+    sistema = " ".join(b.get("text", "") for b in capturado["prompt"].content)
+    assert "Resumo do que já foi feito." not in sistema
 
 
 def test_historico_preserva_chamadas_de_ferramenta_entre_turnos(monkeypatch, sessao, dados):
@@ -183,7 +184,7 @@ def test_historico_preserva_chamadas_de_ferramenta_entre_turnos(monkeypatch, ses
     monkeypatch.setattr(loop, "construir_modelo", lambda *a, **k: object())
 
     # Turno 1: a IA chama editar_agente (tool_call + tool_result na sequência).
-    def fake_turno1(modelo, ferramentas, prompt=None):
+    def fake_turno1(modelo, ferramentas, system_prompt=None, middleware=None):
         class App:
             def invoke(self, payload):
                 return {
@@ -204,7 +205,7 @@ def test_historico_preserva_chamadas_de_ferramenta_entre_turnos(monkeypatch, ses
 
         return App()
 
-    monkeypatch.setattr(loop, "create_react_agent", fake_turno1)
+    monkeypatch.setattr(loop, "create_agent", fake_turno1)
     conversa = ConversaCriacao(organizacao_id=dados["orgA"].id)
     sessao.add(conversa)
     sessao.flush()
@@ -218,7 +219,7 @@ def test_historico_preserva_chamadas_de_ferramenta_entre_turnos(monkeypatch, ses
     # ferramenta do turno 1 foi REPRODUZIDA (não virou prosa).
     capturado = {}
 
-    def fake_turno2(modelo, ferramentas, prompt=None):
+    def fake_turno2(modelo, ferramentas, system_prompt=None, middleware=None):
         class App:
             def invoke(self, payload):
                 capturado["messages"] = payload["messages"]
@@ -227,7 +228,7 @@ def test_historico_preserva_chamadas_de_ferramenta_entre_turnos(monkeypatch, ses
 
         return App()
 
-    monkeypatch.setattr(loop, "create_react_agent", fake_turno2)
+    monkeypatch.setattr(loop, "create_agent", fake_turno2)
     responder_turno(sessao, conversa, "e agora o próximo", usuario=dados["admin"])
 
     tipos = [m.type for m in capturado["messages"]]

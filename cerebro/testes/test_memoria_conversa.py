@@ -12,6 +12,8 @@ from types import SimpleNamespace
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.agents.middleware import SummarizationMiddleware
 
+from orquestracao.cache_prompt import CacheDePrompt
+
 import orquestracao.agente as agente_mod
 from modelos import Agente
 
@@ -129,12 +131,15 @@ def test_middleware_de_resumo_so_no_chat(monkeypatch):
     agente_mod.executar_agente(_agente(), [], "oi")  # sem memória
 
     com_mem, sem_mem = capt["mws"]
-    assert isinstance(com_mem, list) and len(com_mem) == 1
+    assert isinstance(com_mem, list) and len(com_mem) == 2
     assert isinstance(com_mem[0], SummarizationMiddleware)
     # Conserto do "resumo inútil": sem trim, o resumidor recebe o trecho inteiro (o trim
     # nativo com start_on="human" zerava o trecho quando ele não tinha fala humana).
     assert com_mem[0].trim_tokens_to_summarize is None
-    assert sem_mem == "AUSENTE"  # sem memória, nenhum middleware é passado
+    # O cache de prompt vale nos dois caminhos e fica por ÚLTIMO (marca o pedido já
+    # resumido). Sem memória, é o único middleware — nada de resumo.
+    assert isinstance(com_mem[-1], CacheDePrompt)
+    assert len(sem_mem) == 1 and isinstance(sem_mem[0], CacheDePrompt)
 
 
 def test_sem_memoria_conta_o_fio_inteiro(monkeypatch):
@@ -145,7 +150,7 @@ def test_sem_memoria_conta_o_fio_inteiro(monkeypatch):
     `recursion_limit`), mas segue SEM `configurable`: nada de thread/checkpointer."""
     chamou = {"get_state": False, "config": "ausente"}
 
-    def fake_create(modelo, ferramentas, system_prompt):  # sem kwarg checkpointer
+    def fake_create(modelo, ferramentas, system_prompt, middleware=None):  # sem kwarg checkpointer
         class App:
             def get_state(self, config):
                 chamou["get_state"] = True

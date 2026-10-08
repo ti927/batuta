@@ -75,7 +75,7 @@ class Roteiro:
         self.ordem: list[str] = []
         self.ferramentas: dict[str, list[str]] = {}
 
-        def fake_create(modelo, ferramentas, system_prompt):
+        def fake_create(modelo, ferramentas, system_prompt, middleware=None):
             texto = _texto_do_prompt(system_prompt)
             quem = next((m for m in self.acoes if m in texto), "?")
             self.prompts[quem] = texto

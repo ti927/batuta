@@ -2,8 +2,8 @@
 
 Um turno: a mensagem do consultor entra, a IA raciocina e usa as ferramentas (que
 agora escrevem no TIME REAL, via `criacao.servicos`), e devolvemos a resposta + os
-chips + a fotografia do time. Reusa o `create_react_agent` do LangGraph (mesmo motor
-de tool-use do `orquestracao.agente`).
+chips + a fotografia do time. Reusa o `create_agent` do LangChain (mesmo motor de
+tool-use do `orquestracao.agente`), com o cache de prompt da conversa (`cache_prompt`).
 
 A persistência é direta e inspecionável: o histórico vive em
 `conversas_criacao.mensagens` (JSONB) e o ESTADO real é o próprio time (tabelas).
@@ -27,7 +27,7 @@ from langchain_core.messages import (
     messages_from_dict,
     messages_to_dict,
 )
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
 from sqlalchemy.orm import Session
 
 from criacao import memoria
@@ -38,6 +38,11 @@ from criacao.ferramentas import (
     snapshot_time,
 )
 from criacao.prompt import prompt_criadora
+from orquestracao.cache_prompt import (
+    CacheDePrompt,
+    mensagem_de_contexto_volatil,
+    tokens_de_cache,
+)
 from orquestracao.llm import construir_modelo, texto_da_resposta, usar_chaves
 
 # Modelo padrão da IA de conversa: Sonnet 5 — forte e econômico (perto do Opus por
@@ -111,7 +116,10 @@ def responder_turno(
     # agentes nem a cadeia das automações — o grosso do custo fixo por turno). A IA puxa
     # esse detalhe sob demanda com ver_agente/ver_automacao. A foto CHEIA segue indo para
     # o front na resposta abaixo (redesenhar o canvas).
-    prompt = prompt_criadora(
+    # Na Anthropic a parte VOLÁTIL (resumo + foto + memória) vem à parte e vai DEPOIS da
+    # fala do consultor: à frente do histórico, cada edição do time derrubava o cache da
+    # conversa inteira. Ela não entra no histórico salvo (ver `cache_prompt`).
+    prompt, volatil = prompt_criadora(
         modelo,
         enxugar_snapshot(snapshot_time(sessao, conversa)),
         memoria.para_o_prompt(sessao, conversa),
@@ -126,9 +134,18 @@ def responder_turno(
     historico = _historico_para_mensagens(conversa.mensagens[inicio:]) + [
         HumanMessage(content=mensagem_usuario)
     ]
+    if volatil:
+        historico.append(
+            mensagem_de_contexto_volatil(
+                "(Estado atual, trazido pelo Batuta neste turno — não é fala do "
+                "consultor.)\n\n" + volatil
+            )
+        )
     with usar_chaves(chaves):
         modelo_chat = construir_modelo(modelo, temperatura=0.3)
-        app = create_react_agent(modelo_chat, ferramentas, prompt=prompt)
+        app = create_agent(
+            modelo_chat, ferramentas, system_prompt=prompt, middleware=[CacheDePrompt()]
+        )
         resultado = app.invoke({"messages": historico})
 
     # O react agent devolve o HISTÓRICO INTEIRO + as mensagens novas deste turno.
@@ -152,9 +169,9 @@ def responder_turno(
             # Detalhe do cache (Parte D): `input_tokens` JÁ inclui o que veio do cache;
             # guardamos quanto foi LIDO e CRIADO no cache para a medição cobrar a ~10%
             # (releitura) e ~1,25× (criação), em vez de tudo a preço cheio.
-            det = u.get("input_token_details") or {}
-            cache_read += det.get("cache_read", 0) or 0
-            cache_write += det.get("cache_creation", 0) or 0
+            lidos, gravados = tokens_de_cache(u)
+            cache_read += lidos
+            cache_write += gravados
     resposta_texto = "\n\n".join(textos) if textos else "Pronto, atualizei o time."
     uso = {
         "modelo": modelo,

@@ -30,6 +30,7 @@ from instrumentos.base import (
 from modelos import Agente, Instrumento
 from observabilidade import contexto
 from orquestracao import atividade
+from orquestracao.cache_prompt import CacheDePrompt, tokens_de_cache
 from orquestracao import gasto_instrumentos
 from orquestracao import ficha as ficha_mod
 from orquestracao import prazo
@@ -906,11 +907,17 @@ def executar_agente(
     # efêmero e entrada = texto completo, exatamente como antes.
     memoria = checkpointer is not None and thread_id is not None
     extra: dict = {}
+    # Cache da conversa inteira (não só do sistema): o laço de ferramentas reenvia o
+    # histórico do turno a cada ida e volta — ver `cache_prompt`. Vale para todos os
+    # caminhos; fora da Anthropic não faz nada. Fica por ÚLTIMO (mais interno): marca o
+    # pedido já com o que o resumo deixou.
+    middlewares: list = []
     if memoria:
         extra["checkpointer"] = checkpointer
         # P2b: só o chat (com memória) ganha o resumo/janela; a orquestração/tarefa e o
-        # portão seguem sem middleware — grafo efêmero, byte-idêntico à P1.
-        extra["middleware"] = _middlewares_de_memoria()
+        # portão não — grafo efêmero.
+        middlewares += _middlewares_de_memoria()
+    extra["middleware"] = middlewares + [CacheDePrompt()]
     app = create_agent(modelo, ferramentas, system_prompt=prompt_sistema, **extra)
     # Teto de iterações do laço de ferramentas: um agente em laço (chama a mesma
     # ferramenta sem parar) para aqui, com mensagem legível, em vez de queimar tokens
@@ -1021,9 +1028,9 @@ def executar_agente(
             # Cache de prompt (Anthropic): `input_tokens` INCLUI o que veio do cache a
             # preço cheio; guardamos leitura/criação para a medição cobrar ~10% (releitura)
             # e ~1,25× (criação), como no `criacao/loop.py`. Sem cache, ambos ficam 0.
-            det = u.get("input_token_details") or {}
-            cache_read += det.get("cache_read", 0) or 0
-            cache_write += det.get("cache_creation", 0) or 0
+            lidos, gravados = tokens_de_cache(u)
+            cache_read += lidos
+            cache_write += gravados
     modelo_usado = agente.modelo_ia or MODELO_PADRAO
     uso = [
         {

@@ -35,7 +35,7 @@ def _fake_app(monkeypatch, *, chama_rotulos=None, capturar=None):
     """Troca create_agent por um app falso. Se `chama_rotulos`, aciona a
     ferramenta `seguir_para` com esses rótulos. `capturar` recebe a lista de tools."""
 
-    def fake_create(modelo, ferramentas, system_prompt):
+    def fake_create(modelo, ferramentas, system_prompt, middleware=None):
         if capturar is not None:
             capturar.extend(ferramentas)
         if chama_rotulos is not None:
@@ -142,7 +142,7 @@ def test_executar_agente_injeta_portao_md_no_prompt(monkeypatch):
     """O `texto_portao` chega ao PROMPT do agente, com o trilho `seguir_para` intacto."""
     prompts: list = []
 
-    def fake_create(modelo, ferramentas, system_prompt):
+    def fake_create(modelo, ferramentas, system_prompt, middleware=None):
         prompts.append(system_prompt)
 
         class App:

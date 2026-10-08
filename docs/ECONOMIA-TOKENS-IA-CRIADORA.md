@@ -85,6 +85,19 @@ Parar de enviar a conversa inteira. Enviar **`resumo` + os últimos N turnos na 
 - **Opcional:** `precos.py` ler `cache_read_input_tokens`/`cache_creation_input_tokens` do `usage_metadata` para a medição refletir o cache (hoje conta tudo como entrada normal — informativo).
 - **Honestidade:** o cache esfria em ~5 min (ou 1h numa variante) → ajuda uma sessão de vários turnos, **não** o primeiríssimo turno ao reabrir um time parado. Quem resolve o "abrir time velho" é a Parte A.
 
+> **2026-10-08 — cache da CONVERSA, não só do sistema (`orquestracao/cache_prompt.py`).** O painel da
+> Anthropic acusou acerto de cache baixo; a medição de produção (30 dias) deu **~27%** da entrada vinda do
+> cache (agentes ~25%, criadora ~45%). Três causas: (1) só o prompt de sistema era marcado — o histórico do
+> turno (mensagens + resultados de ferramenta), reenviado a cada ida e volta do laço, ia a preço cheio;
+> (2) na criadora a parte volátil (foto/memória/resumo) ficava **à frente** do histórico, então cada edição
+> do time derrubava o cache da conversa toda; (3) a gravação no cache era medida como **0** (o
+> langchain-anthropic passou a reportá-la em `ephemeral_5m/1h_input_tokens`). Correção: o middleware
+> `CacheDePrompt` (agentes **e** criadora, que trocou o `create_react_agent` pelo `create_agent`) põe os 4
+> pontos — sistema, penúltima e última fala humana, automático — e a parte volátil da criadora vai numa
+> mensagem **depois** da fala, fora do histórico salvo; `tokens_de_cache` mede a gravação certo. **Prova ao
+> vivo (Haiku 5.5, laço de 3 ferramentas + 2º turno): 17% → 74% da entrada vinda do cache.** Testes em
+> `testes/test_cache_prompt.py` (inclui o prefixo do turno seguinte, byte a byte, no corpo real do pedido).
+
 ### Parte E — Foto enxuta + detalhe sob demanda  (ganho p/ times grandes)  ✅ **NO AR (2026-07-27, commit `d3ce135`)**
 > **Como ficou:** função pura `enxugar_snapshot(foto)` (`criacao/ferramentas.py`) aplicada **só no
 > `loop.py`** (a cópia que vai no PROMPT): tira os 4 markdowns de cada agente e a `cadeia` de cada
