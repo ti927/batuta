@@ -2826,3 +2826,15 @@ Nasceu da execução **f941b1b1** (📈 COF Post Instagram): o botão "Aprovar" 
 - **Testes de combinações** (`6f54878`, `cerebro/testes/test_combinacoes_aprovacao.py`, Hypothesis): sorteiam ordens de eventos (Telegram que chega e é processado depois, clique, página atrasada, fila) e conferem que **uma resposta só vale para a pergunta que a pessoa viu, uma vez**. Na 1ª rodada acharam: (1) dois "aprovado" para a capa aprovavam também o Carrossel — mensagem mais antiga que o passo em espera é recusada ("✅ Já recebi sua resposta…"); (2) reprovar pelo Telegram não registrava o pedido refeito; (3) clique em página atrasada valia para o pedido seguinte — a tela manda o `passo_id` que mostrava (`ResponderHumano.passo_id`, opcional) e o cérebro recusa se não for mais ele. As sequências que acharam defeito ficaram como testes fixos; busca funda com `BATUTA_COMBINACOES=1000` (1000 cenários verdes, 17 min).
 - **Skill de projeto `mexer-no-motor`** (`6d29c05`), obrigatória pelo `CLAUDE.md §9`: as quatro perguntas por porta (duas vezes? atrasada? outra porta junto? processo morre?) e o roteiro dos testes. Skills oficiais da LangChain instaladas na máquina (`langgraph-human-in-the-loop`, `langgraph-persistence`).
 - Suíte **1590**. **FALTA:** teste ao vivo (mandar "aprovado" duas vezes no Telegram); conferir no Instagram se a capa "Controladoria terceirizada" foi publicada — o Gerador anotou um id de post sem chamar o Zernio.
+
+## FASE — Haiku 5.5 no seletor  ✅ (2026-10-08, sem migração)
+
+Pedido do maestro: *"a Anthropic acabou de entregar o Haiku 5.5, entrega mais por menos tokens"*. ID conferido na referência oficial da API: `claude-haiku-5-5` — US$ 0,10/0,50 por 1M tokens com prompt até 100 mil (acima, 0,50/2,50), um décimo do Haiku 4.5; 1M de contexto; tokenizador novo (~30% mais tokens para o mesmo texto). Commit `b76782b`, no ar às 13:13 UTC, sem erro nem órfã.
+
+- **Catálogo único** (`ciclo_modelos.REGISTRO`): aparece no seletor do agente, da IA de conversa, do Ler imagem e dos instrumentos da Anthropic. A tela lê `/modelos`, sem mudança na interface.
+- **`temperature`**: `_claude_aceita_temperatura` aceitava todo `claude-haiku*` — o Haiku 5.5 recusa (400) e todo agente nele quebraria. Agora só Haiku 3/4.x. A regra por geração vale também DENTRO de cada família.
+- **Pensamento vinculado**: o Haiku 5.5 roda a mesma checagem do Sonnet/Opus 5.5 → entrou em `MODELOS_PENSAMENTO_VINCULADO` (`drop_block`).
+- **Preço**: caía em "haiku" (US$ 1/5, 10× acima). Linha própria `haiku-5-5`; a medição cobra a faixa de baixo, porque a entrada de uso soma as chamadas do passo e não sabe o tamanho de cada prompt.
+- Busca/leitura web do instrumento Anthropic segue nas versões básicas para qualquer Haiku (as que filtram são documentadas só para Opus/Sonnet).
+- Central (`times-agentes/agente`), prompt da criadora, docstring `criar_agente` do MCP, ARQUITETURA §7, MCP-BATUTA. Suíte **1590**.
+- **Em aberto:** prova ao vivo (um agente no Haiku 5.5 com ferramenta e conversa longa); depois tirar o "em validação" e decidir se vira o padrão no lugar do `claude-haiku-4-5` (agentes sem modelo, roteamento, resumidores, Ler imagem).
