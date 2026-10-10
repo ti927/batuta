@@ -149,8 +149,8 @@ def ler(
                        colunas=colunas, busca=busca, limite=limite)
     except ErroQuadro as e:
         return _erro(e.mensagem, 422, formato)
+    sessao.commit()  # devolve a conexão ao pool antes de registrar a leitura
     _registrar(link, "linhas", r["devolvidas"])
-    sessao.commit()
     if formato == "json":
         return JSONResponse(r, headers=_CABECALHOS)
     nomes = r["colunas"] or []
@@ -179,8 +179,8 @@ def totais(
                        recente=recente)
     except ErroQuadro as e:
         return _erro(e.mensagem, 422, formato)
+    sessao.commit()  # devolve a conexão ao pool antes de registrar a leitura
     _registrar(link, "totais", len(r["resultados"]))
-    sessao.commit()
     if formato == "json":
         return JSONResponse(r, headers=_CABECALHOS)
     grupo = r["agrupado_por"]

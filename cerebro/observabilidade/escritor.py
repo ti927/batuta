@@ -123,9 +123,9 @@ def registrar_evento(
         return
     try:
         from modelos import EventoLog
-        from sessao import CriadorDeSessao
+        from sessao import CriadorDeSessaoDoLog
 
-        s = CriadorDeSessao()
+        s = CriadorDeSessaoDoLog()
         try:
             s.add(
                 EventoLog(

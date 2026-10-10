@@ -66,7 +66,7 @@ def _com_log_na_sessao(monkeypatch, sessao):
 
     monkeypatch.setattr(escritor, "EH_LOCAL", False)  # em local ele não persiste
     monkeypatch.setattr(sessao, "close", lambda: None)
-    monkeypatch.setattr(sessao_mod, "CriadorDeSessao", lambda: sessao)
+    monkeypatch.setattr(sessao_mod, "CriadorDeSessaoDoLog", lambda: sessao)
 
 
 # ───────── §12-A: a queda tem endereço no banco de logs, não só no do servidor ───────

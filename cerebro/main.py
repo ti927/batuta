@@ -2,16 +2,20 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import TimeoutError as TimeoutDoPool
 
 import agendador
+import db
 import fila
 import fila_turnos
 import saude_elos
 from arquivos import DIRETORIO_ARQUIVOS
 from orquestracao import memoria_conversa
+from observabilidade.escritor import registrar_evento
 from observabilidade.log import configurar_logging
 from observabilidade.middleware import MiddlewareLog
 from rotas import (
@@ -74,6 +78,27 @@ app.add_middleware(
 # Observabilidade: adicionado por ÚLTIMO para ser o mais externo — envolve todo request
 # (inclusive o CORS), fixando o contexto de log e registrando status/latência.
 app.add_middleware(MiddlewareLog)
+
+
+@app.exception_handler(TimeoutDoPool)
+def _pool_esgotado(request: Request, erro: TimeoutDoPool):
+    """Nenhuma conexão livre em `DB_POOL_TIMEOUT` segundos: responde 503 com Retry-After
+    em vez de deixar a requisição pendurada até o proxy cortar (vira 502 mudo do outro
+    lado). Fica no banco de logs com o estado do pool, para saber depois quem o encheu."""
+    registrar_evento(
+        categoria="banco", acao="banco.pool_esgotado", nivel="error", resultado="falha",
+        erro=erro, detalhe={"pool": db.engine.pool.status(), "rota": request.url.path},
+    )
+    mensagem = (
+        "O Batuta está atendendo muitos pedidos ao mesmo tempo. "
+        "Tente de novo em alguns segundos."
+    )
+    cabecalhos = {"Retry-After": "5"}
+    if request.url.path.startswith("/publico/"):
+        # Leitura de painel externo: mesmo formato e CORS das respostas da rota pública.
+        cabecalhos |= {"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}
+        return JSONResponse({"erro": mensagem}, status_code=503, headers=cabecalhos)
+    return JSONResponse({"detail": mensagem}, status_code=503, headers=cabecalhos)
 
 
 # Momento em que ESTE processo subiu (UTC). Na Railway, um deploy novo = contêiner

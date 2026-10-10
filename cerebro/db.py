@@ -73,10 +73,29 @@ dele para não fixar `require` na mão."""
 # é explícito e ajustável sem deploy (variáveis de ambiente), e quem passa do orçamento
 # ESPERA uma conexão livre (`pool_timeout`) em vez de abrir uma nova que o pooler recusa.
 #   cérebro: DB_POOL_SIZE=5 + DB_MAX_OVERFLOW=7 (até 12) · MCP: 2 + 4 (até 6, fixado em
-#   mcp_servidor.py) · memória das conversas: até 4 (memoria_conversa.py).
+#   mcp_servidor.py) · memória das conversas: até 4 (memoria_conversa.py) · banco de logs:
+#   até 2 por processo (`engine_log`, abaixo). Pior caso: 12+2+6+2+4 = 26 do teto 30 do pooler.
+#
+# POOL ESGOTADO ≠ POOL PEQUENO (incidente de 2026-10-10): 14 leituras simultâneas de links
+# de quadro travaram o pool de 12 — cada leitura segurava UMA conexão e, para gravar o
+# evento da leitura, pedia uma SEGUNDA ao mesmo pool. Com todas segurando a primeira e
+# esperando a segunda, ninguém devolvia nada: impasse por `pool_timeout`, aí 500/502. Por
+# isso o log tem pool próprio, e a espera é curta (10 s): quem não consegue conexão leva
+# 503 com "tente de novo" (main.py) em vez de pendurar até o proxy cortar.
 POOL_SIZE = int(os.environ.get("DB_POOL_SIZE", "5"))
 MAX_OVERFLOW = int(os.environ.get("DB_MAX_OVERFLOW", "7"))
-POOL_TIMEOUT = int(os.environ.get("DB_POOL_TIMEOUT", "30"))
+POOL_TIMEOUT = int(os.environ.get("DB_POOL_TIMEOUT", "10"))
+
+_CONNECT_ARGS = {
+    "sslmode": SSLMODE,
+    "connect_timeout": 10,
+    "keepalives": 1,
+    "keepalives_idle": 30,
+    "keepalives_interval": 10,
+    "keepalives_count": 3,
+    "tcp_user_timeout": 30000,
+    "options": "-c statement_timeout=60000",
+}
 
 engine = create_engine(
     _url,
@@ -85,16 +104,22 @@ engine = create_engine(
     pool_size=POOL_SIZE,
     max_overflow=MAX_OVERFLOW,
     pool_timeout=POOL_TIMEOUT,
-    connect_args={
-        "sslmode": SSLMODE,
-        "connect_timeout": 10,
-        "keepalives": 1,
-        "keepalives_idle": 30,
-        "keepalives_interval": 10,
-        "keepalives_count": 3,
-        "tcp_user_timeout": 30000,
-        "options": "-c statement_timeout=60000",
-    },
+    connect_args=_CONNECT_ARGS,
+)
+
+# Engine SÓ do banco de logs (`registrar_evento`). Quem grava um evento quase sempre já
+# segura uma conexão do `engine` (a sessão da requisição, a de uma execução); se o evento
+# pedisse outra ao mesmo pool, o pool cheio vira impasse (ver acima). Aqui o log nunca
+# disputa com o trabalho: 1 conexão (+1 de folga) e espera curta — sob aperto extremo
+# o evento vai só para o stdout, e quem chamou segue sem esperar.
+engine_log = create_engine(
+    _url,
+    pool_pre_ping=True,
+    pool_recycle=300,
+    pool_size=1,
+    max_overflow=1,
+    pool_timeout=3,
+    connect_args=_CONNECT_ARGS,
 )
 
 
