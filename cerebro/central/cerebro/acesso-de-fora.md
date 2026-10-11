@@ -60,6 +60,9 @@ Operadores do filtro: `eq` (igual), `ne` (diferente), `gt`/`gte` (maior / maior 
 - Só lê, e só aquele quadro. O link nunca grava nem enxerga outros quadros.
 - Cada link tem um limite de leituras por minuto (padrão 60, máximo 600), que você ajusta. Acima dele, o
   painel recebe um aviso para esperar um minuto.
+- Se o Batuta estiver atendendo muitos pedidos ao mesmo tempo, o painel recebe o aviso **503** com
+  "tente de novo em alguns segundos" (e o tempo de espera no cabeçalho `Retry-After`). Um painel próprio
+  deve esperar e tentar de novo, e ler poucos quadros ao mesmo tempo (3 está ótimo).
 - Até 10.000 linhas por leitura. Para mais, use filtros ou os totais.
 - Toda leitura fica contada no link (quantas e a última), e o link aparece em **Quem usa**.
 - Link criado pela IA **não vence** (serve automações; um link que vencesse pararia o painel sem aviso).

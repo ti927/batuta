@@ -193,6 +193,18 @@ pior caso o Batuta pede 22 (cérebro 12 + memória 4 + MCP 6); na troca de vers�
 foi avaliado e **não** adotado: exige desligar comandos preparados e mudar o `statement_timeout` por
 sessão, e o checkpointer depende do modo sessão.
 
+**Pool esgotado por impasse, não por tamanho (2026-10-10, `1dda864`).** 14 leituras simultâneas de links
+de quadro (um painel na Vercel) esgotaram o pool do cérebro (5+7) e voltaram 500 depois de 30–50 s. Cada
+leitura segurava uma conexão e o `registrar_evento` pedia uma **segunda ao mesmo pool** para gravar o evento
+da leitura; com todas esperando a segunda, ninguém devolvia a primeira. Aumentar o pool só mudaria o número
+que trava. Agora o banco de logs tem **engine próprio** (`db.engine_log`, 1+1 conexões, espera de 3 s —
+sob aperto extremo o evento fica só no stdout) e nunca disputa conexão com quem está logando, em qualquer
+rota ou execução. O `pool_timeout` padrão caiu de 30 para **10 s**, e pool esgotado vira **503 com
+`Retry-After: 5`** e frase humana (na leitura pública, no formato e CORS dela) mais o evento
+`banco.pool_esgotado` com o estado do pool (`main.py`). **Regra do orçamento: cérebro 5+7 + log 2; total dos
+serviços < 30 do pooler** — pior caso 26 (cérebro 12 + log 2 + memória 4 + MCP 6 + log do MCP 2). Antes de
+subir o pool por "pool cheio", procure conexão pedida **dentro** de outra já segura.
+
 **Nenhum elo sem limite de rede, e todos vigiados (2026-08-27).** A rede entre o Railway e o pooler do
 Supabase **congelou por ~30 min** (bytes parados em trânsito, sem erro, sem fechamento): uma consulta
 aterrissou 15 min atrasada na mesma transação, três turnos destravaram no mesmo instante e o app inteiro
