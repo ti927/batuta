@@ -127,7 +127,7 @@ def test_teto_de_tempo_da_execucao_para_o_fluxo(sessao, cenario):
 
     texto = str(e.value)
     assert "10 min" in texto  # qual era o teto
-    assert "Limites da execução" in texto  # onde mudar — nunca só o que houve
+    assert "em Configurações › " in texto  # onde mudar — nunca só o que houve
 
 
 def test_o_ja_trabalhado_atravessa_a_espera(sessao, dados, monkeypatch):

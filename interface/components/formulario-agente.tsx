@@ -46,7 +46,11 @@ import { podeOperar } from "@/lib/permissoes";
 import { cn } from "@/lib/utils";
 import { MemoriaAgentePainel } from "@/components/memoria-agente";
 import { PainelCinto } from "@/components/painel-cinto";
-import { PainelRitmoAgente } from "@/components/painel-ritmo-agente";
+import {
+  PainelRitmoAgente,
+  diferencasDoAgente,
+  useRitmoDoAgente,
+} from "@/components/painel-ritmo-agente";
 import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -188,6 +192,7 @@ export function FormularioAgente({
   onDirtyChange,
   onSalvo,
   onCancelar,
+  onVerConfiguracoes,
 }: {
   time: Time;
   agente: Agente | null;
@@ -207,7 +212,10 @@ export function FormularioAgente({
   onDirtyChange?: (sujo: boolean) => void;
   onSalvo: (salvo: Agente) => void;
   onCancelar: () => void;
+  /** Atalho "ver nas configurações" da aba Ritmo e espera (ver `PainelRitmoAgente`). */
+  onVerConfiguracoes?: (automacaoId: string, categoria: string) => void;
 }) {
+  const ritmo = useRitmoDoAgente(agente ?? null, time);
   const chaveRasc = chaveRascunho(agente?.id ?? null, time.id);
   // Rascunho do navegador lido UMA vez no mount (client-only): se houver e diferir do
   // servidor, o editor abre já com ele (rede de segurança contra perda). Feito no
@@ -229,6 +237,8 @@ export function FormularioAgente({
   // Rascunho não salvo restaurado? (mostra a nota de restauração.)
   const [restaurado, setRestaurado] = useState(rascunhoInicial !== null);
   const [aba, setAba] = useState<AbaChave>("agent_md");
+  const ritmoDiferente =
+    diferencasDoAgente(ritmo.painel, ritmo.automacoes, form.configuracao).length > 0;
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const souOperador = podeOperar(meuPapel ?? null);
@@ -445,11 +455,15 @@ export function FormularioAgente({
       return (
         <PainelRitmoAgente
           agente={agente ?? null}
-          time={time}
+          timeId={time.id}
           cinto={cinto ?? []}
           valor={form.configuracao}
           onChange={(v) => campo("configuracao", v)}
           podeEditar={souOperador}
+          painel={ritmo.painel}
+          erro={ritmo.erro}
+          automacoes={ritmo.automacoes}
+          onVerConfiguracoes={onVerConfiguracoes}
         />
       );
     }
@@ -623,6 +637,12 @@ export function FormularioAgente({
                 >
                   <a.Icone className="size-4" />
                   {a.rotulo}
+                  {a.chave === "ritmo" && ritmoDiferente && (
+                    <span
+                      className="size-1.5 rounded-full bg-amber-500"
+                      title="Este agente usa um valor diferente do padrão da automação"
+                    />
+                  )}
                   {abaSuja(a.chave) && (
                     <span
                       className="size-1.5 rounded-full bg-primary"

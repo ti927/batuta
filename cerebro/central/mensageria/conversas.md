@@ -30,8 +30,8 @@ conversa e sabe quando chamar uma pessoa. Cada canal tem **um agente atendente**
 ## Limites e cuidados
 - **Todo limite é configurável, e nenhum é secreto.** Teto de mensagens e de custo da conversa, idas-e-
   vindas de uma aprovação, passos e custo da execução, prazo do vigia de turno travado — todos vivem no
-  painel do fluxo, e os números efetivos aparecem em português logo na abertura dele, sem precisar abrir
-  o "Avançado". A exceção é o que é de OUTRO dono: saudação, horário e as mensagens automáticas ficam no
+  botão **Configurações** do Estúdio, e os números efetivos aparecem em português no **Resumo**, a
+  primeira aba da janela. A exceção é o que é de OUTRO dono: saudação, horário e as mensagens automáticas ficam no
   **canal** (o instrumento do bot), e o tempo de espera de uma aprovação fica no **agente** que espera
   (aba *Ritmo e espera*), com o fluxo dando o padrão. Quando um limite dispara, o agente **diz qual foi, quanto valia e
   onde se muda** — e o trabalho não se perde.

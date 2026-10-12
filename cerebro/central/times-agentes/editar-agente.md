@@ -37,7 +37,9 @@ Quem é · Habilidades · Uso dos instrumentos · Personalidade (os quatro markd
   *Pedir aprovação e aguardar* no cinto, porque só aí existe espera a configurar.
 
 Campo em branco = segue o valor da automação. **Vale em TODAS as automações onde o agente
-aparece** — a aba lista quais são, pelo nome.
+aparece** — a aba lista quais são, pelo nome. Campo com valor próprio fica **destacado**,
+com o valor que cada automação usa e um atalho para as Configurações dela; do outro lado, a
+janela de Configurações da automação avisa quais agentes usam valor diferente.
 
 ## Exemplos
 - Trocar uma palavra no `soul.md` de um agente sem abrir a conversa.

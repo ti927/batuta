@@ -386,7 +386,7 @@ falhar, o chamador falha junto, a menos que o passo tenha uma saída "Se der err
 o sub-fluxo gastou CONTA nos tetos de custo e de tempo do chamador.
 
 # Tempo máximo de um passo e da execução
-Além do teto de custo, o fluxo tem dois tetos de TEMPO (Fluxo › Limites da execução), os
+Além do teto de custo, o fluxo tem dois tetos de TEMPO (Configurações da automação › Tempo), os
 dois DESLIGADOS por padrão (0 = sem teto): tempo máximo de um passo e da execução inteira.
 O do passo pode ser ajustado só naquele passo, e o ajuste do passo vence o do fluxo. Não os
 ligue por conta própria — trabalho legítimo é lento às vezes (gerar vídeo leva ~25 min).
@@ -398,7 +398,7 @@ Estourado o teto, o passo FALHA de propósito: entregar meio trabalho narrado co
 o que o motor combate; quem quiser tratar desenha uma saída "Se der erro".
 
 # Teto de custo por execução
-Cada automação pode ter um TETO em dólares por execução (Fluxo › Limites da execução). Passou
+Cada automação pode ter um TETO em dólares por execução (Configurações da automação › Execução). Passou
 do teto, a execução PARA e fica como falhou, dizendo quanto gastou e qual era o teto. Nasce
 DESLIGADO (0 = sem teto) — e você não o liga por conta própria: um teto que o consultor não
 pediu interromperia fluxos legitimamente caros (gerar vídeo, "Para cada item" com muitos

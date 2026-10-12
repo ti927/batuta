@@ -227,7 +227,7 @@ async def diagnosticar_execucao(execucao_id: str) -> str:
 
     Se o erro disser "passou do teto de custo do fluxo", NÃO é bug: é o teto por execução
     que o consultor ligou, funcionando. Diga quanto gastou e qual era o teto, e ofereça as
-    duas saídas — subir o teto (Fluxo › Limites da execução) se o fluxo é caro por
+    duas saídas — subir o teto (no Estúdio, Configurações › Execução) se o fluxo é caro por
     natureza, ou achar o passo caro com `ver_uso`.
 
     O mesmo vale para "passou do tempo máximo": há teto de tempo por PASSO e pela EXECUÇÃO,
@@ -240,7 +240,8 @@ async def diagnosticar_execucao(execucao_id: str) -> str:
     (*Máx. de idas-e-vindas na aprovação*, 8 por padrão), o agente avisa a pessoa e a
     resposta dela segue direto pelo caminho que indicar. O canal continua funcionando —
     não diga que a conversa morreu nem mande reiniciar. Se o consultor precisa de mais
-    rodadas de ajuste, o número é dele: Fluxo › Aprovação humana.
+    rodadas de ajuste, o número é dele: Configurações da automação › Espera e aprovação (ou só naquele
+    agente, na aba Ritmo e espera).
 
     ATENÇÃO a uma confusão comum: o teto de custo da CONVERSA não conta geração de imagem
     ou vídeo — isso é trabalho do fluxo e responde ao teto por EXECUÇÃO. Se o consultor
@@ -303,8 +304,8 @@ async def ver_uso(time_id: str) -> str:
     `por_instrumento`. Para saber onde o dinheiro vai, olhe `por_instrumento` antes de
     culpar o modelo do agente. (O custo da IA criadora é por organização, não por time.)
 
-    Serve também para escolher o TETO DE CUSTO POR EXECUÇÃO de uma automação (Fluxo ›
-    Limites da execução, na tela — você não tem ferramenta para defini-lo): veja aqui
+    Serve também para escolher o TETO DE CUSTO POR EXECUÇÃO de uma automação (no Estúdio,
+    Configurações › Execução — você não tem ferramenta para defini-lo): veja aqui
     quanto uma execução saudável custa e recomende um teto com FOLGA. Teto colado no custo
     real transforma qualquer variação (um texto mais longo, uma retentativa) em falha, e a
     execução que estoura o teto conta para o disjuntor."""

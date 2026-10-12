@@ -6,7 +6,8 @@
 // única no cérebro) — nada é duplicado aqui.
 //
 // A janela antiga das regras (o botão "Fluxo" da tela clássica) saiu com a tela, em
-// 2026-09-24: as regras moram no painel da direita do Estúdio.
+// 2026-09-24: as regras moraram no painel da direita do Estúdio até 2026-10-12, quando
+// viraram a janela de Configurações (`estudio/configuracoes-automacao.tsx`).
 
 import { RotateCcw } from "lucide-react";
 
@@ -49,6 +50,8 @@ export function CampoConfig({
   onChange,
   onReset,
   rotuloHerdado = "padrão do Batuta",
+  destacado = false,
+  rodape,
 }: {
   campo: CampoConfigFluxo;
   valor: unknown;
@@ -57,6 +60,10 @@ export function CampoConfig({
   onChange: (v: unknown) => void;
   onReset: () => void;
   rotuloHerdado?: string;
+  /** Moldura âmbar: este valor difere do que vale no outro nível (agente × automação). */
+  destacado?: boolean;
+  /** O que vai embaixo do campo, depois da ajuda (ex.: quem usa valor diferente). */
+  rodape?: React.ReactNode;
 }) {
   // Marcador "herdado" / "ajustado — voltar ao padrão" (o afinado vence o herdado;
   // deixamos isso visível e reversível).
@@ -72,80 +79,99 @@ export function CampoConfig({
     ) : ajustado ? (
       <span className="text-[11px] text-primary">ajustado</span>
     ) : (
-      <span className="text-[11px] text-muted-foreground/60">{rotuloHerdado}</span>
+      <span className="text-[11px] text-muted-foreground/60">
+        {rotuloHerdado}
+      </span>
     );
+
+  const ajuda = campo.ajuda ? (
+    <span className="text-[11.5px] font-normal leading-snug text-muted-foreground">
+      {campo.ajuda}
+    </span>
+  ) : null;
+  const moldura = destacado
+    ? "rounded-lg border border-amber-300 bg-amber-50/60 p-2.5"
+    : "";
 
   if (campo.tipo === "bool") {
     return (
-      <div className="flex items-center justify-between gap-2">
-        <label className="flex items-center gap-2 text-[13px] text-foreground">
-          <input
-            type="checkbox"
-            className="accent-primary"
-            disabled={!podeEditar}
-            checked={!!valor}
-            onChange={(e) => onChange(e.target.checked)}
-          />
-          {campo.rotulo}
-        </label>
-        {marcador}
+      <div className={"flex flex-col gap-1 " + moldura}>
+        <div className="flex items-center justify-between gap-2">
+          <label className="flex items-center gap-2 text-[13px] text-foreground">
+            <input
+              type="checkbox"
+              className="accent-primary"
+              disabled={!podeEditar}
+              checked={!!valor}
+              onChange={(e) => onChange(e.target.checked)}
+            />
+            {campo.rotulo}
+          </label>
+          {marcador}
+        </div>
+        {ajuda}
+        {rodape}
       </div>
     );
   }
   return (
-    <Label className="flex-col items-start gap-1 text-[12px] text-muted-foreground">
-      <span className="flex w-full items-center justify-between gap-2">
-        <span>
-          {campo.rotulo}
-          {campo.sufixo ? ` (${campo.sufixo})` : ""}
+    <div className={"flex flex-col gap-1 " + moldura}>
+      <Label className="flex-col items-start gap-1 text-[12px] text-muted-foreground">
+        <span className="flex w-full items-center justify-between gap-2">
+          <span>
+            {campo.rotulo}
+            {campo.sufixo ? ` (${campo.sufixo})` : ""}
+          </span>
+          {marcador}
         </span>
-        {marcador}
-      </span>
-      {campo.tipo === "escolha" ? (
-        <Select
-          value={String(valor ?? "")}
-          disabled={!podeEditar}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full"
-        >
-          {(campo.opcoes ?? []).map((o) => (
-            <option key={o.valor} value={o.valor}>
-              {o.rotulo}
-            </option>
-          ))}
-        </Select>
-      ) : campo.tipo === "int" || campo.tipo === "valor" ? (
-        <Input
-          type="number"
-          step={campo.tipo === "valor" ? "0.01" : "1"}
-          disabled={!podeEditar}
-          value={valor === undefined || valor === null ? "" : String(valor)}
-          onChange={(e) =>
-            onChange(
-              campo.tipo === "valor"
-                ? Number(e.target.value)
-                : parseInt(e.target.value || "0", 10),
-            )
-          }
-          className="w-full"
-        />
-      ) : campo.tipo === "hora" ? (
-        <Input
-          type="time"
-          disabled={!podeEditar}
-          value={String(valor ?? "")}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full"
-        />
-      ) : (
-        <Input
-          type="text"
-          disabled={!podeEditar}
-          value={String(valor ?? "")}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full"
-        />
-      )}
-    </Label>
+        {campo.tipo === "escolha" ? (
+          <Select
+            value={String(valor ?? "")}
+            disabled={!podeEditar}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full"
+          >
+            {(campo.opcoes ?? []).map((o) => (
+              <option key={o.valor} value={o.valor}>
+                {o.rotulo}
+              </option>
+            ))}
+          </Select>
+        ) : campo.tipo === "int" || campo.tipo === "valor" ? (
+          <Input
+            type="number"
+            step={campo.tipo === "valor" ? "0.01" : "1"}
+            disabled={!podeEditar}
+            value={valor === undefined || valor === null ? "" : String(valor)}
+            onChange={(e) =>
+              onChange(
+                campo.tipo === "valor"
+                  ? Number(e.target.value)
+                  : parseInt(e.target.value || "0", 10),
+              )
+            }
+            className="w-full"
+          />
+        ) : campo.tipo === "hora" ? (
+          <Input
+            type="time"
+            disabled={!podeEditar}
+            value={String(valor ?? "")}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full"
+          />
+        ) : (
+          <Input
+            type="text"
+            disabled={!podeEditar}
+            value={String(valor ?? "")}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full"
+          />
+        )}
+      </Label>
+      {ajuda}
+      {rodape}
+    </div>
   );
 }

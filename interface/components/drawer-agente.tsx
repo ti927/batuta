@@ -49,6 +49,7 @@ export function DrawerAgente({
   conversaId,
   abrirEditando,
   onFechar,
+  onVerConfiguracoes,
 }: {
   agente: Agente | null;
   indice: number;
@@ -65,6 +66,8 @@ export function DrawerAgente({
   // ver a ficha e depois procurar como editá-la — quer escrever.
   abrirEditando?: boolean;
   onFechar: () => void;
+  /** No Estúdio: abre a janela de Configurações da automação (fecha este popup antes). */
+  onVerConfiguracoes?: (automacaoId: string, categoria: string) => void;
 }) {
   const router = useRouter();
   const { timeId: timeDoPainel, abrir: abrirConversa } = useConversaTime();
@@ -238,6 +241,15 @@ export function DrawerAgente({
               meuPapel={meuPapel}
               onSubDrawer={setSubAberto}
               onDirtyChange={setSujo}
+              onVerConfiguracoes={
+                onVerConfiguracoes &&
+                ((automacaoId, categoria) => {
+                  // Mesma guarda do X: sair daqui não pode descartar edição calado.
+                  if (sujo && !confirm("Você tem alterações não salvas. Sair e descartar?"))
+                    return;
+                  onVerConfiguracoes(automacaoId, categoria);
+                })
+              }
               // O formulário só chama onSalvo na CRIAÇÃO (one-shot: fecha + sincroniza).
               // Na edição ele fica aberto, reseta o baseline e não dá refresh (Pilar 2).
               onSalvo={() => {

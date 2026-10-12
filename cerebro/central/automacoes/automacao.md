@@ -20,8 +20,10 @@ no Instagram" e "Responder comentários"), cada uma com seu próprio gatilho e s
 ## Como usar (na tela)
 1. Na aba **Automações** do time (o Estúdio), crie uma automação (dê um nome claro).
 2. Defina o **gatilho** (como ela inicia) e monte a **cadeia** (o construtor visual de grafo).
-3. Ajuste **as regras do fluxo** se precisar (tetos de custo, de passos e de tempo, e o
-   *padrão* de espera que os agentes herdam). Saudação e horário de atendimento **não**
+3. Ajuste as regras no botão **Configurações** do Estúdio, se precisar. A janela separa
+   por assunto (**Conversa**, **Execução**, **Tempo**, **Espera e aprovação**) e abre num
+   **Resumo** com os limites em vigor. Campo marcado "cada agente pode mudar" é o padrão
+   dos agentes; se algum agente do desenho usa valor próprio, a janela diz quem é. Saudação e horário de atendimento **não**
    ficam aqui: são do **canal** (o instrumento do bot), porque são a voz de quem fala.
 4. **Ative** quando estiver pronta — nada roda até ativar.
 

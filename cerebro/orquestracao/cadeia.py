@@ -840,12 +840,14 @@ def executar_cadeia(
                 # para o próprio nó, por exemplo) sem condição de saída que feche o ciclo.
                 voltas = sum(1 for p in passos if p.get("no_id") == no_atual)
                 nome_laco = no.get("nome") or _identidade_do_no(sessao, no, tipo)[1]
+                from mensageria.config import onde_mudar
+
                 raise RuntimeError(
                     f"A execução passou do máximo de {max_passos} passos. O passo "
                     f"'{nome_laco}' rodou {voltas} vez(es) — provavelmente há uma seta "
                     "voltando para ele sem condição que feche o ciclo. Os passos já "
-                    "feitos ficam no rastro. Se o fluxo é longo por natureza, aumente o "
-                    "limite em Fluxo › Limites da execução."
+                    "feitos continuam salvos na execução. Se o fluxo é longo por natureza, aumente o "
+                    f"limite {onde_mudar('max_passos')}."
                 )
 
             entrada_atual = (
@@ -1062,11 +1064,13 @@ def executar_cadeia(
             # a espera por uma aprovação não é trabalho e não pode consumir o teto.
             tempo_s += max(0.0, (finalizado_em - iniciado_em).total_seconds())
             if teto_min_execucao and tempo_s > teto_min_execucao * 60:
+                from mensageria.config import onde_mudar
+
                 raise TetoDeTempoExcedido(
                     f"A execução passou do tempo máximo do fluxo: já trabalhou "
                     f"{int(tempo_s // 60)} min, e o teto é {teto_min_execucao} min. Os "
-                    f"passos já feitos ficam no rastro. Se o fluxo é demorado por "
-                    f"natureza, aumente o teto em Fluxo › Limites da execução."
+                    f"passos já feitos continuam salvos na execução. Se o fluxo é demorado por "
+                    f"natureza, aumente o teto {onde_mudar('teto_min_execucao')}."
                 )
 
             custo_usd += sum(precos.custo_de_entrada(e) for e in uso_passo)
@@ -1075,11 +1079,13 @@ def executar_cadeia(
                 # que corta o motivo em 300 caracteres — e o que não pode ser cortado
                 # é o "o que fazer" do fim. Por isso não repete o nome do passo, que o
                 # aviso já diz numa linha própria.
+                from mensageria.config import onde_mudar
+
                 raise TetoDeCustoExcedido(
                     f"A execução passou do teto de custo do fluxo: gastou "
                     f"US$ {custo_usd:.2f}, e o teto é US$ {teto_usd:.2f}. Os passos já "
-                    f"feitos ficam no rastro. Se o fluxo é caro por natureza, aumente "
-                    f"o teto em Fluxo › Limites da execução; se não, veja na aba Uso "
+                    f"feitos continuam salvos na execução. Se o fluxo é caro por natureza, aumente "
+                    f"o teto {onde_mudar('teto_usd_execucao')}; se não, veja na aba Uso "
                     f"qual passo gastou mais."
                 )
 

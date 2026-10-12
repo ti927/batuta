@@ -716,6 +716,10 @@ export type CampoConfigFluxo = {
   sufixo?: string;
   opcoes?: { valor: string; rotulo: string }[];
   padrao?: unknown;
+  /** Em qual categoria da janela de Configurações o campo aparece (ver `categorias`). */
+  categoria: string;
+  /** Linha curta embaixo do campo. */
+  ajuda?: string;
 };
 // Um MODELO DE PARTIDA, não uma camada. Era o "Tipo de fluxo": guardava uma etiqueta
 // cujos números moravam no cérebro, então o efetivo de uma automação nunca estava no
@@ -739,7 +743,11 @@ export type PainelConfigFluxo = {
   padrao_global: Record<string, unknown>;
   limites_padrao: string[];
   onde_mudar: string;
+  /** As categorias da janela de Configurações, na ordem em que aparecem. */
+  categorias: { id: string; rotulo: string; descricao: string }[];
 };
+/** Um limite em vigor, com a categoria onde ele se muda (POST /config/fluxo/limites). */
+export type LimiteDoFluxo = { categoria: string; texto: string };
 
 export type UsoChamada = {
   modelo: string;

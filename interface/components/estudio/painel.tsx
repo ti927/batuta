@@ -27,7 +27,6 @@ import {
   type Agente,
   type AutomacaoDaOrg,
   type Cadeia,
-  type ConfiguracaoFluxo,
   type Instrumento,
   type NoCadeia,
   type OperadorRegra,
@@ -469,12 +468,10 @@ export type PainelProps = {
   onDeleteNode: (id: string) => void;
   onDefinirInicial: (id: string) => void;
   onEditarAgente: (agenteId: string) => void;
-  onEditarInstrumento: (instrumentoId: string) => void;
   /** Os cintos, por agente — dizem quais canais este desenho usa e quem espera gente. */
   cintos: Record<string, Instrumento[]>;
-  /** Regras do fluxo (tetos + o padrão que os agentes herdam). */
-  configFluxo: ConfiguracaoFluxo;
-  setConfigFluxo: (v: ConfiguracaoFluxo) => void;
+  /** Abre a janela de Configurações da automação. */
+  onAbrirConfiguracoes: () => void;
   /** Nome da automação, para a migalha dizer onde a pessoa está. */
   nomeDoFluxo: string;
   /** "Testar este passo" roda o fluxo SALVO — daí precisar do id e do "não salvo". */
@@ -504,10 +501,8 @@ export function PainelEstudio({
   onDeleteNode,
   onDefinirInicial,
   onEditarAgente,
-  onEditarInstrumento,
   cintos,
-  configFluxo,
-  setConfigFluxo,
+  onAbrirConfiguracoes,
   nomeDoFluxo,
   onSubirAoFluxo,
   automacaoId,
@@ -521,17 +516,7 @@ export function PainelEstudio({
     return (
       <div className="flex h-full flex-col overflow-y-auto">
         <Migalha nomeDoFluxo={nomeDoFluxo} />
-        <PainelDoFluxo
-          cadeia={cadeia}
-          agentes={agentes}
-          cintos={cintos}
-          valor={configFluxo}
-          onChange={setConfigFluxo}
-          podeEditar={podeEditar}
-          onEditarInstrumento={onEditarInstrumento}
-          gatilhoTipo={gatilho.tipo}
-          configGatilho={{ teto_por_hora: gatilho.webhookTeto }}
-        />
+        <PainelDoFluxo onAbrirConfiguracoes={onAbrirConfiguracoes} />
       </div>
     );
   }

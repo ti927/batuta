@@ -165,7 +165,7 @@ def _teto_de_passos(automacao: Automacao | None) -> int:
 
     Era o fixo `cadeia.MAX_PASSOS` (25): um limite real, que interrompe a execução, e
     que nenhuma tela mostrava nem ninguém podia mudar. Lei do maestro (2026-09-14):
-    todo limite é configurável e aparece no painel do fluxo."""
+    todo limite é configurável e aparece nas Configurações da automação."""
     from mensageria.config import config_da_automacao
 
     try:

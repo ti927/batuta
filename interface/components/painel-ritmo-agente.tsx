@@ -23,6 +23,12 @@
 // recriaria a sobreposição silenciosa que esta arrumação veio curar — então os fluxos
 // afetados aparecem pelo nome.
 
+//
+// A DIFERENÇA aparece dos dois lados (pedido do maestro, 2026-10-12): campo em que este
+// agente usa um valor diferente do da automação fica destacado, dizendo quanto cada
+// automação usa e com o atalho para as Configurações dela. Do outro lado, a janela de
+// Configurações da automação diz quais agentes usam valor diferente.
+
 import { useEffect, useState } from "react";
 import { Clock, Info, TriangleAlert } from "lucide-react";
 
@@ -30,11 +36,13 @@ import {
   api,
   type Agente,
   type CampoConfigFluxo,
+  type ConfiguracaoFluxo,
   type Instrumento,
   type PainelConfigFluxo,
   type Time,
 } from "@/lib/api";
 import { CampoConfig } from "@/components/automacao-builder/config-fluxo";
+import { valorLegivel } from "@/components/estudio/configuracoes-automacao";
 
 // O agente só "espera uma pessoa" se tiver como perguntar a alguém. Mesma expressão
 // usada no Estúdio (`estudio/problemas.ts`, `estudio/nos.tsx`) — uma regra, um lugar.
@@ -49,25 +57,26 @@ function semChave(
   return resto;
 }
 
-export function PainelRitmoAgente({
-  agente,
-  time,
-  cinto,
-  valor,
-  onChange,
-  podeEditar,
-}: {
-  /** Nulo enquanto o agente está sendo criado (aí não há cinto nem fluxos ainda). */
-  agente: Agente | null;
-  time: Time;
-  cinto: Instrumento[];
-  valor: Record<string, unknown>;
-  onChange: (v: Record<string, unknown>) => void;
-  podeEditar: boolean;
-}) {
+/** Uma automação deste time em que o agente aparece. */
+export type AutomacaoDoAgente = {
+  id: string;
+  nome: string;
+  configuracao: ConfiguracaoFluxo | null;
+};
+
+/** Onde este agente diverge: o campo, a automação e quanto ela usa. */
+export type DiferencaDoAgente = {
+  campo: CampoConfigFluxo;
+  automacao: AutomacaoDoAgente;
+  valorDaAutomacao: unknown;
+};
+
+/** O que a aba "Ritmo e espera" precisa, buscado UMA vez pelo formulário — que também
+ *  usa para marcar a aba quando há diferença (sem abrir a aba, ninguém a veria). */
+export function useRitmoDoAgente(agente: Agente | null, time: Time) {
   const [painel, setPainel] = useState<PainelConfigFluxo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [fluxos, setFluxos] = useState<string[]>([]);
+  const [automacoes, setAutomacoes] = useState<AutomacaoDoAgente[]>([]);
 
   useEffect(() => {
     api
@@ -79,23 +88,26 @@ export function PainelRitmoAgente({
   }, []);
 
   // Em quais automações deste time este agente aparece. Falha em silêncio de
-  // propósito: sem a lista o aviso fica genérico ("em todos os fluxos onde ele
-  // aparece") em vez de sumir — o recado importante não depende dela.
+  // propósito: sem a lista o aviso fica genérico ("em toda automação em que ele for
+  // usado") em vez de sumir — o recado importante não depende dela.
   useEffect(() => {
     if (!agente) return;
     let vivo = true;
     api
-      .get<{ id: string; nome: string; cadeia: { nos?: { ref?: string }[] } | null }[]>(
-        `/times/${time.id}/automacoes`,
-      )
+      .get<
+        {
+          id: string;
+          nome: string;
+          cadeia: { nos?: { ref?: string }[] } | null;
+          configuracao: ConfiguracaoFluxo | null;
+        }[]
+      >(`/times/${time.id}/automacoes`)
       .then((lista) => {
         if (!vivo) return;
-        setFluxos(
+        setAutomacoes(
           lista
-            .filter((a) =>
-              (a.cadeia?.nos ?? []).some((n) => n.ref === agente.id),
-            )
-            .map((a) => a.nome),
+            .filter((a) => (a.cadeia?.nos ?? []).some((n) => n.ref === agente.id))
+            .map((a) => ({ id: a.id, nome: a.nome, configuracao: a.configuracao })),
         );
       })
       .catch(() => {});
@@ -104,7 +116,61 @@ export function PainelRitmoAgente({
     };
   }, [agente, time.id]);
 
+  return { painel, erro, automacoes };
+}
+
+/** Os campos em que o valor PRÓPRIO do agente difere do que cada automação usa. */
+export function diferencasDoAgente(
+  painel: PainelConfigFluxo | null,
+  automacoes: AutomacaoDoAgente[],
+  valor: Record<string, unknown>,
+): DiferencaDoAgente[] {
+  if (!painel) return [];
+  const saida: DiferencaDoAgente[] = [];
+  for (const g of painel.grupos) {
+    if (g.nivel !== "agente") continue;
+    for (const campo of g.campos) {
+      if (!(campo.chave in valor)) continue;
+      for (const automacao of automacoes) {
+        const ajustes = automacao.configuracao?.ajustes ?? {};
+        const daAutomacao =
+          campo.chave in ajustes ? ajustes[campo.chave] : painel.padrao_global[campo.chave];
+        if (daAutomacao !== valor[campo.chave])
+          saida.push({ campo, automacao, valorDaAutomacao: daAutomacao });
+      }
+    }
+  }
+  return saida;
+}
+
+export function PainelRitmoAgente({
+  agente,
+  cinto,
+  valor,
+  onChange,
+  podeEditar,
+  painel,
+  erro,
+  automacoes,
+  timeId,
+  onVerConfiguracoes,
+}: {
+  /** Nulo enquanto o agente está sendo criado (aí não há cinto nem fluxos ainda). */
+  agente: Agente | null;
+  cinto: Instrumento[];
+  valor: Record<string, unknown>;
+  onChange: (v: Record<string, unknown>) => void;
+  podeEditar: boolean;
+  painel: PainelConfigFluxo | null;
+  erro: string | null;
+  automacoes: AutomacaoDoAgente[];
+  timeId: string;
+  /** No Estúdio, abre a janela de Configurações ali mesmo. Fora dele, o atalho abre o
+   *  Estúdio numa aba nova (o agente aberto aqui não perde o que está sendo editado). */
+  onVerConfiguracoes?: (automacaoId: string, categoria: string) => void;
+}) {
   const esperaPessoa = cinto.some((i) => i.tipo === TIPO_APROVACAO);
+  const diferencas = diferencasDoAgente(painel, automacoes, valor);
 
   function grupo(nome: string): CampoConfigFluxo[] {
     return (painel?.grupos ?? [])
@@ -112,19 +178,70 @@ export function PainelRitmoAgente({
       .flatMap((g) => g.campos);
   }
 
+  // O valor que este agente HERDA. Numa automação só, é o dela; em várias, cada uma
+  // pode usar um valor, então mostramos o padrão do Batuta (e as diferenças, abaixo).
+  function herdado(chave: string): unknown {
+    if (automacoes.length === 1) {
+      const ajustes = automacoes[0].configuracao?.ajustes ?? {};
+      if (chave in ajustes) return ajustes[chave];
+    }
+    return painel?.padrao_global?.[chave];
+  }
+
+  function atalho(d: DiferencaDoAgente) {
+    const rotulo = "ver nas configurações";
+    if (onVerConfiguracoes)
+      return (
+        <button
+          type="button"
+          onClick={() => onVerConfiguracoes(d.automacao.id, d.campo.categoria)}
+          className="font-medium underline underline-offset-2 hover:no-underline"
+        >
+          {rotulo}
+        </button>
+      );
+    return (
+      <a
+        href={`/times/${timeId}/estudio?automacao=${d.automacao.id}&config=${d.campo.categoria}`}
+        target="_blank"
+        rel="noreferrer"
+        className="font-medium underline underline-offset-2 hover:no-underline"
+      >
+        {rotulo}
+      </a>
+    );
+  }
+
   function renderar(campos: CampoConfigFluxo[]) {
     return campos.map((campo) => {
       const ajustado = campo.chave in valor;
+      const doCampo = diferencas.filter((d) => d.campo.chave === campo.chave);
       return (
         <CampoConfig
           key={campo.chave}
           campo={campo}
-          valor={
-            ajustado ? valor[campo.chave] : painel?.padrao_global?.[campo.chave]
-          }
+          valor={ajustado ? valor[campo.chave] : herdado(campo.chave)}
           ajustado={ajustado}
           podeEditar={podeEditar}
-          rotuloHerdado="herda do fluxo"
+          rotuloHerdado={
+            automacoes.length === 1 ? "valor da automação" : "padrão do Batuta"
+          }
+          destacado={doCampo.length > 0}
+          rodape={
+            doCampo.length > 0 ? (
+              <div className="flex flex-col gap-0.5 text-[11.5px] leading-snug text-amber-900">
+                {doCampo.map((d) => (
+                  <span key={d.automacao.id} className="flex items-start gap-1.5">
+                    <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+                    <span>
+                      Diferente do padrão da automação: <strong>{d.automacao.nome}</strong>{" "}
+                      usa {valorLegivel(campo, d.valorDaAutomacao)} — {atalho(d)}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            ) : undefined
+          }
           onChange={(v) => onChange({ ...valor, [campo.chave]: v })}
           onReset={() => onChange(semChave(valor, campo.chave))}
         />
@@ -141,16 +258,30 @@ export function PainelRitmoAgente({
 
   const trabalho = grupo("Quanto um passo pode trabalhar");
   const espera = grupo("Enquanto espera uma pessoa");
+  const camposDiferentes = new Set(diferencas.map((d) => d.campo.chave)).size;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
-      <p className="flex gap-2 rounded-lg border border-border bg-muted/40 p-3 text-[12.5px] leading-relaxed text-muted-foreground">
-        <Info className="mt-0.5 size-4 shrink-0" />
-        <span>
-          Ajuste só o que for diferente neste agente. O que você não mexer segue o
-          valor da automação.
-        </span>
-      </p>
+      {camposDiferentes > 0 ? (
+        <p className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-[12.5px] leading-relaxed text-amber-900">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+          <span>
+            Este agente usa um valor diferente do padrão da automação em{" "}
+            <strong>
+              {camposDiferentes === 1 ? "1 campo" : `${camposDiferentes} campos`}
+            </strong>
+            . Eles estão destacados abaixo.
+          </span>
+        </p>
+      ) : (
+        <p className="flex gap-2 rounded-lg border border-border bg-muted/40 p-3 text-[12.5px] leading-relaxed text-muted-foreground">
+          <Info className="mt-0.5 size-4 shrink-0" />
+          <span>
+            Ajuste só o que for diferente neste agente. O que você não mexer segue o
+            valor da automação.
+          </span>
+        </p>
+      )}
 
       <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
         <div>
@@ -186,15 +317,16 @@ export function PainelRitmoAgente({
         </p>
       )}
 
-      {/* Leg 3 da arrumação: o agente é de vários fluxos. Calar isto seria recriar a
-          sobreposição silenciosa que esta frente veio curar. */}
+      {/* O agente é de vários fluxos. Calar isto seria recriar a sobreposição silenciosa
+          que a arrumação de 2026-09-22 veio curar. */}
       {agente && (
-        <p className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-[12px] leading-relaxed text-amber-900">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+        <p className="flex gap-2 rounded-lg border border-border bg-muted/40 p-3 text-[12px] leading-relaxed text-muted-foreground">
+          <Info className="mt-0.5 size-4 shrink-0" />
           <span>
-            {fluxos.length ? (
+            {automacoes.length ? (
               <>
-                Isto muda o agente em <strong>{fluxos.join(", ")}</strong>.
+                Isto muda o agente em{" "}
+                <strong>{automacoes.map((a) => a.nome).join(", ")}</strong>.
               </>
             ) : (
               <>Isto muda o agente em toda automação em que ele for usado.</>

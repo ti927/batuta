@@ -995,10 +995,13 @@ def executar_agente(
     # meio trabalho, narrado como inteiro, é justamente o padrão que o motor combate.
     # Quem quiser tratar isso desenha uma saída "Se der erro" (Onda 1).
     if prazo.expirou():
+        from mensageria.config import onde_mudar
+
         raise FalhaInstrumento(
             f"O passo do agente '{agente.nome}' passou do tempo máximo definido no "
-            "fluxo e foi interrompido. Aumente o teto em Fluxo › Limites da execução, "
-            "ou divida a tarefa deste passo em dois.",
+            f"fluxo e foi interrompido. Aumente o tempo {onde_mudar('teto_min_passo')} "
+            "(ou só para este agente, na aba Ritmo e espera dele), ou divida a tarefa "
+            "deste passo em dois.",
             retentavel=False,
         )
 

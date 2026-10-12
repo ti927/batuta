@@ -59,7 +59,7 @@ como gratuita.
 
 ## O teto de custo por execução
 
-Em **Fluxo › Limites da execução** você define quanto uma execução daquela automação pode gastar, em
+No Estúdio, em **Configurações › Execução**, você define quanto uma execução daquela automação pode gastar, em
 dólares. Passou do teto, ela **para** — com um recado que diz quanto gastou, qual era o teto e o que fazer.
 
 - **Nasce desligado** (`0` = sem teto). É opcional de propósito: um teto ligado sem você pedir

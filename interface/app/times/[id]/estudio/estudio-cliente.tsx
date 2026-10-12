@@ -8,7 +8,7 @@
 // bug — a que só aparece depois, em produção, sem ninguém saber qual das duas mexeu.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Activity,
   AlertCircle,
@@ -17,6 +17,7 @@ import {
   Copy,
   MoreHorizontal,
   Plus,
+  Settings,
   ShieldAlert,
   Trash2,
 } from "lucide-react";
@@ -43,6 +44,7 @@ import { normalizarCadeia } from "@/components/automacao-builder/nucleo";
 import type { ConfigGatilho } from "@/components/automacao-builder/nucleo";
 import { CanvasEstudio } from "@/components/estudio/canvas";
 import { PainelEstudio } from "@/components/estudio/painel";
+import { ConfiguracoesAutomacao } from "@/components/estudio/configuracoes-automacao";
 import type { Problema } from "@/components/estudio/problemas";
 import { DrawerAgente } from "@/components/drawer-agente";
 import { DrawerInstrumento } from "@/components/drawer-instrumento";
@@ -109,6 +111,29 @@ export function EstudioCliente({
   const souOperador = podeOperar(meuPapel);
   const [automacoes, setAutomacoes] = useState(inicial);
   const [selId, setSelId] = useState<string | null>(inicial[0]?.id ?? null);
+
+  // Pedido de abrir a janela de Configurações — mora AQUI porque o editor remonta ao
+  // trocar de automação, e o pedido pode vir de outra (o atalho no agente) ou de um
+  // link (`?automacao=…&config=categoria`, aberto de fora do Estúdio).
+  const router = useRouter();
+  const params = useSearchParams();
+  const [pedidoConfig, setPedidoConfig] = useState<{ categoria: string | null } | null>(
+    null,
+  );
+  function pedirConfig(automacaoId: string | null, categoria: string | null) {
+    if (automacaoId && inicial.some((a) => a.id === automacaoId)) setSelId(automacaoId);
+    setPedidoConfig({ categoria });
+  }
+  const linkConfig = params.get("config");
+  const [linkVisto, setLinkVisto] = useState<string | null>(null);
+  if (linkConfig !== null && params.toString() !== linkVisto) {
+    setLinkVisto(params.toString());
+    pedirConfig(params.get("automacao"), linkConfig || null);
+  }
+  // Limpa o link depois de atendido: recarregar a página não reabre a janela.
+  useEffect(() => {
+    if (linkConfig !== null) router.replace(`/times/${time.id}/estudio`, { scroll: false });
+  }, [linkConfig, router, time.id]);
 
   // Dado novo do servidor: recarrega a lista, sem mexer na seleção (padrão oficial de
   // "resetar estado quando a prop muda": setState no render, com guarda).
@@ -197,6 +222,9 @@ export function EstudioCliente({
       saidaSel={saidaSel}
       setSaidaSel={setSaidaSel}
       onSelecionar={setSelId}
+      pedidoConfig={pedidoConfig}
+      onPedidoAtendido={() => setPedidoConfig(null)}
+      onPedirConfig={pedirConfig}
       onAtualizou={(a) => setAutomacoes((l) => l.map((x) => (x.id === a.id ? a : x)))}
       onCriou={(a) => {
         setAutomacoes((l) => [...l, a]);
@@ -225,6 +253,9 @@ function EditorEstudio({
   saidaSel,
   setSaidaSel,
   onSelecionar,
+  pedidoConfig,
+  onPedidoAtendido,
+  onPedirConfig,
   onAtualizou,
   onCriou,
   onRemoveu,
@@ -243,6 +274,10 @@ function EditorEstudio({
   saidaSel: string | null;
   setSaidaSel: (id: string | null) => void;
   onSelecionar: (id: string) => void;
+  /** Alguém pediu a janela de Configurações aberta (numa categoria, opcional). */
+  pedidoConfig: { categoria: string | null } | null;
+  onPedidoAtendido: () => void;
+  onPedirConfig: (automacaoId: string | null, categoria: string | null) => void;
   onAtualizou: (a: Automacao) => void;
   onCriou: (a: Automacao) => void;
   onRemoveu: (id: string) => void;
@@ -255,6 +290,17 @@ function EditorEstudio({
   const [editAgenteId, setEditAgenteId] = useState<string | null>(null);
   const [editInstrumentoId, setEditInstrumentoId] = useState<string | null>(null);
   const [maisAberto, setMaisAberto] = useState(false);
+  // A janela de Configurações: aberta ou não, e em qual categoria começa.
+  const [config, setConfig] = useState<{ categoria: string | null } | null>(pedidoConfig);
+  const [pedidoVisto, setPedidoVisto] = useState(pedidoConfig);
+  if (pedidoConfig !== pedidoVisto) {
+    setPedidoVisto(pedidoConfig);
+    if (pedidoConfig) setConfig(pedidoConfig);
+  }
+  // Atendido o pedido, ele sai de cena — senão um remonte (depois de salvar) reabriria.
+  useEffect(() => {
+    if (pedidoConfig) onPedidoAtendido();
+  }, [pedidoConfig, onPedidoAtendido]);
   const [ocupado, setOcupado] = useState(false);
   // A automação está no ar? É estado DELA, não do time, e vale para todo gatilho —
   // inclusive o manual, que pode ser disparado por agendamento.
@@ -630,6 +676,16 @@ function EditorEstudio({
 
         <div className="flex-1" />
 
+        {automacao && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setConfig({ categoria: null })}
+            title="Limites de conversa, execução, tempo e aprovação"
+          >
+            <Settings /> Configurações
+          </Button>
+        )}
         {souOperador && automacao && (
           <BotaoRodarAgora
             timeId={time.id}
@@ -766,8 +822,7 @@ function EditorEstudio({
             cadeia={cadeia}
             agentes={agentes}
             cintos={cintos}
-            configFluxo={configFluxo}
-            setConfigFluxo={setConfigFluxo}
+            onAbrirConfiguracoes={() => setConfig({ categoria: null })}
             nomeDoFluxo={nome || "(sem nome)"}
             automacaoId={automacao?.id ?? null}
             timeId={time.id}
@@ -776,7 +831,6 @@ function EditorEstudio({
               setNoSel(null);
               setSaidaSel(null);
             }}
-            onEditarInstrumento={setEditInstrumentoId}
             podeEditar={souOperador}
             problemas={problemas}
             saidaSelecionada={saidaSel}
@@ -815,8 +869,29 @@ function EditorEstudio({
           tipos={tipos}
           conversaId={null}
           onFechar={() => setEditAgenteId(null)}
+          onVerConfiguracoes={(automacaoId, categoria) => {
+            setEditAgenteId(null);
+            onPedirConfig(automacaoId, categoria);
+          }}
         />
       )}
+
+      <ConfiguracoesAutomacao
+        aberto={config !== null}
+        categoriaInicial={config?.categoria}
+        onFechar={() => setConfig(null)}
+        nomeDoFluxo={nome || "(sem nome)"}
+        cadeia={cadeia}
+        agentes={agentes}
+        cintos={cintos}
+        valor={configFluxo}
+        onAplicar={setConfigFluxo}
+        podeEditar={souOperador}
+        onEditarInstrumento={setEditInstrumentoId}
+        onEditarAgente={setEditAgenteId}
+        gatilhoTipo={gatilho.tipo}
+        configGatilho={{ teto_por_hora: gatilho.webhookTeto }}
+      />
 
       {instrumentoEdit && (
         <DrawerInstrumento

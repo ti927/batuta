@@ -84,7 +84,7 @@ def test_teto_baixo_para_a_execucao_no_meio(sessao, cenario):
 
     texto = str(e.value)
     assert "0.03" in texto and "0.02" in texto  # quanto gastou e qual era o teto
-    assert "Limites da execução" in texto  # onde mudar — nunca só o que houve
+    assert "em Configurações › " in texto  # onde mudar — nunca só o que houve
     # O aviso pelo canal corta o motivo em 300 caracteres: a mensagem tem de caber
     # INTEIRA, senão o "o que fazer" (que vem no fim) é justamente o que se perde.
     from mensageria.aviso import MAX_ERRO

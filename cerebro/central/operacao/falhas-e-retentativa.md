@@ -55,7 +55,7 @@ Entender por que um fluxo às vezes se recupera sozinho e às vezes para na sua 
 
 ## Tempo máximo de um passo e da execução
 
-Em **Fluxo › Limites da execução** você pode limitar quanto tempo um **passo** e a **execução inteira**
+No Estúdio, em **Configurações › Tempo**, você pode limitar quanto tempo um **passo** e a **execução inteira**
 podem trabalhar. Os dois nascem **desligados** (`0` = sem teto), pelo mesmo motivo do teto de custo: um
 limite que você não pediu interromperia trabalho legítimo e lento — gerar um vídeo leva uns 25 minutos —
 como se fosse defeito.

@@ -107,7 +107,7 @@ def test_teto_de_passos_nomeia_o_no_em_laco(sessao, dados, ag, monkeypatch):
     msg = str(e.value)
     assert "Eterno" in msg          # QUAL nó
     assert "3 vez" in msg           # quantas voltas deu
-    assert "Limites da execução" in msg  # e o que fazer a respeito
+    assert "em Configurações › Execução" in msg  # e o que fazer a respeito
 
 
 # ───────── D7 — seta apontando para um passo que não existe ─────────

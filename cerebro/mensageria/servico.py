@@ -1266,7 +1266,7 @@ def _limite_do_portao(
     """Qual limite (se algum) impede CONDUZIR mais uma rodada desta aprovação.
 
     Devolve `{qual, valor, teto}` ou None. Três réguas, todas configuráveis e todas
-    visíveis no painel do fluxo (lei do maestro: não existe teto secreto):
+    visíveis nas Configurações da automação (lei do maestro: não existe teto secreto):
     - `portao_max_rodadas` — idas-e-vindas DESTE portão. É a régua principal e a mesma
       que a tela usa (`retoma.rodadas_no_gate`), para não haver duas verdades.
     - `teto_usd` — custo de IA DE CONVERSA acumulado (sem o trabalho de instrumento,

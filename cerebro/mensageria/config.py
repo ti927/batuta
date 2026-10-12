@@ -324,54 +324,79 @@ ESCOLHAS = {
 #
 # `nivel` diz o que a tela precisa dizer à pessoa: "fluxo" é regra do fluxo e ponto;
 # "agente" é o PADRÃO que cada agente herda e pode sobrepor no popup dele.
+# `categoria` é ONDE o campo aparece na janela de Configurações da automação (2026-10-12:
+# o painel lateral virou janela, com as regras separadas pelo ASSUNTO — Conversa,
+# Execução, Tempo, Espera e aprovação). O `grupo` continua dizendo de QUEM é a regra, e
+# é por ele que a aba "Ritmo e espera" do agente monta os quadros dela. `ajuda` é a
+# linha curta embaixo do campo — o que antes ia espremido no rótulo entre parênteses.
+CATEGORIAS = [
+    {"id": "conversa", "rotulo": "Conversa",
+     "descricao": "Quando alguém conversa com os agentes desta automação."},
+    {"id": "execucao", "rotulo": "Execução",
+     "descricao": "Quanto uma execução pode crescer e custar."},
+    {"id": "tempo", "rotulo": "Tempo",
+     "descricao": "Quanto tempo o trabalho pode levar."},
+    {"id": "espera", "rotulo": "Espera e aprovação",
+     "descricao": "Quando um agente espera a resposta de uma pessoa."},
+]
+ROTULO_CATEGORIA = {c["id"]: c["rotulo"] for c in CATEGORIAS}
+
 CAMPOS = [
     {"grupo": "Enquanto espera uma pessoa", "nivel": "agente", "campos": [
-        {"chave": "timeout_min", "rotulo": "Tempo até cutucar quem some", "tipo": "int", "sufixo": "min"},
-        {"chave": "nudge_timeout_min", "rotulo": "Tempo após cutucar até encerrar", "tipo": "int", "sufixo": "min"},
-        {"chave": "encerrar_por_inatividade", "rotulo": "Encerrar conversas paradas", "tipo": "bool"},
-        {"chave": "portao_forma", "rotulo": "Como o agente conduz a aprovação", "tipo": "escolha"},
-        {"chave": "portao_acao_abandono", "rotulo": "Se o aprovador abandona a conversa", "tipo": "escolha"},
-        {"chave": "portao_max_rodadas", "rotulo": "Máx. de idas-e-vindas na aprovação", "tipo": "int"},
+        {"chave": "portao_forma", "rotulo": "Como o agente conduz a aprovação",
+         "tipo": "escolha", "categoria": "espera"},
+        {"chave": "portao_max_rodadas", "rotulo": "Máx. de idas-e-vindas na aprovação",
+         "tipo": "int", "categoria": "espera",
+         "ajuda": "Passado isso, a resposta da pessoa segue direto pelo caminho que ela indicar."},
+        {"chave": "timeout_min", "rotulo": "Tempo até cutucar quem não responde",
+         "tipo": "int", "sufixo": "min", "categoria": "espera"},
+        {"chave": "nudge_timeout_min", "rotulo": "Depois de cutucar, tempo até encerrar",
+         "tipo": "int", "sufixo": "min", "categoria": "espera"},
+        {"chave": "encerrar_por_inatividade", "rotulo": "Encerrar conversas paradas",
+         "tipo": "bool", "categoria": "espera"},
+        {"chave": "portao_acao_abandono", "rotulo": "Se o aprovador abandona a conversa",
+         "tipo": "escolha", "categoria": "espera"},
         {"chave": "teto_espera_humano_min",
-         "rotulo": "Tempo parada até avisar que ninguém aprovou (0 = nunca avisar)",
-         "tipo": "int", "sufixo": "min"},
+         "rotulo": "Avisar o time quando ninguém aprova em",
+         "tipo": "int", "sufixo": "min", "categoria": "espera",
+         "ajuda": "0 = nunca avisar. A execução continua esperando a resposta."},
     ]},
     {"grupo": "Quanto uma conversa pode custar", "nivel": "fluxo", "campos": [
-        {"chave": "max_turnos", "rotulo": "Máx. de mensagens por conversa", "tipo": "int"},
-        {"chave": "teto_usd",
-         "rotulo": "Teto de custo da conversa — só a IA que conversa "
-                   "(imagem e vídeo contam na execução)",
-         "tipo": "valor", "sufixo": "US$"},
+        {"chave": "max_turnos", "rotulo": "Máx. de mensagens por conversa",
+         "tipo": "int", "categoria": "conversa"},
+        {"chave": "teto_usd", "rotulo": "Teto de custo da conversa",
+         "tipo": "valor", "sufixo": "US$", "categoria": "conversa",
+         "ajuda": "Só a IA que conversa. Gerar imagem ou vídeo conta no custo da execução."},
     ]},
     {"grupo": "Quanto uma execução pode custar e durar", "nivel": "fluxo", "campos": [
-        {"chave": "max_passos",
-         "rotulo": "Máx. de passos de uma execução",
-         "tipo": "int"},
-        {"chave": "teto_usd_execucao",
-         "rotulo": "Teto de custo por execução — inclui imagem e vídeo (0 = sem teto)",
-         "tipo": "valor", "sufixo": "US$"},
-        {"chave": "teto_min_execucao",
-         "rotulo": "Tempo máximo da execução inteira (0 = sem teto)",
-         "tipo": "int", "sufixo": "min"},
-        {"chave": "max_itens_cada",
-         "rotulo": "Máx. de itens por vez no “Para cada item”",
-         "tipo": "int"},
+        {"chave": "max_passos", "rotulo": "Máx. de passos de uma execução",
+         "tipo": "int", "categoria": "execucao"},
+        {"chave": "teto_usd_execucao", "rotulo": "Teto de custo por execução",
+         "tipo": "valor", "sufixo": "US$", "categoria": "execucao",
+         "ajuda": "Inclui imagem e vídeo. 0 = sem teto."},
+        {"chave": "max_itens_cada", "rotulo": "Máx. de itens por vez no “Para cada item”",
+         "tipo": "int", "categoria": "execucao",
+         "ajuda": "O que passar disso não roda, e a execução diz quantos ficaram de fora."},
+        {"chave": "teto_min_execucao", "rotulo": "Tempo máximo da execução inteira",
+         "tipo": "int", "sufixo": "min", "categoria": "tempo",
+         "ajuda": "0 = sem teto. O tempo esperando uma aprovação não conta."},
     ]},
     # O teto de tempo de UM passo é do trabalhador, não da execução: um passo que
     # escreve uma frase e um que gera vídeo de 25 min não cabem no mesmo número. Aqui
     # fica só o PADRÃO; cada agente sobrepõe no popup dele.
     {"grupo": "Quanto um passo pode trabalhar", "nivel": "agente", "campos": [
-        {"chave": "teto_min_passo",
-         "rotulo": "Tempo máximo de um passo (0 = sem teto)",
-         "tipo": "int", "sufixo": "min"},
+        {"chave": "teto_min_passo", "rotulo": "Tempo máximo de cada passo",
+         "tipo": "int", "sufixo": "min", "categoria": "tempo",
+         "ajuda": "0 = sem teto. O agente termina a ação em andamento antes de parar."},
     ]},
-    {"grupo": "Vigias — quando o Batuta destrava sozinho", "nivel": "fluxo", "campos": [
+    {"grupo": "Quando o Batuta destrava sozinho", "nivel": "fluxo", "campos": [
         {"chave": "teto_turno_preso_min",
-         "rotulo": "Tempo até declarar um turno travado (atendimento)",
-         "tipo": "int", "sufixo": "min"},
+         "rotulo": "Destravar conversa parada (atendimento)",
+         "tipo": "int", "sufixo": "min", "categoria": "tempo",
+         "ajuda": "Se o agente não responder nesse tempo, o Batuta destrava a conversa e avisa a pessoa."},
         {"chave": "teto_turno_preso_portao_min",
-         "rotulo": "Tempo até declarar um turno travado (aprovação)",
-         "tipo": "int", "sufixo": "min"},
+         "rotulo": "Destravar conversa parada (aprovação)",
+         "tipo": "int", "sufixo": "min", "categoria": "tempo"},
     ]},
 ]
 
@@ -390,7 +415,7 @@ def painel_config() -> dict:
             "ajustes": dict(PRESETS[pid]),
             "defaults": _mesclar(GLOBAL, PRESETS.get(pid)),
             # Os limites deste modelo em português, para a tela mostrar SEM o usuário
-            # ter de abrir o "Avançado" e interpretar números soltos. Lei do maestro:
+            # ter de interpretar números soltos. Lei do maestro:
             # nenhum teto pode existir sem a pessoa saber que existe e onde fica.
             "limites": resumo_dos_limites(_mesclar(GLOBAL, PRESETS.get(pid))),
         }
@@ -412,6 +437,7 @@ def painel_config() -> dict:
         "padrao_global": dict(GLOBAL),
         "limites_padrao": resumo_dos_limites(GLOBAL),
         "onde_mudar": ONDE_MUDAR,
+        "categorias": CATEGORIAS,
     }
 
 
@@ -564,9 +590,18 @@ def complemento_nudge_portao(conf: dict) -> str:
 # passa a mandar gente para o vazio — e quem recebe não tem como saber que o errado é o
 # recado. Mantida NEUTRA de propósito enquanto as duas telas (Automações e Estúdio)
 # convivem: nenhuma das duas chama isso de "Configurações do fluxo" agora.
-ONDE_MUDAR = (
-    "na tela da automação, nas regras do fluxo (em “Avançado”)"
-)
+ONDE_MUDAR = "no Estúdio da automação, em Configurações"
+
+
+def onde_mudar(chave: str) -> str:
+    """Onde a pessoa muda ESTA regra, pelo caminho que ela vê na tela: a janela de
+    Configurações e a categoria do campo. Fonte única dos recados de limite (o motor
+    apontava para "Fluxo › Limites da execução", um caminho que deixou de existir)."""
+    for grupo in CAMPOS:
+        for campo in grupo["campos"]:
+            if campo["chave"] == chave:
+                return f"{ONDE_MUDAR} › {ROTULO_CATEGORIA[campo['categoria']]}"
+    return ONDE_MUDAR
 
 
 # Espelho de `instrumentos.agendar_automacao.TETO_PENDENTES`. Não importamos para não
@@ -578,7 +613,7 @@ TETO_PENDENTES_AGENDAMENTO = 50
 def resumo_dos_limites(conf: dict, contexto: dict | None = None) -> list[str]:
     """Os limites EFETIVOS deste fluxo, em português claro — um item por limite.
 
-    Serve ao painel (o consultor lê sem abrir o 'Avançado') e ao recado honesto. Zero
+    Serve à aba Resumo das Configurações, aos modelos de partida e à IA. Zero
     em teto de custo/tempo significa DESLIGADO, e isso é dito com todas as letras em
     vez de mostrar um "0" que ninguém interpreta.
 
@@ -586,6 +621,13 @@ def resumo_dos_limites(conf: dict, contexto: dict | None = None) -> list[str]:
     "Para cada item" ou instrumento de agendar. Esses limites existem, cortam trabalho
     de verdade, e até 2026-09-22 não apareciam em lugar nenhum. Um deles é FIXO
     (agendamentos pendentes) e isso é dito, em vez de fingir que dá para ajustar."""
+    return [f"{ROTULO_CATEGORIA[i['categoria']]}: {i['texto']}"
+            for i in limites_por_categoria(conf, contexto)]
+
+
+def limites_por_categoria(conf: dict, contexto: dict | None = None) -> list[dict]:
+    """O mesmo resumo, item a item com a CATEGORIA da janela de Configurações — é o que
+    deixa a aba Resumo agrupar as frases e levar cada uma ao lugar onde se muda."""
     ctx = contexto or {}
 
     def _n(chave: str, padrao=0):
@@ -594,32 +636,36 @@ def resumo_dos_limites(conf: dict, contexto: dict | None = None) -> list[str]:
         except (TypeError, ValueError):
             return padrao
 
-    def _teto(valor, texto: str) -> str:
-        return texto if valor else "sem teto"
-
     usd_conversa = float(_n("teto_usd", 0.0))
     usd_exec = float(_n("teto_usd_execucao", 0.0))
     min_passo = int(_n("teto_min_passo", 0))
     min_exec = int(_n("teto_min_execucao", 0))
-    execucao = [f"até {int(_n('max_passos', 25))} passos"]
-    if usd_exec:
-        execucao.append(f"US$ {usd_exec:.2f} de custo (inclui imagem e vídeo)")
-    if min_exec:
-        execucao.append(f"{min_exec} min de duração")
+    turnos = int(_n("max_turnos", 40))
+    conversa = (
+        f"até {turnos} mensagens e US$ {usd_conversa:.2f} de IA por conversa. Gerar "
+        "imagem ou vídeo conta no custo da execução."
+        if usd_conversa else f"até {turnos} mensagens por conversa, sem teto de custo."
+    )
+    execucao = f"até {int(_n('max_passos', 25))} passos, " + (
+        f"com teto de US$ {usd_exec:.2f} (inclui imagem e vídeo)." if usd_exec
+        else "sem teto de custo."
+    )
+    tempo = [f"execução de até {min_exec} min" if min_exec else "sem teto de duração"]
     if min_passo:
-        execucao.append(f"{min_passo} min por passo")
-    if not (usd_exec or min_exec or min_passo):
-        execucao.append("sem teto de custo nem de tempo")
-    return [
-        f"Aprovação: até {int(_n('portao_max_rodadas', 8))} idas-e-vindas por portão; "
-        "passado isso, a resposta segue direto pelo caminho que ela indicar.",
-        f"Conversa: até {int(_n('max_turnos', 40))} mensagens e "
-        f"{_teto(usd_conversa, f'US$ {usd_conversa:.2f}')} de IA de conversa "
-        "(gerar imagem/vídeo não conta aqui — conta no teto da execução).",
-        "Execução: " + ", ".join(execucao) + ".",
-        f"Turno travado: o vigia destrava e avisa em {int(_n('teto_turno_preso_min', 8))} min "
-        f"(atendimento) ou {int(_n('teto_turno_preso_portao_min', 30))} min (aprovação).",
-    ] + _limites_do_desenho(conf, ctx)
+        tempo.append(f"cada passo até {min_passo} min")
+    tempo.append(
+        f"conversa parada é destravada em {int(_n('teto_turno_preso_min', 8))} min "
+        f"(atendimento) ou {int(_n('teto_turno_preso_portao_min', 30))} min (aprovação)"
+    )
+    itens = [
+        {"categoria": "conversa", "texto": conversa},
+        {"categoria": "execucao", "texto": execucao},
+        {"categoria": "tempo", "texto": "; ".join(tempo) + "."},
+        {"categoria": "espera", "texto":
+            f"até {int(_n('portao_max_rodadas', 8))} idas-e-vindas numa aprovação; depois "
+            "disso, a resposta da pessoa segue direto pelo caminho que ela indicar."},
+    ]
+    return itens + [{"categoria": "execucao", "texto": t} for t in _limites_do_desenho(conf, ctx)]
 
 
 
@@ -634,13 +680,13 @@ def _limites_do_desenho(conf: dict, ctx: dict) -> list[str]:
         except (TypeError, ValueError):
             itens = 20
         fora.append(
-            f"Para cada item: até {itens} itens por vez; o que passar disso não roda, "
-            "e o rastro diz quantos ficaram de fora."
+            f"no “Para cada item”, até {itens} itens por vez; o que passar disso não "
+            "roda, e a execução diz quantos ficaram de fora."
         )
     if ctx.get("tem_agendar_automacao"):
         fora.append(
-            f"Agendamentos: até {TETO_PENDENTES_AGENDAMENTO} pendentes por automação "
-            "— limite fixo do Batuta, não ajustável."
+            f"até {TETO_PENDENTES_AGENDAMENTO} agendamentos pendentes por automação "
+            "(limite fixo do Batuta, não dá para mudar)."
         )
     return fora
 
@@ -666,7 +712,7 @@ def explicacao_limite_portao(qual: str, conf: dict, *, valor_atual: str) -> str:
         f"refazendo o material nesta conversa.\n\n"
         f"Nada se perdeu: sua última resposta vale e o fluxo segue por ela. Se quiser "
         f"rever o material inteiro ou responder com calma, ele está em {URL_APP}.\n\n"
-        f"Para mudar esse limite: {ONDE_MUDAR} → “{_rotulo_do_campo(chave)}”."
+        f"Para mudar esse limite: {onde_mudar(chave)} → “{_rotulo_do_campo(chave)}”."
     )
 
 

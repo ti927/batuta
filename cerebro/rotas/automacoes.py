@@ -71,6 +71,7 @@ from mensageria.config import (
     PRESETS,
     _mesclar as _mesclar_config,
     painel_config,
+    limites_por_categoria,
     resumo_dos_limites,
 )
 from orquestracao import circuito, dono, grafo
@@ -214,6 +215,9 @@ def limites_do_fluxo(
     }
     return {
         "limites": resumo_dos_limites(cfg, contexto),
+        # Os mesmos limites com a categoria de cada um: a aba Resumo das Configurações
+        # agrupa por ela e leva cada frase à categoria onde se muda.
+        "itens": limites_por_categoria(cfg, contexto),
         "onde_mudar": ONDE_MUDAR,
     }
 
