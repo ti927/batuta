@@ -23,6 +23,7 @@ from mensageria.config import (
     CHAVES,
     CHAVES_DA_AUTOMACAO,
     CHAVES_DO_AGENTE,
+    CHAVES_SO_DO_AGENTE,
     CHAVES_DO_CANAL,
     CHAVES_DO_FLUXO,
     GLOBAL,
@@ -31,7 +32,8 @@ from mensageria.config import (
 
 
 def _chaves_de_campos() -> set[str]:
-    return {c["chave"] for g in CAMPOS for c in g["campos"]}
+    """O que a janela de Configurações da AUTOMAÇÃO mostra (a `so_agente` ela pula)."""
+    return {c["chave"] for g in CAMPOS if g["nivel"] != "so_agente" for c in g["campos"]}
 
 
 def test_a_particao_cobre_tudo_e_nao_se_sobrepoe():
@@ -66,10 +68,13 @@ def test_todo_grupo_da_tela_declara_de_quem_e_a_regra():
     """Sem o `nivel`, a tela volta a mostrar dois níveis sem dizer qual é qual — que é
     a queixa que originou esta arrumação."""
     for grupo in CAMPOS:
-        assert grupo.get("nivel") in ("fluxo", "agente"), grupo["grupo"]
+        assert grupo.get("nivel") in ("fluxo", "agente", "so_agente"), grupo["grupo"]
         nivel = grupo["nivel"]
         for campo in grupo["campos"]:
-            esperado = CHAVES_DO_AGENTE if nivel == "agente" else CHAVES_DO_FLUXO
+            esperado = {
+                "agente": CHAVES_DO_AGENTE,
+                "so_agente": CHAVES_SO_DO_AGENTE,
+            }.get(nivel, CHAVES_DO_FLUXO)
             assert campo["chave"] in esperado, (
                 f"{campo['chave']} está no grupo '{grupo['grupo']}' (nível {nivel}), "
                 "mas o dono dela é outro"

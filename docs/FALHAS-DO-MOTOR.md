@@ -128,6 +128,7 @@ próximo — foi exatamente o que aconteceu nas correções anteriores.
 | C5 | provedor de IA devolve 429/500 | ~~morre na primeira~~ **já coberto**: 6 retentativas com espera progressiva no fundo, 1 no atendimento (`llm.py`) | 🟢 | — (eu tinha catalogado errado; conferido no código em 21/09) |
 | C6 | provedor de IA devolve **400 de histórico inválido** | vira exceção → a execução inteira morre | 🔴 | 400 de protocolo é **defeito de estado**, não do fluxo: não pode matar a execução. Deve recusar a entrada e manter a espera de pé |
 | C7 | modelo não chama o instrumento que o markdown manda | o rastro mostra `instrumentos_acionados` vazio | 🟢 | — (é adesão do modelo; o rastro prova) |
+| C8 | **a resposta do agente bate no teto de saída e sai cortada** (12/10/2026, exec f2886ef5: o artigo do Redator parou em "receita acumul", o passo ficou "concluído" e o texto pela metade seguiu adiante) | ~~nada detectava~~ **coberto (12/10)**: `llm.resposta_cortada` lê o motivo de parada dos 3 provedores; o passo PARA (`ia.resposta_cortada`, não-retentável) com o que fazer, e o evento `agente.resposta_cortada` vai ao banco de logs. O teto é do agente (curto/padrão/longo, aba Ritmo e espera; padrão subiu de 8192 para 16 000) e respeita o máximo de cada modelo | 🟢 | — (`testes/test_resposta_cortada.py`) |
 
 ### D. A decisão de caminho (as setas)
 

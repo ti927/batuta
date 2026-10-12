@@ -312,7 +312,32 @@ ESCOLHAS = {
         ("direto", "Decisão direta (aprovar/reprovar)"),
     ],
     "portao_acao_abandono": [("cancelar", "Cancelar o fluxo"), ("estacionar", "Deixar pendente na tela")],
+    "tamanho_resposta": [
+        ("curto", "Curto — até umas 5 páginas"),
+        ("padrao", "Padrão — até umas 20 páginas"),
+        ("longo", "Longo — até umas 40 páginas (mais lento e mais caro)"),
+    ],
 }
+
+# Regras SÓ do agente, sem padrão na automação (2026-10-12): o tamanho máximo de cada
+# resposta é do trabalhador — um redator de artigos e um classificador de mensagens não
+# cabem no mesmo número, e não há o que herdar. Ficam FORA da cascata (`GLOBAL`), que é a
+# herança automação → agente; quem lê é o motor, direto do agente (`tamanho_da_resposta`).
+CHAVES_SO_DO_AGENTE = frozenset({"tamanho_resposta"})
+
+# Em tokens de saída (o pensamento do modelo conta dentro). As "páginas" do rótulo são
+# a conta de quem lê: ~700 tokens por página em português, descontado o pensamento.
+TAMANHOS_RESPOSTA = {"curto": 4000, "padrao": 16000, "longo": 32000}
+TAMANHO_RESPOSTA_PADRAO = "padrao"
+
+
+def tamanho_da_resposta(agente) -> tuple[str, int]:
+    """(escolha, tokens) do tamanho máximo de cada resposta deste agente."""
+    escolha = ((getattr(agente, "configuracao", None) or {}).get("tamanho_resposta")
+               or TAMANHO_RESPOSTA_PADRAO)
+    if escolha not in TAMANHOS_RESPOSTA:
+        escolha = TAMANHO_RESPOSTA_PADRAO
+    return escolha, TAMANHOS_RESPOSTA[escolha]
 
 # Botões EXPOSTOS na UI, agrupados (fonte única — o front renderiza a partir daqui,
 # sem duplicar rótulos/opções). O que não está aqui fica interno (trilho de segurança).
@@ -389,6 +414,13 @@ CAMPOS = [
          "tipo": "int", "sufixo": "min", "categoria": "tempo",
          "ajuda": "0 = sem teto. O agente termina a ação em andamento antes de parar."},
     ]},
+    # `so_agente`: aparece só no agente (aba Ritmo e espera); a janela da automação pula.
+    {"grupo": "Quanto um passo pode trabalhar", "nivel": "so_agente", "campos": [
+        {"chave": "tamanho_resposta", "rotulo": "Tamanho máximo de cada resposta",
+         "tipo": "escolha", "categoria": "tempo", "padrao": TAMANHO_RESPOSTA_PADRAO,
+         "ajuda": "Se a resposta passar disso, o passo para e avisa, em vez de seguir "
+                  "com o texto cortado."},
+    ]},
     {"grupo": "Quando o Batuta destrava sozinho", "nivel": "fluxo", "campos": [
         {"chave": "teto_turno_preso_min",
          "rotulo": "Destravar conversa parada (atendimento)",
@@ -428,7 +460,7 @@ def painel_config() -> dict:
             c = dict(c)
             if c["tipo"] == "escolha":
                 c["opcoes"] = [{"valor": v, "rotulo": r} for v, r in ESCOLHAS[c["chave"]]]
-            c["padrao"] = GLOBAL.get(c["chave"])
+            c["padrao"] = GLOBAL.get(c["chave"], c.get("padrao"))
             campos.append(c)
         grupos.append({"grupo": g["grupo"], "nivel": g["nivel"], "campos": campos})
     return {

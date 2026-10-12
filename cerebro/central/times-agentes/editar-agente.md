@@ -33,6 +33,11 @@ Quem é · Habilidades · Uso dos instrumentos · Personalidade (os quatro markd
 **Ritmo e espera** (2026-09-22) é o que este agente faz DIFERENTE do padrão da automação:
 - **quanto ele pode trabalhar num passo** — quem gera vídeo precisa de muito mais tempo que
   quem escreve um parágrafo;
+- **o tamanho máximo de cada resposta** — Curto (≈5 páginas), Padrão (≈20) ou Longo (≈40,
+  mais lento e mais caro). Este é **só do agente**: não tem valor na automação. Se uma
+  resposta passar do tamanho, o passo **para** com o aviso "saiu cortada" em vez de passar
+  um texto pela metade adiante — e é aqui que se aumenta (um redator de artigos longos vai
+  para Longo);
 - **quanto e como ele espera uma pessoa** — só aparece se ele tiver o instrumento
   *Pedir aprovação e aguardar* no cinto, porque só aí existe espera a configurar.
 

@@ -120,7 +120,7 @@ def test_chat_espera_pouco_e_fundo_espera_muito(capturar_openai):
     chat, fundo = capturar_openai
     assert chat["timeout"] == llm.TIMEOUT_IA_CHAT_S
     assert chat["max_retries"] == llm.MAX_RETENTATIVAS_IA_CHAT
-    assert fundo["timeout"] == llm.TIMEOUT_IA_S
+    assert fundo["timeout"] == max(llm.TIMEOUT_IA_S, llm.MAX_TOKENS // 40)
     assert fundo["max_retries"] == llm.MAX_RETENTATIVAS_IA
     # a espera do chat tem de ser MUITO menor no pior caso (timeout × tentativas)
     pior_chat = llm.TIMEOUT_IA_CHAT_S * (llm.MAX_RETENTATIVAS_IA_CHAT + 1)
@@ -132,7 +132,7 @@ def test_agente_interativo_repassa_o_limite(monkeypatch):
     """O `executar_agente` do atendimento pede o modelo em modo interativo."""
     visto: dict = {}
 
-    def fake_construir(modelo_ia=None, temperatura=0.0, *, interativo=False):
+    def fake_construir(modelo_ia=None, temperatura=0.0, *, interativo=False, **_):
         visto["interativo"] = interativo
         return object()
 

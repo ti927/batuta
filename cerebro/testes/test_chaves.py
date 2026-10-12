@@ -163,10 +163,11 @@ def test_construir_modelo_aplica_timeout_finito():
 
     with usar_chaves({"anthropic": "sk-x"}):
         m = construir_modelo("claude-haiku-4-5")
-    assert getattr(m, "default_request_timeout", None) == TIMEOUT_IA_S
+    # finito, e nunca menor que o piso (cresce com o tamanho pedido da resposta)
+    assert TIMEOUT_IA_S <= getattr(m, "default_request_timeout", None) < 3600
     with usar_chaves({"openai": "sk-y"}):
         o = construir_modelo("gpt-4o")
-    assert getattr(o, "request_timeout", None) == TIMEOUT_IA_S
+    assert TIMEOUT_IA_S <= getattr(o, "request_timeout", None) < 3600
 
 
 def test_construir_modelo_aplica_retentativa():

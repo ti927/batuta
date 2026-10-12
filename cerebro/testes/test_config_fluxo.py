@@ -166,7 +166,7 @@ def test_painel_config_tem_presets_grupos_e_opcoes():
     assert interno["ajustes"]["timeout_min"] == 30
     # Cada grupo diz de QUEM é a regra — sem isso a tela volta a mostrar dois níveis
     # sem distinguir um do outro, que foi a origem desta arrumação.
-    assert {g["nivel"] for g in p["grupos"]} <= {"fluxo", "agente"}
+    assert {g["nivel"] for g in p["grupos"]} <= {"fluxo", "agente", "so_agente"}
     # campos de escolha trazem as opções (fonte única, sem duplicar no front)
     forma = next(
         c for g in p["grupos"] for c in g["campos"] if c["chave"] == "portao_forma"

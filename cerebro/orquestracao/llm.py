@@ -31,9 +31,37 @@ from orquestracao.modelos_ia import (
 # Modelo padrão quando o agente não escolheu um. Haiku: barato para o trivial.
 # Também é o modelo do passo de roteamento da cadeia (sempre Anthropic).
 MODELO_PADRAO = "claude-haiku-4-5"
-# Teto de tokens de SAÍDA por resposta. Folga para saídas estruturadas e longas
-# (tabelas, vários candidatos, artigos) — 2048 cortava saídas ricas no meio.
-MAX_TOKENS = 8192
+# Teto de tokens de SAÍDA por resposta — o PADRÃO; cada agente escolhe o dele na aba
+# "Ritmo e espera" (`TAMANHOS_RESPOSTA`, em `mensageria/config.py`). 2048 cortava saídas
+# ricas no meio; 8192 cortou um artigo do Redator em 12/10/2026 (execução f2886ef5) — e o
+# pensamento do modelo conta DENTRO deste teto, então sobra menos para o texto do que o
+# número sugere. Resposta que bate no teto não passa adiante calada: `resposta_cortada`.
+MAX_TOKENS = 16000
+
+# Teto de saída que o PRÓPRIO modelo aceita, para os que aceitam menos que o tamanho
+# pedido (pedir acima disso é erro do provedor, não resposta maior). Os ausentes aceitam
+# 32 mil ou mais.
+TETO_SAIDA_DO_MODELO = {
+    "gpt-4o": 16384,
+    "gpt-4o-mini": 16384,
+    "gemini-1.5-flash": 8192,
+    "gemini-1.5-pro": 8192,
+    "gemini-2.0-flash": 8192,
+}
+
+
+def tokens_de_saida(modelo: str, pedido: int | None = None) -> int:
+    """O teto de saída efetivo: o tamanho pedido, limitado ao que o modelo aceita."""
+    return min(pedido or MAX_TOKENS, TETO_SAIDA_DO_MODELO.get(modelo, 10**9))
+
+
+def resposta_cortada(m) -> bool:
+    """A resposta parou porque bateu no teto de saída — o texto está pela metade.
+    Cada provedor diz isso com um nome: Anthropic `max_tokens`, OpenAI `length`,
+    Google `MAX_TOKENS`."""
+    meta = getattr(m, "response_metadata", None) or {}
+    motivo = str(meta.get("stop_reason") or meta.get("finish_reason") or "")
+    return motivo.split(".")[-1].lower() in {"max_tokens", "length"}
 
 # Timeout (s) de UMA chamada de IA. Generoso o bastante para cobrir uma geração
 # cheia (até MAX_TOKENS num modelo lento), mas FINITO: uma conexão pendurada FALHA
@@ -149,7 +177,11 @@ def chaves_atuais() -> dict[str, str]:
 
 
 def construir_modelo(
-    modelo_ia: str | None = None, temperatura: float = 0.0, *, interativo: bool = False
+    modelo_ia: str | None = None,
+    temperatura: float = 0.0,
+    *,
+    interativo: bool = False,
+    max_tokens: int | None = None,
 ) -> BaseChatModel:
     """Cria o cliente de chat para o modelo dado, do provedor certo, com a chave
     resolvida no contexto (`usar_chaves`). A Anthropic cai na ANTHROPIC_API_KEY do
@@ -163,13 +195,17 @@ def construir_modelo(
     modelo = modelo_ia or MODELO_PADRAO
     provedor = provedor_do_modelo(modelo)
     chave = _chaves_ia.get().get(provedor)
-    espera = TIMEOUT_IA_CHAT_S if interativo else TIMEOUT_IA_S
+    saida = tokens_de_saida(modelo, max_tokens)
+    # Uma resposta longa leva mais tempo para ser escrita: o teto de espera de fundo
+    # cresce com o tamanho pedido (~40 tokens/s no pior caso), para "Longo" não cair por
+    # tempo antes de terminar. O de conversa com gente esperando continua curto.
+    espera = TIMEOUT_IA_CHAT_S if interativo else max(TIMEOUT_IA_S, saida // 40)
     tentativas = MAX_RETENTATIVAS_IA_CHAT if interativo else MAX_RETENTATIVAS_IA
 
     if provedor == PROVEDOR_ANTHROPIC:
         parametros: dict = {
             "model": modelo,
-            "max_tokens": MAX_TOKENS,
+            "max_tokens": saida,
             "timeout": espera,
             "max_retries": tentativas,
         }
@@ -200,7 +236,7 @@ def construir_modelo(
         parametros = {
             "model": modelo,
             "api_key": chave,
-            "max_tokens": MAX_TOKENS,
+            "max_tokens": saida,
             "timeout": espera,
             "max_retries": tentativas,
         }
@@ -229,7 +265,7 @@ def construir_modelo(
         parametros = {
             "model": modelo,
             "api_key": chave,
-            "max_output_tokens": MAX_TOKENS,
+            "max_output_tokens": saida,
             "timeout": espera,
             "max_retries": tentativas,
         }

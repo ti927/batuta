@@ -739,7 +739,13 @@ export type PainelConfigFluxo = {
   presets: PresetFluxo[];
   // `nivel` diz de QUEM é a regra: "fluxo" é do fluxo e ponto; "agente" é o PADRÃO
   // que cada agente herda e pode sobrepor na aba "Ritmo e espera" do popup dele.
-  grupos: { grupo: string; nivel: "fluxo" | "agente"; campos: CampoConfigFluxo[] }[];
+  // "so_agente": só do agente, sem padrão na automação (ex.: tamanho de cada resposta) —
+  // aparece na aba do agente e a janela da automação pula.
+  grupos: {
+    grupo: string;
+    nivel: "fluxo" | "agente" | "so_agente";
+    campos: CampoConfigFluxo[];
+  }[];
   padrao_global: Record<string, unknown>;
   limites_padrao: string[];
   onde_mudar: string;

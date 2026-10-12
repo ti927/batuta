@@ -174,18 +174,26 @@ export function PainelRitmoAgente({
 
   function grupo(nome: string): CampoConfigFluxo[] {
     return (painel?.grupos ?? [])
-      .filter((g) => g.nivel === "agente" && g.grupo === nome)
+      .filter((g) => g.nivel !== "fluxo" && g.grupo === nome)
       .flatMap((g) => g.campos);
   }
 
   // O valor que este agente HERDA. Numa automação só, é o dela; em várias, cada uma
   // pode usar um valor, então mostramos o padrão do Batuta (e as diferenças, abaixo).
-  function herdado(chave: string): unknown {
+  function herdado(campo: CampoConfigFluxo): unknown {
+    if (soDoAgente(campo)) return campo.padrao;
     if (automacoes.length === 1) {
       const ajustes = automacoes[0].configuracao?.ajustes ?? {};
-      if (chave in ajustes) return ajustes[chave];
+      if (campo.chave in ajustes) return ajustes[campo.chave];
     }
-    return painel?.padrao_global?.[chave];
+    return painel?.padrao_global?.[campo.chave];
+  }
+
+  // Regra só do agente (sem padrão na automação): o "herdado" é o padrão do Batuta.
+  function soDoAgente(campo: CampoConfigFluxo): boolean {
+    return (painel?.grupos ?? []).some(
+      (g) => g.nivel === "so_agente" && g.campos.some((c) => c.chave === campo.chave),
+    );
   }
 
   function atalho(d: DiferencaDoAgente) {
@@ -220,11 +228,13 @@ export function PainelRitmoAgente({
         <CampoConfig
           key={campo.chave}
           campo={campo}
-          valor={ajustado ? valor[campo.chave] : herdado(campo.chave)}
+          valor={ajustado ? valor[campo.chave] : herdado(campo)}
           ajustado={ajustado}
           podeEditar={podeEditar}
           rotuloHerdado={
-            automacoes.length === 1 ? "valor da automação" : "padrão do Batuta"
+            automacoes.length === 1 && !soDoAgente(campo)
+              ? "valor da automação"
+              : "padrão do Batuta"
           }
           destacado={doCampo.length > 0}
           rodape={

@@ -801,6 +801,48 @@ def _espera_uma_pessoa(cinto: list[Instrumento]) -> bool:
     return False
 
 
+def _barrar_resposta_cortada(
+    agente: Agente, mensagens_turno: list, tamanho: str, tokens: int
+) -> None:
+    """Resposta que bateu no teto de saída está PELA METADE — e não pode seguir adiante
+    como se estivesse inteira. Em 12/10/2026 (execução f2886ef5) o artigo do Redator
+    parou em "receita acumul", o passo foi marcado como concluído, o Editor aprovou o
+    texto cortado e só o Publicador, por sorte, se recusou a publicar. Aqui o passo PARA,
+    com o que fazer, e a queda fica no banco de logs (§12-A: falha não é muda)."""
+    from orquestracao.llm import resposta_cortada
+
+    cortadas = [m for m in mensagens_turno if isinstance(m, AIMessage) and resposta_cortada(m)]
+    if not cortadas:
+        return
+    from mensageria.config import ESCOLHAS
+    from observabilidade.escritor import registrar_evento
+
+    rotulo = dict(ESCOLHAS["tamanho_resposta"]).get(tamanho, tamanho).split(" — ")[0]
+    registrar_evento(
+        categoria="execucao",
+        acao="agente.resposta_cortada",
+        nivel="error",
+        resultado="falha",
+        recurso_tipo="agente",
+        recurso_id=agente.id,
+        detalhe={
+            "agente": agente.nome,
+            "modelo": agente.modelo_ia,
+            "tamanho": tamanho,
+            "teto_tokens": tokens,
+            "tokens_saida": (cortadas[-1].usage_metadata or {}).get("output_tokens"),
+        },
+    )
+    raise FalhaInstrumento(
+        f"A resposta do agente '{agente.nome}' passou do tamanho máximo ({rotulo}) e "
+        "saiu cortada, então o passo parou em vez de seguir com o texto pela metade. "
+        "Aumente em Ritmo e espera do agente › Tamanho máximo de cada resposta, ou peça "
+        "um texto mais curto nas instruções dele.",
+        retentavel=False,
+        codigo="ia.resposta_cortada",
+    )
+
+
 def executar_agente(
     agente: Agente,
     cinto: list[Instrumento],
@@ -829,7 +871,14 @@ def executar_agente(
     # `interativo` = tem gente esperando (atendimento por mensageria): a chamada de IA
     # usa os limites CURTOS, para a falha chegar em ~1 min em vez de meia hora. Sem ele
     # (automação de fundo), nada muda.
-    modelo = construir_modelo(agente.modelo_ia, interativo=interativo)
+    # O tamanho máximo de cada resposta é do AGENTE (aba "Ritmo e espera"): um redator de
+    # artigos e um classificador não cabem no mesmo número.
+    from mensageria.config import tamanho_da_resposta
+
+    tamanho_escolhido, tamanho_tokens = tamanho_da_resposta(agente)
+    modelo = construir_modelo(
+        agente.modelo_ia, interativo=interativo, max_tokens=tamanho_tokens
+    )
     falhas: list[str] = []
     # Por instrumento (id → textos): o que o agente APRESENTOU a um humano por canal
     # neste turno. O portão de aprovação usa isto para carregar adiante o que a
@@ -1006,6 +1055,12 @@ def executar_agente(
         )
 
     mensagens = resultado["messages"]
+    _barrar_resposta_cortada(
+        agente,
+        [m for m in mensagens if getattr(m, "id", None) not in ids_antes],
+        tamanho_escolhido,
+        tamanho_tokens,
+    )
     # DELTA do turno POR IDENTIDADE: o que NÃO estava no fio antes. Sem memória, ids_antes é
     # vazio → o fio inteiro (como sempre). Com memória, exclui os turnos anteriores mesmo
     # que o resumo tenha reordenado/encolhido o fio; o resumo injetado (HumanMessage, sem

@@ -76,6 +76,16 @@ como se fosse defeito.
 Escolher os números: veja na inspeção quanto um passo saudável costuma levar e deixe folga. Teto colado no
 tempo real transforma qualquer variação (um texto mais longo, uma retentativa de rede) em falha.
 
+## Quando a resposta do agente "saiu cortada"
+
+Cada agente tem um **tamanho máximo de cada resposta** (aba **Ritmo e espera** dele: Curto,
+Padrão ou Longo). Se o que ele escreve passa disso, o passo **para** com o aviso "a resposta
+do agente passou do tamanho máximo e saiu cortada" — em vez de entregar um texto pela metade
+ao passo seguinte, que foi o que aconteceu antes de 12/10/2026. Não adianta rodar de novo
+igual: o corte se repete. Aumente o tamanho no agente (Longo para quem escreve artigos
+longos) ou peça um texto mais curto nas instruções dele, e use **Rodar de novo a partir
+daqui** no passo que parou.
+
 ## Quando a automação se desliga sozinha (o disjuntor)
 
 Uma automação que **dispara sozinha** e falha **3 vezes seguidas** é **desligada pelo Batuta**, com um

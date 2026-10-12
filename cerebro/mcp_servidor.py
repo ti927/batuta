@@ -230,6 +230,11 @@ async def diagnosticar_execucao(execucao_id: str) -> str:
     duas saídas — subir o teto (no Estúdio, Configurações › Execução) se o fluxo é caro por
     natureza, ou achar o passo caro com `ver_uso`.
 
+    Se o erro disser "saiu cortada" (código `ia.resposta_cortada`), a resposta do agente
+    passou do TAMANHO MÁXIMO dele — também não é bug, é a proteção contra texto pela metade.
+    O conserto é no agente: `configurar_ritmo_agente` com `tamanho_resposta` maior (ex.:
+    `longo`), ou instruções pedindo um texto mais curto. Rodar igual de novo corta igual.
+
     O mesmo vale para "passou do tempo máximo": há teto de tempo por PASSO e pela EXECUÇÃO,
     ambos desligados por padrão. Duas ressalvas ao explicar: o teto do passo barra o agente
     ENTRE ações (a chamada em andamento termina), e o da execução conta tempo de TRABALHO —
@@ -761,6 +766,11 @@ async def configurar_ritmo_agente(agente_id: str, ajustes: dict | None = None) -
     - `portao_forma`, `portao_acao_abandono`, `portao_max_rodadas`,
       `teto_espera_humano_min` — como ele conduz uma aprovação e o que faz se a pessoa
       some. Só fazem efeito se ele tiver `pedir_aprovacao` no cinto.
+    - `tamanho_resposta` — o tamanho máximo de CADA resposta dele: `curto` (≈5 páginas),
+      `padrao` (≈20, o padrão) ou `longo` (≈40, mais lento e mais caro). Esta é SÓ do
+      agente, não tem padrão no fluxo. Resposta que passa disso faz o passo PARAR com
+      aviso "saiu cortada" — se uma execução parou assim, é aqui que se aumenta (ex.: o
+      agente que escreve artigos longos vai para `longo`).
 
     USE ISTO quando dois passos do mesmo fluxo esperam pessoas diferentes: confirmar um
     detalhe com quem pediu (cutucar em 10 min) e pedir a um diretor que aprove uma compra

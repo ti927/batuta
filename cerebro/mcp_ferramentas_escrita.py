@@ -28,7 +28,7 @@ import instrumentos as encaixe
 import mcp_escopo
 import segredos_instrumento as segredos
 from criacao import servicos
-from mensageria.config import CHAVES_DO_AGENTE
+from mensageria.config import CHAVES_DO_AGENTE, CHAVES_SO_DO_AGENTE, TAMANHOS_RESPOSTA
 from criacao.ferramentas import _validar_gatilho
 from criacao.servicos import ConflitoDominio
 from instrumentos.base import FalhaInstrumento
@@ -619,14 +619,21 @@ def configurar_ritmo_agente(sessao, usuario, agente_id, ajustes) -> str:
     # Chave fora do dono é RECUSADA, não ignorada: ignorar em silêncio faria a IA
     # relatar sucesso sobre um ajuste que nunca valeu — o tipo de mentira que esta
     # frente inteira veio matar.
-    intrusas = sorted(set(ajustes) - CHAVES_DO_AGENTE)
+    intrusas = sorted(set(ajustes) - CHAVES_DO_AGENTE - CHAVES_SO_DO_AGENTE)
     if intrusas:
         return (
             f"Estas não são regras do agente: {', '.join(intrusas)}. "
             f"O agente decide o que é de UM ATO dele (quanto trabalha num passo, quanto "
-            f"e como espera uma pessoa): {', '.join(sorted(CHAVES_DO_AGENTE))}. "
+            f"e como espera uma pessoa): "
+            f"{', '.join(sorted(CHAVES_DO_AGENTE | CHAVES_SO_DO_AGENTE))}. "
             "Teto de mensagens e de custo são contadores da conversa inteira e ficam no "
             "fluxo."
+        )
+    tamanho = ajustes.get("tamanho_resposta")
+    if tamanho is not None and tamanho not in TAMANHOS_RESPOSTA:
+        return (
+            f"tamanho_resposta '{tamanho}' não existe. Use um de: "
+            f"{', '.join(TAMANHOS_RESPOSTA)} (curto ≈ 5 páginas, padrao ≈ 20, longo ≈ 40)."
         )
     agente.configuracao = dict(ajustes) or None
     sessao.flush()

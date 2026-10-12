@@ -163,8 +163,10 @@ export function ConfiguracoesAutomacao({
 
   const camposPorChave = useMemo(() => {
     const m = new Map<string, { campo: CampoConfigFluxo; nivel: "fluxo" | "agente" }>();
-    for (const g of painel?.grupos ?? [])
+    for (const g of painel?.grupos ?? []) {
+      if (g.nivel === "so_agente") continue; // só do agente: não tem valor na automação
       for (const c of g.campos) m.set(c.chave, { campo: c, nivel: g.nivel });
+    }
     return m;
   }, [painel]);
 
