@@ -168,6 +168,7 @@ Uma tarefa só está concluída quando todas são verdade:
 3. Se a mudança cruzou a fronteira cérebro/interface, as duas partes estão sincronizadas.
 4. O repositório está num estado consistente.
 5. Você relatou ao maestro com clareza.
+6. Se a mudança aparece numa tela, você a **viu funcionando em produção** depois do deploy, no Chrome do maestro: invoque a skill **`conferir-na-tela`** (o que já está autorizado e o que precisa de ok estão nela). Não peça ao maestro que teste, e não suba servidor local para isso.
 
 ## 12-A. Experiência do usuário: sem erro genérico, sem travar, sem silêncio
 
